@@ -22,6 +22,11 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 
+/** The steps of one turn. Each CLI names their hook events its own way (`events`
+ *  below), and every CLI here has a hook for each. A turn cut off by an API
+ *  error (`failure`) is not one of them: only a CLI with a hook for it has it. */
+const STEPS = ['start', 'prompt', 'preTool', 'postTool', 'stop'];
+
 /** Claude Code reads its hooks from the `--settings` file on argv. */
 function settingsArg(injection) {
   const i = injection.args.indexOf('--settings');
@@ -216,4 +221,4 @@ function isolateHome() {
 /** Does the stand-in for `engine` model this step? */
 const hasStep = (engine, step) => !!ENGINES[engine]?.events[step];
 
-module.exports = { fakeEngine, officeOn, isolateHome, hasStep, AGENT, FAKE_ENGINES: Object.keys(ENGINES) };
+module.exports = { fakeEngine, officeOn, isolateHome, hasStep, AGENT, STEPS, FAKE_ENGINES: Object.keys(ENGINES) };
