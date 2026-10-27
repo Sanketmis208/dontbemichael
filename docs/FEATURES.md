@@ -1,6 +1,6 @@
 # Don't Be Michael: features and changes
 
-Everything the app does today, and every release that got it here (0.0.1 to 0.2.3). Part 1 is
+Everything the app does today, and every release that got it here (0.0.1 to 0.2.7). Part 1 is
 written to be lifted onto the GitHub page and the website as it is; Part 2 is the full list, release
 by release.
 
@@ -49,8 +49,14 @@ moving, and brings you only the decisions that need you.
   business. Or write a new one.
 - No two teammates do the same work. The app checks every new job against the team by what each
   one handles; an overlap has to be tied to its own mailbox or topic before you can hire.
-- The work style is in plain words you can edit, or Suggest me writes a first one for you. The app
-  turns it into the agent's instructions.
+- Describe the job once, in your own words, and see it written out before you hire. The app turns
+  it into the agent's instructions.
+- Change any job later by saying what should change in Edit agent. You see the steps as it works,
+  then exactly what changes, before anything is saved, and Undo puts it back.
+- A job change is never blocked by an overlap. When it adds work a teammate already does, the
+  preview says so and you can explain how they split it: the app writes the handoff Michael routes
+  by ("technical questions go to Nick") and shows it on the teammate's side. A change that adds
+  tracking asks where the numbers live when the job doesn't say.
 - A new hire's one time first job is a card Michael hands out, not a line in their work style.
 - Every hire gets its own private folder and starts working.
 - Delete a team member for good from the Danger zone in Edit agent: they stop, their schedules
@@ -60,6 +66,9 @@ moving, and brings you only the decisions that need you.
 ### 3. A mailbox for every job
 - Connect as many mailboxes as your business runs on: Gmail, Google Workspace, iCloud, Yahoo, Zoho
   or any IMAP mailbox. Passwords stay encrypted on your computer.
+- A mail server that isn't encrypted from the start must switch to encryption before the app sends
+  the password. One that can't is refused, and the mailbox says so in plain words, with the
+  encrypted port to use instead.
 - Give each team member the one mailbox that fits its job: the Admin watches the CEO's inbox,
   Support answers support@, Sales follows up from sales@. One team member per mailbox.
 - Choose Can send, Send on approval or Draft only for each one. Send on approval puts each email on Needs you to edit and approve; the team member then sends exactly what you approved. Can send never puts an email on Needs you, and moving a team member to it hands back the emails still waiting there, unless it sends only from a mailbox nobody on the team watches right now. A team member can't reach a mailbox you didn't give it.
@@ -78,18 +87,37 @@ moving, and brings you only the decisions that need you.
 - Run now sends a job at once, exactly as its clock would, so you see it work without waiting. A
   job at set times keeps them; a job that runs every few hours counts again from the run.
 - Closing time pauses the office; opening it runs a missed job once, never a backlog.
+- When a job's run goes wrong, say so: "Went wrong" under the job's last run (with a line on what
+  was wrong, if you like). Michael compares it with an earlier run of the same job that went well
+  and suggests a change to the member's work style in Pulse. Review the change opens Edit agent
+  with it typed in; nothing changes until you Apply, and Undo puts it back. For members on Claude.
 
 ### 5. Memory that gets better
 - Each team member keeps a short list of lasting notes: your preferences and corrections, facts it
   looked up, where things live, and the steps for jobs it repeats. A background tidy up merges and
   updates them instead of letting them pile up.
 - Your answers to its questions go straight into its memory, so it doesn't ask again.
+- Every note says what showed it: a source and date, a card, a file. The Memory tab shows it behind
+  an info icon. When two notes disagree, your word wins, then the note with something behind it,
+  then the newer one.
+- Only you make a note "from you": your Ask me answers, your email decisions and what you tell
+  Michael in the dock are kept by the app where no team member can write, so a member's own note
+  can never pass for yours or undo yours.
 - Each team member's memory is its own. Nobody, Michael included, reads or searches another's
   notes: to learn what a teammate knows, they ask that teammate, and Michael reads the task board
   and the work each one hands in. On a Mac, Claude members' shells are walled off from each
   other's notes too.
-- Company profile and company knowledge (Word, Excel, PowerPoint, PDF, and scans on a Mac) are
-  shared with the whole team, searchable by meaning.
+- Reset memory in Settings gives the whole team a first day again without losing the office:
+  every member, Michael included, forgets its notes, its conversations and the messages it
+  handled, then the app restarts. The team, cards, waiting messages, schedules, settings and
+  company knowledge stay.
+- Company profile and company knowledge (Word, Excel, PowerPoint, PDF, and scans or photos on a Mac or a Windows PC) are
+  shared with the whole team, searchable by meaning. Settings lists every document; open one in
+  your own app, save it, and the team searches the new version.
+- Company foundations: one document of what each job needs to know about your business (who you
+  sell to, how you sound, your financial year), filled by you, the company profile and what the
+  team learns. When work needs an empty answer, a card on Needs you asks you once; answer it in
+  words or with a file, which the app checks fits the question before the team can read it.
 
 ### 6. You stay in charge
 - Every connector on your Claude account (HubSpot, Google Drive, Gmail, QuickBooks and the rest)
@@ -143,6 +171,10 @@ moving, and brings you only the decisions that need you.
   and turn on Compare to see each figure next to the same days of the day, week or month
   before. It fills in the weeks before it started from what the office already keeps, so it
   never starts at zero.
+- Pulse says how long the office ran in the period and how much of that you were away. Time the
+  computer slept or the office was stopped (plan limit, no credit, sign in failed) doesn't count.
+- Costs are worked out at each Claude model's own list price: each Opus, Sonnet and Haiku has its
+  own.
 
 ### 8. Built for small business owners
 - Setup by kind of business: restaurant and food, retail, professional services, home services,
@@ -159,6 +191,66 @@ moving, and brings you only the decisions that need you.
   the file was kept.
 
 ## Part 2: Every change, release by release
+
+### 0.2.7 (2026-10-26)
+- Every memory note says what showed it, shown behind an info icon on the Memory tab. Your Ask me
+  answers, email decisions and words to Michael in the dock are kept where no team member can
+  write, so only you make a note "from you"; your word wins a disagreement, then evidence, then
+  the newer note.
+- Went wrong under a scheduled job's last run: Michael compares it with a run that went well and
+  suggests a work style change in Pulse, applied only when you Apply.
+- An overlap never blocks a job change; explain how two members split the work and the app writes
+  the handoff Michael routes by, shown on the teammate's side too.
+- Pulse says how long the office ran and how much of that you were away; costs use each Claude
+  model's own list price.
+- A mail server not encrypted from the start must switch to encryption before the password; a
+  shared hire's turn limit can only lower your cap; a voice confirm naming someone else cancels.
+- Contributor fixes: Pulse's plan bar after a reset, no error storm while the office is stopped,
+  a copied hire's starter jobs come switched off, overnight card steps reach their person, an
+  approved reply survives archiving, cost records in the app's own database, and fixes on Windows,
+  voice, files and panels.
+
+### 0.2.6 (2026-10-23)
+- Change a team member's job by saying what should change: Edit agent shows the job in plain
+  words with one box, then the steps and the new words as they are written, what changes and the
+  whole new job, before Apply. Undo puts it back. A clash becomes one question whose suggested
+  answer keeps your approvals; an overlap names the teammates; one time work goes to Michael.
+- Hiring asks what the new person will do once; a pack update keeps your earlier changes.
+- Add a file right from a Company foundations card, pictures included: it is checked against the
+  question before it joins company knowledge, and nothing of it stays in Claude's history.
+- Settings, Access, the Command Center, the company profile, the schedule editor and Add a mailbox
+  share Edit agent's panels and labels. Edit agent shows scheduled jobs as their own group.
+- A mailbox check that times out tries again by itself; a recovered stuck member is reported to
+  Michael; the office floor carries the GAACC AI Labs mark.
+- Messages typed into a team member's terminal and the app's background checks drop hidden
+  control characters first. The Mac release is signed with the owner's own Apple team.
+
+### 0.2.5 (2026-10-21)
+- Reset memory in Settings: every member, Michael and Research included, starts on its first day
+  again while the office stays. Notes, recorded conversations, handled messages and Claude Code's
+  notes for each working folder go; the team, cards, waiting messages, schedules, settings and
+  Company knowledge stay. Members' notes are no longer kept in the office's history.
+- Pulse lists the emails organized in a period: subject, sender, where each went and who moved it.
+- The Tasks board has search and filters, and says when it shows only some tasks.
+- A member waiting at a permission prompt is never typed into while a helper it started works,
+  and every file chip in a message opens.
+- Contributor fixes: Pulse can say why a number looks wrong, Ask me answers reach notes before
+  Michael is told, starter jobs for a member with no schedules, card numbers beside an expiry
+  caught, Windows office restore with letter case, terminal zoom, quoted Claude paths, knowledge
+  search ranking and closing time messages.
+
+### 0.2.4 (2026-10-20)
+- Company foundations: one document in company knowledge with plain questions for each job, one
+  answer per shared question, in step with the company profile. Work that hits an empty answer
+  raises one card on Needs you; answer it, have the member draft it, or put it off a week. Pulse
+  shows the jobs that hit an empty answer and a Foundations count under each member.
+- Settings lists every company knowledge document with Open in your own app; a save there is read
+  in again. Company knowledge and search by meaning have no switches, and search by meaning
+  follows your edits.
+- Pulse folds quiet tiles into chips and, in the first two weeks, shows what it sees so far.
+- A file an Ask me question names without its ending opens from its chip.
+- Contributor fixes: scans and photos read on Windows, a lost answer to Michael sent again, a late
+  restart reported, Pulse buttons, its backfill on open and stale cost totals, bounded hook counters.
 
 ### 0.2.3 (2026-10-18)
 - The office opens with a Clocking in card over Michael's desk: how many are in, who is still
