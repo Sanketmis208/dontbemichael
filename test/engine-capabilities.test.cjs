@@ -12,6 +12,7 @@ const loadTs = require('./load-ts.cjs');
 
 const ap = loadTs('src/shared/agentProvider.ts');
 const ec = loadTs('src/shared/engineCapabilities.ts');
+const silent = loadTs('src/shared/silentEngine.ts');
 
 const SUPPORT = new Set(['yes', 'no', 'unknown']);
 const PER_ENGINE = ec.ENGINE_NEEDS.filter((n) => !['seedPrompt', 'lifecycleEvents', 'inbox', 'resume'].includes(n));
@@ -41,18 +42,40 @@ test('every fact is yes, no or unknown, and per OS facts name every OS', () => {
 
 test('the facts the presets hold are read from the presets, never copied', () => {
   // Value: protects=the table and the presets cannot disagree; fails_when=a derived need is hard coded and a preset change leaves it stale; why_new=issue #531; seam=none
+  const yesNo = (v) => (v ? 'yes' : 'no');
   for (const preset of ap.AGENT_PROVIDER_PRESETS) {
     const id = preset.id;
+    const bridged = preset.hiveAware || !!ap.bridgeOf(id);
     const expect = {
-      inbox: preset.canReceiveInbox,
-      resume: !!(preset.resumeFlag || preset.resumeSubcommand),
-      lifecycleEvents: preset.hiveAware || !!ap.bridgeOf(id),
-      seedPrompt: !!(preset.hiveAware || preset.initialPromptFlag || preset.positionalInitialPrompt || preset.seedDelivery)
+      inbox: yesNo(preset.canReceiveInbox),
+      resume: yesNo(preset.resumeFlag || preset.resumeSubcommand),
+      lifecycleEvents: !bridged ? 'no' : silent.NEVER_REPORTS.some((r) => r.engine === id) ? 'unknown' : 'yes',
+      seedPrompt: yesNo(preset.hiveAware || preset.initialPromptFlag || preset.positionalInitialPrompt || preset.seedDelivery)
     };
     for (const [need, value] of Object.entries(expect)) {
-      for (const os of ec.ENGINE_OSES) assert.equal(ec.engineSupport(id, os, need), value ? 'yes' : 'no', `${id} ${need} on ${os}`);
+      for (const os of ec.ENGINE_OSES) assert.equal(ec.engineSupport(id, os, need), value, `${id} ${need} on ${os}`);
     }
   }
+});
+
+test('an engine with a version known never to report does not read as reporting', () => {
+  // Value: protects=the table never says yes for lifecycle events that NEVER_REPORTS says current versions skip; fails_when=lifecycleEvents is derived from the bridge alone, so Gemini reads yes; why_new=review of #577; seam=none
+  assert.ok(silent.neverReports('gemini', '0.60.0'), 'sanity: current Gemini CLI never reports');
+  for (const os of ec.ENGINE_OSES) {
+    assert.equal(ec.engineSupport('gemini', os, 'lifecycleEvents'), 'unknown', `gemini on ${os}: an older version may still report`);
+    assert.equal(ec.engineSupport('codex', os, 'lifecycleEvents'), 'yes');
+    assert.equal(ec.engineSupport('custom', os, 'lifecycleEvents'), 'no');
+  }
+});
+
+test('the file sandbox says yes exactly where the silent engine rules say an OS sandbox guards the files', () => {
+  // Value: protects=two answers to "does an OS sandbox hold this engine's files" cannot drift apart; fails_when=fileSandbox says yes where guardedWithoutReports is false or the other way round, or Gemini reads anything but no; why_new=review of #577; seam=none
+  for (const id of Object.keys(ec.ENGINE_FACTS)) {
+    for (const os of ec.ENGINE_OSES) {
+      assert.equal(ec.ENGINE_FACTS[id].fileSandbox[os] === 'yes', silent.guardedWithoutReports(id, os), `${id} on ${os}`);
+    }
+  }
+  assert.deepEqual(ec.ENGINE_FACTS.gemini.fileSandbox, { darwin: 'no', win32: 'no', linux: 'no' }, 'Gemini has none anywhere');
 });
 
 test('engineGaps names what is missing in the order asked, and tells a known gap from an unchecked one', () => {

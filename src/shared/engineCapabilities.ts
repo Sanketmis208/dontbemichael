@@ -11,15 +11,18 @@
  * Two kinds of fact live here:
  *  - Facts the presets already hold (lifecycle events, inbox, resume, the seed
  *    prompt) are DERIVED from `agentProvider.ts`, never copied, so the two
- *    cannot drift.
+ *    cannot drift. Lifecycle events also read `NEVER_REPORTS` in
+ *    `silentEngine.ts`: a bridge on an engine with a version known never to
+ *    report is `unknown`, since this table has no versions (#357).
  *  - Everything else is written down per engine. `unknown` means nobody has
  *    checked it on that engine yet; it is never read as `yes`.
  *
  * No call site reads this yet: replacing the inline checks comes later, one PR
  * at a time. Plain TypeScript with no imports from either side but the preset
- * registry, so the tests can run it.
+ * registry and the silent engine rules, so the tests can run it.
  */
 import { bridgeOf, providerPreset, type AgentProvider } from './agentProvider';
+import { NEVER_REPORTS } from './silentEngine';
 
 export type Support = 'yes' | 'no' | 'unknown';
 
@@ -40,7 +43,9 @@ export interface EngineFacts {
    *  proxy bridge only watches traffic, so it can never refuse one (#139). */
   toolGuard: Support;
   /** The engine's own OS sandbox holds the member's shell to its folders.
-   *  Claude Code has none on Windows (hive.ts, `failIfUnavailable`). */
+   *  Claude Code has none on Windows (hive.ts, `failIfUnavailable`). `yes`
+   *  exactly where `guardedWithoutReports` in silentEngine.ts says so, which a
+   *  test holds. */
   fileSandbox: PerOs;
   /** The app reads how full the session's context window is (the gauge). */
   contextGauge: Support;
@@ -127,8 +132,9 @@ export const ENGINE_FACTS: Readonly<Record<AgentProvider, EngineFacts>> = {
   // that a refusal holds on these engines.
   grok: UNCHECKED,
   // Gemini CLI 0.60 and later skip the per agent settings file that carries
-  // its hooks (#315, NEVER_REPORTS in silentEngine.ts).
-  gemini: UNCHECKED,
+  // its hooks (#315), so its lifecycle events read unknown (NEVER_REPORTS).
+  // It runs in no OS sandbox anywhere (guardedWithoutReports).
+  gemini: { ...UNCHECKED, fileSandbox: { darwin: 'no', win32: 'no', linux: 'no' } },
   antigravity: UNCHECKED,
   opencode: UNCHECKED,
   pi: UNCHECKED,
@@ -152,7 +158,8 @@ export function engineSupport(engine: AgentProvider, os: EngineOs, need: EngineN
     case 'seedPrompt':
       return yesNo(preset.hiveAware || !!preset.initialPromptFlag || !!preset.positionalInitialPrompt || !!preset.seedDelivery);
     case 'lifecycleEvents':
-      return yesNo(preset.hiveAware || !!bridgeOf(engine));
+      if (!preset.hiveAware && !bridgeOf(engine)) return 'no';
+      return NEVER_REPORTS.some((r) => r.engine === engine) ? 'unknown' : 'yes';
     case 'inbox':
       return yesNo(preset.canReceiveInbox);
     case 'resume':
