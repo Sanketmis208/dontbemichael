@@ -15,7 +15,7 @@ const os = require('node:os');
 const path = require('node:path');
 const loadTs = require('./load-ts.cjs');
 
-const { extractFacts, unfoundedFacts, unfoundedMoneyReason, unfoundedWhen } = loadTs('src/shared/standingFacts.ts');
+const { extractFacts, kindIsAboutMoney, unfoundedFacts, unfoundedMoneyReason, unfoundedWhen } = loadTs('src/shared/standingFacts.ts');
 const { standingFitPrompt } = loadTs('src/shared/mailProposals.ts');
 const { handleMailRequest } = loadTs('src/main/mail.ts');
 const { MailApprovals } = loadTs('src/main/mailApprovals.ts');
@@ -62,6 +62,30 @@ test('money the approval and the message do not name gives a reason without dash
   assert.doesNotMatch(reply, /[‐-―−]| - /);
 });
 
+test('a kind about money keeps sending its own amounts: the model judges them, as before', () => {
+  // Value: protects=an owner's refund or invoice approval keeps working; fails_when=the count holds amounts a money kind plainly covers, turning every reminder into an Ask me card; why_new=review of #578; seam=none
+  assert.equal(unfoundedMoneyReason({ kind: 'refunds up to $50' }, { subject: 'Refund', body: 'Your $30 refund is done.' }), null);
+  assert.equal(unfoundedMoneyReason({ kind: 'invoice reminders for unpaid invoices' },
+    { subject: 'Invoice 1042', body: 'A reminder: invoice 1042 for $1,250 is due Friday.' }), null);
+  for (const kind of ['refunds up to $50', 'invoice reminders for unpaid invoices', 'price questions', 'payment receipts',
+    'discount codes for returning customers', 'store credit notes', 'quotes for lawn care', 'bills for finished jobs', '10% loyalty offers']) {
+    assert.equal(kindIsAboutMoney(kind), true, kind);
+  }
+  for (const kind of ['order status replies', 'booking confirmations', 'thank you notes after a visit']) {
+    assert.equal(kindIsAboutMoney(kind), false, kind);
+  }
+  assert.match(unfoundedMoneyReason({ kind: 'order status replies' }, { subject: 'Order 9', body: 'It ships Monday, and here is 20% off.' }) ?? '',
+    /"20%"/, 'a kind not about money still holds an invented discount');
+});
+
+test('a lone 100% is a figure of speech; 100% off or a 100% refund is money', () => {
+  // Value: protects=common phrasing does not send replies to the owner, while a full discount or refund still counts; fails_when=every 100% is held, or a 100% refund slips past the count; why_new=review of #578; seam=none
+  assert.deepEqual(facts('We are 100% on it, and 100 percent sure.'), []);
+  assert.deepEqual(facts('Here is 100% off your next visit.'), ['percent:n:100']);
+  assert.deepEqual(facts('You get a 100% refund.'), ['percent:n:100']);
+  assert.equal(unfoundedMoneyReason({ kind: 'order status replies' }, { subject: 'Order 9', body: 'We are 100% on it.' }), null);
+});
+
 test('the prompt is exactly what it was for an email that names no unfounded date or time', () => {
   // Value: protects=nothing changes for the emails the check already handled (#490: keep the prompt byte for byte); fails_when=the closed list line appears with nothing to list; why_new=issue #490; seam=none
   const email = { to: 'a@b.com', subject: 'Order 9', body: 'It has shipped.' };
@@ -83,7 +107,7 @@ test('the model gets the unfounded dates and times as a closed list, outside the
   assert.doesNotMatch(reply, /dates or times/, 'a day the customer asked for is founded');
 });
 
-function broker(t, answers) {
+function broker(t, answers, kind = 'order status replies') {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'md-standing-facts-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const server = { host: 'h', port: 993, secure: true };
@@ -104,8 +128,8 @@ function broker(t, answers) {
   const call = (body) => handleMailRequest(svc, { getConfig: () => cfg, proposals: approvals, fitCheck, present: () => true }, 'pam', 'send', body);
   const standing = async () => {
     const p = (await handleMailRequest(svc, { getConfig: () => cfg, proposals: approvals, fitCheck, present: () => true }, 'pam', 'propose',
-      { mailbox: 'ceo', to: 'a@example.org', subject: 'Order 1', body: 'x', offer_standing: 'order status replies' })).body.proposal;
-    approvals.decide(p, 'approve', {}, '', 'order status replies');
+      { mailbox: 'ceo', to: 'a@example.org', subject: 'Order 1', body: 'x', offer_standing: kind })).body.proposal;
+    approvals.decide(p, 'approve', {}, '', kind);
     return approvals.standing('pam')[0];
   };
   return { out, approvals, call, standing };
@@ -135,4 +159,14 @@ test('a standing reply may repeat the amount the customer wrote', async (t) => {
   const res = await call({ mailbox: 'ceo', to: 'customer@example.org', subject: 'Re: Order 9', body: 'Sorry about that: the second $45 charge is reversed.', standing: rule.id, reply_to: { mailbox: 'ceo', id: '7' } });
   assert.equal(res.body.sent, true);
   assert.equal(out.checked.length, 1, 'the model still judges whether it fits');
+});
+
+test('an invoice reminder under an invoice approval still goes out after the model says it fits', async (t) => {
+  // Value: protects=a money kind's sends are never held by the count, end to end; fails_when=the broker files an invoice reminder on Ask me without asking the model; why_new=review of #578; seam=fake svc and fit check that always says FITS
+  const { out, approvals, call, standing } = broker(t, 'unused', 'invoice reminders for unpaid invoices');
+  const rule = await standing();
+  const res = await call({ mailbox: 'ceo', to: 'c@example.org', subject: 'Invoice 1042', body: 'A reminder: invoice 1042 for $1,250 is due Friday.', standing: rule.id });
+  assert.equal(res.body.sent, true);
+  assert.equal(out.checked.length, 1, 'the model judged it');
+  assert.equal(approvals.waiting().length, 0);
 });

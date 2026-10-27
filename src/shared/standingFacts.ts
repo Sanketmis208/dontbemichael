@@ -7,9 +7,12 @@
  * model overlooks it. This pulls the closed classes out of the email and checks
  * them against the words the email may draw on, the approved kind and, for a
  * reply, the message it answers:
- *  - money (an amount with a currency, or a percentage) the email names and
- *    those words do not is refused without asking the model, because the check
- *    already counts money as outside an approval unless it plainly covers it;
+ *  - when the approved kind is not about money, money (an amount with a
+ *    currency, or a percentage) the email names and those words do not is
+ *    refused without asking the model, because the check already counts money
+ *    as outside an approval unless it plainly covers it. A kind about money
+ *    ("refunds up to $50", "invoice reminders") plainly covers some amounts the
+ *    count cannot see, so its money is left to the model, as before;
  *  - dates and times the email names and those words do not are handed to the
  *    model as a closed list, since a ship day can be exactly what an order
  *    status reply is for, and only judgement can tell.
@@ -42,6 +45,10 @@ const AMOUNT_BEFORE = new RegExp(String.raw`(?:${CURRENCY_MARK}|\b(?:${CURRENCY_
 const AMOUNT_AFTER = new RegExp(String.raw`(?<![\d.,])(${NUM})\s?(?:€|£|₹|\b(?:${CURRENCY_CODE}|${CURRENCY_WORD})\b)`, 'gi');
 const PERCENT = new RegExp(String.raw`(?<![\d.,])(${NUM})\s?(?:%|\bper\s?cent\b)`, 'gi');
 const ANY_NUMBER = new RegExp(String.raw`(?<![\d.,])(?:${NUM})(?![\d])`, 'g');
+/** Words that make a kind about money: its amounts are the model's to judge. */
+const MONEY_WORD = /\b(?:prices?|pricing|refund(?:s|ed)?|invoic(?:e|es|ed|ing)|payments?|discounts?|credits?|quotes?|bill(?:s|ed|ing)?)\b/i;
+/** Words that make a 100% money ("100% off", "a 100% refund"). */
+const MONEY_NEAR = /\b(?:off|discount|refund|back|cashback)\b/i;
 
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 const MONTH = String.raw`jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?`;
@@ -99,7 +106,13 @@ export function extractFacts(text: string): Fact[] {
 
   for (const m of matches(AMOUNT_BEFORE, text)) add('amount', m[0], [`n:${numberKey(m[1])}`]);
   for (const m of matches(AMOUNT_AFTER, text)) add('amount', m[0], [`n:${numberKey(m[1])}`]);
-  for (const m of matches(PERCENT, text)) add('percent', m[0], [`n:${numberKey(m[1])}`]);
+  for (const m of matches(PERCENT, text)) {
+    // "We are 100% on it" is a figure of speech: a lone 100% is money only
+    // with an "off", a "discount" or a "refund" beside it.
+    const near = text.slice(Math.max(0, m.index - 30), m.index + m[0].length + 30);
+    if (numberKey(m[1]) === '100' && !MONEY_NEAR.test(near)) continue;
+    add('percent', m[0], [`n:${numberKey(m[1])}`]);
+  }
 
   for (const m of matches(DAY_MONTH, text)) {
     const mo = monthIndex(m[2]); const d = Number(m[1]);
@@ -170,9 +183,17 @@ const isMoney = (f: Fact) => f.kind === 'amount' || f.kind === 'percent';
 const QUOTED = 5;
 const quote = (facts: Fact[]) => facts.slice(0, QUOTED).map((f) => `"${f.text.replace(/\s+/g, ' ').slice(0, 40)}"`).join(', ');
 
+/** Whether the approved kind is about money: it names an amount, a
+ *  percentage or a money word. */
+export function kindIsAboutMoney(kind: string): boolean {
+  return MONEY_WORD.test(kind) || extractFacts(kind).some(isMoney);
+}
+
 /** Why a standing send names money it may not, or null. Counted, so the model
- *  is never asked: the email goes to the owner instead (fail closed). */
+ *  is never asked: the email goes to the owner instead (fail closed). Null for
+ *  a kind about money, whose amounts the model judges as before. */
 export function unfoundedMoneyReason(sources: FactSources, email: { subject: string; body: string }): string | null {
+  if (kindIsAboutMoney(sources.kind)) return null;
   const money = unfoundedFacts(sources, email).filter(isMoney);
   if (!money.length) return null;
   const where = sources.answers ? 'the approval or the message it answers' : 'the approval';
