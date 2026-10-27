@@ -21,7 +21,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 
-/** The steps of one turn, by the name each CLI gives its hook event. */
+/** The steps of one turn. Each CLI names their hook events its own way (`events`
+ *  below), and every CLI here has a hook for each. */
 const STEPS = ['start', 'prompt', 'preTool', 'postTool', 'stop'];
 
 /** Claude Code reads its hooks from the `--settings` file on argv. */
