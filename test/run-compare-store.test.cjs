@@ -160,6 +160,19 @@ test('a session file read only up to the run\'s end is closed after it', async (
   assert.equal(fs.existsSync(path.join(f.projects, '-office-pam')), false);
 });
 
+test('every session file the slicer opens is closed by the time the comparison returns', async (t) => {
+  // Value: protects=a Went wrong never leaves a member's session file open behind it; fails_when=the slicer destroys its reader without waiting for the file to close, so a rename or delete right after can fail on Windows (the flake in the test above); why_new=Windows CI ENOTEMPTY on main, 2026-10-27; seam=fs.createReadStream
+  const opened = [];
+  const real = fs.createReadStream;
+  fs.createReadStream = (...args) => { const s = real(...args); opened.push(s); return s; };
+  t.after(() => { fs.createReadStream = real; });
+  const f = setup(t);
+  twoRuns(f);
+  await f.store.wentWrong({ runId: 2, agentId: 'pam', workStyle: 'x' });
+  assert.ok(opened.length >= 2, `sanity: both sessions were read (${opened.length})`);
+  assert.deepEqual(opened.filter((s) => !s.closed).map((s) => path.basename(s.path)), [], 'no file is still open, with no extra wait');
+});
+
 test('only the member\'s own sessions from the private record are read', async (t) => {
   // Value: protects=a forged or other member's session never enters the comparison; fails_when=the slicer scans every session file; why_new=architecture finding 1; seam=sessionsOf
   const f = setup(t);

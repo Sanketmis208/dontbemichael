@@ -11,6 +11,7 @@
  * to the owner's card.
  */
 import { createReadStream } from 'node:fs';
+import { once } from 'node:events';
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -277,6 +278,9 @@ export class RunCompare {
         // (past the run's end); Windows then holds the file (CI, 2026-10-24).
         rl.close();
         input.destroy();
+        // destroy() closes the file on a later tick: wait for it, so no file
+        // is still open once the slice returns (Windows CI, 2026-10-27).
+        if (!input.closed) await once(input, 'close').catch(() => { /* closed with an error: nothing to wait for */ });
       }
     }
     lines.sort((a, b) => a.t - b.t);
