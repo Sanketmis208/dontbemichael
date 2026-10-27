@@ -1,5 +1,5 @@
-- **Clocking in** shows your team arriving.
-- **Waiting cards** come back on their date.
-- **Pulse** lists what the team learned.
-- **Run a job now** from its schedule.
-- **Members' notes** stay their own.
+- **Memory notes** say what showed them.
+- **Went wrong** compares a job's runs.
+- **Explain how two members split** the work.
+- Pulse shows how long the office ran.
+- Contributor fixes across the app.
