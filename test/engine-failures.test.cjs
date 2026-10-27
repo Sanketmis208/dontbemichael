@@ -31,7 +31,9 @@ const SH = posixOnly('the stand-in CLIs run hooks with sh');
 const failing = (engine) => (SH.skip || hasStep(engine, 'failure') ? SH : { skip: `${engine} has no hook for a failed turn (pinned above)` });
 
 /** An office whose plan signals feed a real OfficeBreak, wired as index.ts
- *  wires them for a stop (limitReached on a `limit` signal). */
+ *  wires them for a stop (limitReached on a `limit` signal). A simplified copy:
+ *  index.ts also passes `retry` (false for an API key that stopped working),
+ *  which this leaves out, so these tests say nothing about the retry rule. */
 async function office(t, engine) {
   let saved = null;
   const officeBreak = new OfficeBreak({ load: () => saved, save: (s) => { saved = s; } }, () => 1_000_000);
@@ -46,6 +48,7 @@ async function office(t, engine) {
 }
 
 test('the app installs a hook for a failed turn on Claude Code only, and the stand-ins model exactly that', SH, async (t) => {
+  // Value: protects=the Codex and Gemini CLI gap stays recorded against what the app installs; fails_when=a bridge gains or loses a StopFailure hook without the stand-ins and this list following; why_new=issue #443; seam=installed hook files
   const engines = [];
   for (const engine of FAKE_ENGINES) {
     const { cli } = await office(t, engine);
@@ -59,7 +62,16 @@ test('the app installs a hook for a failed turn on Claude Code only, and the sta
 });
 
 for (const engine of FAKE_ENGINES) {
+  test(`${engine}: a prompt and a finished turn reach the office break`, SH, async (t) => {
+    // Value: protects=the office break hears every engine's prompts and turn ends, which end a break; fails_when=onPlan shifts to another HookServer slot, or a bridge drops UserPromptSubmit or Stop on the way in; why_new=review of #580; seam=stand-in CLI into a real HookServer
+    const { cli, signals } = await office(t, engine);
+    await cli.step('prompt', { prompt: 'Check the supplier invoices.' });
+    await cli.step('stop');
+    assert.deepEqual(signals, [{ kind: 'prompt', agentId: AGENT }, { kind: 'turn', agentId: AGENT }], engine);
+  });
+
   test(`${engine}: a sign in that stopped working, no credit and a usage limit each reach the owner as their own reason`, failing(engine), async (t) => {
+    // Value: protects=each stop reaches the office break as its own reason, so the owner is told the right thing; fails_when=STOP_ERRORS loses a mapping, StopFailure sends the wrong reason, or the matcher drops one; why_new=issue #443; seam=stand-in CLI into a real HookServer and OfficeBreak
     for (const [error, reason, ownerActs] of [
       ['authentication_failed', 'signin', true],
       ['billing_error', 'credit', true],
@@ -76,6 +88,7 @@ for (const engine of FAKE_ENGINES) {
   });
 
   test(`${engine}: a turn that fails for any other reason ends that turn only`, failing(engine), async (t) => {
+    // Value: protects=a passing server error never stops the whole office; fails_when=the StopFailure matcher widens to every error; why_new=issue #443; seam=stand-in CLI into a real HookServer
     const { cli, officeBreak, signals } = await office(t, engine);
     for (const error of ['server_error', 'invalid_request', 'max_output_tokens']) {
       assert.deepEqual(await cli.step('failure', { error }), [], `${engine} ${error}: no hook runs for it`);
@@ -85,6 +98,7 @@ for (const engine of FAKE_ENGINES) {
   });
 
   test(`${engine}: a member the app stops ends its turn cleanly, in the engine's own answer`, SH, async (t) => {
+    // Value: protects=the app's stop (voice or control strip) ends the turn on every engine; fails_when=the halt answer is lost, or a shim drops continue false; why_new=issue #443; seam=stand-in CLI into a real HookServer
     const { cli, control, events } = await office(t, engine);
     await cli.step('start');
     control.halt(AGENT);

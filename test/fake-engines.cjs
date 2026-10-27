@@ -202,8 +202,23 @@ async function officeOn(t, engine, { goal = null, onPlan } = {}) {
   const events = [];
   const window = { send: (channel, payload) => { if (channel === 'hive:hookEvent') events.push(payload); }, isDestroyed: () => false };
   const control = new ControlRegistry();
-  const server = new HookServer(hive, () => window, () => ({ harnessHome: home }), control, undefined,
-    (id) => (id === AGENT ? goal : null), undefined, undefined, undefined, undefined, undefined, onPlan);
+  // HookServer takes its hooks by position. Every slot is named, so a new
+  // constructor parameter cannot silently shift onPlan; engine-failures.test.cjs
+  // also checks that plan signals arrive on every engine.
+  const server = new HookServer(
+    hive,
+    () => window,
+    () => ({ harnessHome: home }),
+    control,
+    /* breaker */ undefined,
+    /* getStandingGoal */ (id) => (id === AGENT ? goal : null),
+    /* onEvent */ undefined,
+    /* getKnowledge */ undefined,
+    /* getCompanyProfile */ undefined,
+    /* roleReadsBooks */ undefined,
+    /* memberPresent */ undefined,
+    /* onPlan */ onPlan
+  );
   server.start();
   t.after(() => server.stop());
   return { cli: fakeEngine(engine, injection, { cwd: business }), events, control, injection };
