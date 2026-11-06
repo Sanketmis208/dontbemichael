@@ -23,7 +23,7 @@ import { arabicJoinRanges } from '@/terminal/arabicJoiner';
 import { attachArabicSpacingFix } from '@/terminal/arabicSpacingFix';
 import { isArabicTerminalEnabled } from '@/terminal/arabicSetting';
 import {
-  classifyPathToken, isPathToken, linkCellRange, pathTokenMatcher, stripPathToken, type PathAction
+  classifyPathToken, isPathToken, linkCellRange, linkableTokens, stripPathToken, type PathAction
 } from '@shared/terminalPaths';
 import {
   createTerminalRecoveryState,
@@ -1037,6 +1037,24 @@ async function activatePath(abs: string, action: PathAction): Promise<void> {
   storeApi?.getState().openFileInIde(hit.path);
 }
 
+/** Is a quoted match with a space inside a real path on disk, so it links whole?
+ *  The link provider runs on every hover, so an answer is kept for a few
+ *  seconds; a file saved a moment later links on the next look. A path that
+ *  does not resolve (no cwd yet) is not on disk. */
+const quotedStatCache = new Map<string, { at: number; exists: boolean }>();
+const QUOTED_STAT_TTL_MS = 10_000;
+async function quotedPathOnDisk(ptyId: string, raw: string): Promise<boolean> {
+  const abs = resolvePathCandidate(ptyId, raw);
+  if (!abs) return false;
+  const hit = quotedStatCache.get(abs);
+  if (hit && Date.now() - hit.at < QUOTED_STAT_TTL_MS) return hit.exists;
+  const res = await window.cth.statAbs(abs).catch(() => null);
+  const exists = !!res?.exists;
+  if (quotedStatCache.size > 500) quotedStatCache.clear();
+  quotedStatCache.set(abs, { at: Date.now(), exists });
+  return exists;
+}
+
 /** A buffer line's cells as linkCellRange reads them. */
 function cellsOf(line: NonNullable<ReturnType<Terminal['buffer']['active']['getLine']>>): Array<{ chars: string; width: number }> {
   const out: Array<{ chars: string; width: number }> = [];
@@ -1054,31 +1072,30 @@ function registerMarkdownLinkProvider(term: Terminal, ptyId: string): void {
         const line = term.buffer.active.getLine(bufferLineNumber - 1);
         const text = line ? line.translateToString(true) : '';
         if (!text || !text.includes('.')) { callback(undefined); return; }
-        const links: Parameters<typeof callback>[0] = [];
-        const re = pathTokenMatcher();
-        let m: RegExpExecArray | null;
-        while ((m = re.exec(text)) !== null) {
-          const raw = m[0];
-          const abs = resolvePathCandidate(ptyId, raw);
-          if (!abs) continue;
-          const action = classifyPathToken(stripPathToken(raw));
-          const span = line ? linkCellRange(cellsOf(line), m.index, m.index + raw.length, raw) : null;
-          if (!span) continue;
-          links!.push({
-            range: {
-              start: { x: span.startX, y: bufferLineNumber },
-              end: { x: span.endX, y: bufferLineNumber }
-            },
-            text: raw,
-            decorations: { underline: true, pointerCursor: true },
-            activate: (event: MouseEvent | undefined) => {
-              // ⌘/Ctrl+click only — a plain click must keep going to the TUI.
-              if (event && !(event.metaKey || event.ctrlKey)) return;
-              void activatePath(abs, action);
-            }
-          });
-        }
-        callback(links && links.length ? links : undefined);
+        void linkableTokens(text, (raw) => quotedPathOnDisk(ptyId, raw)).then((tokens) => {
+          const links: Parameters<typeof callback>[0] = [];
+          for (const { raw, index } of tokens) {
+            const abs = resolvePathCandidate(ptyId, raw);
+            if (!abs) continue;
+            const action = classifyPathToken(stripPathToken(raw));
+            const span = line ? linkCellRange(cellsOf(line), index, index + raw.length, raw) : null;
+            if (!span) continue;
+            links!.push({
+              range: {
+                start: { x: span.startX, y: bufferLineNumber },
+                end: { x: span.endX, y: bufferLineNumber }
+              },
+              text: raw,
+              decorations: { underline: true, pointerCursor: true },
+              activate: (event: MouseEvent | undefined) => {
+                // ⌘/Ctrl+click only — a plain click must keep going to the TUI.
+                if (event && !(event.metaKey || event.ctrlKey)) return;
+                void activatePath(abs, action);
+              }
+            });
+          }
+          callback(links && links.length ? links : undefined);
+        }).catch(() => callback(undefined));
       }
     });
   } catch { /* proposed API unavailable — feature silently off */ }

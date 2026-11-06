@@ -137,6 +137,32 @@ test('quoted prose that starts with a slash links only the file name inside it',
   assert.deepEqual(tokensIn('saved "/Users/Jane/Business Reports/summary.md"'), ['/Users/Jane/Business Reports/summary.md']);
 });
 
+test('quoted prose that starts with a folder links the file name inside it when the whole is not on disk', async () => {
+  // Value: protects=a ⌘-click on "/tmp is full, see notes.md" finds notes.md, not a path that leads nowhere (TODOS, terminal links); fails_when=the whole phrase is underlined though it is not on disk, a real spaced path stops linking whole, or a path with no space is stat'ed; why_new=review of #436; seam=the exists callback stands in for statAbs
+  const { linkableTokens, quotedNeedsCheck } = loadTs('src/shared/terminalPaths.ts');
+  const asked = [];
+  const disk = (onDisk) => async (raw) => { asked.push(raw); return onDisk.includes(raw); };
+  const prose = 'warn: "/tmp is full, see notes.md" now';
+  assert.deepEqual(await linkableTokens(prose, disk([])), [{ raw: 'notes.md', index: prose.indexOf('notes.md') }], 'the file name, at its own offset');
+  assert.deepEqual(asked, ['"/tmp is full, see notes.md"'], 'the disk is asked about the quoted whole');
+
+  const real = 'saved "/Users/Jane/Business Reports/summary.md"';
+  const whole = '"/Users/Jane/Business Reports/summary.md"';
+  assert.deepEqual(await linkableTokens(real, disk([whole])), [{ raw: whole, index: real.indexOf(whole) }], 'a real path with spaces links whole');
+
+  asked.length = 0;
+  const plain = 'open "/tmp/report.md" and src/main/a.ts';
+  assert.deepEqual((await linkableTokens(plain, disk([]))).map((t) => t.raw), ['"/tmp/report.md"', 'src/main/a.ts'], 'no space, no question');
+  assert.deepEqual(asked, [], 'a quoted path with no space is never stat\'ed');
+
+  const failing = async () => { throw new Error('ipc gone'); };
+  assert.deepEqual((await linkableTokens(prose, failing)).map((t) => t.raw), ['notes.md'], 'a failed stat counts as not on disk');
+
+  assert.equal(quotedNeedsCheck('"/a b/c.md"'), true);
+  assert.equal(quotedNeedsCheck('"/a/c.md"'), false);
+  assert.equal(quotedNeedsCheck('a b.md'), false, 'unquoted');
+});
+
 test('quoted versions and prose do not become file paths', () => {
   assert.deepEqual(tokensIn('version "v0.4.5", cost \'0.92\', called `spring.thaw`'), []);
 });
