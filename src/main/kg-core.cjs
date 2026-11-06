@@ -177,8 +177,9 @@ function chunkText(text, opts = {}) {
  * an exact-phrase bonus. Returns 0 when no query term appears.
  *
  * `opts.weights` (term → weight, see termWeights) makes a rare term's matches
- * count for more than a common one's; a term without a weight counts 1.
- * `opts.tf` is the chunk's termCounts, when the caller already has it.
+ * and its title boost count for more than a common one's; a term without a
+ * weight counts 1. `opts.tf`, when the caller already has it, holds the chunk's
+ * counts for at least every query term (search passes only those).
  */
 function scoreChunk(rec, queryTerms, queryRaw, opts = {}) {
   if (!queryTerms.length) return 0;
@@ -194,7 +195,8 @@ function scoreChunk(rec, queryTerms, queryRaw, opts = {}) {
     const c = tf[term] || 0;
     const w = weights && weights[term] !== undefined ? weights[term] : 1;
     if (c > 0) { matched++; score += w * (1 + Math.log(1 + c)); }
-    if (titleTokens.has(term)) score += 2;
+    // Weighted too, so a rare term's title keeps its pull against its body hits.
+    if (titleTokens.has(term)) score += 2 * w;
   }
   if (matched === 0) return 0;
   score += matched * 0.5; // reward breadth of distinct matches
@@ -212,21 +214,22 @@ function termCounts(text) {
 
 /**
  * A weight per query term from how many of the store's chunks hold it: 1 + ln(chunks /
- * chunks holding the term). A term in every chunk weighs 1, as every term did before,
- * and a term in few chunks weighs more, so "time" cannot outweigh a rarer word that says
- * what the owner is after. A store of one chunk weighs every term 1. `counts` is one
- * termCounts per chunk.
+ * chunks holding the term), at most WEIGHT_CAP. A term in every chunk weighs 1, as every
+ * term did before, and a term in few chunks weighs more, so "time" cannot outweigh a
+ * rarer word that says what the owner is after. The cap keeps a typo or a stray number
+ * in one chunk from taking the top slot from the passage that matches the rest of the
+ * query. A store of one chunk weighs every term 1. `holding` is term → chunks holding
+ * it; `total` is the store's chunk count.
  */
-function termWeights(queryTerms, counts) {
+function termWeights(holding, total) {
   const weights = Object.create(null);
-  const total = counts.length;
-  for (const term of queryTerms) {
-    let holding = 0;
-    for (const tf of counts) if (tf[term]) holding++;
-    if (holding) weights[term] = 1 + Math.log(total / holding);
+  for (const term of Object.keys(holding)) {
+    if (holding[term] > 0) weights[term] = Math.min(WEIGHT_CAP, 1 + Math.log(total / holding[term]));
   }
   return weights;
 }
+// A term in one chunk of ten already weighs this much; rarer ones weigh no more.
+const WEIGHT_CAP = 1 + Math.log(10);
 
 /** How many chars the end of `earlier` and the start of `later` have in common: the
  *  overlap chunkText carries from one chunk into the next. 0 when they share none. */
@@ -403,21 +406,29 @@ function search(kgRoot, query, opts = {}) {
   const idxPath = path.join(kgRoot, 'index.jsonl');
   if (!fs.existsSync(idxPath)) return [];
 
-  // Count the query's terms in every chunk first: a term's weight depends on how many
-  // chunks of the whole store hold it. Only the query's terms are kept per chunk.
+  // One scan counts the store's chunks and how many hold each query term, since a term's
+  // weight depends on the whole store. Only chunks holding a query term are kept (no
+  // other chunk can score), with counts for the query's terms alone.
   const chunks = [];
+  const holding = Object.create(null);
+  let total = 0;
   const lines = fs.readFileSync(idxPath, 'utf8').split('\n');
   for (const line of lines) {
     const s = line.trim();
     if (!s) continue;
     let rec;
     try { rec = JSON.parse(s); } catch { continue; }
+    total++;
     const all = termCounts(String(rec.text || ''));
-    const tf = Object.create(null);
-    for (const term of queryTerms) if (all[term]) tf[term] = all[term];
-    chunks.push({ rec, tf });
+    let tf = null;
+    for (const term of queryTerms) {
+      if (!all[term]) continue;
+      (tf ??= Object.create(null))[term] = all[term];
+      holding[term] = (holding[term] || 0) + 1;
+    }
+    if (tf) chunks.push({ rec, tf });
   }
-  const weights = termWeights(queryTerms, chunks.map((c) => c.tf));
+  const weights = termWeights(holding, total);
   const scored = [];
   for (const { rec, tf } of chunks) {
     const sc = scoreChunk(rec, queryTerms, query, { weights, tf });

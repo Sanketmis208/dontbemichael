@@ -226,12 +226,36 @@ function writeFixture(dir, name, content) {
 
   // ─── search: rare terms weigh more ──────────────────────────────────────
   test('termWeights: a term in every chunk weighs 1, a rarer one more, an absent one nothing', () => {
-    const counts = [{ time: 2, warranty: 1 }, { time: 1 }, { time: 3 }, { time: 1 }];
-    const w = kg.termWeights(['time', 'warranty', 'refund'], counts);
+    const w = kg.termWeights({ time: 4, warranty: 1 }, 4);
     assert.strictEqual(w.time, 1, 'in every chunk');
     assert.ok(Math.abs(w.warranty - (1 + Math.log(4))) < 1e-9, 'in one chunk of four');
     assert.strictEqual(w.refund, undefined, 'in no chunk');
-    assert.strictEqual(kg.termWeights(['time'], [{ time: 5 }]).time, 1, 'a store of one chunk weighs every term 1');
+    assert.strictEqual(kg.termWeights({ time: 1 }, 1).time, 1, 'a store of one chunk weighs every term 1');
+  });
+
+  test('termWeights: a term rarer than one chunk in ten weighs no more than one in ten', () => {
+    const cap = 1 + Math.log(10);
+    assert.ok(Math.abs(kg.termWeights({ typo: 1 }, 2000).typo - cap) < 1e-9, 'one chunk of 2,000');
+    assert.ok(Math.abs(kg.termWeights({ rare: 10 }, 100).rare - cap) < 1e-9, 'one chunk in ten');
+    assert.ok(kg.termWeights({ common: 50 }, 100).common < cap);
+  });
+
+  test('scoreChunk: a stray number in one log line does not outrank the passage the query is about', () => {
+    // Review of #685: "refund for order 4471" in a 2,000 chunk store.
+    const weights = kg.termWeights({ refund: 50, order: 300, 4471: 1 }, 2000);
+    const terms = kg.tokenize('refund for order 4471');
+    const policy = kg.scoreChunk({ title: 'Refund Policy', text: 'Ask for a refund within 30 days of your order.' }, terms, 'refund for order 4471', { weights });
+    const log = kg.scoreChunk({ title: 'Sync log', text: 'synced order 4471 at 09:12' }, terms, 'refund for order 4471', { weights });
+    assert.ok(policy > log, `policy ${policy} should beat the log line ${log}`);
+  });
+
+  test('scoreChunk: a rare term in the title keeps its pull against more hits in a body', () => {
+    // Review of #685: "zebrafish" in 2 chunks of 1,000; the title boost grows with the weight.
+    const weights = kg.termWeights({ zebrafish: 2 }, 1000);
+    const terms = kg.tokenize('zebrafish');
+    const titled = kg.scoreChunk({ title: 'Zebrafish', text: 'The zebrafish tank is in room 4.' }, terms, 'zebrafish', { weights });
+    const untitled = kg.scoreChunk({ title: 'Notes', text: 'zebrafish zebrafish zebrafish feeding times' }, terms, 'zebrafish', { weights });
+    assert.ok(titled > untitled, `titled ${titled} should beat untitled ${untitled}`);
   });
 
   test('search: a rare word that answers the query outranks a common word said often', () => {
