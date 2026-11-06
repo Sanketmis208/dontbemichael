@@ -175,20 +175,25 @@ function chunkText(text, opts = {}) {
  * Score one index record against the query. Term-frequency (log-damped) over
  * distinct query terms, a title-match boost, a distinct-term coverage bonus, and
  * an exact-phrase bonus. Returns 0 when no query term appears.
+ *
+ * `opts.weights` (term → weight, see termWeights) makes a rare term's matches
+ * count for more than a common one's; a term without a weight counts 1.
+ * `opts.tf` is the chunk's termCounts, when the caller already has it.
  */
-function scoreChunk(rec, queryTerms, queryRaw) {
+function scoreChunk(rec, queryTerms, queryRaw, opts = {}) {
   if (!queryTerms.length) return 0;
   const text = String(rec.text || '');
   const titleLc = String(rec.title || '').toLowerCase();
-  const tf = Object.create(null);
-  for (const tok of tokenize(text)) tf[tok] = (tf[tok] || 0) + 1;
+  const tf = opts.tf || termCounts(text);
+  const weights = opts.weights || null;
   // A title boosts a term only as a whole word, as the body is matched.
   const titleTokens = new Set(tokenize(titleLc));
   let score = 0;
   let matched = 0;
   for (const term of queryTerms) {
     const c = tf[term] || 0;
-    if (c > 0) { matched++; score += 1 + Math.log(1 + c); }
+    const w = weights && weights[term] !== undefined ? weights[term] : 1;
+    if (c > 0) { matched++; score += w * (1 + Math.log(1 + c)); }
     if (titleTokens.has(term)) score += 2;
   }
   if (matched === 0) return 0;
@@ -196,6 +201,31 @@ function scoreChunk(rec, queryTerms, queryRaw) {
   const q = String(queryRaw || '').trim().toLowerCase();
   if (q.length >= 3 && text.toLowerCase().includes(q)) score += 5; // exact phrase
   return score;
+}
+
+/** How many times each token appears in `text`. */
+function termCounts(text) {
+  const tf = Object.create(null);
+  for (const tok of tokenize(text)) tf[tok] = (tf[tok] || 0) + 1;
+  return tf;
+}
+
+/**
+ * A weight per query term from how many of the store's chunks hold it: 1 + ln(chunks /
+ * chunks holding the term). A term in every chunk weighs 1, as every term did before,
+ * and a term in few chunks weighs more, so "time" cannot outweigh a rarer word that says
+ * what the owner is after. A store of one chunk weighs every term 1. `counts` is one
+ * termCounts per chunk.
+ */
+function termWeights(queryTerms, counts) {
+  const weights = Object.create(null);
+  const total = counts.length;
+  for (const term of queryTerms) {
+    let holding = 0;
+    for (const tf of counts) if (tf[term]) holding++;
+    if (holding) weights[term] = 1 + Math.log(total / holding);
+  }
+  return weights;
 }
 
 /** How many chars the end of `earlier` and the start of `later` have in common: the
@@ -373,14 +403,24 @@ function search(kgRoot, query, opts = {}) {
   const idxPath = path.join(kgRoot, 'index.jsonl');
   if (!fs.existsSync(idxPath)) return [];
 
-  const scored = [];
+  // Count the query's terms in every chunk first: a term's weight depends on how many
+  // chunks of the whole store hold it. Only the query's terms are kept per chunk.
+  const chunks = [];
   const lines = fs.readFileSync(idxPath, 'utf8').split('\n');
   for (const line of lines) {
     const s = line.trim();
     if (!s) continue;
     let rec;
     try { rec = JSON.parse(s); } catch { continue; }
-    const sc = scoreChunk(rec, queryTerms, query);
+    const all = termCounts(String(rec.text || ''));
+    const tf = Object.create(null);
+    for (const term of queryTerms) if (all[term]) tf[term] = all[term];
+    chunks.push({ rec, tf });
+  }
+  const weights = termWeights(queryTerms, chunks.map((c) => c.tf));
+  const scored = [];
+  for (const { rec, tf } of chunks) {
+    const sc = scoreChunk(rec, queryTerms, query, { weights, tf });
     if (sc > 0) scored.push({ rec, score: sc });
   }
   scored.sort((a, b) =>
@@ -510,6 +550,6 @@ function stats(kgRoot) {
 
 module.exports = {
   ingest, search, list, getDoc, removeDoc, reindex, docFile, stats,
-  detectModality, extractText, chunkText, tokenize, scoreChunk, makeSnippet, deriveTitle,
+  detectModality, extractText, chunkText, tokenize, scoreChunk, termWeights, makeSnippet, deriveTitle,
   DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP
 };

@@ -146,7 +146,10 @@ beside the CLI (packaged), then the repo layout (dev). With no store configured 
 line and exits 0.
 
 **Scoring (`scoreChunk`):** the query is lowercased and tokenized, stop words dropped. For each
-query term found in a chunk, add `1 + ln(1 + count)`; add 2 when the term is in the title; add
+query term found in a chunk, add `weight × (1 + ln(1 + count))`, where the weight is
+`1 + ln(chunks in the store / chunks holding the term)` (`termWeights`): a term in every chunk
+weighs 1 and a rare one more, so a common word said often cannot outrank the rare word the
+query is about; add 2 when the term is in the title; add
 0.5 per distinct term matched; add 5 when the whole query appears as written. A word typed more
 than once is one term. Results come back highest first with a snippet around the first hit.
 Neighbouring chunks share 150 characters of overlap, so a passage there sits in two chunks: a chunk is

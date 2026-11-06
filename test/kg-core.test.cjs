@@ -224,6 +224,36 @@ function writeFixture(dir, name, content) {
     assert.strictEqual(kg.search(root, 'free free free shipping')[0].score, once);
   });
 
+  // ─── search: rare terms weigh more ──────────────────────────────────────
+  test('termWeights: a term in every chunk weighs 1, a rarer one more, an absent one nothing', () => {
+    const counts = [{ time: 2, warranty: 1 }, { time: 1 }, { time: 3 }, { time: 1 }];
+    const w = kg.termWeights(['time', 'warranty', 'refund'], counts);
+    assert.strictEqual(w.time, 1, 'in every chunk');
+    assert.ok(Math.abs(w.warranty - (1 + Math.log(4))) < 1e-9, 'in one chunk of four');
+    assert.strictEqual(w.refund, undefined, 'in no chunk');
+    assert.strictEqual(kg.termWeights(['time'], [{ time: 5 }]).time, 1, 'a store of one chunk weighs every term 1');
+  });
+
+  test('search: a rare word that answers the query outranks a common word said often', () => {
+    const root = tmpRoot();
+    for (let i = 0; i < 5; i++) {
+      kg.ingest(root, { title: `Rota ${i}`, text: `Opening time is nine. Closing time is five. Lunch time is noon.` });
+    }
+    const warranty = kg.ingest(root, { title: 'Repairs', text: 'Our warranty covers one year of parts.' });
+    // Not a phrase in any text, so only the term scores decide.
+    const hits = kg.search(root, 'warranty time');
+    assert.strictEqual(hits[0].docId, warranty.docId, 'the warranty passage comes first');
+    assert.strictEqual(hits.length, 6, 'the passages that only say time still come back');
+  });
+
+  test('search: a store of one passage scores as it did before weights', () => {
+    const root = tmpRoot();
+    kg.ingest(root, { title: 'Shipping', text: 'We ship in three days. Shipping is free over fifty dollars.' });
+    const terms = kg.tokenize('free shipping');
+    const unweighted = kg.scoreChunk({ title: 'Shipping', text: 'We ship in three days. Shipping is free over fifty dollars.' }, terms, 'free shipping');
+    assert.strictEqual(kg.search(root, 'free shipping')[0].score, Math.round(unweighted * 1000) / 1000);
+  });
+
   test('search: a passage inside the overlap of two chunks comes back once', () => {
     const sentence = 'The quarterly zebrafish audit happens in March.';
     let inTwoChunks = 0;
