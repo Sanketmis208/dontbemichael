@@ -482,6 +482,91 @@ test('the backfill never follows a link or waits on a pipe left in an agent\'s f
   assert.deepEqual(JSON.parse(r.stdout), []);
 });
 
+test('a backfill that could not read a file runs again and adds only what it missed', { skip: process.platform === 'win32' || process.getuid?.() === 0 ? 'chmod does not lock a file here' : false }, (t) => {
+  // Value: protects=a scan cut short by a locked or moving file fills in its details later (TODOS "Retry the backfill when it skipped files it could not read"); fails_when=the mark is written done after a scan that missed a file, a retry duplicates rows it already wrote, a file no scan can read rescans forever, or the mark is not done after a full scan; why_new=Codex adversarial review, 2026-10-17; seam=temporary office folders; no_claim=Windows file locks
+  const B = loadTs('src/main/checkedBackfill.ts');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'md-backfill-retry-'));
+  t.after(() => { try { fs.chmodSync(locked, 0o644); } catch { /* gone */ } fs.rmSync(home, { recursive: true, force: true }); });
+  const hiveRoot = path.join(home, 'hive');
+  const priv = path.join(home, 'private');
+  const dir = (...p) => { const d = path.join(...p); fs.mkdirSync(d, { recursive: true }); return d; };
+  const now = Date.UTC(2026, 9, 16, 23, 0);
+  const sentDir = dir(hiveRoot, 'agents', 'pam', 'outbox', '.sent');
+  const peteDone = dir(hiveRoot, 'agents', 'research', 'inbox', '.done');
+  const question = (name, at, subject) => {
+    const sent = path.join(sentDir, `${name}.json`);
+    fs.writeFileSync(sent, JSON.stringify({ to: 'research', act: 'query', subject, body: `${subject} for Rosa Diaz` }));
+    fs.utimesSync(sent, (at - 2000) / 1000, (at - 2000) / 1000);
+    const got = path.join(peteDone, `${name}.json`);
+    fs.writeFileSync(got, JSON.stringify({ id: name, from: 'pam', to: 'research', subject, body: `${subject} for a customer`, created_at: new Date(at).toISOString() }));
+    return got;
+  };
+  question('q1', now - 7_200_000, 'Rate');
+  const locked = question('q2', now - 3_600_000, 'Late fee');
+  fs.chmodSync(locked, 0o000);
+  const input = { hiveRoot, researchId: 'research', researchNames: ['Pete'], nameOf: () => null };
+  const mark = () => JSON.parse(fs.readFileSync(path.join(priv, 'checked-backfill.json'), 'utf8'));
+  B.ensureCheckedBackfill(priv, input, now);
+  assert.deepEqual(rows(home).map((r) => r.wrote.subject), ['Rate'], 'what it could read');
+  assert.deepEqual([mark().done, mark().tries, mark().missed], [false, 1, 1], 'not done: one file missed');
+  // The file reads now: the next open fills it in, in time order, and adds no second Rate.
+  fs.chmodSync(locked, 0o644);
+  B.ensureCheckedBackfill(priv, input, now + 60_000);
+  assert.deepEqual(rows(home).map((r) => [r.wrote.subject, !!r.found]), [['Rate', true], ['Late fee', true]]);
+  assert.equal(mark().done, undefined, 'done');
+  assert.equal(mark().rows, 2);
+  fs.writeFileSync(path.join(priv, 'checked.jsonl'), '');
+  B.ensureCheckedBackfill(priv, input, now + 120_000);
+  assert.equal(rows(home).length, 0, 'a done mark never scans again');
+
+  // A file no scan can read stops after CHECKED_BACKFILL_TRIES scans.
+  fs.rmSync(priv, { recursive: true, force: true });
+  fs.chmodSync(locked, 0o000);
+  for (let n = 1; n < B.CHECKED_BACKFILL_TRIES; n++) {
+    B.ensureCheckedBackfill(priv, input, now);
+    assert.equal(mark().done, false, `scan ${n}`);
+    assert.equal(rows(home).length, 1, `scan ${n} adds no second Rate`);
+  }
+  B.ensureCheckedBackfill(priv, input, now);
+  assert.equal(mark().done, undefined, 'taken as done on the last try');
+  assert.equal(mark().missed, 1, 'and says what it missed');
+  // A mark from before retries ({ at, rows }) is done.
+  fs.writeFileSync(path.join(priv, 'checked-backfill.json'), JSON.stringify({ at: now, rows: 3 }));
+  fs.writeFileSync(path.join(priv, 'checked.jsonl'), '');
+  B.ensureCheckedBackfill(priv, input, now);
+  assert.equal(rows(home).length, 0, 'an older mark is done');
+});
+
+test('links and pipes an agent left never count as missed', { skip: process.platform === 'win32' ? 'pipes and links' : false }, (t) => {
+  // Value: protects=files skipped on purpose do not keep the backfill open; fails_when=a pipe, a link, a linked folder or an oversized file counts as missed, so the backfill rescans for nothing; why_new=TODOS "Retry the backfill", which names links and pipes; seam=temporary office folders
+  const { execFileSync } = require('node:child_process');
+  const B = loadTs('src/main/checkedBackfill.ts');
+  const { MAX_MESSAGE_FILE_BYTES } = loadTs('src/main/messageFile.ts');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'md-backfill-skip-'));
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const hiveRoot = path.join(home, 'hive');
+  const priv = path.join(home, 'private');
+  const done = path.join(hiveRoot, 'agents', 'research', 'inbox', '.done');
+  fs.mkdirSync(done, { recursive: true });
+  execFileSync('mkfifo', [path.join(done, 'pipe.json')]);
+  const outside = path.join(home, 'outside');
+  fs.mkdirSync(outside);
+  fs.writeFileSync(path.join(outside, 'x.json'), '{}');
+  fs.symlinkSync(path.join(outside, 'x.json'), path.join(done, 'link.json'));
+  fs.symlinkSync(path.join(outside, 'gone.json'), path.join(done, 'dangling.json'));
+  fs.mkdirSync(path.join(done, 'folder.json'));
+  fs.writeFileSync(path.join(done, 'big.json'), Buffer.alloc(MAX_MESSAGE_FILE_BYTES + 1, 32));
+  fs.mkdirSync(path.join(hiveRoot, 'agents', 'pam', 'outbox'), { recursive: true });
+  fs.symlinkSync(outside, path.join(hiveRoot, 'agents', 'pam', 'outbox', '.sent'));
+  const missed = [];
+  B.backfillChecked({ hiveRoot, researchSentDir: null, researchId: 'research', researchNames: ['Pete'], from: 0, until: Date.now() + 1e9, nameOf: () => null, onMissed: (p) => missed.push(p) });
+  assert.deepEqual(missed, []);
+  B.ensureCheckedBackfill(priv, { hiveRoot, researchId: 'research', researchNames: ['Pete'], nameOf: () => null });
+  const mark = JSON.parse(fs.readFileSync(path.join(priv, 'checked-backfill.json'), 'utf8'));
+  assert.equal(mark.done, undefined, 'done in one scan');
+  assert.equal(mark.missed, undefined);
+});
+
 test('word changes put back together give both texts, whatever is shared at the ends', () => {
   // Value: protects=the faster comparison (shared opening and ending taken off first) still marks every change; fails_when=a word is lost or doubled at the edges of the changed middle; why_new=performance fix, ship review 2026-10-17; seam=none
   const { wordChanges } = loadTs('src/shared/checkedRecord.ts');

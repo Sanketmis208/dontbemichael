@@ -18,14 +18,19 @@
  * any flag to Michael were never recorded. A question or answer whose other
  * half can't be found is left out; the list counts it as without details.
  * backfillChecked only reads; ensureCheckedBackfill writes the rows and its
- * mark once. Every file is read the safe way (messageFile.ts): an agent's own
+ * mark. Every file is read the safe way (messageFile.ts): an agent's own
  * folder may hold a link or a pipe, and this runs with the owner's rights.
+ *
+ * A scan that met a file it meant to read and could not (locked, being moved,
+ * a slow volume) is not done: the mark says how many it missed and the next
+ * open scans again, adding only rows it did not have. Links, pipes and files
+ * too big to be a message are left out on purpose and never count as missed.
  */
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { CHECKED_FILE, CHECKED_KEEP_MS, keepText, parseChecked, type CheckedRow } from '../shared/checkedRecord';
 import { RESEARCH_REPLY_LABEL, researchText } from '../shared/research';
-import { readMessageFile, realFolderIn, researchDeliveredId } from './messageFile';
+import { MAX_MESSAGE_FILE_BYTES, readMessageFile, realFolderIn, researchDeliveredId } from './messageFile';
 
 export interface BackfillInput {
   hiveRoot: string;
@@ -38,19 +43,47 @@ export interface BackfillInput {
   from: number;
   until: number;
   nameOf: (id: string) => string | null;
+  /** Told of each file or folder the scan meant to read and could not. */
+  onMissed?: (path: string) => void;
 }
+
+type Missed = ((path: string) => void) | undefined;
+
+/** A file `readMessageFile` gave nothing for that should have read: a plain
+ *  file of a message's size, or one locked, or one a folder listing named that
+ *  was gone by the read (moved on mid-scan). A link, a pipe, a folder or a file
+ *  too big is left out on purpose, and a file never listed may just not exist. */
+function missedByChance(file: string, listed: boolean): boolean {
+  try {
+    const st = lstatSync(file);
+    return st.isFile() && st.size <= MAX_MESSAGE_FILE_BYTES;
+  } catch (e) { return listed || (e as NodeJS.ErrnoException)?.code !== 'ENOENT'; }
+}
+const readCounted = (file: string, missed: Missed, listed = true): string | null => {
+  const raw = readMessageFile(file);
+  if (raw === null && missed && missedByChance(file, listed)) missed(file);
+  return raw;
+};
+/** A folder's names; a folder that is there and cannot be listed is missed,
+ *  one that isn't there has nothing to read. */
+const listCounted = (dir: string, missed: Missed): string[] => {
+  try { return readdirSync(dir); } catch (e) {
+    if ((e as NodeJS.ErrnoException)?.code !== 'ENOENT') missed?.(dir);
+    return [];
+  }
+};
 
 const parseJson = (raw: string | null): Record<string, unknown> | null => {
   if (raw === null) return null;
   try { const v = JSON.parse(raw) as unknown; return v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : null; } catch { return null; }
 };
-const readJson = (file: string): Record<string, unknown> | null => parseJson(readMessageFile(file));
+const readJson = (file: string, missed?: Missed, listed = true): Record<string, unknown> | null => parseJson(readCounted(file, missed, listed));
 const str = (v: unknown): string => (typeof v === 'string' ? v : v === undefined || v === null ? '' : JSON.stringify(v));
 /** The .json files in `parts` under `base`, only while each step is a real folder. */
-const jsonFiles = (base: string, ...parts: string[]): string[] => {
+const jsonFiles = (missed: Missed, base: string, ...parts: string[]): string[] => {
   const dir = realFolderIn(base, ...parts);
   if (!dir) return [];
-  try { return readdirSync(dir).filter((f) => f.endsWith('.json')).map((f) => join(dir, f)); } catch { return []; }
+  return listCounted(dir, missed).filter((f) => f.endsWith('.json')).map((f) => join(dir, f));
 };
 const timeOf = (m: Record<string, unknown>, file: string): number => {
   const t = Date.parse(str(m.created_at));
@@ -72,8 +105,8 @@ function texts(wrote: { subject: unknown; body: unknown }, got: { subject: unkno
 }
 
 /** The owner's answers to Research's Ask me questions, with when they were given. */
-function ownerAnswers(hiveRoot: string, researchId: string): Array<{ at: number; title: string; q: string; a: string }> {
-  const t = readJson(join(hiveRoot, 'tasks.json'));
+function ownerAnswers(hiveRoot: string, researchId: string, missed: Missed): Array<{ at: number; title: string; q: string; a: string }> {
+  const t = readJson(join(hiveRoot, 'tasks.json'), missed, false);
   const out: Array<{ at: number; title: string; q: string; a: string }> = [];
   for (const c of Array.isArray(t?.tasks) ? t!.tasks as Array<Record<string, unknown>> : []) {
     for (const e of Array.isArray(c?.humanQA) ? c.humanQA as Array<Record<string, unknown>> : []) {
@@ -85,6 +118,7 @@ function ownerAnswers(hiveRoot: string, researchId: string): Array<{ at: number;
 }
 
 export function backfillChecked(i: BackfillInput): CheckedRow[] {
+  const missed = i.onMissed;
   const rows: CheckedRow[] = [];
   const agentsDir = join(i.hiveRoot, 'agents');
   const inRange = (at: number): boolean => Number.isFinite(at) && at >= i.from && at < i.until;
@@ -93,13 +127,13 @@ export function backfillChecked(i: BackfillInput): CheckedRow[] {
     ({ at, way, from, fromName: i.nameOf(from), to, toName: i.nameOf(to), ...t, found: true });
 
   // ── Questions: what Research got, matched to what was written ──
-  const answers = ownerAnswers(i.hiveRoot, i.researchId);
+  const answers = ownerAnswers(i.hiveRoot, i.researchId, missed);
   const used = new Set<string>();
   const sentBy = new Map<string, Array<{ file: string; at: number; m: Record<string, unknown> }>>();
   const sentOf = (id: string) => {
     if (!sentBy.has(id)) {
-      sentBy.set(id, jsonFiles(agentsDir, id, 'outbox', '.sent').flatMap((file) => {
-        const m = readJson(file);
+      sentBy.set(id, jsonFiles(missed, agentsDir, id, 'outbox', '.sent').flatMap((file) => {
+        const m = readJson(file, missed);
         if (!m || !names.has(str(m.to).trim().toLowerCase())) return [];
         let at = NaN;
         try { at = lstatSync(file).mtimeMs; } catch { /* skipped */ }
@@ -108,9 +142,9 @@ export function backfillChecked(i: BackfillInput): CheckedRow[] {
     }
     return sentBy.get(id)!;
   };
-  const researchInbox = [...jsonFiles(agentsDir, i.researchId, 'inbox'), ...jsonFiles(agentsDir, i.researchId, 'inbox', '.done')];
+  const researchInbox = [...jsonFiles(missed, agentsDir, i.researchId, 'inbox'), ...jsonFiles(missed, agentsDir, i.researchId, 'inbox', '.done')];
   for (const file of researchInbox) {
-    const m = readJson(file);
+    const m = readJson(file, missed);
     if (!m) continue;
     const from = str(m.from);
     const at = timeOf(m, file);
@@ -132,17 +166,17 @@ export function backfillChecked(i: BackfillInput): CheckedRow[] {
 
   // ── Answers: what Research wrote, matched to the copy the team read ──
   const delivered = new Map<string, { m: Record<string, unknown>; file: string }>();
-  for (const id of (() => { try { return readdirSync(agentsDir); } catch { return []; } })()) {
+  for (const id of listCounted(agentsDir, missed)) {
     if (id === i.researchId) continue;
-    for (const file of [...jsonFiles(agentsDir, id, 'inbox'), ...jsonFiles(agentsDir, id, 'inbox', '.done')]) {
-      const m = readJson(file);
+    for (const file of [...jsonFiles(missed, agentsDir, id, 'inbox'), ...jsonFiles(missed, agentsDir, id, 'inbox', '.done')]) {
+      const m = readJson(file, missed);
       if (m && str(m.id).startsWith('research-') && str(m.from) === i.researchId) delivered.set(str(m.id), { m, file });
     }
   }
   const labels = i.researchNames.map((n) => `${researchText(RESEARCH_REPLY_LABEL, n)}\n\n`);
-  const sentAnswers = [...(i.researchSentDir ? jsonFiles(i.researchSentDir) : []), ...jsonFiles(agentsDir, i.researchId, 'outbox', '.sent')];
+  const sentAnswers = [...(i.researchSentDir ? jsonFiles(missed, i.researchSentDir) : []), ...jsonFiles(missed, agentsDir, i.researchId, 'outbox', '.sent')];
   for (const file of sentAnswers) {
-    const raw = readMessageFile(file);
+    const raw = readCounted(file, missed);
     const m = parseJson(raw);
     if (!m || raw === null) continue;
     const id = researchDeliveredId(`${basename(file)}\n${raw}`);
@@ -159,19 +193,53 @@ export function backfillChecked(i: BackfillInput): CheckedRow[] {
 
 export const CHECKED_BACKFILL_MARK = 'checked-backfill.json';
 
+/** Scans in all, the first included, before a scan that still misses files
+ *  is taken as done: a file no scan can read must not rescan forever. */
+export const CHECKED_BACKFILL_TRIES = 3;
+
+/** What the mark says: done, or how many scans missed files so far. A mark
+ *  from before scans were retried, or one that does not read, is done. */
+function readMark(file: string): { done: boolean; tries: number } | null {
+  if (!existsSync(file)) return null;
+  try {
+    const m = JSON.parse(readFileSync(file, 'utf8')) as { done?: unknown; tries?: unknown };
+    if (m && typeof m === 'object' && m.done === false) return { done: false, tries: typeof m.tries === 'number' && m.tries > 0 ? m.tries : 1 };
+  } catch { /* a mark that does not read still means a scan ran */ }
+  return { done: true, tries: 0 };
+}
+
+/** A found row's identity, so a scan run again adds only rows it lacked. */
+const foundKey = (r: CheckedRow): string => JSON.stringify([r.at, r.way, r.from, r.to, r.wrote]);
+
 /** Once per office: rows for the 62 days before the lists kept words, put in
- *  front of the rows kept since, then a mark so it never runs again. Sync, on
- *  the main process like the hive's own appends, so nothing interleaves. */
-export function ensureCheckedBackfill(privateDir: string, input: Omit<BackfillInput, 'from' | 'until' | 'researchSentDir'>, now = Date.now()): void {
+ *  front of the rows kept since, then a mark so it never runs again. A scan
+ *  that missed files runs again on the next open, up to CHECKED_BACKFILL_TRIES
+ *  scans. Sync, on the main process like the hive's own appends, so nothing
+ *  interleaves. */
+export function ensureCheckedBackfill(privateDir: string, input: Omit<BackfillInput, 'from' | 'until' | 'researchSentDir' | 'onMissed'>, now = Date.now()): void {
   const mark = join(privateDir, CHECKED_BACKFILL_MARK);
-  if (existsSync(mark)) return;
+  const was = readMark(mark);
+  if (was?.done) return;
   const live = join(privateDir, CHECKED_FILE);
   let existing: string[] = [];
   try { existing = readFileSync(live, 'utf8').split('\n').filter((l) => l.trim()); } catch { /* none yet */ }
-  const kept = existing.map(parseChecked).filter((r): r is CheckedRow => !!r);
+  const parsed = existing.map(parseChecked);
+  // Rows an earlier scan found are not where keeping began.
+  const kept = parsed.filter((r): r is CheckedRow => !!r && !r.found);
   const until = kept.reduce((m, r) => Math.min(m, r.at), now);
-  const rows = backfillChecked({ ...input, researchSentDir: join(privateDir, 'research-outbox', 'sent'), from: now - CHECKED_KEEP_MS, until });
+  let missed = 0;
+  const rows = backfillChecked({ ...input, researchSentDir: join(privateDir, 'research-outbox', 'sent'), from: now - CHECKED_KEEP_MS, until, onMissed: () => { missed++; } });
+  const had = new Set(parsed.filter((r): r is CheckedRow => !!r && !!r.found).map(foundKey));
+  const fresh = rows.filter((r) => !had.has(foundKey(r)));
   mkdirSync(privateDir, { recursive: true });
-  if (rows.length) writeFileSync(live, `${[...rows.map((r) => JSON.stringify(r)), ...existing].join('\n')}\n`, 'utf8');
-  writeFileSync(mark, JSON.stringify({ at: now, rows: rows.length }), 'utf8');
+  if (fresh.length) {
+    // Found rows first, in time order, then every other line as it was.
+    const earlier = existing.flatMap((line, n) => (parsed[n]?.found ? [{ at: parsed[n]!.at, line }] : []));
+    const found = [...earlier, ...fresh.map((r) => ({ at: r.at, line: JSON.stringify(r) }))]
+      .sort((a, b) => a.at - b.at).map((x) => x.line);
+    writeFileSync(live, `${[...found, ...existing.filter((_, n) => !parsed[n]?.found)].join('\n')}\n`, 'utf8');
+  }
+  const tries = (was?.tries ?? 0) + 1;
+  const done = missed === 0 || tries >= CHECKED_BACKFILL_TRIES;
+  writeFileSync(mark, JSON.stringify({ at: now, rows: had.size + fresh.length, ...(missed ? { missed } : {}), ...(done ? {} : { done: false, tries }) }), 'utf8');
 }
