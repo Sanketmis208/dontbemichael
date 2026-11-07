@@ -25,7 +25,7 @@ import { AttachmentSaveError, handOverAttachment, markFromOutsideNow, saveAttach
 import { attachmentKind } from '../shared/attachmentKind';
 import { Foundations, publishCopy } from './foundations';
 import { KnowledgeEdits } from './knowledgeEdits';
-import { FOUNDATION_JOBS, FOUNDATION_QUESTIONS, isFoundationId, jobOf, jobsAsking, knowledgeNoticeDue, michaelFoundations, namedFolders, readFoldersFor, sectionFor, settledAnswers, type FoundationId, type FoundationJob } from '../shared/foundations';
+import { FOUNDATION_JOBS, FOUNDATION_QUESTIONS, holdsSystem, isFoundationId, jobOf, jobsAsking, knowledgeNoticeDue, michaelFoundations, namedFolders, readFoldersFor, sectionFor, settledAnswers, type FoundationId, type FoundationJob } from '../shared/foundations';
 import type { DepartmentSource } from '../shared/officeRoles';
 import {
   apiKeyShapeOk, checkAnthropicKey, claudeInstallScript, claudeMissingScript, ENGINE_INSTALL_PTY, ENGINE_SIGNIN_PTY,
@@ -876,6 +876,9 @@ const foundations = new Foundations({
     return [cfg.businessFolder, cfg.officeFolder, cwd].some((root) => typeof root === 'string' && !!root && isSameOrInside(expandTilde(root), path));
   },
   tell: (to, subject, body) => { if (hive.enabled()) hive.send({ to, act: 'inform', subject, body }, 'foundations'); },
+  canTell: () => hive.enabled(),
+  // The member's real access, as its profile shows it (decision 5).
+  holdsSystem: (agentId, name) => holdsSystem(caseStudyTools(agentId), name),
   changed: () => { try { liveWebContents()?.send('foundations:changed'); } catch { /* window gone */ } },
   // A file added on a foundation card (docs/designs/foundation-card-upload.md).
   readFile: (path) => knowledge.readDocument(path),

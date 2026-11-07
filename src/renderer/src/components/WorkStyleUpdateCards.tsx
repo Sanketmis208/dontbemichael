@@ -4,6 +4,8 @@ import { PixelButton } from './PixelButton';
 import { InfoTip } from './InfoTip';
 import { useStore } from '@/store/store';
 import { AgentAvatar } from './AgentAvatar';
+import type { MemberLook } from './askMeFilter';
+import { ALWAYS_OPEN, FoldBody, FoldHeader, foldCardClass, foldCardStyle, type FoldControl } from './AskCardFold';
 import { splitAgentRole } from '@shared/agentRole';
 import { jobBase } from '@shared/jobChange';
 import { roleLabel } from '@shared/workStyleText';
@@ -21,7 +23,15 @@ import { JobChangeReview, type ReviseResult, type ReviseRun } from './JobChangeR
  * it" (work-style-change-request.md, D7, D8, DR9). Same frame as a schedule
  * request card.
  */
-export function WorkStyleUpdateCards({ offers }: { offers: WorkStyleOffer[] }) {
+export function WorkStyleUpdateCards({ offers, look, hiddenIds, fold }: {
+  offers: WorkStyleOffer[];
+  /** Each member's department look (docs/designs/ask-me-department-colors.md). */
+  look?: (agentId: string) => MemberLook | undefined;
+  /** Offers (by decision id) the board's department filter hides: kept mounted, drawn nowhere. */
+  hiddenIds?: ReadonlySet<string>;
+  /** Folding under the board's one open card rule; open when not given. */
+  fold?: (id: string) => FoldControl;
+}) {
   const { t } = useTranslation();
   const agents = useStore((s) => s.agents);
   const godName = useResolvedGodName();
@@ -70,19 +80,23 @@ export function WorkStyleUpdateCards({ offers }: { offers: WorkStyleOffer[] }) {
         const id = decisionId(offer.key, offer.agentId);
         const agent = agents.find((a) => a.id === offer.agentId);
         const name = agent?.name ?? offer.agentId;
+        const lk = look?.(offer.agentId);
+        const hide = !!hiddenIds?.has(id);
+        const f = fold?.(id) ?? ALWAYS_OPEN;
         const carry = offer.olderEdits ? t('jobChange.packOlderEdits', { name })
           : offer.changes.length === 1 ? t('jobChange.packKeptOne')
             : t('jobChange.packKeptMany', { count: offer.changes.length });
         return (
-          <section key={id} data-work-style-offer aria-label={t('jobChange.packTitle', { name })} style={{
-            position: 'relative', flexShrink: 0, padding: '12px 14px', borderRadius: 'var(--cth-r-xl)',
-            background: 'var(--cth-card)', boxShadow: 'inset 0 0 0 1px var(--cth-line), var(--cth-shadow-sm)',
-            display: 'flex', flexDirection: 'column', gap: 8, fontFamily: 'var(--cth-font-ui)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 600, lineHeight: '17px', color: 'var(--cth-ink)' }}>
-              <AgentAvatar id={offer.agentId} name={name} size={17} />
-              {t('jobChange.packTitle', { name })}
-            </div>
+          <section key={id} data-work-style-offer data-askme-hidden={hide || undefined}
+            aria-label={lk ? `${t('jobChange.packTitle', { name })}, ${lk.dept}` : t('jobChange.packTitle', { name })}
+            className={foldCardClass(f.open)} style={foldCardStyle(f.open, hide)}>
+            <FoldHeader open={f.open} toggle={f.toggle} summary={t(offer.whyKey)} title={
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 600, lineHeight: '17px', color: 'var(--cth-ink)' }}>
+                <AgentAvatar id={offer.agentId} name={name} size={17} />
+                {t('jobChange.packTitle', { name })}
+              </div>
+            } />
+            <FoldBody open={f.open} pin={f.pin}>
             <div style={{ fontSize: 12, lineHeight: '16.5px', color: 'var(--cth-ink)' }}>
               {t(offer.whyKey)} <InfoTip text={t('askMe.workStyleReplaces', { name })} label={t('jobChange.packTitle', { name })} />
             </div>
@@ -112,6 +126,7 @@ export function WorkStyleUpdateCards({ offers }: { offers: WorkStyleOffer[] }) {
                 <PixelButton variant="primary" size="sm" disabled={busy === id} onClick={() => { setFailed(null); setOpen(id); }}>{t('jobChange.seeIt')}</PixelButton>
               </div>
             )}
+            </FoldBody>
           </section>
         );
       })}

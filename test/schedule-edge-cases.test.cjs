@@ -187,7 +187,7 @@ test('messageHistory: no agent id reads nothing, the limit caps it, and secrets 
 
 test('ASK ME shows schedule requests; a stale one cannot be approved, and a failed decision says so', () => {
   const askMe = read('src/renderer/src/components/AskMeTab.tsx');
-  assert.match(askMe, /<ScheduleRequestCards requests=\{scheduleRequests\} refresh=\{refreshScheduleRequests\} \/>/);
+  assert.match(askMe, /<ScheduleRequestCards requests=\{scheduleRequests\} refresh=\{refreshScheduleRequests\} look=\{memberLook\} hiddenIds=\{hiddenOf\('schedule:'\)\} fold=\{foldFor\('schedule:'\)\} \/>/);
   const src = read('src/renderer/src/components/ScheduleRequestCards.tsx');
   assert.match(src, /const stale = requestIsStale\(req, missions\);/);
   assert.match(src, /disabled=\{stale \|\| busy === req\.id\} onClick=\{\(\) => void decide\(req, true\)\}/, 'Approve is off while stale or busy');

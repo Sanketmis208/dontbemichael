@@ -46,6 +46,14 @@ export interface FoundationQuestion {
   version?: number;
   /** Days a whole list is trusted before the owner is asked again (R4). */
   shelfDays?: number;
+  /** Retired: asked of no job any more. An office's answer stays in the record
+   *  until the member whose role keeps that list confirms it took it over
+   *  (docs/designs/foundations-rules-not-records.md, decision 6). */
+  retired?: true;
+  /** What a connected system may answer (decision 5): "pointer" says where a
+   *  record lives, "copied" is a small fact copied from the system. A member
+   *  holding that system may answer it with "source": {"system": ...}. */
+  kind?: 'pointer' | 'copied';
 }
 
 /** Every question, by id. A question two jobs share has one id, so one answer
@@ -55,29 +63,37 @@ export const FOUNDATION_QUESTIONS = {
   customers: { text: 'Who we sell to (ideal customer)', short: 'ideal customer' },
   sales_process: { text: 'How a sale happens, step by step', short: 'how a sale happens' },
   market: { text: 'Businesses, consumers or both', short: 'businesses or consumers' },
-  deals: { text: 'Where leads and deals are kept', short: 'where deals are kept' },
-  prices: { text: 'Prices and terms', short: 'prices and terms' },
+  deals: { text: 'Where leads and deals are kept', short: 'where deals are kept', kind: 'pointer' },
+  // Reworded 2026-11-07 to ask for less (decision 1), so no version bump.
+  prices: { text: 'Pricing rules and payment terms, and where the price list is kept', short: 'prices and terms' },
   voice: { text: 'How we sound (brand voice)', short: 'brand voice' },
   brand: { text: 'How we look (logo, colors, fonts)', short: 'brand look' },
-  current_customers: { text: 'Who our customers are today', short: 'customers today', list: true },
+  // Retired 2026-11-07: customers live in the roster the role that keeps it holds.
+  current_customers: { text: 'Who our customers are today', short: 'customers today', list: true, retired: true },
+  reference_customers: { text: 'Who are our referenceable customers for marketing content', short: 'referenceable customers' },
   competitors: { text: 'Who we compete with, and how we differ', short: 'competitors', list: true },
-  accounting: { text: 'Accounting method (cash or accrual)', short: 'accounting method' },
-  fiscal_year: { text: 'Financial year', short: 'financial year' },
+  accounting: { text: 'Accounting method (cash or accrual)', short: 'accounting method', kind: 'copied' },
+  fiscal_year: { text: 'Financial year', short: 'financial year', kind: 'copied' },
   // Version 2 since 2 Nov 2026: it asked only where money is recorded.
   money: { text: 'Every place money comes in and goes out (banks, cards, payment services, investments), and where each is recorded', short: 'where money moves', list: true, version: 2, shelfDays: 90 },
-  owed: { text: 'Who owes us and whom we owe, and where that is kept', short: 'who owes whom', list: true },
-  results: { text: 'Statements, budgets or targets', short: 'budgets and targets' },
+  // Retired 2026-11-07 for owed_where (decision 6).
+  owed: { text: 'Who owes us and whom we owe, and where that is kept', short: 'who owes whom', list: true, retired: true },
+  owed_where: { text: 'Where we keep who owes us and whom we owe', short: 'where debts are kept', kind: 'pointer' },
+  results: { text: 'Our targets or budget, and where statements are kept', short: 'budgets and targets' },
   policies: { text: 'Refunds, returns and service promises', short: 'service policies' },
   hours: { text: 'Opening hours', short: 'opening hours' },
-  faq: { text: 'Common customer questions and their answers', short: 'common questions' },
+  faq: { text: 'Common customer questions and their answers, or where they are kept', short: 'common questions' },
+  client_work: { text: 'Where client work and projects are tracked', short: 'where projects are tracked', kind: 'pointer' },
   team: { text: 'Who is on the team and who handles what', short: 'who handles what', list: true, shelfDays: 180 },
-  calendar: { text: 'Where meetings and bookings are kept', short: 'where bookings are kept' },
+  calendar: { text: 'Where meetings and bookings are kept', short: 'where bookings are kept', kind: 'pointer' },
   hiring: { text: 'How we hire and welcome new people', short: 'how we hire' },
   // Its shelf life stands in for who has access to what (R4).
   tools: { text: 'The systems we work in, and who uses each', short: 'our systems', list: true, shelfDays: 90 },
   access: { text: 'How passwords and access are handled', short: 'how access is handled' },
-  suppliers: { text: 'Our suppliers and how we order', short: 'suppliers', list: true },
-  stock: { text: 'Where stock is tracked', short: 'where stock is tracked' },
+  // Retired 2026-11-07 for ordering (decision 6).
+  suppliers: { text: 'Our suppliers and how we order', short: 'suppliers', list: true, retired: true },
+  ordering: { text: 'How we order from suppliers, and where the supplier list is kept', short: 'how we order' },
+  stock: { text: 'Where stock is tracked', short: 'where stock is tracked', kind: 'pointer' },
   shipping: { text: 'How orders are packed and delivered', short: 'how orders are delivered' }
 } as const satisfies Record<string, FoundationQuestion>;
 export type FoundationId = keyof typeof FOUNDATION_QUESTIONS;
@@ -85,6 +101,23 @@ export type FoundationId = keyof typeof FOUNDATION_QUESTIONS;
 /** A question with its optional fields, whatever literal type it has. */
 export function questionOf(id: FoundationId): FoundationQuestion {
   return FOUNDATION_QUESTIONS[id];
+}
+
+/** The retired questions, in catalog order. */
+export const RETIRED_IDS = (Object.keys(FOUNDATION_QUESTIONS) as FoundationId[]).filter((id) => questionOf(id).retired === true);
+
+/** Whether a connected system may answer this question (decision 5). */
+export function systemAnswerable(id: FoundationId): boolean {
+  return questionOf(id).kind === 'pointer' || questionOf(id).kind === 'copied';
+}
+
+/** Whether a member's connected systems include the one an answer names: the
+ *  names compared as plain lower case letters and digits, either way round
+ *  ("HubSpot" holds "hubspot crm"). */
+export function holdsSystem(held: readonly string[], name: string): boolean {
+  const n = (s: string): string => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+  const want = n(name);
+  return !!want && held.some((h) => { const k = n(h); return !!k && (k.includes(want) || want.includes(k)); });
 }
 
 /** Whether a question is an open ended list (R1). */
@@ -132,13 +165,13 @@ export const SEEN_LATER_MS = 7 * 86_400_000;
 /** Each job's questions, in the order its section prints them. */
 export const JOB_QUESTIONS: Record<FoundationJob, FoundationId[]> = {
   sales: ['offer', 'customers', 'sales_process', 'market', 'deals', 'prices'],
-  marketing: ['customers', 'voice', 'brand', 'current_customers', 'offer', 'competitors'],
-  finance: ['accounting', 'fiscal_year', 'money', 'owed', 'results'],
-  support: ['offer', 'policies', 'hours', 'faq'],
+  marketing: ['customers', 'voice', 'brand', 'reference_customers', 'offer', 'competitors'],
+  finance: ['accounting', 'fiscal_year', 'money', 'owed_where', 'results'],
+  support: ['offer', 'policies', 'hours', 'faq', 'client_work'],
   'front-desk': ['team', 'hours', 'calendar'],
   people: ['team', 'hiring'],
   it: ['tools', 'access'],
-  operations: ['suppliers', 'stock', 'shipping']
+  operations: ['ordering', 'stock', 'shipping', 'client_work']
 };
 
 /** An answer longer than this points to a file instead (about 300
@@ -214,6 +247,13 @@ export interface FoundationAnswer {
   /** Who gave it: 'owner', 'profile', or the member's id. */
   by: string;
   source: FoundationSourceKind;
+  /** A retired question's answer: when Michael was told, and the member that
+   *  confirmed it took the list over (decision 6). */
+  retiredNoticeAt?: string;
+  retiredKeptBy?: string;
+  retiredKeptAt?: string;
+  /** A system given answer whose member can no longer reach it: when Michael was told. */
+  systemGoneAt?: string;
   /** The message id or file path behind it, when there is one. */
   ref?: string;
   at: string;
@@ -362,7 +402,9 @@ export function cleanRecord(raw: unknown): FoundationsRecord {
     if (!text || !by || !at || !source) return;
     const coverage = e.coverage === 'known' || e.coverage === 'complete' ? e.coverage : undefined;
     const v = typeof e.v === 'number' && e.v >= 1 ? Math.floor(e.v) : undefined;
-    out.answers[id] = { text, by, source, at, ...(str(e.ref) ? { ref: e.ref as string } : {}), ...(coverage ? { coverage } : {}), ...(str(e.completeAt) ? { completeAt: e.completeAt as string } : {}), ...(v ? { v } : {}) };
+    out.answers[id] = { text, by, source, at, ...(str(e.ref) ? { ref: e.ref as string } : {}), ...(coverage ? { coverage } : {}), ...(str(e.completeAt) ? { completeAt: e.completeAt as string } : {}), ...(v ? { v } : {}),
+      ...(str(e.retiredNoticeAt) ? { retiredNoticeAt: e.retiredNoticeAt as string } : {}), ...(str(e.retiredKeptBy) ? { retiredKeptBy: e.retiredKeptBy as string } : {}),
+      ...(str(e.retiredKeptAt) ? { retiredKeptAt: e.retiredKeptAt as string } : {}), ...(str(e.systemGoneAt) ? { systemGoneAt: e.systemGoneAt as string } : {}) };
   });
   each(r.hits, (id, e) => {
     const first = str(e.first), last = str(e.last);
@@ -493,8 +535,21 @@ export function michaelFoundations(rec: FoundationsRecord, jobs: readonly Founda
     renderFoundations(rec, jobs, nameOf, now),
     '',
     empty.length ? `Empty questions the work hit: ${empty.join(', ')}.` : 'No empty question has been hit by the work.',
-    ...(partly.length ? [`Lists still open that the work hit or that passed their shelf life: ${partly.join(', ')}.`] : [])
+    ...(partly.length ? [`Lists still open that the work hit or that passed their shelf life: ${partly.join(', ')}.`] : []),
+    ...retiredLines(rec, nameOf)
   ].join('\n');
+}
+
+/** Retired questions an office answered, for Michael only: what each held and
+ *  whether the member who keeps that list now took it over. */
+function retiredLines(rec: FoundationsRecord, nameOf: (id: string) => string): string[] {
+  const out: string[] = [];
+  for (const id of RETIRED_IDS) {
+    const a = rec.answers[id];
+    if (!a) continue;
+    out.push(`- ${FOUNDATION_QUESTIONS[id].text} [${id}]: ${oneLine(a.text)}${a.retiredKeptBy ? ` (taken over by ${nameOf(a.retiredKeptBy)})` : ' (waiting for the member whose role keeps it to take it over)'}`);
+  }
+  return out.length ? ['', 'Retired questions, kept until their keeper takes them over:', ...out] : [];
 }
 
 // ---- The count -------------------------------------------------------------------

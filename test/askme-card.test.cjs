@@ -83,8 +83,12 @@ test('how long ago, in plain words', () => {
 
 test('one card is open at a time, the newest by default; folded cards show the headline', () => {
   const src = read('src/renderer/src/components/AskMeTab.tsx');
-  assert.match(src, /const pinned = openId !== undefined && \(openId === null \|\| waiting\.some\(\(x\) => x\.key === openId\)\);/);
-  assert.match(src, /const expanded = pinned \? openId === row\.key : idx === 0;/);
+  // One card open across the whole board (mail, schedule and Work style cards
+  // fold too, owner 2026-11-05): the first card the department filter leaves
+  // visible, until the owner picks another; a hidden card never is open.
+  assert.match(src, /const pinned = openId !== undefined && \(openId === null \|\| cards\.some\(\(c\) => c\.key === openId && !hidden\.has\(c\.key\)\)\);/);
+  assert.match(src, /const openKey = pinned \? openId : cards\.find\(\(c\) => !hidden\.has\(c\.key\)\)\?\.key;/);
+  assert.match(src, /const expanded = openKey === row\.key;/);
   // Typing pins the card, so a newer ask never folds it mid answer (review, 2026-10-01).
   assert.match(src, /onFocus=\{\(\) => setOpenId\(row\.key\)\}/);
   assert.match(src, /\{askHeadline\(open\.q\)\}/);

@@ -26,6 +26,9 @@ export interface WorkStyleUpdate {
 /** Newest first: a card is offered the first update that matches it, and the
  *  newest text already holds the older changes. */
 export const WORK_STYLE_UPDATES: readonly WorkStyleUpdate[] = [
+  // Marketing keeps the referenceable customers, Sales the customer list (owner, 2026-11-06/07).
+  { key: 'ryan-reference-customers-2026-11', cardId: 'ryan', whyKey: 'askMe.workStyleWhy.customerLists' },
+  { key: 'dwight-customer-list-2026-11', cardId: 'dwight', whyKey: 'askMe.workStyleWhy.customerLists' },
   // Replies leave as the Sending setting allows, never "always a draft" (owner, 2026-10-05).
   { key: 'pam-sending-2026-10', cardId: 'pam', whyKey: 'askMe.workStyleWhy.sendingSetting' },
   { key: 'kelly-sending-2026-10', cardId: 'kelly', packs: ['saas-consulting'], whyKey: 'askMe.workStyleWhy.sendingSetting' },

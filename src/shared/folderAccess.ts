@@ -517,3 +517,34 @@ export function folderToolTarget(tool: string, input: unknown, cwd: string | und
   }
   return isAbsolute(p) ? resolve(p) : cwd ? resolve(cwd, p) : null;
 }
+
+/** The refusal a member's shell command gets on Windows when it names another
+ *  member's folder (owner, eng review D2, 2026-11-07). */
+export const WINDOWS_SHELL_WALL = 'On Windows the app cannot keep your shell commands inside your own folders, so a command that names another team member\'s folder is not run. Ask that teammate for what you need, or tell Michael.';
+
+/** Windows has no shell sandbox (#187), so a member's shell command is judged
+ *  by its text: one naming another member's folder, by full path or as a
+ *  sibling ("..\\Sales"), is refused. Text can be walked around (a variable
+ *  holding the path), so this narrows the gap, it does not close it. Other
+ *  platforms answer "allow": their sandbox holds the shell. */
+export function windowsShellWallDecision(platform: string, command: unknown, peers: string[], ownFolders: string[]): { deny: boolean; reason?: string } {
+  if (platform !== 'win32' || typeof command !== 'string' || !command.trim()) return { deny: false };
+  const norm = (s: string): string => s.replace(/["'`]/g, '').replace(/\\+/g, '/').replace(/\/+/g, '/').toLowerCase();
+  const text = norm(command);
+  const own = ownFolders.filter(Boolean).map((f) => norm(f).replace(/\/$/, ''));
+  for (const peer of peers) {
+    if (!peer) continue;
+    const p = norm(peer).replace(/\/$/, '');
+    if (!p || own.some((o) => o === p || o.startsWith(`${p}/`))) continue;
+    const base = p.slice(p.lastIndexOf('/') + 1);
+    const at = (needle: string): boolean => {
+      for (let i = text.indexOf(needle); i !== -1; i = text.indexOf(needle, i + 1)) {
+        const next = text[i + needle.length];
+        if (next === undefined || next === '/' || /\s/.test(next)) return true;
+      }
+      return false;
+    };
+    if (at(p) || (base && at(`../${base}`))) return { deny: true, reason: WINDOWS_SHELL_WALL };
+  }
+  return { deny: false };
+}

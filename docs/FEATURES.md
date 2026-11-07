@@ -57,6 +57,30 @@ moving, and brings you only the decisions that need you.
   clear three of one kind with Got it, Michael asks whether to keep showing them.
 - A new version of the app, or a case study prepared in the background, arrives as a card from
   Michael on Ask me and stays until you act on it or choose Later.
+- A row of department chips on Ask me shows only one team's cards while you focus, say finance
+  or IT: it keeps Michael's own cards in view, says how many others are waiting, and marks a
+  team whose new card arrives meanwhile. A Company foundations question files under the area
+  it is about. Email approvals, schedule changes and Work style updates fold like questions,
+  one card open at a time.
+- When Claude Code updates underneath your team, Michael says so on Ask me, with Close office and
+  reopen to switch everyone over or Later; no chip or popup in the corner.
+- Answer an Ask me question with a file: paste a screenshot into the answer box, drop files on
+  the card, or use the paperclip. Michael asks you to attach what he needs right there, and the
+  question he asks for an option stays readable above the box while you type.
+- Each team member works within its role: it does what its role covers, does its part of a mixed
+  job and hands Michael the rest, and gives back what is outside its role untouched. When work
+  needs a fact it doesn't have, it asks every teammate whose role could know before Michael.
+- Records follow roles: Sales keeps the customer list, Marketing the customers you may reference,
+  Finance who owes whom. When no one's role covers a job, Michael asks you to give it to someone
+  (a link opens their job), hire (a link opens Add agent on the right card) or drop it. He never
+  does a team member's work himself, unless he is the only one in the office.
+- A customer's complaint or praise, and a new customer, supplier or debt, reach Michael, who
+  passes it to the role that keeps that record.
+- Company foundations hold your rules and where things live, not lists that change every week:
+  who our customers are today, who owes whom and the supplier list are retired into the records
+  of the roles that keep them. A team member who can reach a connected system can say where a
+  record lives from it; your own answer always stands.
+- On Windows, a team member's shell command that names another member's folder is refused.
 - Only Michael sends you desktop notifications. Talk 1:1 with any team member when you want to.
 
 ### 2. Hire the right person in four steps

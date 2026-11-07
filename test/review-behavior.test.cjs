@@ -272,7 +272,7 @@ test('a file answer that cannot be written sends Michael the exact line with the
   assert.deepEqual(f.log[2], ['foundationsAnswerFile', 'prices', 'doc-7', 'Sunrise prices']);
   assert.deepEqual(f.log[3], ['hiveSend', {
     to: 'michael', act: 'request', subject: 'Add my answer to the company foundations',
-    body: 'Please add my answer to the company foundations question "Prices and terms" (prices): Sunrise prices. Full version: company knowledge document doc-7 (Price list.pdf)'
+    body: 'Please add my answer to the company foundations question "Pricing rules and payment terms, and where the price list is kept" (prices): Sunrise prices. Full version: company knowledge document doc-7 (Price list.pdf)'
   }, 'human']);
   assert.deepEqual(steps, ['checked', 'taken']);
   const unsent = fakeCth({ foundationsAnswerFile: { ok: false, error: 'no-doc' }, hiveSend: { ok: false } });

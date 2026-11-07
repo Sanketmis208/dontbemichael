@@ -54,12 +54,15 @@ test('instead, a job no one fits goes to the ASK ME board with suggestions', asy
   assert.match(p, /do NOT do it yourself and do NOT start a new agent/);
   assert.match(p, /"status": "blocked" and one humanQA ask/);
   assert.match(p, /give the choices in "options", with "recommended": true on the one you recommend/);
-  for (const option of ['add a team member', 'hand it to the closest team member', 'you do it yourself this once', 'or drop it']) {
+  // Owner, CEO review D5 (2026-11-07): give it to a member, hire, or drop it;
+  // never "you do it yourself this once" while a worker member exists.
+  for (const option of ['give it to an existing team member', 'add a team member for it', 'or drop it']) {
     assert.ok(p.includes(option), `offers: ${option}`);
   }
-  // It can name the right person: every cast member with their fixed job.
+  assert.ok(!p.includes('this once'), 'Michael never offers to do the work himself');
+  // A link for each role it can suggest (eng review E3): dbm:hire/<card>.
   for (const [who, { role }] of Object.entries(OFFICE_ROLES)) {
-    assert.ok(p.includes(`${who[0].toUpperCase()}${who.slice(1)} (${role})`), `${who} is suggested as ${role}`);
+    assert.ok(p.includes(`${role} (dbm:hire/${who})`), `${role} links its card ${who}`);
   }
   assert.match(p, /Small jobs .* are not this/);
 });

@@ -7,7 +7,6 @@ import { Icon } from '@/components/Icon';
 import { useAppTheme, toggleAppTheme } from '@/design/theme';
 import { notifyThemeChangeAll } from '@/components/terminalPool';
 import { UpdateBadge } from '@/components/UpdateBadge';
-import { CliUpdateBadge } from '@/components/CliUpdateNotice';
 import { OfficeBreakChip } from '@/components/OfficeBreakNotice';
 import { pillState, useNeedsYou, useNeedsYouCount } from './useNeedsYou';
 import { NEEDS_YOU_PILL_ID, pillHidden } from './rightColumn';
@@ -65,7 +64,6 @@ export function TopBar({ onOpenSettings }: { onOpenSettings: () => void }) {
         <span className="cth-titlebar-nodrag" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           <UpdateBadge />
           <ReportProblemButton />
-          <CliUpdateBadge />
           <OfficeBreakChip />
         </span>
         <IconButton label={theme === 'dark' ? t('shell.themeLight') : t('shell.themeDark')} onClick={toggleTheme}>

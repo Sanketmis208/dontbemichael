@@ -83,7 +83,7 @@ test('a member gets its job\'s section with the empty questions, and no section 
   const s = F.sectionFor(rec, ['marketing'], (id) => (id === 'ryan' ? 'Ryan' : id));
   assert.match(s, /COMPANY FOUNDATIONS for your job/);
   assert.match(s, /How we sound \(brand voice\) \[voice\]: Warm, plain, no jargon \(learned by Ryan, 19 Oct\)/);
-  assert.match(s, /Empty now: customers, brand, current_customers, offer, competitors\./);
+  assert.match(s, /Empty now: customers, brand, reference_customers, offer, competitors\./);
   assert.equal(F.sectionFor(rec, []), null);
 });
 
@@ -201,7 +201,7 @@ test('Pulse: the strip lists jobs whose work hit an empty question, most hit fir
   const state = F.replayFoundations([
     ev('ryan', 'customers', 'hit'), ev('ryan', 'customers', 'hit', 2), ev('ryan', 'voice', 'hit', 3),
     ev('oscar', 'accounting', 'hit', 4), ev(null, 'offer', 'answered', 5),
-    ...['accounting', 'fiscal_year', 'money', 'owed', 'results'].map((q, i) => ev(null, q, 'answered', 10 + i))
+    ...['accounting', 'fiscal_year', 'money', 'owed_where', 'results'].map((q, i) => ev(null, q, 'answered', 10 + i))
   ]);
   const p = F.foundationsPulse(state, { ryan: ['marketing'], dwight: ['sales'], oscar: ['finance'], pam: [] });
   assert.deepEqual(p.jobs.map((j) => [j.job, j.answered, j.total, j.waiting]), [['marketing', 1, 6, ['customers', 'voice']]]);
@@ -290,8 +290,10 @@ test('a member citing an owner message can neither override the owner nor set th
   // Gaps: own job only.
   assert.match(o.w.handle('ryan', { question: 'access', gap: 'needed passwords' }), /not one of your job's/);
   assert.equal(o.w.read().hits.access, undefined);
-  assert.equal(o.w.handle('ryan', { question: 'current_customers', gap: 'posts' }), null);
-  assert.ok(o.w.read().hits.current_customers);
+  assert.equal(o.w.handle('ryan', { question: 'reference_customers', gap: 'posts' }), null);
+  assert.ok(o.w.read().hits.reference_customers);
+  // A retired question is no job's any more (decision 6).
+  assert.match(o.w.handle('ryan', { question: 'current_customers', gap: 'posts' }), /not one of your job's/);
   // Michael raises a gap for any job's question.
   assert.equal(o.w.handle('god', { question: 'access', gap: 'the owner asked about passwords' }), null);
   assert.ok(o.w.read().hits.access);
@@ -1180,4 +1182,46 @@ test('the list card: one box from the saved list, seen rows with Add, Not ours a
   const save = read('src/renderer/src/shell/foundationSave.ts');
   assert.match(save, /with "complete": true/, 'Michael\'s fallback carries the whole list flag');
   assert.match(read('branding/DESIGN.md'), /### 7\.27b The list card/);
+});
+
+test('a retired list is told to Michael once, kept until its keeper takes it over, and leaves every section', (t) => {
+  // Value: protects=retired lists lose no owner answer (decision 6, eng E4); fails_when=the answer is deleted, the note repeats, or a member still carries the question; why_new=new 2026-11-07; seam=none; no_claim=Michael handing it on (model)
+  const o = writer(t, { deps: { jobs: () => ['marketing', 'finance'], jobsOf: (id) => (id === 'oscar' ? ['finance'] : ['marketing']) } });
+  assert.ok(o.w.ownerAnswer('current_customers', 'Acme; Globex').ok);
+  o.w.checkExpiry(true);
+  const notes = o.told.filter((m) => m.subject === 'Foundation list retired');
+  assert.equal(notes.length, 1);
+  assert.match(notes[0].body, /Acme; Globex/);
+  assert.match(notes[0].body, /"retired": "kept"/);
+  o.w.checkExpiry(true);
+  assert.equal(o.told.filter((m) => m.subject === 'Foundation list retired').length, 1, 'told once');
+  assert.equal(o.w.read().answers.current_customers.text, 'Acme; Globex', 'kept');
+  assert.doesNotMatch(F.sectionFor(o.w.read(), ['marketing']), /current_customers/);
+  assert.match(F.michaelFoundations(o.w.read(), ['marketing']), /waiting for the member whose role keeps it to take it over/);
+  assert.match(o.w.handle('ryan', { question: 'current_customers', retired: 'kept' }), /Recorded/);
+  assert.equal(o.w.read().answers.current_customers.retiredKeptBy, 'ryan');
+  assert.match(F.michaelFoundations(o.w.read(), ["marketing"], (id) => (id === "ryan" ? "Ryan" : id)), /taken over by Ryan/);
+  assert.match(o.w.handle('ryan', { question: 'voice', retired: 'kept' }), /not a retired question/);
+});
+
+test('a connected system answers only where a record lives, only from a member who reaches it, and never over the owner', (t) => {
+  // Value: protects=the system source (decision 5, eng E10); fails_when=a member without the connector, or a rule question, is accepted from a system, or it replaces the owner's answer; why_new=new 2026-11-07; seam=none; no_claim=what the system really holds
+  const held = { dwight: ['HubSpot', 'Email'] };
+  const o = writer(t, { deps: { jobs: () => ['sales'], jobsOf: () => ['sales'], holdsSystem: (id, name) => F.holdsSystem(held[id] ?? [], name) } });
+  assert.match(o.w.handle('ryan', { question: 'deals', answer: 'In HubSpot', source: { system: 'HubSpot' } }), /cannot reach HubSpot/);
+  assert.match(o.w.handle('dwight', { question: 'prices', answer: 'List in HubSpot', source: { system: 'HubSpot' } }), /not something a connected system holds/);
+  assert.match(o.w.handle('dwight', { question: 'deals', answer: 'In HubSpot, pipeline Sales', source: { system: 'hubspot crm' } }), /Saved/);
+  assert.equal(o.w.read().answers.deals.ref, 'system:hubspot crm');
+  assert.equal(o.w.read().answers.deals.source, 'file', 'ranks with an office file');
+  // Lost access: Michael is told once to ask the owner (decision 4).
+  held.dwight = ['Email'];
+  o.w.checkExpiry(true);
+  o.w.checkExpiry(true);
+  assert.equal(o.told.filter((m) => m.subject === 'Foundation system no longer reached').length, 1);
+  // The owner's answer stands over a system answer.
+  held.dwight = ['HubSpot'];
+  assert.ok(o.w.ownerAnswer('stock', 'In the till').ok);
+  assert.match(o.w.handle('dwight', { question: 'stock', answer: 'In HubSpot', source: { system: 'HubSpot' } }), /owner's answer to .* stands|not one of your job's/);
+  assert.equal(F.holdsSystem(['QuickBooks'], 'quickbooks online'), true);
+  assert.equal(F.holdsSystem(['Email'], 'HubSpot'), false);
 });

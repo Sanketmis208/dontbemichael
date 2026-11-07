@@ -193,9 +193,13 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
   // "Clone" instead (owner, 2026-10-03: no second Dwight, and a calmer grid).
   const onTeam = useMemo(() => new Set(agents.filter((a) => !a.archived && a.character).map((a) => a.character as string)), [agents]);
   const castGroups = CAST_GROUPS.map((g) => g.members as string[]);
+  // A hire link from Michael's card (dbm:hire/<card>) starts on that cast
+  // member when they are free (owner, CEO review D6).
+  const linkPick = useStore((s) => s.addAgentPick);
+  const picked = linkPick && HIREABLE_CAST.some((m) => m.name === linkPick) && !onTeam.has(linkPick) ? (linkPick as OfficeCharacterName) : null;
   const firstCharacter = pendingHire?.character
     ? knownCharacter(pendingHire.character)
-    : (characterForName(pendingHire?.name ?? '') ?? (firstFreeCharacter(DEFAULT_CHARACTER, onTeam, castGroups) as OfficeCharacterName));
+    : (picked ?? characterForName(pendingHire?.name ?? '') ?? (firstFreeCharacter(DEFAULT_CHARACTER, onTeam, castGroups) as OfficeCharacterName));
   const [step, setStep] = useState<Step>(pendingHire ? 'role' : 'who');
   const [character, setCharacter] = useState<OfficeCharacterName>(firstCharacter);
   const [name, setName] = useState(pendingHire?.name ?? CAST_BY_NAME[firstCharacter].displayName);

@@ -25,7 +25,7 @@ import { OfficeFolderMissing } from '@/components/OfficeFolderMissing';
 import { ClosingTimeBar, type ClosingTimeState } from '@/components/ClosingTimeBar';
 import { CompletionToast } from '@/realtime/CompletionToast';
 import { UpdateToast } from '@/components/UpdateToast';
-import { CliUpdateToast } from '@/components/CliUpdateNotice';
+import { setCloseAndReopen } from '@/components/CliUpdateNotice';
 import { CaseStudyEvents } from '@/components/pulse/CaseStudyEvents';
 import { SettingsModal, type Section as SettingsSection, type SettingsPlace } from '@/components/SettingsModal';
 import type { PlaceGroup } from '@shared/settingsPlaces';
@@ -252,6 +252,13 @@ export function App() {
     setClosingOpen(true);
     return startClosingTime({ relaunch: true });
   };
+  // Michael's team upgrade card on Ask me reaches it here, registered once
+  // (docs/designs/team-upgrade-card.md); the ref keeps the latest closure.
+  const closeOfficeAndReopenRef = useRef(closeOfficeAndReopen);
+  closeOfficeAndReopenRef.current = closeOfficeAndReopen;
+  useEffect(() => { setCloseAndReopen(() => closeOfficeAndReopenRef.current()); }, []);
+  // The card steps aside while the closing bar is up, and is back after a cancel.
+  useEffect(() => { useStore.setState({ officeClosing: closingOpen }); }, [closingOpen]);
   const cancelClosingTime = () => {
     void window.cth.cancelClosingTime();
     setClosing(null);
@@ -533,7 +540,6 @@ export function App() {
       <CompletionToast />
       <UpdateToast />
       <CaseStudyEvents />
-      <CliUpdateToast onCloseAndReopen={closeOfficeAndReopen} />
 
       {/* Design v2 shell (branding/DESIGN.md 5.2): top bar, the stage with the
           bottom bar floating over it, and the right column. No agent strip and

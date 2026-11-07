@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppTheme } from '@/design/theme';
 import { GrowingTextarea } from './GrowingTextarea';
 import { askHeadline, askTitle, askedAgo } from './askHeadline';
-import { departmentOf } from '@/scene/studio/layout';
 import { family } from '@/scene/studio/theme';
 import { PixelButton } from './PixelButton';
 import { useStore } from '@/store/store';
@@ -30,7 +29,16 @@ import { FoundationCard } from './FoundationCard';
 import { foundationAsk, isSettled, isSnoozed } from '@shared/foundations';
 import { updateCardShown } from '@shared/updateState';
 import { UpdateCard } from './UpdateCard';
+import { CliUpdateCard } from './CliUpdateNotice';
+import { cliUpdateToastVisible } from '@shared/cliUpdate';
 import { CaseStudyCard } from './pulse/CaseStudyCard';
+import { decisionId } from '@shared/workStyleUpdates';
+import type { OfficeDepartment } from '@shared/officeRoles';
+import { foundationDepartment, hiddenKeys, departmentsOnBoard, memberDepartment, noteArrivals, pickDepartment, pickRunsDry, showDepartmentRow, type BoardCard, type FilterState } from './askMeFilter';
+import { AskMeDepartmentRow } from './AskMeDepartmentRow';
+import { attachmentsFromPaste, type PastedFile } from './pasteAttachments';
+import { withAttachments } from '@shared/ownerRequests';
+import type { FoldControl } from './AskCardFold';
 
 /**
  * ASK ME — first-class human feedback through the task system.
@@ -82,7 +90,9 @@ export function AskMeTab() {
   const agents = useStore((s) => s.agents);
   const restorable = useStore((s) => s.restorableAgents);
   // One shared read with the pill, the strip and the chips (D3, eng R4).
-  const { tasks, requests: scheduleRequests, offers, proposals, engineSetup, stop, researchNotice, knowledgeNotice, silent, foundations, update, updateLater, caseStudyWaiting } = useNeedsYou();
+  const { tasks, requests: scheduleRequests, offers, proposals, engineSetup, stop, researchNotice, knowledgeNotice, silent, foundations, update, updateLater, cliUpdate, cliUpdateLater, caseStudyWaiting, count: needsCount } = useNeedsYou();
+  // Michael's team upgrade card (docs/designs/team-upgrade-card.md) keeps All clear away too.
+  const cliShown = cliUpdateToastVisible(cliUpdate, cliUpdateLater);
   // Michael's card for a new version (UpdateCard) keeps All clear away too.
   const updateShown = updateCardShown(update, updateLater);
   // And a case study ready to view (CaseStudyCard).
@@ -102,6 +112,17 @@ export function AskMeTab() {
   // draft (ask-me-options.md, 3A).
   const picks = useStore((s) => s.answerPicks);
   const setAnswerPick = useStore((s) => s.setAnswerPick);
+  // Files attached to an answer, kept like the draft until it lands
+  // (docs/designs/ask-me-answer-box.md): pasted, dropped or picked.
+  const answerFiles = useStore((s) => s.answerFiles);
+  const setAnswerFiles = useStore((s) => s.setAnswerFiles);
+  const addFiles = (key: string, incoming: PastedFile[]) => {
+    const prev = useStore.getState().answerFiles[key] ?? [];
+    const seen = new Set(prev.map((f) => f.path));
+    const fresh = incoming.filter((f) => f.path && !seen.has(f.path));
+    if (fresh.length) setAnswerFiles(key, [...prev, ...fresh]);
+  };
+  const pickFiles = async (key: string) => { const res = await window.cth.attachFiles(); if (res.ok) addFiles(key, res.files); };
   const openTaskDetail = useStore((s) => s.openTaskDetail);
   const [sending, setSending] = useState<string | null>(null);
   // The row whose last Reply did not save, so its card can say so.
@@ -113,7 +134,7 @@ export function AskMeTab() {
   const dark = useAppTheme() === 'dark';
   // Answers given since the board opened: they stay under All clear until the
   // column closes (D4), so the owner sees the reply landed.
-  const [answeredHere, setAnsweredHere] = useState<{ id: string; title: string; a: string; who?: string; whoId?: string }[]>([]);
+  const [answeredHere, setAnsweredHere] = useState<{ id: string; title: string; a: string; files?: string[]; who?: string; whoId?: string }[]>([]);
   const [line] = useState(() => 1 + Math.floor(Math.random() * ALL_CLEAR_LINES));
   const rootRef = useRef<HTMLDivElement>(null);
   // A foundation answer just saved, sent to Michael to add, or not written:
@@ -133,7 +154,11 @@ export function AskMeTab() {
     handledFocusSeq = focusReq.seq;
     if (focusReq.taskId) {
       const first = rowsRef.current.find((r) => r.task.id === focusReq.taskId);
-      if (first) setOpenId(first.key);
+      if (first) {
+        // A card the department filter hides: show every card, then open it (D6).
+        if (hiddenRef.current.has(first.key)) setFilter(null);
+        setOpenId(first.key);
+      }
     }
     let frame = requestAnimationFrame(() => {
       frame = requestAnimationFrame(() => {
@@ -141,8 +166,8 @@ export function AskMeTab() {
         if (!root) return;
         // Every row of a card carries its id; the first in the list is the
         // one just opened.
-        const wanted = focusReq.taskId ? root.querySelector<HTMLElement>(`[data-askme-id="${CSS.escape(focusReq.taskId)}"]`) : null;
-        const cardEl = wanted ?? root.querySelector<HTMLElement>('.cth-askme-card.is-open');
+        const wanted = focusReq.taskId ? root.querySelector<HTMLElement>(`[data-askme-id="${CSS.escape(focusReq.taskId)}"]:not([data-askme-hidden])`) : null;
+        const cardEl = wanted ?? root.querySelector<HTMLElement>('.cth-askme-card.is-open:not([data-askme-hidden])');
         const field = cardEl?.querySelector<HTMLTextAreaElement>('textarea');
         if (field && cardEl) { cardEl.scrollIntoView({ block: 'nearest' }); field.focus(); return; }
         root.closest('[data-right-column]')?.querySelector<HTMLElement>('[data-needs-you-heading]')?.focus();
@@ -184,6 +209,81 @@ export function AskMeTab() {
     return `${title}: ${q.length > 60 ? `${q.slice(0, 59).trimEnd()}…` : q}`;
   };
 
+  // Department colors and the department row (docs/designs/ask-me-department-colors.md):
+  // one rule colors a card and files it under a department (askMeFilter.ts).
+  const deptOf = (id: unknown): OfficeDepartment | null => memberDepartment(id, agents, restorable);
+  const famOf = (d: OfficeDepartment | null) => (d ? family(d, dark) : null);
+  const deptName = (d: OfficeDepartment): string => translate(`studio.dept.${d}`);
+  const assigneeOf = (t: HiveTask): string | undefined => (typeof t.assignee === 'string' ? t.assignee : undefined);
+  const raiserOfRow = (r: AskRow): string | undefined => (r.ask.raisedBy && r.ask.raisedBy !== 'god' ? r.ask.raisedBy : assigneeOf(r.task));
+  // A Company foundations card takes the area its question is about (design review D2, D3).
+  const rowDept = (r: AskRow): OfficeDepartment | null => {
+    const fid = foundationAsk(r.ask);
+    return fid ? foundationDepartment(fid, deptOf(raiserOfRow(r))) : deptOf(assigneeOf(r.task));
+  };
+  // The board top to bottom: schedule changes, Work style updates, mail, then the rows.
+  const cards: BoardCard[] = [
+    ...scheduleRequests.map((r) => ({ key: `schedule:${r.id}`, dept: deptOf(r.agentId) })),
+    ...offers.map((o) => ({ key: `offer:${decisionId(o.key, o.agentId)}`, dept: deptOf(o.agentId) })),
+    ...proposals.map((p) => ({ key: `mail:${p.id}`, dept: deptOf(p.agentId) })),
+    ...waiting.map((r) => ({ key: r.key, dept: rowDept(r), keep: isReport(r.ask) }))
+  ];
+  const cardsRef = useRef(cards);
+  cardsRef.current = cards;
+  const cardsSig = cards.map((c) => `${c.key}=${c.dept ?? ''}`).join('|');
+  const [filter, setFilter] = useState<FilterState | null>(null);
+  const picked = filter?.picked ?? null;
+  const hidden = hiddenKeys(cards, picked);
+  const hiddenRef = useRef(hidden);
+  hiddenRef.current = hidden;
+  const hiddenOf = (prefix: string): Set<string> => new Set([...hidden].filter((k) => k.startsWith(prefix)).map((k) => k.slice(prefix.length)));
+  const shownCount = Math.max(0, needsCount - hidden.size);
+  const deptCounts: Partial<Record<OfficeDepartment, number>> = {};
+  for (const c of cards) if (c.dept) deptCounts[c.dept] = (deptCounts[c.dept] ?? 0) + 1;
+  // A card of another department that arrives while one is picked marks its chip (2A).
+  useEffect(() => { setFilter((f) => noteArrivals(f, cardsRef.current)); }, [cardsSig]);
+  // The picked department's last card left: every card again, the newest open.
+  const rosterLoaded = agents.length > 0;
+  useEffect(() => {
+    if (pickRunsDry(filter, cardsRef.current, rosterLoaded)) { setFilter(null); setOpenId(undefined); }
+  }, [cardsSig, filter, rosterLoaded]);
+  // Each return to the board starts from every card (owner E1): minimized, or
+  // another view. A member panel replacing the board unmounts it anyway.
+  const boardHidden = useStore((s) => s.columnMinimized || (s.floorView !== 'office' && s.floorView !== 'file'));
+  useEffect(() => { if (boardHidden) setFilter(null); }, [boardHidden]);
+  // Screen readers hear the filter only when the pick changes, never on a poll.
+  const [filterStatus, setFilterStatus] = useState('');
+  const lastPicked = useRef<OfficeDepartment | null>(null);
+  useEffect(() => {
+    if (lastPicked.current === picked) return;
+    lastPicked.current = picked;
+    setFilterStatus(picked ? translate('askMe.showing', { shown: shownCount, total: needsCount }) : translate('askMe.showingEvery'));
+    // Only a change of pick speaks; the counts are read for the message.
+  }, [picked]);
+  const choose = (d: OfficeDepartment) => { setFilter((f) => pickDepartment(f, d, cardsRef.current)); setOpenId(undefined); };
+  const [rowHeight, setRowHeight] = useState(0);
+  const onRowHeight = useCallback((px: number) => setRowHeight(px), []);
+  // The cards stay white (owner, 2026-11-05: the filter row is what helps); a
+  // member's department goes into the card's label, never color alone.
+  const memberLook = (agentId: string): { dept: string } | undefined => {
+    const d = deptOf(agentId);
+    return d ? { dept: deptName(d) } : undefined;
+  };
+  // The person chip in its department colors, as it always was (DESIGN.md 7.8).
+  const chipLook = (f: ReturnType<typeof famOf>): CSSProperties => ({ ...personChip, ...(f ? { background: f.l, boxShadow: `inset 0 0 0 1px ${f.m}` } : {}) });
+  // One card open at a time across the whole board: questions, mail approvals,
+  // schedule changes and Work style updates (owner, 2026-11-05). The first card
+  // the filter leaves visible is open until the owner picks another; a card
+  // the filter hides is never the open one.
+  const pinned = openId !== undefined && (openId === null || cards.some((c) => c.key === openId && !hidden.has(c.key)));
+  const openKey = pinned ? openId : cards.find((c) => !hidden.has(c.key))?.key;
+  const foldFor = (prefix: string) => (id: string): FoldControl => {
+    const key = `${prefix}${id}`;
+    return { open: openKey === key, toggle: () => setOpenId(openKey === key ? null : key), pin: () => setOpenId(key) };
+  };
+  // The whole board, whatever is picked: All clear and the answered list read it.
+  const boardEmpty = !engineCard && !updateShown && !caseShown && !silentShown && !cliShown && waiting.length === 0 && scheduleRequests.length === 0 && offers.length === 0 && proposals.length === 0;
+
   /** The answer a row would send: the owner's words, labeled with the option
    *  or the questions it answers (ask-me-options.md, 5A). */
   const answerFor = (row: AskRow, shape: AskShape): string => {
@@ -203,7 +303,12 @@ export function AskMeTab() {
   const sendAnswer = async (row: AskRow, override?: string): Promise<boolean> => {
     const { task, index, ask: open } = row;
     const shape = readAskShape(open);
-    const text = override ?? answerFor(row, shape);
+    // The words go with any attached files as "Attached files:" lines, so the
+    // raiser's memory note and Michael's request both carry the paths. A file
+    // alone is a whole answer.
+    const files = override === undefined ? (useStore.getState().answerFiles[row.key] ?? []) : [];
+    const words = override ?? answerFor(row, shape);
+    const text = withAttachments(words, files);
     if (!text || sending) return false;
     // Whether the card itself took the answer (FoundationCard writes the
     // foundations then, even if a message after it failed).
@@ -259,7 +364,8 @@ export function AskMeTab() {
       }
       setAnswerDraft(row.key, '');
       setAnswerPick(row.key, {});
-      setAnsweredHere((list) => [{ id: row.key, title: task.title, a: text, who: nameFor(typeof task.assignee === 'string' ? task.assignee : undefined), whoId: typeof task.assignee === 'string' ? task.assignee : undefined }, ...list.filter((x) => x.id !== row.key)]);
+      setAnswerFiles(row.key, []);
+      setAnsweredHere((list) => [{ id: row.key, title: task.title, a: words, files: files.map((f) => f.name), who: nameFor(typeof task.assignee === 'string' ? task.assignee : undefined), whoId: typeof task.assignee === 'string' ? task.assignee : undefined }, ...list.filter((x) => x.id !== row.key)]);
       refreshNeedsYou();
     } catch {
       // Keep the draft so the owner can try again, and reload the board in
@@ -275,15 +381,24 @@ export function AskMeTab() {
     // Design v2 (branding/DESIGN.md 7.8): plain white cards. Michael's question,
     // a one row answer, and what is stuck behind it. Scrolls on its own so the
     // board heading stays put.
-    <div ref={rootRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12, padding: '2px 2px 10px', margin: '-2px -2px 0' }}>
+    <div ref={rootRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12, padding: '2px 2px 10px', margin: '-2px -2px 0', scrollPaddingTop: rowHeight ? rowHeight + 12 : undefined }}>
+      {showDepartmentRow(cards, picked) && (
+        <AskMeDepartmentRow
+          departments={departmentsOnBoard(cards)} counts={deptCounts} picked={picked} fresh={filter?.fresh ?? new Set()}
+          shown={shownCount} total={needsCount} dark={dark}
+          onPick={choose} onShowAll={() => { setFilter(null); setOpenId(undefined); }} onHeight={onRowHeight}
+        />
+      )}
+      <div role="status" className="cth-sr-only">{filterStatus}</div>
       <OfficeBreakCard />
       <SilentEngineCards />
       <EngineSetupCard status={engineCard ? engineSetup : null} />
       <UpdateCard update={update} later={updateLater} />
       <CaseStudyCard waiting={caseStudyWaiting} />
-      <ScheduleRequestCards requests={scheduleRequests} refresh={refreshScheduleRequests} />
-      <WorkStyleUpdateCards offers={offers} />
-      <MailProposalCards proposals={proposals} refresh={refreshNeedsYou} />
+      <CliUpdateCard status={cliUpdate} later={cliUpdateLater} />
+      <ScheduleRequestCards requests={scheduleRequests} refresh={refreshScheduleRequests} look={memberLook} hiddenIds={hiddenOf('schedule:')} fold={foldFor('schedule:')} />
+      <WorkStyleUpdateCards offers={offers} look={memberLook} hiddenIds={hiddenOf('offer:')} fold={foldFor('offer:')} />
+      <MailProposalCards proposals={proposals} refresh={refreshNeedsYou} look={memberLook} hiddenIds={hiddenOf('mail:')} fold={foldFor('mail:')} />
       {/* Always mounted, so screen readers announce the line when it fills. */}
       <div key={foundationSaved?.at} role={foundationSaved?.how === 'failed' ? 'alert' : 'status'} className={foundationSaved ? undefined : 'cth-sr-only'}
         style={foundationSaved ? { fontSize: 12, lineHeight: '17px', color: foundationSaved.how === 'failed' ? 'var(--cth-coral-text)' : 'var(--cth-ink-3)', padding: '0 2px' } : undefined}>
@@ -293,33 +408,43 @@ export function AskMeTab() {
       </div>
       {/* Nothing left (D4, D8): All clear, one light line, and what was just
           answered. The column closes on the next click outside it. */}
-      {!engineCard && !updateShown && !caseShown && !onBreak && !researchNotice && !knowledgeNotice && !silentShown && waiting.length === 0 && scheduleRequests.length === 0 && offers.length === 0 && proposals.length === 0 && (
+      {boardEmpty && !onBreak && !researchNotice && !knowledgeNotice && (
         <div style={{ padding: '4px 2px 2px' }}>
           <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--cth-ink)' }}>{translate('shell.allClear')}</div>
           <div style={{ marginTop: 4, fontSize: 13, lineHeight: '19px', color: 'var(--cth-ink-3)' }}>{translate(`shell.allClearLine${line}`, { godName })}</div>
         </div>
       )}
-      {!engineCard && !updateShown && !caseShown && !silentShown && waiting.length === 0 && scheduleRequests.length === 0 && offers.length === 0 && proposals.length === 0 && answeredHere.map((x) => (
-        <section key={x.id} aria-label={askTitle(x.title)} style={card}>
+      {boardEmpty && answeredHere.map((x) => {
+        const xDept = deptOf(x.whoId);
+        const xFam = famOf(xDept);
+        return (
+        <section key={x.id} aria-label={xDept ? `${askTitle(x.title)}, ${deptName(xDept)}` : askTitle(x.title)} style={card}>
           <div style={{ fontSize: 13, fontWeight: 600, lineHeight: '18px', letterSpacing: '-0.01em', color: 'var(--cth-ink)' }}>{askTitle(x.title)}</div>
-          {x.who && <div style={{ marginTop: 6 }}><span style={personChip}><AgentAvatar id={x.whoId} name={x.who} size={16} />{x.who}</span></div>}
+          {x.who && <div style={{ marginTop: 6 }}><span style={chipLook(xFam)} title={xDept ? translate('askMe.personDept', { name: x.who, dept: deptName(xDept) }) : undefined}><AgentAvatar id={x.whoId} name={x.who} size={16} />{x.who}{xDept && <span className="cth-sr-only">, {deptName(xDept)}</span>}</span></div>}
           <div style={{ marginTop: 8, fontSize: 11, fontWeight: 600, color: 'var(--cth-ink-3)' }}>{translate('askMe.yourAnswer')}</div>
           <div dir={rtl ? 'auto' : undefined} style={{ marginTop: 2, fontSize: 12.5, lineHeight: '18px', color: 'var(--cth-ink-2)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{x.a}</div>
+          {/* The files that went with it, by name: the paths are for the team. */}
+          {!!x.files?.length && <div style={{ ...fileRow, marginTop: 6 }}>{x.files.map((n) => <span key={n} style={fileChip}>{n}</span>)}</div>}
         </section>
-      ))}
-      {waiting.map((row, idx) => {
+        );
+      })}
+      {waiting.map((row) => {
         const { task: t, ask: open } = row;
         const foundationId = foundationAsk(open);
+        const isHidden = hidden.has(row.key);
         if (foundationId) {
-          // The member whose work hit it (D11), in its department color.
-          const raiser = open.raisedBy && open.raisedBy !== 'god' ? open.raisedBy : typeof t.assignee === 'string' ? t.assignee : undefined;
+          // The member whose work hit it (D11) is named; card and chip wear the
+          // area the question is about (design review D2, D3, 3A).
+          const raiser = raiserOfRow(row);
           const member = raiser ? agents.find((a) => a.id === raiser) : undefined;
-          const fam = member && !member.isGod ? family(departmentOf(member), dark) : null;
+          const area = rowDept(row);
+          const fam = famOf(area);
           return (
             <FoundationCard
               key={row.key} id={foundationId} rowKey={row.key} taskId={t.id} q={open.q} askedAt={open.askedAt}
               raiserId={raiser} raiserName={nameFor(raiser)} raiserIsMember={!!member}
-              chipStyle={{ ...personChip, ...(fam ? { background: fam.l, boxShadow: `inset 0 0 0 1px ${fam.m}` } : {}) }}
+              chipStyle={chipLook(fam)}
+              areaName={area ? deptName(area) : undefined} hidden={isHidden}
               foundations={foundations}
               memberName={(mid) => agents.find((a) => a.id === mid)?.name}
               onAnswer={(text) => sendAnswer(row, text)}
@@ -328,10 +453,10 @@ export function AskMeTab() {
           );
         }
         const stuck = dependentsTree(t.id, tasks);
-        const owner = t.assignee ? agents.find((a) => a.id === t.assignee) : undefined;
         // Agents write tasks.json: a card's assignee may not be a string.
         const who = nameFor(typeof t.assignee === 'string' ? t.assignee : undefined);
-        const fam = owner && !owner.isGod ? family(departmentOf(owner), dark) : null;
+        const dept = rowDept(row);
+        const fam = famOf(dept);
         const answered = t.humanQA?.filter((e) => e.a).length ?? 0;
         // See full context only when it leads somewhere new: the card's background,
         // its result, or other questions and answers (owner, 2026-10-12: it opened
@@ -345,7 +470,9 @@ export function AskMeTab() {
         // An option that needs the owner's words asks for them in the box, and
         // Reply waits until there are some (its "note", ask-me-options.md).
         const pickedNote = shape.kind === 'choice' && pk.pick !== undefined ? shape.options[pk.pick]?.note : undefined;
-        const toSend = pickedNote && !draft.trim() ? '' : answerFor(row, shape);
+        const files = answerFiles[row.key] ?? [];
+        // A file is an answer too, also for an option that asks for words.
+        const toSend = pickedNote && !draft.trim() && !files.length ? '' : answerFor(row, shape);
         const partsAnswered = shape.kind === 'parts' ? shape.parts.filter((p, i) => partAnswerText(p, pk.parts?.[i])).length : 0;
         // Reply says what it will send (D3): the option, or how many questions.
         const replyLabel = shape.kind === 'choice' && pk.pick !== undefined
@@ -353,20 +480,31 @@ export function AskMeTab() {
           : shape.kind === 'parts' && partsAnswered > 0 && partsAnswered < shape.parts.length
             ? translate('askMe.replyPartial', { n: partsAnswered, total: shape.parts.length })
             : translate('askMe.respond');
-        const hasDraft = !!draft.trim() || pk.pick !== undefined || partsAnswered > 0;
+        const hasDraft = !!draft.trim() || pk.pick !== undefined || partsAnswered > 0 || files.length > 0;
         const showStuck = openStuck[row.key] ?? false;
         // One card open at a time; the newest is open until the owner picks another.
         // The newest is open by default, and after the open card is answered
         // (it leaves the list) the newest opens again.
-        const pinned = openId !== undefined && (openId === null || waiting.some((x) => x.key === openId));
-        const expanded = pinned ? openId === row.key : idx === 0;
+        // One open card for the whole board (openKey above).
+        const expanded = openKey === row.key;
         const toggle = () => setOpenId(expanded ? null : row.key);
         const ago = askedAgo(open.askedAt, Date.now(), i18n.language, translate('askMe.justNow'));
         return (
           // Design v2 (DESIGN.md 7.8; owner, 2026-09-30): folded cards read as a
           // list (title, who, when, the ask in a line or two); one opens to the
           // full question, a one row reply and what it holds up.
-          <section key={row.key} data-askme-id={t.id} aria-label={rowLabel(row)} style={expanded ? cardOpen : card} className={expanded ? 'cth-askme-card is-open' : 'cth-askme-card'}>
+          <section key={row.key} data-askme-id={t.id} data-askme-hidden={isHidden || undefined} aria-label={dept ? `${rowLabel(row)}, ${deptName(dept)}` : rowLabel(row)}
+            style={{ ...(expanded ? cardOpen : card), ...(isHidden ? { display: 'none' } : {}) }}
+            className={expanded ? 'cth-askme-card is-open' : 'cth-askme-card'}
+            // Files dropped on the card go with the answer (ask-me-answer-box.md).
+            onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); }}
+            onDrop={(e) => {
+              const dropped = Array.from(e.dataTransfer?.files ?? []).map((f) => ({ path: window.cth.pathForFile(f), name: f.name })).filter((f) => f.path);
+              if (!dropped.length) return;
+              e.preventDefault();
+              addFiles(row.key, dropped);
+              setOpenId(row.key);
+            }}>
             {/* The header folds and unfolds the card. */}
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
               <div
@@ -383,9 +521,10 @@ export function AskMeTab() {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 6, flexWrap: 'wrap' }}>
                   {who && (
-                    <span style={{ ...personChip, ...(fam ? { background: fam.l, boxShadow: `inset 0 0 0 1px ${fam.m}` } : {}) }}>
-                      <AgentAvatar id={typeof t.assignee === 'string' ? t.assignee : undefined} name={who} size={16} />
+                    <span style={chipLook(fam)} title={dept ? translate('askMe.personDept', { name: who, dept: deptName(dept) }) : undefined}>
+                      <AgentAvatar id={assigneeOf(t)} name={who} size={16} />
                       {who}
+                      {dept && <span className="cth-sr-only">, {deptName(dept)}</span>}
                     </span>
                   )}
                   {ago && <span style={{ fontSize: 11, color: 'var(--cth-ink-3)' }}>{ago}</span>}
@@ -443,7 +582,12 @@ export function AskMeTab() {
             )}
             {shape.kind !== 'plain' ? <>
             {/* With options or questions (A1): the box full width, then Reply on
-                its own row, so picking never reads as sending. */}
+                its own row, so picking never reads as sending. A picked option's
+                question stays above the box, whole, while the owner types
+                (owner D2, ask-me-answer-box.md). */}
+            {pickedNote && (
+              <div dir={rtl ? 'auto' : undefined} data-askme-note style={{ margin: '0 0 6px', fontSize: 12, lineHeight: '18px', color: 'var(--cth-ink-2)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{pickedNote}</div>
+            )}
             <GrowingTextarea
               className="cth-input"
               dir={rtl ? 'auto' : undefined}
@@ -451,7 +595,8 @@ export function AskMeTab() {
               onChange={(e) => setAnswerDraft(row.key, e.target.value)}
               onFocus={() => setOpenId(row.key)}
               onKeyDown={(e) => { if (isComposingKey(e)) return; if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void sendAnswer(row); }}
-              placeholder={shape.kind === 'parts' ? translate('askMe.anythingElse') : pickedNote ?? (pk.pick !== undefined ? translate('askMe.addNote') : translate('askMe.ownAnswer'))}
+              onPaste={(e) => { void attachmentsFromPaste(e)?.then((f) => addFiles(row.key, f)); }}
+              placeholder={shape.kind === 'parts' ? translate('askMe.anythingElse') : pickedNote ? translate('askMe.yourAnswer') : (pk.pick !== undefined ? translate('askMe.addNote') : translate('askMe.ownAnswer'))}
               style={{
                 width: '100%', display: 'block', boxSizing: 'border-box', padding: '7px 10px', minHeight: 34,
                 background: 'var(--cth-card)', border: 'none',
@@ -459,10 +604,12 @@ export function AskMeTab() {
                 color: 'var(--cth-ink)', outline: 'none'
               }}
             />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+            <AttachedFiles files={files} onRemove={(path) => setAnswerFiles(row.key, files.filter((f) => f.path !== path))} />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, marginTop: 8 }}>
+              <AddFileButton onPick={() => void pickFiles(row.key)} disabled={sending === row.key} />
               <PixelButton
                 variant="primary" size="sm"
-                disabled={!toSend || sending === row.key}
+                disabled={(!toSend && !files.length) || sending === row.key}
                 onClick={() => void sendAnswer(row)}
                 ariaLabel={shape.kind === 'choice' && pk.pick !== undefined ? translate('askMe.replyOptionAria', { n: pk.pick + 1, label: shape.options[pk.pick]?.label ?? '' }) : undefined}
                 style={{ height: 34, flexShrink: 0 }}
@@ -481,6 +628,7 @@ export function AskMeTab() {
                 // Typing pins this card open, so a newer ask arriving never folds it mid answer.
                 onFocus={() => setOpenId(row.key)}
                 onKeyDown={(e) => { if (isComposingKey(e)) return; if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void sendAnswer(row); }}
+                onPaste={(e) => { void attachmentsFromPaste(e)?.then((f) => addFiles(row.key, f)); }}
                 placeholder={translate('askMe.answerPlaceholder')}
                 style={{
                   flex: 1, minWidth: 0, display: 'block', boxSizing: 'border-box', padding: '7px 10px', minHeight: 34,
@@ -489,6 +637,7 @@ export function AskMeTab() {
                   color: 'var(--cth-ink)', outline: 'none'
                 }}
               />
+              <AddFileButton onPick={() => void pickFiles(row.key)} disabled={sending === row.key} />
               {/* A report is cleared with Got it; nothing goes to Michael (14A). */}
               {isReport(open) && (
                 <PixelButton variant="secondary" size="sm" disabled={sending === row.key} style={{ height: 34, flexShrink: 0 }}
@@ -498,7 +647,7 @@ export function AskMeTab() {
               )}
               <PixelButton
                 variant="primary" size="sm"
-                disabled={!draft.trim() || sending === row.key}
+                disabled={(!draft.trim() && !files.length) || sending === row.key}
                 onClick={() => void sendAnswer(row)}
                 style={{ height: 34, flexShrink: 0 }}
               >
@@ -506,6 +655,7 @@ export function AskMeTab() {
               </PixelButton>
             </div>
             )}
+            {shape.kind === 'plain' && <AttachedFiles files={files} onRemove={(path) => setAnswerFiles(row.key, files.filter((f) => f.path !== path))} />}
             {/* A notice (a report with a kind) can teach its member to stop
                 filing that kind (owner-items-reach-ask-me.md D2). */}
             {isReport(open) && !!noticeKindOf(open) && (
@@ -648,4 +798,46 @@ function KnowledgeNoticeCard() {
 const reportTag: CSSProperties = {
   fontSize: 11, fontWeight: 600, padding: '1px 8px', borderRadius: 'var(--cth-r-pill)',
   background: 'var(--cth-neutral-soft)', color: 'var(--cth-ink-2)'
+};
+
+/** The quiet paperclip beside Reply: pick files to send with the answer
+ *  (ask-me-answer-box.md). Pasting into the box and dropping on the card
+ *  attach too. */
+function AddFileButton({ onPick, disabled }: { onPick: () => void; disabled?: boolean }) {
+  const { t } = useTranslation();
+  return (
+    <button type="button" className="cth-askme-attach" onClick={onPick} disabled={disabled} aria-label={t('askMe.addFile')} title={t('askMe.addFile')} style={attachButton}>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M21 11.5l-8.6 8.6a5 5 0 01-7.1-7.1l8.6-8.6a3.5 3.5 0 015 5l-8.6 8.6a2 2 0 01-2.8-2.8l7.9-7.9" />
+      </svg>
+    </button>
+  );
+}
+
+/** The files waiting to go with an answer, as Talk to Michael shows them. */
+function AttachedFiles({ files, onRemove }: { files: PastedFile[]; onRemove: (path: string) => void }) {
+  const { t } = useTranslation();
+  if (!files.length) return null;
+  return (
+    <div style={{ ...fileRow, marginTop: 6 }}>
+      {files.map((f) => (
+        <span key={f.path} title={f.path} style={{ ...fileChip, padding: '0 3px 0 8px' }}>
+          {f.name}
+          <button type="button" onClick={() => onRemove(f.path)} aria-label={t('shell.removeAttachment', { name: f.name })}
+            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--cth-ink-3)', fontSize: 10 }}>✕</button>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+const fileRow: CSSProperties = { display: 'flex', gap: 4, flexWrap: 'wrap' };
+const fileChip: CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: 4, height: 20, padding: '0 8px', maxWidth: 220,
+  borderRadius: 'var(--cth-r-pill)', background: 'var(--cth-neutral-soft)', fontSize: 11, color: 'var(--cth-ink-2)',
+  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+};
+const attachButton: CSSProperties = {
+  width: 34, height: 34, flexShrink: 0, display: 'grid', placeItems: 'center', padding: 0,
+  border: 'none', borderRadius: 'var(--cth-r-md)', background: 'transparent', color: 'var(--cth-ink-3)', cursor: 'pointer'
 };

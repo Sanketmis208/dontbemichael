@@ -109,7 +109,9 @@ test('the card, the tag and the panel line are placed where the design says (SD1
   // Value: protects=placement on the board, the pods, the panel header and above the tabs; fails_when=a piece is dropped or All clear shows beside a card; why_new=new UI; seam=source pin; no_claim=the look (live check against silent-engine-v2.html)
   const ask = read('src/renderer/src/components/AskMeTab.tsx');
   assert.match(ask, /<OfficeBreakCard \/>\s*<SilentEngineCards \/>/);
-  assert.match(ask, /!engineCard && !updateShown && !caseShown && !onBreak && !researchNotice && !knowledgeNotice && !silentShown &&/);
+  // All clear reads the whole board, whatever department is picked.
+  assert.match(ask, /const boardEmpty = !engineCard && !updateShown && !caseShown && !silentShown &&/);
+  assert.match(ask, /\{boardEmpty && !onBreak && !researchNotice && !knowledgeNotice && \(/);
   assert.match(read('src/renderer/src/shell/PanelChrome.tsx'), /\{silent \? <NotReportingTag/);
   const stage = read('src/renderer/src/scene/studio/StudioStage.tsx');
   assert.equal((stage.match(/<NotReportingTag/g) ?? []).length, 2, 'member pods and Michael\'s');

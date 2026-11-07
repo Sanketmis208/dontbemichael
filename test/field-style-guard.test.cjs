@@ -25,7 +25,7 @@ const SHARED = 'components/fieldText.tsx';
 const FILE_EXCEPTIONS = [
   // Cards: the Kanban, Ask me, Needs you, foundation and mail proposal cards.
   'components/TasksKanban.tsx', 'components/AskMeTab.tsx', 'shell/NeedsYouBoard.tsx',
-  'components/FoundationCard.tsx', 'components/MailProposalCards.tsx',
+  'components/FoundationCard.tsx', 'components/MailProposalCards.tsx', 'components/AskMeDepartmentRow.tsx',
   // Chat.
   'components/ThreadsPanel.tsx', 'components/MessageQueueComposer.tsx',
   // The floor, and the voice overlays drawn on it.

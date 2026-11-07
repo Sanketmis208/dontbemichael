@@ -163,7 +163,7 @@ test('offices that already hired her are offered the new text once, never given 
   assert.match(offers[0].description, /^Executive Admin: Runs the business inbox to zero/);
   assert.deepEqual(workStyleOffers(agents, cards, 'saas-consulting', { name: 'Sunrise Bakery' }, { [decisionId(offers[0].key, 'pam')]: 'keep' }).map((o) => o.agentId), ['pam-2'], 'decided once');
   assert.deepEqual(workStyleOffers([{ id: 'pam', goal: offers[0].goal }], cards, 'saas-consulting', { name: 'Sunrise Bakery' }, {}), [], 'already current');
-  assert.match(read('src/renderer/src/components/AskMeTab.tsx'), /<WorkStyleUpdateCards offers=\{offers\} \/>/);
+  assert.match(read('src/renderer/src/components/AskMeTab.tsx'), /<WorkStyleUpdateCards offers=\{offers\} look=\{memberLook\} hiddenIds=\{hiddenOf\('offer:'\)\} fold=\{foldFor\('offer:'\)\} \/>/);
   assert.match(read('src/renderer/src/App.tsx'), /setWorkStyleOffersSource\(readWorkStyleOffers\)/);
   const decide = read('src/renderer/src/shell/workStyleOffers.ts');
   // Use it saves what the preview showed: the new text with the owner's

@@ -91,6 +91,15 @@
     "noteAria": "{{name}} 的笔记"
   },
   "askMe": {
+    "addFile": "添加文件",
+    "deptFilter": "只看一个部门",
+    "showing": "显示 {{shown}} / {{total}}",
+    "showAll": "显示全部",
+    "showingEvery": "显示所有团队",
+    "deptNew": "{{dept}}，选择后有新内容",
+    "personDept": "{{name}}，{{dept}}",
+    "areaQuestion": "{{dept}}问题",
+    "areaQuestionFrom": "{{dept}}问题，来自{{name}}",
     "mailFailed": "没能保存。请再试一次。",
     "report": "报告",
     "gotIt": "知道了",
@@ -148,7 +157,8 @@
     "workStyleWhy": {
       "sendingSetting": "回复按「权限」页里的发送设置发出：直接发送、先交你审批，或存为草稿。",
       "pamInboxZero": "收件箱清零：每封邮件都有处理结果并移出收件箱，不删除任何邮件。",
-      "askTeammates": "直接向掌握答案的同事询问，只有在同事无法帮忙时才找办公室经理。"
+      "askTeammates": "直接向掌握答案的同事询问，只有在同事无法帮忙时才找办公室经理。",
+      "customerLists": "市场部负责可引用的客户名单，销售部负责客户名单"
     },
     "mailTitle": "{{name}} 想发一封邮件",
     "mailFrom": "发件人：{{from}}",
@@ -1150,9 +1160,7 @@
     "body": "Claude Code {{version}} 已安装，但还有 1 个智能体在使用旧版本。下班并重新打开，让所有人都换到新版本。每个智能体都会先保存工作，不会丢失任何内容。在你决定之前，什么都不会重启。",
     "bodyPlural": "Claude Code {{version}} 已安装，但还有 {{count}} 个智能体在使用旧版本。下班并重新打开，让所有人都换到新版本。每个智能体都会先保存工作，不会丢失任何内容。在你决定之前，什么都不会重启。",
     "later": "稍后",
-    "closeAndReopen": "下班并重新打开",
-    "chip": "团队升级已就绪",
-    "chipTitle": "Claude Code {{version}} 已安装。下班并重新打开即可使用。"
+    "closeAndReopen": "下班并重新打开"
   },
   "updateBadge": {
     "downloadingLabel": "正在下载 {{percent}}%",
@@ -3043,7 +3051,7 @@
       "sales_process": "一笔销售如何进行，逐步说明",
       "market": "企业客户、个人客户还是两者",
       "deals": "潜在客户和交易记录在哪里",
-      "prices": "价格和条款",
+      "prices": "定价规则和付款条款，以及价目表存放在哪里",
       "voice": "我们的说话方式（品牌语气）",
       "brand": "我们的形象（标志、颜色、字体）",
       "current_customers": "我们现在的客户是谁",
@@ -3052,10 +3060,10 @@
       "fiscal_year": "财务年度",
       "money": "资金进出的每一处（银行、信用卡、支付服务、投资账户），以及各自记录在哪里",
       "owed": "谁欠我们钱、我们欠谁钱，记录在哪里",
-      "results": "报表、预算或目标",
+      "results": "我们的目标或预算，以及报表存放在哪里",
       "policies": "退款、退货和服务承诺",
       "hours": "营业时间",
-      "faq": "常见客户问题及答案",
+      "faq": "常见客户问题及答案，或它们存放在哪里",
       "team": "团队成员和各自负责的事",
       "calendar": "会议和预约记录在哪里",
       "hiring": "我们如何招聘和迎接新同事",
@@ -3063,7 +3071,11 @@
       "access": "密码和权限如何管理",
       "suppliers": "我们的供应商和订货方式",
       "stock": "库存在哪里跟踪",
-      "shipping": "订单如何打包和配送"
+      "shipping": "订单如何打包和配送",
+      "reference_customers": "哪些客户可以在营销内容中引用",
+      "owed_where": "谁欠我们钱、我们欠谁钱记录在哪里",
+      "client_work": "客户工作和项目在哪里跟踪",
+      "ordering": "我们如何向供应商订货，以及供应商名单存放在哪里"
     },
     "short": {
       "offer": "我们卖什么",

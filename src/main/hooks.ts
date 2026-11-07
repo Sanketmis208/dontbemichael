@@ -16,7 +16,7 @@ import { existsSync, lstatSync, readlinkSync, realpathSync, rmSync } from 'node:
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { homedir, tmpdir } from 'node:os';
 import { Notification, type WebContents } from 'electron';
-import { redactSecrets, type HiveManager } from './hive';
+import { redactSecrets, SOLO_ENDED, SOLO_RULES, type HiveManager } from './hive';
 import type { HarnessConfig } from './config';
 import type { ControlRegistry } from './control';
 import type { CircuitBreaker } from './breaker';
@@ -89,7 +89,7 @@ export const ASK_TOOL_REFUSAL =
 
 import { GUARDED_TOOLS, harnessWriteDecision } from './harnessGuard';
 import { TurnCap } from './turnCap';
-import { FOLDER_READ_TOOLS, FOLDER_WRITE_TOOLS, agentTmpDecision, agentTmpName, folderDecision, folderToolTarget, AGENT_TMP_DIR, isSharedTempSave, researchFolderDecision, sharedTempWriteDecision, tempFolders, researchWallDecision, memberWallDecision } from '../shared/folderAccess';
+import { FOLDER_READ_TOOLS, FOLDER_WRITE_TOOLS, windowsShellWallDecision, agentTmpDecision, agentTmpName, folderDecision, folderToolTarget, AGENT_TMP_DIR, isSharedTempSave, researchFolderDecision, sharedTempWriteDecision, tempFolders, researchWallDecision, memberWallDecision } from '../shared/folderAccess';
 import { REFUSAL_WEB_TOOL, REFUSAL_WEB_TOOL_OFF, RESEARCH_DESK_DIR, RESEARCH_ID, RESEARCH_NAME, RESEARCH_SANDBOX_ONLY, RESEARCH_UNCHECKED_TOOL, researchText } from '../shared/research';
 import { folderLayoutFor } from './officeFile';
 import { expandTilde } from './fs';
@@ -194,6 +194,9 @@ export class HookServer {
   private deliveredFoundationsByAgent = new Map<string, { sessionId: string | null; text: string | null }>();
   /** What roster each agent's session was last given, so it is sent again only on a change. */
   private deliveredRosterByAgent = new Map<string, { sessionId: string | null; layoutKey: string; statusKey: string }>();
+  /** Whether Michael's last roster carried the solo rules, per session, so the
+   *  first hire revokes them with one line (eng review E1, 2026-11-07). */
+  private soloByAgent = new Map<string, { sessionId: string | null; solo: boolean }>();
   /** The session each agent was last given its memory index in. */
   private deliveredMemoryByAgent = new Map<string, string | null>();
   /** Whether Michael's last turn showed open owner requests, per session, so
@@ -902,6 +905,17 @@ export class HookServer {
       }
     }
 
+    // Windows has no shell sandbox (#187): a member's shell command that names
+    // another member's folder is refused by its text (owner, eng review D2).
+    if (event === 'PreToolUse' && agentId && toolName === 'Bash' && process.platform === 'win32') {
+      let d: { deny: boolean; reason?: string };
+      try { d = this.windowsShellWall(agentId, p.tool_input); } catch { d = { deny: false }; }
+      if (d.deny) {
+        this.emitRefused(agentId, event, p, 'folder');
+        return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: d.reason } };
+      }
+    }
+
     // Memory pays off only if it's used (owner, 2026-09-25): record each time an
     // agent opens one of its procedure files, next to the tidy-up's own counts.
     if (event === 'PostToolUse' && agentId && toolName === 'Read') {
@@ -966,6 +980,17 @@ export class HookServer {
       }
     } else if (wantsRoster) {
       roster = this.hive.rosterContext((id) => this.contextFor(id));
+    }
+    // A solo office (no worker member): Michael does the work himself until
+    // the first hire, then one line ends that (owner, CEO review D5).
+    if (wantsRoster && typeof this.hive.hasWorkerMember === 'function') {
+      const solo = !this.hive.hasWorkerMember();
+      const sessionId = p.session_id ?? null;
+      const was = this.soloByAgent.get(agentId!);
+      const sameSession = !!was && was.sessionId === sessionId && event !== 'SessionStart';
+      if (solo && (!sameSession || !was.solo || roster)) roster = roster ? `${roster}\n${SOLO_RULES}` : SOLO_RULES;
+      else if (!solo && sameSession && was.solo) roster = roster ? `${roster}\n${SOLO_ENDED}` : SOLO_ENDED;
+      this.soloByAgent.set(agentId!, { sessionId, solo });
     }
 
     // Standing goal (hire Briefing) — durable roster field, re-read every cycle so
@@ -1314,6 +1339,26 @@ export class HookServer {
    *  not know is announced as the app. */
   /** One file tool call judged against the office's folder rules. Offices
    *  without a business folder (older installs) have no rules to apply. */
+  /** The Windows shell wall: every other member's work folder and hive folder
+   *  (Michael is not held: he may read members' work folders). */
+  private windowsShellWall(agentId: string, input: unknown): { deny: boolean; reason?: string } {
+    const reg = this.hive.registry();
+    const me = reg.agents[agentId];
+    if (!me || me.isGod) return { deny: false };
+    const cfg = this.getConfig();
+    const hiveRoot = this.hive.root();
+    const peers: string[] = [];
+    for (const [id, a] of Object.entries(reg.agents ?? {})) {
+      if (id === agentId || a.isGod) continue;
+      if (a.cwd) peers.push(a.cwd);
+      if (hiveRoot) peers.push(join(hiveRoot, 'agents', id));
+    }
+    for (const m of cfg.businessTeam ?? []) if (m.folder) peers.push(m.folder);
+    const own = [me.cwd ?? '', hiveRoot ? join(hiveRoot, 'agents', agentId) : ''];
+    const command = input && typeof input === 'object' ? (input as Record<string, unknown>).command : undefined;
+    return windowsShellWallDecision(process.platform, command, peers, own);
+  }
+
   private folderCheck(agentId: string, tool: string, input: unknown, cwd: string | undefined): { deny: boolean; reason?: string } {
     const cfg = this.getConfig();
     // Without a business folder there are no team folders to keep apart, but

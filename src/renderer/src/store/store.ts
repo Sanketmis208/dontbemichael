@@ -345,6 +345,9 @@ interface State {
   /** Closing time: who has gone home (confirmed or closed without). Empty when
    *  not closing. Nobody in it can be opened (docs/designs/closing-floor.md). */
   goneHome: string[];
+  /** Closing time's bar is up (App.tsx): the team upgrade card steps aside
+   *  until it closes (docs/designs/team-upgrade-card.md). */
+  officeClosing: boolean;
   setGoneHome: (ids: string[]) => void;
   /** What the right column shows (docs/designs/needs-you-empty-state.md, eng
    *  R1): nothing ('closed', the office takes the window), the Needs you board,
@@ -447,6 +450,10 @@ interface State {
    *  kept like a typed draft (docs/designs/ask-me-options.md, decision 3A). */
   answerPicks: Record<string, AnswerPick>;
   setAnswerPick: (key: string, pick: AnswerPick) => void;
+  /** Files attached to an Ask me answer, by row, kept like a typed draft
+   *  until the answer lands (docs/designs/ask-me-answer-box.md). */
+  answerFiles: Record<string, Array<{ path: string; name: string }>>;
+  setAnswerFiles: (key: string, files: Array<{ path: string; name: string }>) => void;
   /** Unsent composer drafts, per agent — so switching agents (which remounts the
    *  composer) doesn't eat what the user was typing. */
   drafts: Record<string, string>;
@@ -509,6 +516,9 @@ interface State {
   /** Clear an agent's entire pending queue. */
   clearQueue: (agentId: string) => void;
   setAddAgentOpen: (open: boolean) => void;
+  /** The cast card a hire link asked Add agent to start on (dbm:hire/<card>). */
+  addAgentPick: string | null;
+  openHire: (card?: string) => void;
   /** Validated manifests waiting for one-at-a-time human review. */
   hireQueue: HireReviewQueue;
   enqueuePendingHires: (manifests: readonly HireManifest[]) => void;
@@ -1149,6 +1159,7 @@ export const useStore = create<State>((set, get) => ({
     return { selectedId: id, ccTabRequest: null, memoryFocusRequest: null, rightColumn: 'person', centerClaim: 'column', columnMinimized: false, ...officeView(s.floorView) };
   })); },
   goneHome: [],
+  officeClosing: false,
   setGoneHome: (ids) => set((s) => (ids.length === s.goneHome.length && ids.every((id) => s.goneHome.includes(id)) ? {} : { goneHome: ids })),
   rightColumn: 'closed',
   columnMinimized: false,
@@ -1399,6 +1410,9 @@ export const useStore = create<State>((set, get) => ({
   answerPicks: {},
   setAnswerPick: (key, pick) =>
     set((s) => ({ answerPicks: { ...s.answerPicks, [key]: pick } })),
+  answerFiles: {},
+  setAnswerFiles: (key, files) =>
+    set((s) => ({ answerFiles: { ...s.answerFiles, [key]: files } })),
   drafts: {},
   setDraft: (agentId, text) =>
     set((s) => ({ drafts: { ...s.drafts, [agentId]: text } })),
@@ -1535,7 +1549,9 @@ export const useStore = create<State>((set, get) => ({
       persistRestorable(restorableAgents);
       return { agents, feeds, selectedId, restorableAgents, fullscreenAgentId };
     }),
-  setAddAgentOpen: (open) => set({ addAgentOpen: open }),
+  setAddAgentOpen: (open) => set(open ? { addAgentOpen: true } : { addAgentOpen: false, addAgentPick: null }),
+  addAgentPick: null,
+  openHire: (card) => set({ addAgentOpen: true, addAgentPick: card ?? null }),
   hireQueue: EMPTY_HIRE_QUEUE,
   enqueuePendingHires: (manifests) => set((s) => ({
     hireQueue: enqueueHires(s.hireQueue, manifests)

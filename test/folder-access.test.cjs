@@ -309,3 +309,24 @@ test('the records are walled by the folder they really are, when CLAUDE_CONFIG_D
     }
   }
 });
+
+test('Windows: a member shell command naming another member\'s folder is refused', () => {
+  // Value: protects=records from peer shell writes where Windows has no shell sandbox (owner, eng review D2, 2026-11-07); fails_when=a peer path spelling passes, or the member's own folder or another platform is refused; why_new=new check; seam=none; no_claim=commands that build the path in a variable
+  const { windowsShellWallDecision, WINDOWS_SHELL_WALL } = loadTs('src/shared/folderAccess.ts');
+  const peers = ['C:\\Office\\Sales', 'C:\\Office\\hive\\agents\\dwight'];
+  const own = ['C:\\Office\\Marketing', 'C:\\Office\\hive\\agents\\ryan'];
+  for (const cmd of [
+    'echo x > "C:\\Office\\Sales\\Customer roster.csv"',
+    'echo x > C:/Office/Sales/roster.csv',
+    "copy a.csv 'c:\\office\\sales'",
+    'type ..\\Sales\\roster.csv',
+    'del C:\\Office\\hive\\agents\\dwight\\inbox\\m.json'
+  ]) {
+    assert.deepEqual(windowsShellWallDecision('win32', cmd, peers, own), { deny: true, reason: WINDOWS_SHELL_WALL }, cmd);
+  }
+  for (const cmd of ['echo x > C:\\Office\\Marketing\\Reference customers.csv', 'dir C:\\Office\\SalesArchive', 'echo Sales went up', '']) {
+    assert.equal(windowsShellWallDecision('win32', cmd, peers, own).deny, false, cmd);
+  }
+  assert.equal(windowsShellWallDecision('darwin', 'echo x > /Office/Sales/a.csv', ['/Office/Sales'], own).deny, false, 'the sandbox holds other platforms');
+  assert.match(WINDOWS_SHELL_WALL, /Ask that teammate/);
+});

@@ -47,7 +47,7 @@ const COUNTER_FROM = 40;
  * Decide later (both saved at once, each with Undo). Save waits until every
  * seen item has one of the three; with one put off it saves the list so far.
  */
-export function FoundationCard({ id, rowKey, taskId, q, askedAt, raiserId, raiserName, raiserIsMember = true, memberName, chipStyle, foundations, onAnswer, onSaved }: {
+export function FoundationCard({ id, rowKey, taskId, q, askedAt, raiserId, raiserName, raiserIsMember = true, memberName, chipStyle, areaName, hidden = false, foundations, onAnswer, onSaved }: {
   id: FoundationId;
   rowKey: string;
   taskId: string;
@@ -60,8 +60,14 @@ export function FoundationCard({ id, rowKey, taskId, q, askedAt, raiserId, raise
   raiserIsMember?: boolean;
   /** A team member's name, or undefined for someone not on the team now. */
   memberName?: (id: string) => string | undefined;
-  /** The raiser chip in the member's department color (D11). */
+  /** The raiser chip, in the colors of the area the question is about
+   *  (docs/designs/ask-me-department-colors.md, design review 3A). */
   chipStyle: CSSProperties;
+  /** The area in words ("Finance"), so color is never the only sign of it. */
+  areaName?: string;
+  /** Hidden by the board's department filter: kept mounted, so a half written
+   *  answer survives, and drawn nowhere. */
+  hidden?: boolean;
   foundations: FoundationsView | null;
   /** Answer the card like any Ask me reply; resolves false when the card did not take it. */
   onAnswer: (text: string) => Promise<boolean>;
@@ -284,12 +290,17 @@ export function FoundationCard({ id, rowKey, taskId, q, askedAt, raiserId, raise
   // Draft only while a list is empty: with items known, the team grows it through seen items (D6).
   const canDraft = !!raiserId && raiserIsMember && !!drafter && !drafting && !asked?.text && !(list && known);
   return (
-    <section ref={sectionRef} role="group" aria-label={question} data-askme-id={taskId} className="cth-askme-card is-open" style={cardStyle}
+    <section ref={sectionRef} role="group" aria-label={areaName ? `${question}, ${t('askMe.areaQuestion', { dept: areaName })}` : question} data-askme-id={taskId}
+      data-askme-hidden={hidden || undefined} className="cth-askme-card is-open"
+      style={{ ...cardStyle, ...(hidden ? { display: 'none' } : {}) }}
       onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); }} onDrop={dropFile}>
       <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 14, fontWeight: 600, lineHeight: '19px', letterSpacing: '-0.01em', color: 'var(--cth-ink)' }}>{question}</div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 6, flexWrap: 'wrap' }}>
         {raiserName && (
-          <span style={chipStyle}><AgentAvatar id={raiserId} name={raiserName} size={16} />{raiserName}</span>
+          <span style={chipStyle} title={areaName ? t('askMe.areaQuestionFrom', { dept: areaName, name: raiserName }) : undefined}>
+            <AgentAvatar id={raiserId} name={raiserName} size={16} />{raiserName}
+            {areaName && <span className="cth-sr-only">, {t('askMe.areaQuestion', { dept: areaName })}</span>}
+          </span>
         )}
         <span style={{ fontSize: 11, color: 'var(--cth-ink-3)' }}>
           {expired && known?.completeAt ? t('foundations.card.confirmedOn', { day: day(known.completeAt) }) : ago ? t('foundations.card.needsAgo', { ago }) : t('foundations.card.needs')}
