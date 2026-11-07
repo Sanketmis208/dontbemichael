@@ -278,6 +278,35 @@ function namesSomeoneElse(phrase: string, targetId: string, reg: Registry): bool
     id !== targetId && words(id, m.name).some((w) => !own.has(w) && p.includes(` ${w} `)));
 }
 
+/** Words any confirm may carry, whatever it is for. */
+const CONFIRM_WORDS = new Set(['confirm', 'confirmed', 'yes', 'ok', 'okay', 'please', 'go', 'ahead', 'do', 'it', 'now', 'the', 'a', 'schedule', 'setting', 'settings', 'change', 'delete', 'remove', 'enable', 'disable', 'pause', 'create', 'on', 'off']);
+
+/** A setting key as it is said: `maxConcurrentWorkers` is "max concurrent
+ *  workers", and the key run together counts too. */
+const settingWords = (key: string): string[] =>
+  [key.replace(/([a-z0-9])([A-Z])/g, '$1 $2'), key];
+
+/**
+ * Does the phrase name one of `others` (a schedule's name or id, a setting key)
+ * that is not the staged one? "confirm, delete the Invoice check schedule"
+ * while a delete of Morning report waits is about Invoice check, so it must
+ * not delete Morning report. Matched as whole words; a name the staged one's
+ * own names contain ("report" inside "Morning report") is not someone else's,
+ * and neither is one shared by two of them.
+ */
+function namesOtherThing(phrase: string, own: readonly string[], others: readonly string[]): string | null {
+  const p = ` ${normMatch(phrase)} `;
+  const mine = own.map((o) => ` ${normMatch(o)} `);
+  for (const o of others) {
+    const w = normMatch(o);
+    // A name made only of the words a confirm is said with ("Schedule",
+    // "Confirm") would cancel every confirm, so it names nothing here.
+    if (w.length < 2 || w.split(' ').every((x) => CONFIRM_WORDS.has(x))) continue;
+    if (p.includes(` ${w} `) && !mine.some((m) => m.includes(` ${w} `))) return o;
+  }
+  return null;
+}
+
 // ─── pending (single-slot two-phase confirm) ────────────────────────────────
 
 interface Pending {
@@ -286,6 +315,10 @@ interface Pending {
   targetLabel: string;
   /** The team member the action is for, when it is for one. */
   targetId?: string;
+  /** For a schedule or a setting: what it is called, and how a confirm that
+   *  names another one is answered. Read at confirm time, so a schedule added
+   *  since counts as another one. */
+  other?: { kind: 'schedule' | 'setting'; own: string[]; others: () => string[] };
   createdAt: number;
   commit: () => Promise<string>;
 }
@@ -759,6 +792,7 @@ function proposeDestructive(deps: RealtimeActionDeps, verb: string, a: Record<st
       verb,
       confirmWord: 'schedule',
       targetLabel: m.label,
+      other: scheduleTarget(deps, [m.label, m.id], m.id),
       createdAt: Date.now(),
       commit: buildEditSchedule(deps, m, action)
     };
@@ -803,6 +837,7 @@ function proposeDestructive(deps: RealtimeActionDeps, verb: string, a: Record<st
     };
     pending = {
       verb, confirmWord: 'schedule', targetLabel: label, targetId, createdAt: Date.now(),
+      other: scheduleTarget(deps, [label, mission.id], mission.id),
       commit: async () => {
         deps.saveMissions([...deps.listMissions(), mission]);
         attribute(deps, 'create_schedule', mission.id, { title: label.slice(0, 120) });
@@ -858,7 +893,11 @@ function proposeDestructive(deps: RealtimeActionDeps, verb: string, a: Record<st
       // Low-blast keys apply immediately, like other soft verbs.
       return { ok: true, spoken: applyNow() };
     }
-    pending = { verb, confirmWord: 'setting', targetLabel: key, createdAt: Date.now(), commit: async () => applyNow() };
+    pending = {
+      verb, confirmWord: 'setting', targetLabel: key, createdAt: Date.now(),
+      other: { kind: 'setting', own: settingWords(key), others: () => Object.keys(SETTING_POLICY).filter((k) => k !== key).flatMap(settingWords) },
+      commit: async () => applyNow()
+    };
     return {
       ok: true,
       needsConfirm: true,
@@ -867,6 +906,15 @@ function proposeDestructive(deps: RealtimeActionDeps, verb: string, a: Record<st
   }
 
   return { ok: false, spoken: `I don't know how to ${verb}.` };
+}
+
+/** A staged schedule's names, and every other schedule's, for the confirm. */
+function scheduleTarget(deps: RealtimeActionDeps, own: string[], id: string): NonNullable<Pending['other']> {
+  return {
+    kind: 'schedule',
+    own,
+    others: () => deps.listMissions().filter((x) => x.id !== id).flatMap((x) => [x.label || '', x.id])
+  };
 }
 
 /** Top-level propose/execute for one verb. Soft writes run now; destructive ones
@@ -966,6 +1014,20 @@ export function registerRealtimeActionIpc(deps: RealtimeActionDeps): void {
         ok: false,
         spoken: `That named someone other than ${who}, so I cancelled the ${cur.verb.replace(/_/g, ' ')}. Ask again for the one you mean.`
       } satisfies ActionResult;
+    }
+    // The same for a schedule or a setting: a confirm naming another one is
+    // about that one, so the staged change is dropped and nothing runs.
+    if (cur.other) {
+      let others: string[] = [];
+      try { others = cur.other.others(); } catch { /* none known: nothing to compare */ }
+      if (namesOtherThing(phrase, cur.other.own, others)) {
+        pending = null;
+        const what = cur.other.kind === 'schedule' ? `the "${cur.targetLabel}" schedule` : `the ${cur.targetLabel} setting`;
+        return {
+          ok: false,
+          spoken: `That named a different ${cur.other.kind} than ${what}, so I cancelled the ${cur.verb.replace(/_/g, ' ')}. Ask again for the one you mean.`
+        } satisfies ActionResult;
+      }
     }
     if (!confirmAccepted(phrase, cur.confirmWord)) {
       return {

@@ -78,15 +78,6 @@ Go with it: keep only the owner's own words (the answer, the edit, the note) in 
 **Effort:** S
 **Priority:** P3
 
-### Voice confirms for schedules and settings carry no target
-
-**What:** Carry the staged schedule id or setting key on the pending confirm, and cancel when the confirm names another one, as `namesSomeoneElse` does for members.
-
-**Why:** "confirm, delete the Invoice check schedule" while a delete of Morning report waits deletes Morning report. Older than this branch. Also: a member whose name is an ordinary word ("Will") can cancel a valid confirm; it fails safe.
-
-**Effort:** S
-**Priority:** P2
-
 ## Overlap split (deferred from the CEO review, 2026-10-24)
 
 ### Explain how they split it in the hire wizard
