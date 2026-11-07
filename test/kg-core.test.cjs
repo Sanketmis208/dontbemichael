@@ -270,6 +270,19 @@ function writeFixture(dir, name, content) {
     assert.strictEqual(hits.length, 6, 'the passages that only say time still come back');
   });
 
+  test('search: a passage with no query term is not kept, but still counts toward the weights', () => {
+    const root = tmpRoot();
+    for (let i = 0; i < 3; i++) kg.ingest(root, { title: `Menu ${i}`, text: 'Soup of the day and fresh bread.' });
+    const text = 'Our warranty covers one year of parts.';
+    kg.ingest(root, { title: 'Repairs', text });
+    const hits = kg.search(root, 'warranty');
+    assert.strictEqual(hits.length, 1, 'only the passage holding the term comes back');
+    // Weighed against all four chunks, not just the one kept.
+    const weights = kg.termWeights({ warranty: 1 }, 4);
+    const expected = kg.scoreChunk({ title: 'Repairs', text }, kg.tokenize('warranty'), 'warranty', { weights });
+    assert.strictEqual(hits[0].score, Math.round(expected * 1000) / 1000);
+  });
+
   test('search: a store of one passage scores as it did before weights', () => {
     const root = tmpRoot();
     kg.ingest(root, { title: 'Shipping', text: 'We ship in three days. Shipping is free over fifty dollars.' });
