@@ -199,7 +199,7 @@ import { APP_NAME, APP_DATA_DIR, APP_URL_SCHEME } from '../shared/appName';
 import { copyOfficeData, homeFolderStatus, homeReadyAtLaunch } from './homeFolder';
 import { backfillOfficeRecord, findOffice, folderLayoutFor, isUsableTeamFolder, syncOfficeRecord } from './officeFile';
 import { folderPolicy, AGENT_TMP_DIR, agentTmpName, researchFolderPolicy, withAgentTmpWall, withMemberWall, RESEARCH_TMP_DIR, shellTempWalls, withResearchWall, type AgentFolderPolicy, type FolderLayout } from '../shared/folderAccess';
-import { sandboxNetwork } from '../shared/webAccess';
+import { needsWebToolsOff, sandboxNetwork, WEB_TOOLS_OFF_ARGS } from '../shared/webAccess';
 import { MCP_CATALOG } from '../shared/mcpCatalog';
 import { legacyBusinessFolder, touchesOffice } from '../shared/officeRecord';
 import { cleanCompanyProfile, companyProfileContext } from '../shared/companyProfile';
@@ -4627,6 +4627,14 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
     console.error('[research] walls not in place; Research did not start');
     turnResearchOff();
     return { ok: false, error: `${hive.researchName()} could not be set up safely, so they did not start. Try again.` };
+  }
+  // Without the app's settings no hook refuses the web page and web search
+  // tools, so a member other than Research would start with the web: the
+  // engine is told to refuse them itself (only Research uses the internet,
+  // shared/webAccess.ts), Michael included.
+  if (opts.hive && needsWebToolsOff({ claude: claudeProvider, isResearch, settingsApplied: connectorsApplied })) {
+    console.warn(`[spawn] ${opts.hive.id}: no hive settings, starting with the web tools off`);
+    opts.args = [...(opts.args ?? []), ...WEB_TOOLS_OFF_ARGS];
   }
   if (connectorPlan && !connectorsApplied) {
     console.warn(`[connectors] ${opts.hive?.id}: no hive settings, starting without connectors`);

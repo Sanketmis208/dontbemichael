@@ -34,6 +34,21 @@ export function webAccess(isResearch: boolean, researchOn: boolean, tool: string
   return { ok: false, reason: researchOn ? REFUSAL_WEB_TOOL : REFUSAL_WEB_TOOL_OFF };
 }
 
+/**
+ * Claude Code's own switch for the web tools, for a team member who starts
+ * without the app's settings (its set up failed, or the hive is off): with no
+ * settings there is no hook to refuse them, so the engine refuses them
+ * itself. One value, comma separated, so the list can take no other argument.
+ */
+export const WEB_TOOLS_OFF_ARGS: readonly string[] = ['--disallowedTools', [...WEB_TOOLS].join(',')];
+
+/** Does a Claude member's start need the web tools turned off by flag? Every
+ *  member but Research when the app's settings did not reach it; Research
+ *  never starts that way (its spawn is refused instead). */
+export function needsWebToolsOff(o: { claude: boolean; isResearch: boolean; settingsApplied: boolean }): boolean {
+  return o.claude && !o.isResearch && !o.settingsApplied;
+}
+
 /** Claude Code's `sandbox.network`. */
 export interface SandboxNetwork { allowedDomains: string[]; strictAllowlist: true }
 

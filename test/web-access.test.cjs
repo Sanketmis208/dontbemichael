@@ -42,6 +42,24 @@ test('every team member of every office gets an empty strict network list', () =
   assert.match(main, /if \(isResearch\) opts\.env = \{ \.\.\.\(opts\.env \?\? \{\}\), CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1' \};/);
 });
 
+test('a member whose set up failed starts with the web tools turned off by the engine', () => {
+  // Value: protects=no member but Research gets web pages or search when the app's settings (and so its hook) did not reach it (TODOS P2, site 2.8.1.0 ship review); fails_when=the failed set up path starts a member with WebFetch or WebSearch, Research is let through, the flag goes to an engine that has no such switch, or the list can swallow a later argument; why_new=TODOS "Refuse the web tools when a member's set up fails"; seam=source pin for the spawn path
+  assert.deepEqual([...W.WEB_TOOLS_OFF_ARGS], ['--disallowedTools', 'WebFetch,WebSearch'], 'one value, so it takes no later argument');
+  assert.deepEqual(W.WEB_TOOLS_OFF_ARGS[1].split(',').sort(), [...W.WEB_TOOLS].sort(), 'every tool the hook gates');
+  assert.equal(W.needsWebToolsOff({ claude: true, isResearch: false, settingsApplied: false }), true, 'Michael and every member');
+  assert.equal(W.needsWebToolsOff({ claude: true, isResearch: false, settingsApplied: true }), false, 'the hook refuses them');
+  assert.equal(W.needsWebToolsOff({ claude: true, isResearch: true, settingsApplied: false }), false, 'Research never starts that way');
+  assert.equal(W.needsWebToolsOff({ claude: false, isResearch: false, settingsApplied: false }), false, 'only Claude Code takes the flag');
+  const main = read('src/main/index.ts');
+  // After the hive try (where a failure lands) and Research's refusal, before the spawn.
+  const failed = main.indexOf("console.error('[hive] ensureAgent failed:', e);");
+  const refused = main.indexOf("console.error('[research] walls not in place; Research did not start');");
+  const off = main.indexOf('if (opts.hive && needsWebToolsOff({ claude: claudeProvider, isResearch, settingsApplied: connectorsApplied })) {');
+  assert.ok(failed > 0 && refused > failed && off > refused, 'on the path a failed set up takes');
+  assert.match(main.slice(off, off + 300), /opts\.args = \[\.\.\.\(opts\.args \?\? \[\]\), \.\.\.WEB_TOOLS_OFF_ARGS\];/);
+  assert.match(main, /connectorsApplied = true;\n\s+researchWalled = isResearch;/, 'settings count as applied only once the hive gave them');
+});
+
 test('the hook gate covers Michael and decides Research by the app, not a file', () => {
   // Value: protects=Michael is gated too and no agent-written flag opens the web; fails_when=the gate skips Michael or reads isResearch from the registry; why_new=owner answer 2026-10-13, ship review D2.7; seam=none
   const hooks = read('src/main/hooks.ts');
