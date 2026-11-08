@@ -3295,7 +3295,13 @@
     "homeShowAll_two": "显示全部 {{count}} 个工具",
     "homeShowAll_few": "显示全部 {{count}} 个工具",
     "homeShowAll_many": "显示全部 {{count}} 个工具",
-    "homeShowAll_other": "显示全部 {{count}} 个工具"
+    "homeShowAll_other": "显示全部 {{count}} 个工具",
+    "updateTitle": "{{name}} 的工作有哪些变化",
+    "updateAdds": "加入 {{name}} 的工作",
+    "updateChanges": "改动",
+    "updateRemoves": "不再包含",
+    "updateNothing": "{{name}} 没有变化：工作中已经包含这一点。",
+    "updateAgain": "重新分析"
   },
   "runCompare": {
     "cardsLabel": "{{godName}} 建议的工作更改",

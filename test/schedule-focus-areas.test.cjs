@@ -105,7 +105,7 @@ test('Profile and Edit agent show each job with its focus, read only', () => {
   assert.doesNotMatch(row, /<textarea|<input/);
   assert.doesNotMatch(list, /<textarea/);
   assert.match(list, /color: 'var\(--cth-ink-3\)' \}\}>\{t\('scheduledJobs\.noFocus'\)\}<\/span>/, 'a quiet note, not a call to act on a read only list');
-  assert.match(read('src/renderer/src/components/WorkStyleUpdateCards.tsx'), /<InfoTip text=\{t\('askMe\.workStyleReplaces', \{ name \}\)\}/, 'the detail sits behind an info icon');
+  assert.match(read('src/renderer/src/components/WorkStyleUpdateCards.tsx'), /<InfoTip text=\{t\(offer\.whyKey\)\}/, 'the why sits behind an info icon (CEO review C1)');
   assert.match(read('src/renderer/src/components/ProfileTab.tsx'), /<ScheduledJobsSection agentId=\{agent\.id\} name=\{name\} god=\{god\} \/>/);
   for (const loc of ['en', 'zh-CN', 'ar']) {
     const d = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`));

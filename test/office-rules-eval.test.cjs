@@ -94,3 +94,44 @@ test('3. a task outside the member\'s role goes back to Michael, undone', { skip
     assert.ok(!msgs.some((m) => m.to !== 'michael' && m.act === 'request'), `gives no teammate work: ${JSON.stringify(msgs)}`);
   }
 });
+
+// ---- Job updates worked into a member's own job (work-style-update-card-clarity.md) ----
+
+const { toRevisePrompt } = loadTs('src/shared/workStyleText.ts');
+
+const OWN_JOB = [
+  'The owner set this work style for your role at Harbor Consulting, Portland.',
+  '',
+  '### The job',
+  'Most new work comes from referrals, so every lead needs a clear next step.',
+  '',
+  '### How to work',
+  'Keep the pipeline current: name, referrer, service wanted, last contact, next step.',
+  'Handle every client conversation yourself, from first call to signed contract.'
+].join('\n');
+
+function update(duty) {
+  const prompt = toRevisePrompt({ ctx: { name: 'Dwight', title: 'Sales Director', business: business }, instructions: OWN_JOB, handles: 'Handles leads and deals', changes: [duty], update: true, routing: [] });
+  const env = { ...process.env };
+  for (const k of Object.keys(env)) if (k.startsWith('CLAUDE')) delete env[k];
+  const r = spawnSync('claude', ['-p', '--model', 'claude-sonnet-5-5', '--tools', '', '--strict-mcp-config'], { input: prompt, env, encoding: 'utf8', timeout: 180_000 });
+  assert.equal(r.status, 0, (r.stderr || r.error?.message || '').slice(0, 300));
+  const text = r.stdout;
+  try { return JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)); } catch { assert.fail(`not a JSON answer: ${text.slice(0, 600)}`); }
+}
+
+test('4. a duty that would narrow the role is asked, never merged', { skip, timeout: 600_000 }, () => {
+  for (let i = 0; i < RUNS; i++) {
+    const a = update('Pass every client conversation after the first call to Customer Support, and only find new leads.');
+    assert.equal(a.kind, 'question', JSON.stringify(a).slice(0, 400));
+  }
+});
+
+test('5. a plain added duty is merged without a question, keeping the rest', { skip, timeout: 600_000 }, () => {
+  for (let i = 0; i < RUNS; i++) {
+    const a = update("Keep the office's customer list: every customer ever won, one row each with when and where it came from, and tell Michael about each new one.");
+    assert.equal(a.kind, 'ok', JSON.stringify(a).slice(0, 400));
+    assert.match(a.instructions, /Keep the pipeline current: name, referrer, service wanted, last contact, next step\./, 'untouched lines stay word for word');
+    assert.match(a.instructions, /customer list/i);
+  }
+});

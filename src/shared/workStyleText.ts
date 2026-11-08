@@ -146,6 +146,14 @@ export interface ReviseInput {
   teammates?: ReviseTeammate[];
   /** The member's live handoffs, numbered for "drops" (S4). */
   handoffList?: Array<{ toId: string; scope: string; toTitle?: string }>;
+  /** An app update, not the owner's own change (owner, CEO review D3,
+   *  2026-11-07): the duty is worked into the current job, the current job
+   *  wins any conflict, and a clash or a role made broader or narrower is
+   *  asked. */
+  update?: boolean;
+  /** The role line's routing lines ("Not for X; that goes to Y."), kept out
+   *  of the rewrite but checked against an update's duty (eng review E3). */
+  routing?: string[];
   /** Ask where tracked numbers live when the job doesn't say (E1). Edit agent
    *  only: a pack update's replay never asks. */
   askHome?: boolean;
@@ -195,7 +203,9 @@ export function toRevisePrompt(input: ReviseInput): string {
   return [
     fresh
       ? `The owner of a small business is describing a new job for ${ctx.name}, an AI team member${ctx.title ? ` whose job is ${ctx.title}` : ''} at ${where(ctx.business)}. Write the whole job from the owner's words below.`
-      : `The owner of a small business wants to change the job of ${ctx.name}, an AI team member${ctx.title ? ` whose job is ${ctx.title}` : ''} at ${where(ctx.business)}. Apply the owner's ${changes.length > 1 ? 'changes, in order,' : 'change'} to the current job below and write the job again.`,
+      : input.update
+        ? `The app has an update for the job of ${ctx.name}, an AI team member${ctx.title ? ` whose job is ${ctx.title}` : ''} at ${where(ctx.business)} in a small business: the default job for this role now includes the ${changes.length > 1 ? 'duties' : 'duty'} under CHANGES. Work ${changes.length > 1 ? 'them' : 'it'} into ${ctx.name}'s current job below, which the owner may have edited, and write the job again. Add, or change only the part ${changes.length > 1 ? 'the duties touch' : 'the duty touches'}; never replace the job.`
+        : `The owner of a small business wants to change the job of ${ctx.name}, an AI team member${ctx.title ? ` whose job is ${ctx.title}` : ''} at ${where(ctx.business)}. Apply the owner's ${changes.length > 1 ? 'changes, in order,' : 'change'} to the current job below and write the job again.`,
     `${michael} is the office manager: he hands out work, and team members send reports and approvals to him, never to the owner directly.`,
     '',
     `Answer with one JSON object and nothing else, in one of ${shapes} shapes.`,
@@ -219,6 +229,10 @@ export function toRevisePrompt(input: ReviseInput): string {
     '',
     `Shape 2, one question: {"kind": "question", "question": "...", "choices": [{"label": "...", "suggested": true}, {"label": "..."}]}`,
     'Ask only when you cannot tell what the owner wants: a change contradicts one of the company foundations below, or it conflicts with an approval rule in the current job without saying it replaces it. A plain change to the job is not a contradiction: the owner\'s newest words win. "question" is one or two short sentences naming both sides; "choices" are two or three short answers the owner can pick, one of them marked "suggested". When a choice would drop an approval, a spending limit or another safeguard, mark as suggested the choice that keeps it, or the narrowest one that still does what the owner asked.',
+    ...(input.update && !fresh ? [
+      'This change comes from the app, not the owner, so the owner\'s current job wins every conflict: never let the duty override or quietly narrow it. Use Shape 2 also when the duty contradicts a duty, limit, approval or routing line of the current job, or would make the role broader or narrower than the duty itself needs; offer the choices plainly, the current job first.',
+      'Copy every line the duty does not touch exactly, character for character, headings included. If the current job already covers the duty, return the current instructions unchanged, "handles": null and "summary": [].'
+    ] : []),
     ...(askHome ? [
       '',
       `Shape 3, where tracked numbers live: {"kind": "home", "question": "Where should ${ctx.name} keep ...?"}`,
@@ -238,10 +252,11 @@ export function toRevisePrompt(input: ReviseInput): string {
       '',
       '--- CURRENT INSTRUCTIONS ---',
       input.instructions.trim(),
-      ...(input.lead ? [] : ['', `--- CURRENT "WHAT ${ctx.name.toUpperCase()} HANDLES" ---`, input.handles.trim() || '(none written yet)'])
+      ...(input.lead ? [] : ['', `--- CURRENT "WHAT ${ctx.name.toUpperCase()} HANDLES" ---`, input.handles.trim() || '(none written yet)']),
+      ...(input.update && input.routing?.length ? ['', '--- ROUTING LINES (check the duty against these; they stay as they are) ---', ...input.routing.map((l) => l.trim()).filter(Boolean)] : [])
     ]),
     '',
-    fresh ? '--- THE OWNER\'S DESCRIPTION ---' : '--- THE OWNER\'S CHANGES, OLDEST FIRST ---',
+    fresh ? '--- THE OWNER\'S DESCRIPTION ---' : input.update ? '--- CHANGES: THE DUTIES THE APP ADDS, OLDEST FIRST ---' : '--- THE OWNER\'S CHANGES, OLDEST FIRST ---',
     ...changes.map((c, i) => (changes.length > 1 ? `${i + 1}. ${c}` : c)),
     ...(split ? [
       '',
@@ -628,4 +643,48 @@ export function revisePreview(answer: string): RevisePreview {
     plain: withoutFirstTask(partialField(text, 'plain')).trim().slice(0, 3000),
     question: partialField(text, 'question').replace(/\s+/g, ' ').trim().slice(0, 400)
   };
+}
+
+
+/** What an update changes in a job, line by line (owner, CEO review D2):
+ *  the opening line and markdown headings are left out, a removed line and an
+ *  added line that share at least half their words pair up as a change. */
+export interface LineChanges {
+  added: string[];
+  changed: Array<{ before: string; after: string }>;
+  removed: string[];
+}
+
+export function lineChanges(before: string, after: string): LineChanges {
+  const lines = (t: string): string[] => t.split(/\n+/).map((l) => l.trim())
+    .filter((l) => l && !/^#{1,6}\s/.test(l) && !/^The owner set this work style/i.test(l));
+  const a = lines(before);
+  const b = lines(after);
+  const inB = new Set(b);
+  const inA = new Set(a);
+  const removed = a.filter((l) => !inB.has(l));
+  const added = b.filter((l) => !inA.has(l));
+  const words = (l: string): Set<string> => new Set(l.toLowerCase().match(/[\p{L}\p{N}']+/gu) ?? []);
+  const changed: Array<{ before: string; after: string }> = [];
+  const stillAdded = [...added];
+  const stillRemoved: string[] = [];
+  for (const r of removed) {
+    const rw = words(r);
+    let best = -1;
+    let score = 0;
+    stillAdded.forEach((x, i) => {
+      const xw = words(x);
+      const shared = [...rw].filter((w) => xw.has(w)).length;
+      const s2 = shared / Math.max(1, Math.max(rw.size, xw.size));
+      if (s2 > score) { score = s2; best = i; }
+    });
+    if (best >= 0 && score >= 0.5) changed.push({ before: r, after: stillAdded.splice(best, 1)[0] });
+    else stillRemoved.push(r);
+  }
+  return { added: stillAdded, changed, removed: stillRemoved };
+}
+
+/** Nothing in the job changes. */
+export function noLineChanges(c: LineChanges): boolean {
+  return !c.added.length && !c.changed.length && !c.removed.length;
 }

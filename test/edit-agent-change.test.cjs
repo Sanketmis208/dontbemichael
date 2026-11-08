@@ -120,24 +120,26 @@ test('the hire wizard describes the job once, keeps a picked job\'s changes, and
   assert.doesNotMatch(src, /suggestWorkStyle|workStyleSuggest/, 'Suggest me is retired');
 });
 
-test('a pack update carries the owner\'s changes into the preview, or says earlier edits are replaced', () => {
-  // Value: protects=eng D7 and D8 on the offer itself; fails_when=the change list is not passed or the older edits line shows when changes carry over; why_new=T6; seam=pure
+test('a pack update is worked into the member\'s own job, and the card shows the exact lines', () => {
+  // Value: protects=owner CEO review D2 to D4 (2026-11-07): no wholesale replace, no blind append, exact lines, analysis on open; fails_when=the card runs the pack text instead of the member's job, drops the update flag, or shows the old replaced warning; why_new=replaces the D7/D8 preview; seam=pure
   const def = JSON.parse(read('resources/packs/saas-consulting.json')).agents.find((a) => a.id === 'pam');
   const cards = new Map([['saas-consulting/pam', def]]);
-  const agents = [
-    { id: 'pam', goal: 'old', jobChanges: [{ text: 'Sign replies', at: 'a' }, { text: 'Ask before refunds', at: 'b' }] },
-    { id: 'pam-2', name: 'Erin', goal: 'old', sourceCard: 'saas-consulting/pam' }
-  ];
+  const agents = [{ id: 'pam', goal: 'old' }, { id: 'pam-2', name: 'Erin', goal: 'old', sourceCard: 'saas-consulting/pam' }];
   const offers = workStyleOffers(agents, cards, 'saas-consulting', { name: 'Sunrise' }, {});
-  assert.deepEqual(offers.map((o) => [o.agentId, o.changes, o.olderEdits]), [['pam', ['Sign replies', 'Ask before refunds'], false], ['pam-2', [], true]]);
-  assert.equal(offers[0].goal.trim(), teamMemberGoal(def, { name: 'Sunrise' }).trim());
+  // Every undecided update for the card at once, duties oldest first.
+  assert.deepEqual(offers[0].keys, ['pam-sending-2026-10', 'pam-inbox-zero-2026-10']);
+  assert.match(offers[0].duties[0], /^Keep the inbox at zero/);
+  assert.match(offers[0].duties[1], /^Send replies the way your Sending setting/);
+  // Deciding a newer one decides the older ones (eng review E1).
+  assert.deepEqual(workStyleOffers(agents.slice(0, 1), cards, 'saas-consulting', { name: 'Sunrise' }, { 'pam-sending-2026-10:pam': 'keep' }), []);
   const card = read('src/renderer/src/components/WorkStyleUpdateCards.tsx');
-  assert.match(card, /if \(offer\.changes\.length\) \{\s*return window\.cth\.workStyleRevise\(\{ requestId, ctx, current: \{ instructions: offer\.goal, handles: split\.roleDescription \}, changes: offer\.changes \}\);/);
+  assert.match(card, /current: \{ instructions: effectiveWorkStyle\(agent\), handles: own\.roleDescription \}, changes: offer\.duties\?\.length \? offer\.duties : \[t\(offer\.whyKey\)\], update: true/);
   assert.match(card, /applyLabel=\{t\('jobChange\.useIt'\)\}\s*sendsTask=\{false\}\s*autoRun/, 'no card is promised: Use it sends none');
-  assert.match(card, /t\('jobChange\.packOlderEdits', \{ name \}\)/);
+  assert.doesNotMatch(card, /packOlderEdits/, 'no "earlier edits will be replaced" (CEO review C3)');
+  assert.match(card, /Keep mine is on the card in every state/);
   const en = JSON.parse(read('src/renderer/src/i18n/locales/en.json')).jobChange;
-  assert.equal(en.packTitle, 'A better job description for {{name}}');
-  assert.equal(en.packKeptMany, 'Your {{count}} changes will be kept.');
+  assert.equal(en.updateAdds, "Adds to {{name}}'s job");
+  assert.equal(en.updateRemoves, 'No longer in it');
 });
 
 test('the new strings have no dashes and say who, never "you" for a team member', () => {

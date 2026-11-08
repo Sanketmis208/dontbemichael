@@ -64,6 +64,14 @@ export interface JobChangeReviewProps {
   applyLabel: string;
   /** The pack card: run on mount, Cancel closes it. */
   autoRun?: boolean;
+  /** A result worked out before (the pack card keeps it for the session):
+   *  shown at once, nothing runs (eng review E5). */
+  initialResult?: { ok: ReviseOk; from: string };
+  /** Each finished result, for the parent to keep. */
+  onResult?: (ok: ReviseOk, from: string) => void;
+  /** The pack card: the exact line changes in place of the summary, and
+   *  whether nothing changes (then Apply is hidden, eng review E7, E10). */
+  changesOf?: (ok: ReviseOk) => { node: React.ReactNode; none: boolean };
   onCancel?: () => void;
   /** The line under the box after Apply or Undo (role=status). */
   status?: string | null;
@@ -119,7 +127,7 @@ export function JobChangeReview(p: JobChangeReviewProps) {
   // `explainText` is the box; `explanation` is what the last run was given.
   const [explainText, setExplainText] = useState('');
   const [explanation, setExplanation] = useState('');
-  const [state, setState] = useState<State>({ at: p.autoRun ? 'working' : 'idle' });
+  const [state, setState] = useState<State>(p.initialResult ? { at: 'ok', ok: p.initialResult.ok, from: p.initialResult.from } : { at: p.autoRun ? 'working' : 'idle' });
   const [applying, setApplying] = useState(false);
   const [failed, setFailed] = useState(false);
   const runId = useRef<string | null>(null);
@@ -190,8 +198,9 @@ export function JobChangeReview(p: JobChangeReviewProps) {
       }
     }
     setState({ at: 'ok', ok: res, from, ...(overlap ? { overlap } : {}) });
+    p.onResult?.(res, from);
   };
-  useEffect(() => { if (p.autoRun) void start([]); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (p.autoRun && !p.initialResult) void start([]); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const stop = (): void => { runSeq.current++; stopRun(); setState({ at: 'idle' }); if (p.autoRun) p.onCancel?.(); };
   const cancel = (): void => { runSeq.current++; setState({ at: 'idle' }); setExtras([]); resetSplit(); if (p.autoRun) p.onCancel?.(); };
@@ -253,7 +262,9 @@ export function JobChangeReview(p: JobChangeReviewProps) {
     const overlap = state.overlap;
     const names = overlap ? listOf(overlap.names) : '';
     const count = overlap?.names.length ?? 0;
+    const lineView = p.changesOf?.(state.ok);
     panel = <Preview ok={state.ok} who={p.who} lead={p.lead} sendsTask={p.sendsTask ?? true} title={p.previewTitle ?? t('jobChange.previewTitle')} heading={heading}
+      changes={lineView?.node} hideApply={lineView?.none}
       applyLabel={p.applyLabel} applying={applying} failed={failed} onCancel={cancel} onApply={() => { void doApply(state.ok, state.from); }}
       nameOf={(id) => p.nameOf?.(id) ?? named.current.get(id)?.name}
       noSplit={noSplit ? t('jobChange.noSplit', { names: splitNames, count: named.current.size }) : undefined}
@@ -417,8 +428,10 @@ function Working({ who, progress, heading, onStop }: { who: string; progress?: P
 }
 
 /** The new job: what changes, the new "What X handles", the whole job folded. */
-function Preview({ ok, who, lead, sendsTask, title, heading, applyLabel, applying, failed, onCancel, onApply, nameOf, noSplit, noAccess, onOpenAccess, overlap }: {
+function Preview({ ok, who, lead, sendsTask, title, heading, applyLabel, applying, failed, onCancel, onApply, nameOf, noSplit, noAccess, onOpenAccess, overlap, changes, hideApply }: {
   ok: ReviseOk; who: string; lead?: boolean; sendsTask: boolean; title: string; heading: React.RefObject<HTMLDivElement>;
+  /** The exact line changes, shown in place of the summary (pack card). */
+  changes?: React.ReactNode; hideApply?: boolean;
   applyLabel: string; applying: boolean; failed: boolean; onCancel: () => void; onApply: () => void;
   nameOf?: (id: string) => string | undefined; noSplit?: string; noAccess?: string; onOpenAccess?: () => void;
   /** Teammates the change adds to the overlap: a note with two optional
@@ -433,11 +446,13 @@ function Preview({ ok, who, lead, sendsTask, title, heading, applyLabel, applyin
   return (
     <div style={panelStyle}>
       <div ref={heading} tabIndex={-1} style={headStyle}>{title}</div>
+      {changes ?? (
       <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4 }}>
         {lines.map((l, i) => <li key={i} style={dotLine}><span aria-hidden="true" style={dot} /><span>{l}</span></li>)}
         {sendsTask && ok.oneTimeTask && <li style={dotLine}><span aria-hidden="true" style={dot} /><span>{t('jobChange.oneTimeTask', { task: ok.oneTimeTask, manager })}</span></li>}
       </ul>
-      {ok.summary.length > SUMMARY_SHOWN && (
+      )}
+      {!changes && ok.summary.length > SUMMARY_SHOWN && (
         <button type="button" aria-expanded={all} onClick={() => setAll((v) => !v)} style={linkStyle}>{all ? t('jobChange.showLess') : t('jobChange.showAll')}</button>
       )}
       {!lead && (
@@ -495,7 +510,7 @@ function Preview({ ok, who, lead, sendsTask, title, heading, applyLabel, applyin
       {/* The decision stays in reach on a short window (DR11). */}
       <div style={{ ...rowEnd, position: 'sticky', bottom: 0, paddingTop: 6, background: 'var(--cth-indigo-soft)' }}>
         <PixelButton variant="secondary" size="sm" onClick={onCancel} disabled={applying}>{t('jobChange.cancel')}</PixelButton>
-        <PixelButton variant="primary" size="sm" onClick={onApply} disabled={applying}>{applyLabel}</PixelButton>
+        {!hideApply && <PixelButton variant="primary" size="sm" onClick={onApply} disabled={applying}>{applyLabel}</PixelButton>}
       </div>
     </div>
   );

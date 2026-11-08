@@ -108,7 +108,7 @@ test('Edit agent opened the normal way is as before; a suggestion only fills the
   const review = read('src/renderer/src/components/JobChangeReview.tsx');
   assert.match(review, /const \[typed, setTyped\] = useState\(p\.initialTyped \?\? ''\);/);
   assert.equal(review.split('initialTyped').length - 1, 2, 'it only seeds the box');
-  assert.match(review, /const \[state, setState\] = useState<State>\(\{ at: p\.autoRun \? 'working' : 'idle' \}\);/, 'nothing runs unless autoRun, which a suggestion never sets');
+  assert.match(review, /const \[state, setState\] = useState<State>\(p\.initialResult \? \{ at: 'ok', ok: p\.initialResult\.ok, from: p\.initialResult\.from \} : \{ at: p\.autoRun \? 'working' : 'idle' \}\);/, 'nothing runs unless autoRun, which a suggestion never sets');
   const store = read('src/renderer/src/store/store.ts');
   assert.match(store, /\.\.\.\(opts\?\.change \? \{ change: opts\.change \} : \{\}\)/);
 });

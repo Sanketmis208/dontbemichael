@@ -3295,7 +3295,13 @@
     "homeShowAll_two": "Show all {{count}} tools",
     "homeShowAll_few": "Show all {{count}} tools",
     "homeShowAll_many": "Show all {{count}} tools",
-    "homeShowAll_other": "Show all {{count}} tools"
+    "homeShowAll_other": "Show all {{count}} tools",
+    "updateTitle": "What changes in {{name}}'s job",
+    "updateAdds": "Adds to {{name}}'s job",
+    "updateChanges": "Changes",
+    "updateRemoves": "No longer in it",
+    "updateNothing": "Nothing changes for {{name}}: the job already covers this.",
+    "updateAgain": "Work it out again"
   },
   "runCompare": {
     "cardsLabel": "{{godName}}'s suggested job changes",

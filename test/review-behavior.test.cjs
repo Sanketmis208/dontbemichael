@@ -99,7 +99,7 @@ test('Use it on a member with job changes saves the revised job, keeps Undo and 
   assert.equal(r.result, 'applied');
   assert.equal(r.after.goal, REVISED.instructions.trim(), 'the revised instructions, trimmed');
   assert.equal(r.after.goalPlain.text, REVISED.plain);
-  assert.equal(r.after.description, `${titleOf(r.offer.description)}: ${REVISED.handles}`, 'the new default title with the revised handles');
+  assert.equal(r.after.description, `${titleOf(CHANGED_PAM.description)}: ${REVISED.handles}`, 'the member\'s own title with the revised handles (CEO review A2)');
   assert.notEqual(titleOf(r.offer.description), '', 'sanity: the offer has a title');
   assert.deepEqual(r.after.jobPrevious, { goal: CHANGED_PAM.goal, description: CHANGED_PAM.description, jobChanges: CHANGED_PAM.jobChanges }, 'Undo holds the owner\'s own job');
   assert.deepEqual(r.after.jobChanges, CHANGED_PAM.jobChanges, 'a pack default is no change of the owner\'s');
@@ -109,22 +109,21 @@ test('Use it on a member with job changes saves the revised job, keeps Undo and 
   assert.equal(r.calls.upsert, 0, 'no starter job without a pack card');
 });
 
-test('Use it with no new duties keeps the offer\'s default handles', () => {
-  // Value: protects=a rewrite that left the duties alone still saves the new default role line, never the old one; fails_when=revised.handles null falls back to the member's old description; why_new=only the regex pinned the ?? fallback; seam=stub window.cth in a child process; no_claim=the rendered preview
+test('Use it with no new duties keeps the member\'s own role line', () => {
+  // Value: protects=an update never puts the pack's role line back (owner, CEO review D3; A2, 2026-11-07); fails_when=revised.handles null falls back to the pack's description; why_new=replaces the default handles rule; seam=stub window.cth; no_claim=none beyond protectsallback; seam=stub window.cth in a child process; no_claim=the rendered preview
   const r = runOffer({ member: CHANGED_PAM, choice: 'use', revised: { ...REVISED, handles: null }, roleAnswer: { ok: true } });
   assert.equal(r.result, 'applied');
-  assert.equal(r.after.description, r.offer.description);
-  assert.notEqual(r.after.description, CHANGED_PAM.description);
+  assert.equal(r.after.description, CHANGED_PAM.description);
 });
 
-test('Use it on a member with no job changes saves the offer\'s goal and role line', () => {
+test('Use it on a member with no job changes saves the analyzed goal and keeps the member\'s role line', () => {
   // Value: protects=an unchanged member gets the pack's new default as offered; fails_when=adopt writes anything but the offer's text, or invents a change list; why_new=no behavior test of the plain update; seam=stub window.cth in a child process; no_claim=the plain words conversion
   const plain = { id: 'pam', name: 'Pam', goal: 'Pam sorts the inbox.', description: 'Executive Admin: Sorts the inbox' };
   const r = runOffer({ member: plain, choice: 'use', revised: 'offer', roleAnswer: { ok: true } });
   assert.equal(r.offer.changes.length, 0);
   assert.equal(r.result, 'applied');
   assert.equal(r.after.goal, r.offer.goal.trim());
-  assert.equal(r.after.description, r.offer.description);
+  assert.equal(r.after.description, plain.description);
   assert.equal(r.after.jobChanges, undefined);
   assert.equal(r.after.jobPrevious.goal, plain.goal);
   assert.equal(r.decided[r.id], 'use');
