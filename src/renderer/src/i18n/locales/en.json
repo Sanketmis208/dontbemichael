@@ -155,10 +155,10 @@
     "workStyleReplaces": "Using it replaces {{name}}'s Work style and role line, and adds its scheduled jobs.",
     "workStyleKeep": "Keep mine",
     "workStyleWhy": {
-      "sendingSetting": "Replies go out as your Sending setting on the Access tab allows: sent, proposed for your approval, or saved as drafts.",
-      "pamInboxZero": "Inbox zero: every email gets an outcome and leaves the inbox, and nothing is deleted.",
-      "askTeammates": "Asks the teammate who has the answer directly, and the office manager only when they cannot help.",
-      "customerLists": "Marketing keeps the customers we may reference, and Sales keeps the customer list"
+      "sendingSetting": "Some jobs said to keep every reply as a draft, even when your Sending setting on the Access tab allows more. Replies now go out the way that setting says.",
+      "pamInboxZero": "Emails that were read and left in the inbox piled up, so the ones still waiting were easy to miss. Every email now gets an outcome and leaves the inbox, and nothing is deleted.",
+      "askTeammates": "Questions a teammate could answer went to the office manager first, which was slower. Members now ask the teammate who has the answer, and the office manager only when they cannot help.",
+      "customerLists": "No one kept a full list of the customers the office has won, so \"who are our customers\" had no clear answer. Sales now keeps that list, and Marketing keeps which customers may be named in public."
     },
     "mailTitle": "{{name}} wants to send an email",
     "mailFrom": "From: {{from}}",
@@ -3298,6 +3298,8 @@
     "homeShowAll_other": "Show all {{count}} tools",
     "updateTitle": "What changes in {{name}}'s job",
     "updateAdds": "Adds to {{name}}'s job",
+    "updateWhyLabel": "Why this change",
+    "updateWhy": "The app's job for this role now includes this, and {{name}} was hired before that change.",
     "updateChanges": "Changes",
     "updateRemoves": "No longer in it",
     "updateNothing": "Nothing changes for {{name}}: the job already covers this.",

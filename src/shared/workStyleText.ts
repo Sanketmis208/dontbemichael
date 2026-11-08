@@ -649,7 +649,8 @@ export function revisePreview(answer: string): RevisePreview {
 
 /** What an update changes in a job, line by line (owner, CEO review D2):
  *  the opening line and markdown headings are left out, a removed line and an
- *  added line that share at least half their words pair up as a change. */
+ *  added line pair up as a change when they share at least half their words,
+ *  or the added line holds nearly all of the removed one. */
 export interface LineChanges {
   added: string[];
   changed: Array<{ before: string; after: string }>;
@@ -676,7 +677,9 @@ export function lineChanges(before: string, after: string): LineChanges {
     stillAdded.forEach((x, i) => {
       const xw = words(x);
       const shared = [...rw].filter((w) => xw.has(w)).length;
-      const s2 = shared / Math.max(1, Math.max(rw.size, xw.size));
+      // Half the words in common, or the old line almost whole inside the new
+      // one: a sentence the update lengthened is a change, not a removal.
+      const s2 = Math.max(shared / Math.max(1, Math.max(rw.size, xw.size)), shared / Math.max(1, rw.size) >= 0.8 ? 1 : 0);
       if (s2 > score) { score = s2; best = i; }
     });
     if (best >= 0 && score >= 0.5) changed.push({ before: r, after: stillAdded.splice(best, 1)[0] });
@@ -698,4 +701,37 @@ export function roleLineChange(before: string, after: string | null | undefined)
   const norm = (t: string): string => t.replace(/\s+/g, ' ').trim();
   if (!after || norm(after) === norm(before)) return null;
   return { before: norm(before), after: norm(after) };
+}
+
+/** One run of words in a changed line: kept, added or taken out. Its text
+ *  keeps the spaces before each word, so the runs read back as the line. */
+export interface WordPart { kind: 'same' | 'add' | 'del'; text: string }
+
+/** A changed line word by word (owner, 2026-11-07: the card colours what is
+ *  added and taken out, so a long line is read once, not twice). Punctuation
+ *  is its own piece, so "prospect" and "prospect," are the same word. */
+export function wordDiff(before: string, after: string): WordPart[] {
+  const pieces = (t: string): string[] => t.trim().match(/\s*(?:[\p{L}\p{N}'\u2019]+(?:-[\p{L}\p{N}'\u2019]+)*|[^\s\p{L}\p{N}])/gu) ?? [];
+  const a = pieces(before);
+  const b = pieces(after);
+  const same = (x: string, y: string): boolean => x.trim() === y.trim();
+  const n = a.length;
+  const m = b.length;
+  // Longest common run of pieces, from the end, so the walk reads forward.
+  const lcs: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) lcs[i][j] = same(a[i], b[j]) ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+  const parts: WordPart[] = [];
+  const push = (kind: WordPart['kind'], text: string): void => {
+    const last = parts[parts.length - 1];
+    if (last?.kind === kind) last.text += text;
+    else parts.push({ kind, text });
+  };
+  let i = 0;
+  let j = 0;
+  while (i < n || j < m) {
+    if (i < n && j < m && same(a[i], b[j])) { push('same', b[j]); i++; j++; }
+    else if (j < m && (i >= n || lcs[i][j + 1] >= lcs[i + 1][j])) { push('add', b[j]); j++; }
+    else { push('del', a[i]); i++; }
+  }
+  return parts;
 }

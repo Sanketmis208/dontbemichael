@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { isComposingKey } from '@shared/imeGuard';
 import { PixelButton } from './PixelButton';
@@ -82,6 +82,13 @@ export interface JobChangeReviewProps {
   /** A change to start the box with (a run comparison's suggestion from
    *  Pulse). Only fills the box: nothing runs until the owner asks. */
   initialTyped?: string;
+  /** Why the app offers this change (the pack card): a folded link beside
+   *  "See the whole new job", for an owner who wants to know. */
+  why?: { label: string; text: string };
+  /** The pack card's Keep mine: drawn at the start of every button row, so
+   *  the card has one row of buttons (owner, 2026-11-07). The preview then
+   *  has no Cancel: folding the card puts it away. */
+  keep?: ReactNode;
   /** A run or a preview is up: the parent holds its own buttons. */
   onBusy?: (busy: boolean) => void;
   /** False where Apply sends no card for a one-time task (Michael's own job,
@@ -264,7 +271,7 @@ export function JobChangeReview(p: JobChangeReviewProps) {
     const count = overlap?.names.length ?? 0;
     const lineView = p.changesOf?.(state.ok);
     panel = <Preview ok={state.ok} who={p.who} lead={p.lead} sendsTask={p.sendsTask ?? true} title={p.previewTitle ?? t('jobChange.previewTitle')} heading={heading}
-      changes={lineView?.node} hideApply={lineView?.none}
+      changes={lineView?.node} hideApply={lineView?.none} why={p.why}
       applyLabel={p.applyLabel} applying={applying} failed={failed} onCancel={cancel} onApply={() => { void doApply(state.ok, state.from); }}
       nameOf={(id) => p.nameOf?.(id) ?? named.current.get(id)?.name}
       noSplit={noSplit ? t('jobChange.noSplit', { names: splitNames, count: named.current.size }) : undefined}
@@ -330,7 +337,7 @@ export function JobChangeReview(p: JobChangeReviewProps) {
       <div role="alert" style={panelStyle}>
         {head(t('jobChange.errorTitle'))}
         <span style={noteStyle}>{t(state.reason !== 'failed' ? FAILURE_NOTE[state.reason] : p.autoRun ? 'jobChange.errorNoteCard' : 'jobChange.errorNote')}</span>
-        <div style={rowEnd}>
+        <div style={rowEnd}><Keep />
           <PixelButton variant="secondary" size="sm" onClick={cancel}>{t('jobChange.cancel')}</PixelButton>
           <PixelButton variant="primary" size="sm" onClick={() => { void start(extras, answersRef.current); }}>{t('jobChange.tryAgain')}</PixelButton>
         </div>
@@ -342,7 +349,7 @@ export function JobChangeReview(p: JobChangeReviewProps) {
         {head(t('jobChange.movedTitle', { name: p.who }))}
         <span style={noteStyle}>{t(p.autoRun ? 'jobChange.movedNoteCard' : 'jobChange.movedNote')}</span>
         {!p.autoRun && <span style={{ ...bodyStyle, padding: '8px 10px', borderRadius: 'var(--cth-r-md)', background: 'var(--cth-card)' }}>{typed}</span>}
-        <div style={rowEnd}>
+        <div style={rowEnd}><Keep />
           <PixelButton variant="secondary" size="sm" onClick={cancel}>{t('jobChange.cancel')}</PixelButton>
           <PixelButton variant="primary" size="sm" onClick={() => { void start(extras, answersRef.current); }}>{t('jobChange.seeAgain')}</PixelButton>
         </div>
@@ -350,7 +357,7 @@ export function JobChangeReview(p: JobChangeReviewProps) {
     );
   }
 
-  if (!p.box) return <>{panel}</>;
+  if (!p.box) return <KeepSlot.Provider value={p.keep ?? null}>{panel}</KeepSlot.Provider>;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
       <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -397,8 +404,10 @@ function Working({ who, progress, heading, onStop }: { who: string; progress?: P
   const at = STEPS.indexOf(progress?.stage ?? 'starting');
   const seen = progress?.preview;
   const any = !!seen && (seen.summary.length > 0 || !!seen.plain || !!seen.question);
+  // On the pack card (it gives Keep mine) the steps sit on the card, untinted.
+  const bare = useContext(KeepSlot) !== null;
   return (
-    <div style={panelStyle}>
+    <div style={bare ? { ...panelStyle, background: 'transparent', padding: '2px 0' } : panelStyle}>
       {heading}
       <ol role="status" style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
         {STEPS.map((step, i) => (
@@ -422,14 +431,16 @@ function Working({ who, progress, heading, onStop }: { who: string; progress?: P
           {seen.plain && <JobParts plain={seen.plain} />}
         </div>
       )}
-      <div style={rowEnd}><PixelButton variant="secondary" size="sm" onClick={onStop}>{t('jobChange.stop')}</PixelButton></div>
+      <div style={rowEnd}><Keep /><PixelButton variant="secondary" size="sm" onClick={onStop}>{t('jobChange.stop')}</PixelButton></div>
     </div>
   );
 }
 
 /** The new job: what changes, the new "What X handles", the whole job folded. */
-function Preview({ ok, who, lead, sendsTask, title, heading, applyLabel, applying, failed, onCancel, onApply, nameOf, noSplit, noAccess, onOpenAccess, overlap, changes, hideApply }: {
+function Preview({ ok, who, lead, sendsTask, title, heading, applyLabel, applying, failed, onCancel, onApply, nameOf, noSplit, noAccess, onOpenAccess, overlap, changes, hideApply, why }: {
   ok: ReviseOk; who: string; lead?: boolean; sendsTask: boolean; title: string; heading: React.RefObject<HTMLDivElement>;
+  /** Why the change is offered, folded: its link and its words. */
+  why?: { label: string; text: string };
   /** The exact line changes, shown in place of the summary (pack card). */
   changes?: React.ReactNode; hideApply?: boolean;
   applyLabel: string; applying: boolean; failed: boolean; onCancel: () => void; onApply: () => void;
@@ -442,9 +453,14 @@ function Preview({ ok, who, lead, sendsTask, title, heading, applyLabel, applyin
   const manager = useResolvedGodName();
   const [all, setAll] = useState(false);
   const [whole, setWhole] = useState(false);
+  const [whyOpen, setWhyOpen] = useState(false);
+  const keep = useContext(KeepSlot);
   const lines = all ? ok.summary : ok.summary.slice(0, SUMMARY_SHOWN);
+  // The pack card's coloured change list reads on the card itself, with no
+  // tint behind it (owner, 2026-11-07).
+  const bare = changes !== undefined;
   return (
-    <div style={panelStyle}>
+    <div style={bare ? { ...panelStyle, background: 'transparent', padding: '2px 0' } : panelStyle}>
       <div ref={heading} tabIndex={-1} style={headStyle}>{title}</div>
       {changes ?? (
       <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -485,9 +501,20 @@ function Preview({ ok, who, lead, sendsTask, title, heading, applyLabel, applyin
           ))}
         </div>
       ) : null}
-      <button type="button" aria-expanded={whole} onClick={() => setWhole((v) => !v)} style={{ ...linkStyle, display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
-        <Disclosure open={whole} />{t('jobChange.seeWhole')}
-      </button>
+      {/* The two optional reads side by side: why the app suggests it (the
+          pack card; owner, 2026-11-07, design job-update-why B), set apart in
+          indigo, and the whole new job. Each opens in place. */}
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+        {why && (
+          <button type="button" aria-expanded={whyOpen} onClick={() => setWhyOpen((v) => !v)} style={{ ...linkStyle, display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none', color: 'var(--cth-indigo-text)', fontWeight: 600 }}>
+            <Disclosure open={whyOpen} />{why.label}
+          </button>
+        )}
+        <button type="button" aria-expanded={whole} onClick={() => setWhole((v) => !v)} style={{ ...linkStyle, display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
+          <Disclosure open={whole} />{t('jobChange.seeWhole')}
+        </button>
+      </div>
+      {why && whyOpen && <span style={{ fontSize: 12, lineHeight: '16.5px', color: 'var(--cth-ink-2)' }}>{why.text}</span>}
       {whole && <div style={{ padding: '8px 10px', borderRadius: 'var(--cth-r-md)', background: 'var(--cth-card)' }}><JobParts plain={ok.plain} /></div>}
       {overlap && (
         <Note>
@@ -510,8 +537,9 @@ function Preview({ ok, who, lead, sendsTask, title, heading, applyLabel, applyin
       )}
       {failed && <span role="alert" style={{ fontSize: 12, color: 'var(--cth-coral-text)' }}>{t('jobChange.applyFailed')}</span>}
       {/* The decision stays in reach on a short window (DR11). */}
-      <div style={{ ...rowEnd, position: 'sticky', bottom: 0, paddingTop: 6, background: 'var(--cth-indigo-soft)' }}>
-        <PixelButton variant="secondary" size="sm" onClick={onCancel} disabled={applying}>{t('jobChange.cancel')}</PixelButton>
+      <div style={{ ...rowEnd, position: 'sticky', bottom: 0, paddingTop: 6, background: bare ? 'var(--cth-card)' : 'var(--cth-indigo-soft)' }}>
+        <Keep />
+        {!keep && <PixelButton variant="secondary" size="sm" onClick={onCancel} disabled={applying}>{t('jobChange.cancel')}</PixelButton>}
         {!hideApply && <PixelButton variant="primary" size="sm" onClick={onApply} disabled={applying}>{applyLabel}</PixelButton>}
       </div>
     </div>
@@ -591,7 +619,7 @@ function Home({ question, choices, heading, onCancel, onAnswer }: {
       {!all && rows.hidden > 0 && (
         <button type="button" aria-expanded={false} onClick={() => setAll(true)} style={linkStyle}>{t('jobChange.homeShowAll', { count: rows.tools })}</button>
       )}
-      <div style={rowEnd}>
+      <div style={rowEnd}><Keep />
         <PixelButton variant="secondary" size="sm" onClick={onCancel}>{t('jobChange.cancel')}</PixelButton>
         <PixelButton variant="primary" size="sm" onClick={send} disabled={pick === undefined}>{t('jobChange.continue')}</PixelButton>
       </div>
@@ -645,7 +673,7 @@ function Clash({ q, who, heading, onCancel, onAnswer }: {
           placeholder={t('jobChange.somethingElsePlaceholder', { name: who })} aria-label={t('jobChange.somethingElse')}
           className="cth-input" style={{ width: '100%', minHeight: 34, padding: '7px 10px', background: 'var(--cth-card)', border: 'none', outline: 'none', boxSizing: 'border-box', fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink)' }} />
       )}
-      <div style={rowEnd}>
+      <div style={rowEnd}><Keep />
         <PixelButton variant="secondary" size="sm" onClick={onCancel}>{t('jobChange.cancel')}</PixelButton>
         <PixelButton variant="primary" size="sm" onClick={send} disabled={!answer}>{t('jobChange.continue')}</PixelButton>
       </div>
@@ -662,6 +690,12 @@ const headStyle: CSSProperties = { fontSize: 13, fontWeight: 600, lineHeight: '1
 const stepMark: CSSProperties = { width: 14, height: 14, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 };
 const noteStyle: CSSProperties = { fontSize: 12.5, lineHeight: '18px', color: 'var(--cth-ink-2)' };
 const bodyStyle: CSSProperties = { fontSize: 13, lineHeight: '19px', color: 'var(--cth-ink)' };
+/** The parent's own button for every row (the pack card's Keep mine). */
+const KeepSlot = createContext<ReactNode>(null);
+function Keep() {
+  const keep = useContext(KeepSlot);
+  return keep ? <span style={{ marginRight: 'auto', display: 'inline-flex' }}>{keep}</span> : null;
+}
 const rowEnd: CSSProperties = { display: 'flex', gap: 7, justifyContent: 'flex-end', alignItems: 'center' };
 const dotLine: CSSProperties = { display: 'flex', gap: 8, alignItems: 'baseline', fontSize: 13, lineHeight: '19px', color: 'var(--cth-ink)' };
 const dot: CSSProperties = { flexShrink: 0, width: 6, height: 6, borderRadius: '50%', background: 'var(--cth-indigo)', transform: 'translateY(-1px)' };

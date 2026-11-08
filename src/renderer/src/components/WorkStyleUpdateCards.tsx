@@ -1,7 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelButton } from './PixelButton';
-import { InfoTip } from './InfoTip';
 import { fieldLabel } from './fieldText';
 import { useStore } from '@/store/store';
 import { AgentAvatar } from './AgentAvatar';
@@ -9,7 +8,7 @@ import type { MemberLook } from './askMeFilter';
 import { ALWAYS_OPEN, FoldBody, FoldHeader, foldCardClass, foldCardStyle, type FoldControl } from './AskCardFold';
 import { splitAgentRole } from '@shared/agentRole';
 import { jobBase } from '@shared/jobChange';
-import { lineChanges, noLineChanges, roleLabel, roleLineChange } from '@shared/workStyleText';
+import { lineChanges, noLineChanges, roleLabel, roleLineChange, wordDiff } from '@shared/workStyleText';
 import { effectiveWorkStyle } from '@shared/michaelWorkStyle';
 import { useResolvedGodName } from '@/hooks/useResolvedGodName';
 import { decisionId, type WorkStyleOffer } from '@shared/workStyleUpdates';
@@ -81,10 +80,10 @@ export function WorkStyleUpdateCards({ offers, look, hiddenIds, fold }: {
       none: false,
       node: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {c.added.length > 0 && <Group label={t('jobChange.updateAdds', { name })} lines={c.added} mark="+" />}
-          {c.changed.length > 0 && <Pair label={t('jobChange.updateChanges')} pairs={c.changed} />}
-          {c.removed.length > 0 && <Group label={t('jobChange.updateRemoves')} lines={c.removed} mark={'\u2212'} />}
-          {role && <Pair label={t('jobChange.handles', { name })} before={role.before} after={role.after} />}
+          {c.added.length > 0 && <Group label={t('jobChange.updateAdds', { name })} lines={c.added} kind="add" />}
+          {c.changed.length > 0 && <Changed label={t('jobChange.updateChanges')} pairs={c.changed} />}
+          {c.removed.length > 0 && <Group label={t('jobChange.updateRemoves')} lines={c.removed} kind="del" />}
+          {role && <Changed label={t('jobChange.handles', { name })} pairs={[role]} />}
         </div>
       )
     };
@@ -109,6 +108,7 @@ export function WorkStyleUpdateCards({ offers, look, hiddenIds, fold }: {
         const started = opened.current.has(id) && !stopped.has(id);
         const from = agent ? jobBase(agent) : '';
         const headline = dutyHeadline(offer.duties ?? []) || t(offer.whyKey);
+        const keepMine = <PixelButton variant="secondary" size="sm" disabled={busy === id} onClick={() => void keep(offer)}>{t('askMe.workStyleKeep')}</PixelButton>;
         return (
           <section key={id} data-work-style-offer data-askme-hidden={hide || undefined}
             aria-label={lk ? `${t('jobChange.packTitle', { name })}, ${lk.dept}` : t('jobChange.packTitle', { name })}
@@ -117,7 +117,6 @@ export function WorkStyleUpdateCards({ offers, look, hiddenIds, fold }: {
               <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 600, lineHeight: '17px', color: 'var(--cth-ink)' }}>
                 <AgentAvatar id={offer.agentId} name={name} size={17} />
                 {t('jobChange.packTitle', { name })}
-                <InfoTip text={t(offer.whyKey)} label={t('jobChange.packTitle', { name })} />
               </div>
             } />
             <FoldBody open={f.open} pin={f.pin}>
@@ -142,17 +141,20 @@ export function WorkStyleUpdateCards({ offers, look, hiddenIds, fold }: {
                 applyLabel={t('jobChange.useIt')}
                 sendsTask={false}
                 autoRun
+                keep={keepMine}
+                // Why the app suggests it: folded, for a curious owner (owner,
+                // 2026-11-07, design job-update-why B, made easy to spot).
+                why={{ label: t('jobChange.updateWhyLabel'), text: `${t(offer.whyKey).replace(/\.\s*$/, '')}. ${t('jobChange.updateWhy', { name })}` }}
                 onCancel={() => setStopped((x) => new Set(x).add(id))}
               />
-            ) : stopped.has(id) ? (
-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <PixelButton variant="secondary" size="sm" onClick={() => { setStopped((x) => { const n = new Set(x); n.delete(id); return n; }); setRuns((r) => ({ ...r, [id]: (r[id] ?? 0) + 1 })); }}>{t('jobChange.updateAgain')}</PixelButton>
+            ) : (
+              // Keep mine is on the card in every state (eng review E6), in
+              // the one row of buttons (owner, 2026-11-07).
+              <div style={{ display: 'flex', gap: 7, justifyContent: 'flex-end', alignItems: 'center' }}>
+                <span style={{ marginRight: 'auto', display: 'inline-flex' }}>{keepMine}</span>
+                {stopped.has(id) && <PixelButton variant="primary" size="sm" onClick={() => { setStopped((x) => { const n = new Set(x); n.delete(id); return n; }); setRuns((r) => ({ ...r, [id]: (r[id] ?? 0) + 1 })); }}>{t('jobChange.updateAgain')}</PixelButton>}
               </div>
-            ) : null}
-            {/* Keep mine is on the card in every state (eng review E6). */}
-            <div style={{ display: 'flex', gap: 7, justifyContent: 'flex-end' }}>
-              <PixelButton variant="secondary" size="sm" disabled={busy === id} onClick={() => void keep(offer)}>{t('askMe.workStyleKeep')}</PixelButton>
-            </div>
+            )}
             </FoldBody>
           </section>
         );
@@ -165,33 +167,53 @@ export function WorkStyleUpdateCards({ offers, look, hiddenIds, fold }: {
 const groupLabel = fieldLabel;
 const lineText: React.CSSProperties = { fontSize: 12, lineHeight: '16.5px', color: 'var(--cth-ink)' };
 
-/** A labelled group of old lines, struck, each above what replaces it. */
-function Pair({ label, pairs, before, after }: { label: string; pairs?: Array<{ before: string; after: string }>; before?: string; after?: string }) {
-  const list = pairs ?? [{ before: before ?? '', after: after ?? '' }];
+/** The card's colours (owner, 2026-11-07): green for what is added, red for
+ *  what is taken out, orange for what changes in a line. Marks and a strike
+ *  say the same for anyone who can't tell the colours apart. */
+const ADD = 'var(--cth-green-text)';
+const DEL = 'var(--cth-coral-text)';
+const CHANGE = 'var(--cth-amber-text)';
+const struck: React.CSSProperties = { color: DEL, textDecoration: 'line-through' };
+
+/** Changed lines, each read once: kept words plain, new words orange, words
+ *  taken out red and struck. */
+function Changed({ label, pairs }: { label: string; pairs: Array<{ before: string; after: string }> }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       <span style={groupLabel}>{label}</span>
-      {list.map((x, i) => (
-        <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <span style={{ ...lineText, color: 'var(--cth-ink-2)', textDecoration: 'line-through' }}>{x.before}</span>
-          <span style={lineText}>{x.after}</span>
+      {pairs.map((x, i) => (
+        <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'baseline' }}>
+          <span aria-hidden="true" style={{ ...markStyle, color: CHANGE }}>~</span>
+          <span style={lineText}>
+            {wordDiff(x.before, x.after).map((w, k) => {
+              // The space before a run stays plain, so no strike runs into it.
+              const lead = w.text.match(/^\s*/)?.[0] ?? '';
+              const body = w.text.slice(lead.length);
+              if (w.kind === 'add') return <span key={k}>{lead}<ins style={{ color: CHANGE, fontWeight: 600, textDecoration: 'none' }}>{body}</ins></span>;
+              if (w.kind === 'del') return <span key={k}>{lead}<del style={struck}>{body}</del></span>;
+              return <span key={k}>{w.text}</span>;
+            })}
+          </span>
         </div>
       ))}
     </div>
   );
 }
 
-/** A labelled list of whole lines with a + or minus mark for the eye. */
-function Group({ label, lines, mark }: { label: string; lines: string[]; mark: string }) {
+/** A labelled list of whole lines: added in green with +, taken out in red,
+ *  struck, with a minus. */
+function Group({ label, lines, kind }: { label: string; lines: string[]; kind: 'add' | 'del' }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       <span style={groupLabel}>{label}</span>
       {lines.map((l, i) => (
         <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'baseline' }}>
-          <span aria-hidden="true" style={{ ...lineText, color: 'var(--cth-ink-3)', minWidth: 8 }}>{mark}</span>
-          <span style={lineText}>{l}</span>
+          <span aria-hidden="true" style={{ ...markStyle, color: kind === 'add' ? ADD : DEL }}>{kind === 'add' ? '+' : '\u2212'}</span>
+          {kind === 'add' ? <ins style={{ ...lineText, color: ADD, textDecoration: 'none' }}>{l}</ins> : <del style={{ ...lineText, ...struck }}>{l}</del>}
         </div>
       ))}
     </div>
   );
 }
+
+const markStyle: React.CSSProperties = { ...lineText, fontWeight: 600, minWidth: 8 };

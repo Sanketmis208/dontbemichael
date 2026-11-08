@@ -155,10 +155,10 @@
     "workStyleReplaces": "使用后将替换 {{name}} 的工作方式和职位说明，并添加其定时任务。",
     "workStyleKeep": "保留我的",
     "workStyleWhy": {
-      "sendingSetting": "回复按「权限」页里的发送设置发出：直接发送、先交你审批，或存为草稿。",
-      "pamInboxZero": "收件箱清零：每封邮件都有处理结果并移出收件箱，不删除任何邮件。",
-      "askTeammates": "直接向掌握答案的同事询问，只有在同事无法帮忙时才找办公室经理。",
-      "customerLists": "市场部负责可引用的客户名单，销售部负责客户名单"
+      "sendingSetting": "有些工作说明要求把每封回复都存为草稿，即使「权限」页的发送设置允许更多。现在回复按该设置发出。",
+      "pamInboxZero": "已读但留在收件箱的邮件越积越多，仍在等待处理的邮件容易被漏掉。现在每封邮件都有处理结果并移出收件箱，不删除任何邮件。",
+      "askTeammates": "本可由同事回答的问题先交给了办公室经理，速度更慢。现在成员直接问掌握答案的同事，只有同事无法帮忙时才找办公室经理。",
+      "customerLists": "以前没有人维护办公室赢得的全部客户名单，“我们的客户有哪些”没有明确答案。现在由销售部维护这份名单，市场部负责哪些客户可以公开提及。"
     },
     "mailTitle": "{{name}} 想发一封邮件",
     "mailFrom": "发件人：{{from}}",
@@ -3298,6 +3298,8 @@
     "homeShowAll_other": "显示全部 {{count}} 个工具",
     "updateTitle": "{{name}} 的工作有哪些变化",
     "updateAdds": "加入 {{name}} 的工作",
+    "updateWhyLabel": "为什么有这个更改",
+    "updateWhy": "应用中这个职位的工作现在包含这一项，而 {{name}} 是在这次更改之前聘用的。",
     "updateChanges": "改动",
     "updateRemoves": "不再包含",
     "updateNothing": "{{name}} 没有变化：工作中已经包含这一点。",

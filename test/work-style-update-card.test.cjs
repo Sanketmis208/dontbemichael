@@ -9,7 +9,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const loadTs = require('./load-ts.cjs');
 
-const { lineChanges, noLineChanges, roleLineChange, toRevisePrompt } = loadTs('src/shared/workStyleText.ts');
+const { lineChanges, noLineChanges, roleLineChange, toRevisePrompt, wordDiff } = loadTs('src/shared/workStyleText.ts');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -39,6 +39,22 @@ test('line changes: added, changed and no longer in it, headings and the opening
   assert.ok(noLineChanges(headings), 'headings and the opening line are not job lines');
 });
 
+test('a lengthened line is one change, read word by word', () => {
+  // Value: protects=owner 2026-11-07 (the card was hard to read: a sentence the update lengthened showed as one line added and one taken out, and each change twice); fails_when=a line the new one holds whole is listed as removed, or the word runs lose, double or reorder words; why_new=bug fix; seam=pure; no_claim=colours
+  const deals = 'Every open deal has a stage, a next step and a date, so nothing goes quiet by accident.';
+  const longer = `${deals} You also keep the office's customer list, every customer ever won that the office knows by name, so there is one place to see who the office has sold to.`;
+  const c = lineChanges(JOB.replace('### The job', `### The job\n${deals}`), JOB.replace('### The job', `### The job\n${longer}`));
+  assert.deepEqual(c, { added: [], changed: [{ before: deals, after: longer }], removed: [] });
+  assert.deepEqual(wordDiff(deals, longer), [{ kind: 'same', text: deals }, { kind: 'add', text: longer.slice(deals.length) }]);
+  const before = 'Send here for "chase this prospect" or "what will close this month". Not for invoices.';
+  const after = 'Send here for "chase this prospect", "what will close this month" or "who are our customers". Not for invoices.';
+  const parts = wordDiff(before, after);
+  assert.equal(parts.filter((p) => p.kind !== 'del').map((p) => p.text).join(''), after, 'the kept and added runs read as the new line');
+  assert.equal(parts.filter((p) => p.kind !== 'add').map((p) => p.text).join(''), before, 'the kept and taken out runs read as the old line');
+  assert.ok(!parts.some((p) => p.kind !== 'same' && /prospect|month/.test(p.text)), `a word beside new punctuation stays kept: ${JSON.stringify(parts)}`);
+  assert.deepEqual(wordDiff('same words', 'same words'), [{ kind: 'same', text: 'same words' }]);
+});
+
 test('the role line is a marked change on the card, and never an unmarked paragraph', () => {
   // Value: protects=owner 2026-11-07 ("is What Dwight handles also changed?"); fails_when=a changed role line shows without its old text, an unchanged or kept one shows as a change, a role only change hides Use it, or the preview draws its own unmarked role paragraph on the card; why_new=bug fix; seam=pure + source; no_claim=layout
   const before = 'Dwight runs the sales pipeline: leads, open deals and their stages.';
@@ -48,7 +64,7 @@ test('the role line is a marked change on the card, and never an unmarked paragr
   const card = fs.readFileSync(path.join(__dirname, '../src/renderer/src/components/WorkStyleUpdateCards.tsx'), 'utf8');
   assert.match(card, /const role = roleLineChange\(splitAgentRole\(agent\?\.description \?\? ''\)\.roleDescription, ok\.handles\);/);
   assert.match(card, /if \(noLineChanges\(c\) && !role\) return/, 'a role only change keeps Use it');
-  assert.match(card, /\{role && <Pair label=\{t\('jobChange\.handles', \{ name \}\)\} before=\{role\.before\} after=\{role\.after\} \/>\}/);
+  assert.match(card, /\{role && <Changed label=\{t\('jobChange\.handles', \{ name \}\)\} pairs=\{\[role\]\} \/>\}/);
   const review = fs.readFileSync(path.join(__dirname, '../src/renderer/src/components/JobChangeReview.tsx'), 'utf8');
   assert.match(review, /\{!lead && !changes && \(\n\s*<div[^\n]*\n\s*<span style=\{fieldLabel\}>\{t\('jobChange\.handles'/, 'the preview leaves the role line to the card');
 });
@@ -97,4 +113,27 @@ test('a pack duty sits in the job\'s duties, never under the owner\'s approval l
     }
   }
   assert.ok(seen >= 5, `the duties were found in the packs (${seen})`);
+});
+
+test('the card says why, and holds one row of buttons', () => {
+  // Value: protects=owner 2026-11-07 ("why buttons in two rows", "what caused to suggest these changes", then "the why section does not need to be on the top"); fails_when=the reason sits open at the top or goes back behind an icon, the Why link loses its indigo, the reason no longer opens in place, Keep mine gets its own row under the preview, or the preview shows Cancel beside Keep mine; why_new=owner feedback; seam=source; no_claim=layout
+  const card = fs.readFileSync(path.join(__dirname, '../src/renderer/src/components/WorkStyleUpdateCards.tsx'), 'utf8');
+  assert.match(card, /why=\{\{ label: t\('jobChange\.updateWhyLabel'\), text: `\$\{t\(offer\.whyKey\)/, 'the reason is a folded link on the card (design job-update-why B)');
+  assert.doesNotMatch(card, /<span style=\{groupLabel\}>\{t\('jobChange\.updateWhyLabel'\)\}/, 'not open at the top');
+  assert.doesNotMatch(card, /<InfoTip/, 'not behind an icon');
+  assert.match(card, /keep=\{keepMine\}/, 'Keep mine rides in the review\'s own row');
+  assert.equal((card.match(/\{keepMine\}/g) ?? []).length, 2, 'and in the one row when nothing is worked out yet');
+  const review = fs.readFileSync(path.join(__dirname, '../src/renderer/src/components/JobChangeReview.tsx'), 'utf8');
+  assert.match(review, /<Keep \/>\n\s*\{!keep && <PixelButton variant="secondary" size="sm" onClick=\{onCancel\}/, 'no Cancel beside Keep mine');
+  assert.equal((review.match(/<Keep \/>/g) ?? []).length, 6, 'every button row of the review');
+  assert.match(review, /<Disclosure open=\{whyOpen\} \/>\{why\.label\}/, 'Why this change folds like See the whole new job');
+  assert.match(review, /color: 'var\(--cth-indigo-text\)', fontWeight: 600 \}\}>\n\s*<Disclosure open=\{whyOpen\}/, 'and is set apart, easy to notice');
+  assert.match(review, /\{why && whyOpen && <span/, 'it opens in place');
+  for (const lang of ['en', 'ar', 'zh-CN']) {
+    const L = JSON.parse(fs.readFileSync(path.join(__dirname, `../src/renderer/src/i18n/locales/${lang}.json`), 'utf8'));
+    assert.match(L.jobChange.updateWhy, /\{\{name\}\}/, lang);
+    assert.ok(L.jobChange.updateWhyLabel, lang);
+    // Each reason names what went wrong before, not only what the update does.
+    for (const [k, v] of Object.entries(L.askMe.workStyleWhy)) assert.ok(/[.。]\s*\S/.test(v), `${lang} ${k}: a cause, then the change`);
+  }
 });
