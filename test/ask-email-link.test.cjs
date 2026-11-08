@@ -84,7 +84,8 @@ test('a change option that sends without another look is flagged; one that comes
 test('the change option check reads approve and send then show, and a negation only before showing', () => {
   // Value: protects=house rule 10 for more wordings (TODOS, 2026-11-05); fails_when=Approve with my changes or Send then show me again passes, or a compliant label with an unrelated "without" is flagged; why_new=ship review pass 2; seam=none
   const opt = (label) => R.askChangeSends({ q: 'x', askedAt: '2026-11-05T20:10:00Z', options: [{ label }] }, SINCE);
-  assert.equal(opt('Approve with my changes'), true, 'approving with changes sends them');
+  const answering = (q, label) => R.askChangeSends({ q, askedAt: '2026-11-05T20:10:00Z', options: [{ label }] }, SINCE);
+  assert.equal(answering('**Approve the reply to Dana?**', 'Approve with my changes'), true, 'approving a reply with changes sends them');
   assert.equal(opt('Send with my changes, then show me again'), true, 'it goes before the owner sees it');
   assert.equal(opt('Send with my changes and afterwards show me again'), true);
   assert.equal(opt('Send with my changes, no need to show me again'), true, 'denied just before');
@@ -121,6 +122,74 @@ test('review of #686: what main caught still counts, and the wordings the rules 
   }
   assert.equal(ask("**Answer José's email?**"), true, 'an accented name');
   assert.equal(ask("**Answer James' email?**"), true, 'a name ending in s');
+});
+
+test('re-review of #686: a look before the send, a wait until the look, and our own mail pass', () => {
+  // Value: protects=the wider checks flag nothing main let pass (re-review at 255b88f1); fails_when=a look before the send reads as after it, "post" the noun sends, "won't go out until you show me again" reads as a denial, or our own outgoing mail, a time word, a pronoun or a passive "emailed" reads as an email someone sent; why_new=re-review of #686; seam=none
+  const at = '2026-11-05T20:10:00Z';
+  const ask = (q, parts) => R.askMissesEmailLink({ q, askedAt: at, ...(parts ? { parts } : {}) }, SINCE);
+  const opt = (label, q = 'x') => R.askChangeSends({ q, askedAt: at, options: [{ label }] }, SINCE);
+  // 1. The order: only a look after a send that goes out is flagged.
+  assert.equal(opt('Draft the post with my changes, then show me again'), false, 'post is a noun here');
+  assert.equal(opt('Fix it, then show me again, then send with my changes'), false, 'the look comes first');
+  assert.equal(opt('Make my edits, then show me again before it goes out with my changes'), false, 'the look comes first');
+  assert.equal(opt('Send with my changes, then show me again'), true, 'still: it goes before the look');
+  assert.equal(opt('Post it with my changes, then show me again'), true, 'post as a verb at the start');
+  assert.equal(opt('Edit it and post with my changes, then show me again'), true, 'post as a verb after and');
+  assert.equal(opt('Draft the post with my changes'), false, 'a draft sends nothing');
+  // 2. A wait until the look is not a denial.
+  assert.equal(opt("Send with my changes, but it won't go out until you show me again"), false);
+  assert.equal(opt('Send with my changes, it will not go out before you show me again'), false);
+  assert.equal(opt("Send with my changes, don't post till I review it"), false);
+  assert.equal(opt("Send with my changes, won't go out unless you show me again"), false);
+  assert.equal(opt("Send with my changes, it won't need to come back"), true, 'a denial with no wait in between');
+  // 3. Our own outgoing mail is not an email someone sent.
+  for (const q of [
+    "**Approve this week's email newsletter?**", "**Send tomorrow's email reminders?**", "**Send Monday's email?**",
+    "**Approve Pam's email draft?**", "**Approve the company's email footer?**", "**Update the team's email addresses?**",
+    "**Check Pam's email campaign?**", "**Fix the shop's email template?**", "**Clean up our team's email list?**",
+    '**Is the quote email already sent?**', '**Did the email we sent Dana bounce?**', '**Was the email I sent Dana read?**',
+    '**Was the quote emailed in time?**', '**OK if the form is emailed back by Friday?**', '**Is it true the form was emailed back?**',
+    "**It's email day: approve the batch?**"
+  ]) assert.equal(ask(q), false, q);
+  // Still an email someone sent.
+  for (const q of [
+    "**Answer Will's email?**", "**Answer O'Brien's email?**", "**Answer O’Brien’s message?**", '**Dana emailed us: reply?**',
+    '**Approve the answer to the email Dana wrote?**', '**Dana sent us an email: answer it?**', '**The supplier emailed back. Approve the order?**'
+  ]) assert.equal(ask(q), true, q);
+  // Every setting word, and every word for who was emailed.
+  for (const word of ['account', 'settings', 'access', 'tone', 'signature', 'address']) assert.equal(ask(`**Change Pam's email ${word}?**`), false, word);
+  for (const who of ['us', 'me', 'you', 'the office', 'in', 'back']) assert.equal(ask(`**Dana emailed ${who}. Approve?**`), true, who);
+});
+
+test('re-review of #686, smaller items: a chat in another part, a bare approve, and every coming back phrase', () => {
+  // Value: protects=a chat named in one part does not hide an email in another, a bare approve counts only on an ask about outgoing mail, and every alternation is reached; fails_when=a chat switch in one part silences the whole ask, "Approve with my changes" on an inside approval is flagged, or a coming back phrase stops counting; why_new=re-review of #686; seam=none
+  const at = '2026-11-05T20:10:00Z';
+  // The chat switch reads per question.
+  const parts = [{ q: 'Pam flagged it in Slack. Is it urgent?', options: [{ label: 'Yes' }] }];
+  assert.equal(R.askMissesEmailLink({ q: "**Approve the reply to Will Cox's message?**", askedAt: at, parts }, SINCE), true, 'the chat is in another part');
+  assert.equal(R.askMissesEmailLink({ q: '**Approve the reply in the Slack thread?**', askedAt: at, parts }, SINCE), false, 'the chat is in the same part');
+  // A bare approve with changes.
+  const answer = (q, label, extra = {}) => R.askChangeSends({ q, askedAt: at, options: [{ label }], ...extra }, SINCE);
+  assert.equal(answer('**Approve the new rota?**', 'Approve with my changes'), false, 'nothing leaves the office');
+  assert.equal(answer('**Approve the new rota?**', 'Approve it with my changes'), false);
+  assert.equal(answer('**Approve the quote for Northwind?**', 'Approve it with my changes'), true, 'a quote goes out');
+  assert.equal(answer('**Approve the invoice?**', 'Approve with my changes'), true, 'an invoice goes out');
+  assert.equal(R.askChangeSends({ q: '**Approve the reply to Will Cox?**', askedAt: at, parts: [{ q: 'Send it?', options: [{ label: 'Approve with my changes' }] }] }, SINCE), true, 'the ask sets what its parts are about');
+  assert.equal(answer('x', 'Approve the invoice with my changes'), true, 'an invoice named in the label');
+  // Every phrase for coming back, after a send and before one.
+  const opt = (label) => answer('x', label);
+  for (const back of ['show me again', 'show me it again', 'come back', 'comes back', 'for another look', 'for a look', 'review it']) {
+    assert.equal(opt(`Change it, then ${back}`), false, `${back}: no send`);
+    assert.equal(opt(`Send with my changes, then ${back}`), true, `${back}: after the send`);
+    assert.equal(opt(`Change it, then ${back}, then send with my changes`), false, `${back}: before the send`);
+  }
+  assert.equal(opt('Send with my changes, after that show me again'), true, 'after that');
+  assert.equal(opt("Send with my changes, it doesn't need to come back"), true, "doesn't");
+  assert.equal(opt('Send with my changes, no need for another look'), true, 'no need for another look');
+  // A send back is still a send, and comes back when the label says so.
+  assert.equal(opt('Send it back to Pam with my edits'), true, 'the label does not say who Pam is');
+  assert.equal(opt('Send it back to Pam with my edits, then show me again'), false);
 });
 
 test('both reach Michael\'s tidy list each turn, with what to do', () => {

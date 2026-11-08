@@ -20,6 +20,15 @@
 **Effort:** S
 **Priority:** P3
 
+### What the two card checks still can't read
+
+**What:** Three wordings the email link check and the change option check read by words alone and get wrong: "Go ahead with my changes" (an inside approval or a send, the label can't say), "Send it back to Pam with my edits" (flagged, since the label can't say whether Pam is in the office), and a chat named in another sentence of the same question ("Approve the reply? It's in the Slack thread." is flagged; per sentence would instead miss "Approve the reply to Will Cox's message? Pam flagged it in Slack.").
+
+**Why:** Both checks are a backstop to Michael's rules, read English words only, and have no way to know who a name is or what a draft is for. Left from the re-review of #686 (2026-11-08); the rest of that list is fixed.
+
+**Effort:** S
+**Priority:** P3
+
 ### The Ask me count can run one ahead for a moment
 
 **What:** Count the case study and update cards from the same check the cards render with (the case study screen open, a restart in progress).
