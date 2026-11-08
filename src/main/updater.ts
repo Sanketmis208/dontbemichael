@@ -3,6 +3,7 @@ import type { WebContents } from 'electron';
 import { request as httpsRequest } from 'node:https';
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { getText } from './fetchText';
 import { DEFAULT_DROP_HTML } from '../shared/releaseDrop';
 import { reduceStatus, clampPercent, isNewerRelease, installerUrl, isInstallRefusal, shouldShowReleaseDrop, REPO, type UpdateStatus } from '../shared/updateState';
 
@@ -195,33 +196,19 @@ export function pickDownloadAsset(
   return null;
 }
 
-/** Body of the release tagged v{version}, or undefined. Never throws. */
+/** Body of the release tagged v{version}, or undefined. Never throws, and
+ *  always answers: through getText, a body cut partway or sent a byte at a
+ *  time ends at the 10 s deadline instead of leaving "What's new" spinning
+ *  until the window reloads. */
 function fetchReleaseBody(version: string, done: (notes: string | undefined) => void): void {
-  try {
-    const req = httpsRequest(
-      {
-        hostname: 'api.github.com',
-        path: `/repos/${REPO}/releases/tags/v${version}`,
-        method: 'GET',
-        headers: { 'User-Agent': 'dontbemichael-updater', Accept: 'application/vnd.github+json' },
-        timeout: 10_000
-      },
-      (res) => {
-        let body = '';
-        res.setEncoding('utf8');
-        res.on('data', (d) => { body += d; if (body.length > 262_144) req.destroy(); });
-        res.on('end', () => {
-          try {
-            const rel = JSON.parse(body) as { body?: string };
-            done(typeof rel.body === 'string' ? rel.body : undefined);
-          } catch { done(undefined); }
-        });
-      }
-    );
-    req.on('error', () => done(undefined));
-    req.on('timeout', () => { req.destroy(); done(undefined); });
-    req.end();
-  } catch { done(undefined); }
+  getText(`https://api.github.com/repos/${REPO}/releases/tags/v${version}`, {
+    timeoutMs: 10_000,
+    maxBytes: 262_144,
+    headers: { 'User-Agent': 'dontbemichael-updater', Accept: 'application/vnd.github+json' }
+  }).then((text) => {
+    const rel = JSON.parse(text) as { body?: string };
+    return typeof rel.body === 'string' ? rel.body : undefined;
+  }).catch(() => undefined).then(done);
 }
 
 /** Notify-only check against releases/latest (no download). Never throws. */
