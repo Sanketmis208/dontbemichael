@@ -98,7 +98,8 @@ import {
 } from '../shared/agentPrivatePaths';
 import { HOUSE_RULES_CHANGED_SUBJECT, houseRulesNoticeBody, houseRulesToTell } from '../shared/houseRulesNotice';
 import { applyGuardFixes, restoreDone, dueReminders, guardSignature, emptyGuardState, guardCards, waitingChecks, type GuardCard, type GuardState } from '../shared/cardGuards';
-import { sleepSync } from './atomicFile';
+import { DURABLE_OPS, isHeldRename, NO_SYNC_OPS, NO_WAIT_OPS, RENAME_RETRY_MS, sleepSync, writeFileAtomic, type AtomicFileOps } from './atomicFile';
+import { appendHiveFile, isInside, writeHiveFile } from './hiveFile';
 import { exitCause } from '../shared/agentExit';
 import { TELEMETRY_TOKEN_HEADER } from './telemetry';
 
@@ -636,7 +637,10 @@ const MINE_IGNORE_LINES = ['settings.json', 'cursor.json', 'inbox/', 'outbox/', 
 
 /** Idempotently ensure `<agentDir>/.gitignore` excludes the non-memory files.
  *  Append-only: writes only the missing lines, leaving any existing entries. */
-function ensureMineIgnore(agentDir: string): void {
+/** What a roster edit answers when registry.json can't be read (rosterForSave). */
+const ROSTER_UNREADABLE = 'The team list could not be read, so nothing was changed.';
+
+function ensureMineIgnore(agentDir: string, write: (path: string, text: string) => void): void {
   const path = join(agentDir, '.gitignore');
   let existing = '';
   try { if (existsSync(path)) existing = readFileSync(path, 'utf8'); } catch { return; }
@@ -644,7 +648,7 @@ function ensureMineIgnore(agentDir: string): void {
   const missing = MINE_IGNORE_LINES.filter((l) => !have.has(l));
   if (missing.length === 0) return;
   const prefix = existing && !existing.endsWith('\n') ? existing + '\n' : existing;
-  try { writeFileSync(path, prefix + missing.join('\n') + '\n', 'utf8'); } catch { /* best-effort */ }
+  try { write(path, prefix + missing.join('\n') + '\n'); } catch { /* best-effort */ }
 }
 
 /**
@@ -1058,10 +1062,12 @@ export class HiveManager {
    *  change (seen live, 2026-10-12). The text only changes when the app moves
    *  or updates, and that write still lands on the next bootstrap with no hook
    *  in flight. */
-  private writeIfChanged(p: string, text: string): void {
-    let current: string | null;
-    try { current = readFileSync(p, 'utf8'); } catch { current = null; }
-    if (current !== text) writeFileSync(p, text, 'utf8');
+  private writeIfChanged(p: string, text: string, mode = 0o644): void {
+    let current: string | null = null;
+    // Only a plain file with one name counts as already written: a link or a
+    // second name is replaced, never left for the chmod after this to follow.
+    try { const st = lstatSync(p); if (st.isFile() && st.nlink === 1) current = readFileSync(p, 'utf8'); } catch { current = null; }
+    if (current !== text) this.atomicWriteText(p, text, mode);
   }
 
   /** Write the launcher described above. Best-effort: on failure callers fall
@@ -1073,7 +1079,7 @@ export class HiveManager {
       if (process.platform === 'win32') {
         this.writeIfChanged(p, `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${process.execPath}" %*\r\n`);
       } else {
-        this.writeIfChanged(p, `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec "${process.execPath}" "$@"\n`);
+        this.writeIfChanged(p, `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec "${process.execPath}" "$@"\n`, 0o755);
         chmodSync(p, 0o755);
       }
     } catch (e) {
@@ -1140,7 +1146,7 @@ export class HiveManager {
         this.writeIfChanged(join(dir, 'node.cmd'), `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${process.execPath}" %*\r\n`);
       } else {
         const p = join(dir, 'node');
-        this.writeIfChanged(p, `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec "${process.execPath}" "$@"\n`);
+        this.writeIfChanged(p, `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec "${process.execPath}" "$@"\n`, 0o755);
         chmodSync(p, 0o755);
       }
     } catch (e) {
@@ -1210,11 +1216,11 @@ export class HiveManager {
     // the day it was initialised, so every protocol addition since had reached
     // new hives only. The file is generated, not user-authored, and agents are
     // pointed at it as the authority, so a stale copy is worse than a rewrite.
-    writeFileSync(join(root, 'PROTOCOL.md'), this.businessOffice ? PROTOCOL_BUSINESS_MD : PROTOCOL_MD, 'utf8');
+    this.atomicWriteText(join(root, 'PROTOCOL.md'), this.businessOffice ? PROTOCOL_BUSINESS_MD : PROTOCOL_MD);
 
     const registry = join(root, 'registry.json');
     if (!existsSync(registry)) {
-      this.writeJson(registry, { godId: null, agents: {} } as Registry);
+      this.atomicWriteJson(registry, { godId: null, agents: {} } as Registry, DURABLE_OPS);
     }
     const userCodexHome = join(homedir(), '.codex');
     for (const [id, agent] of Object.entries(this.registry().agents)) {
@@ -1225,16 +1231,16 @@ export class HiveManager {
     }
     const board = join(root, 'board.md');
     if (!existsSync(board)) {
-      writeFileSync(board, '# Hive board\n\n_Shared plans live here. The god agent is the scribe._\n', 'utf8');
+      this.atomicWriteText(board, '# Hive board\n\n_Shared plans live here. The god agent is the scribe._\n');
     }
     const tasks = join(root, 'tasks.json');
-    if (!existsSync(tasks)) this.writeJson(tasks, { tasks: [] });
+    if (!existsSync(tasks)) this.atomicWriteJson(tasks, { tasks: [] });
     const log = join(root, 'log.jsonl');
-    if (!existsSync(log)) writeFileSync(log, '', 'utf8');
+    if (!existsSync(log)) this.atomicWriteText(log, '');
 
     // The Claude Code command reference Michael consults (refreshed each bootstrap
     // so it tracks the bundled list).
-    if (!this.businessOffice) writeFileSync(join(root, 'COMMANDS.md'), COMMANDS_MD, 'utf8');
+    if (!this.businessOffice) this.atomicWriteText(join(root, 'COMMANDS.md'), COMMANDS_MD);
 
     // Keep the churny/ephemeral live files out of the hive git repo.
     const gitignore = join(root, '.gitignore');
@@ -1250,18 +1256,19 @@ export class HiveManager {
     // cleaned (owner, 2026-10-13: its folders are its alone).
     // Members' notes and the tidy up's copies stay out too: each member's
     // memory is private (owner, 2026-10-16 and 2026-10-22; untrackNotes).
-    const want = ['fleet.json', 'hooks.sock', 'cost-ledger.jsonl', 'crashes/', '.DS_Store', 'agents/human/', `agents/${RESEARCH_ID}/`, 'agents/*/memory.md', 'agents/*/memory/', '/backups/'];
+    // A temp file a crash left before its rename (atomicFile.ts) is no record.
+    const want = ['fleet.json', 'hooks.sock', 'cost-ledger.jsonl', 'crashes/', '.DS_Store', 'agents/human/', `agents/${RESEARCH_ID}/`, 'agents/*/memory.md', 'agents/*/memory/', '/backups/', '*.tmp'];
     let lines: string[] = [];
     if (existsSync(gitignore)) { try { lines = readFileSync(gitignore, 'utf8').split('\n'); } catch { lines = []; } }
     const missing = want.filter((w) => !lines.includes(w));
-    if (missing.length) writeFileSync(gitignore, [...lines.filter(Boolean), ...missing].join('\n') + '\n', 'utf8');
+    if (missing.length) this.atomicWriteText(gitignore, [...lines.filter(Boolean), ...missing].join('\n') + '\n');
 
     // The hook shim: a dumb pipe between a `claude` hook and our UDS. Refreshed
     // on every bootstrap so it tracks code changes.
     mkdirSync(join(root, 'bin'), { recursive: true });
-    writeFileSync(this.shimPath()!, HOOK_SHIM, 'utf8');
+    this.atomicWriteText(this.shimPath()!, HOOK_SHIM);
     // The proxy-bridge sidecar for hookless CLIs (qwen). Same refresh policy.
-    writeFileSync(this.proxyShimPath()!, PROXY_BRIDGE_SHIM, 'utf8');
+    this.atomicWriteText(this.proxyShimPath()!, PROXY_BRIDGE_SHIM);
     // The bundled-node launcher every shim above is invoked through — MUST be
     // written before any hook installer runs (they probe for it).
     this.writeNodeLauncher();
@@ -1358,7 +1365,10 @@ export class HiveManager {
     // Resolve role BEFORE writing identity.md. A restart passes the floor
     // roster's `description`, which can be a status caption ("on standby").
     // identity.md and registry.role are the durable job from the hire.
-    const reg = this.registry();
+    // A roster that is there but can't be read is never saved over: the
+    // member still starts with its walls and hooks, only not added to it.
+    const saved = this.rosterForSave();
+    const reg = saved ?? { godId: null, agents: {} };
     const prev = reg.agents[meta.id];
     if (meta.cwd) meta = { ...meta, cwd: expandTilde(meta.cwd) };
     const role = preferredAgentRole(meta.role, prev?.role, !!meta.isGod);
@@ -1382,9 +1392,9 @@ export class HiveManager {
     const memory = join(dir, 'memory.md');
     if (!existsSync(memory)) this.atomicWriteText(memory, renderIndex(meta.name, meta.id, []));
     mkdirSync(join(dir, 'memory'), { recursive: true });
-    ensureMineIgnore(dir); // keep settings.json / cursor / messages out of mempalace's index
+    ensureMineIgnore(dir, (p, t) => this.atomicWriteText(p, t)); // keep settings.json / cursor / messages out of mempalace's index
     const cursor = join(dir, 'cursor.json');
-    if (!existsSync(cursor)) this.writeJson(cursor, { lastProcessed: null });
+    if (!existsSync(cursor)) this.atomicWriteJson(cursor, { lastProcessed: null });
 
     // upsert registry — spread the PRIOR entry first so a respawn preserves
     // fields the spawn `meta` doesn't carry, above all `sessionId`. Without this,
@@ -1416,7 +1426,13 @@ export class HiveManager {
       lastSeen: Date.now()
     };
     if (meta.isGod) reg.godId = meta.id;
-    this.atomicWriteJson(join(root, 'registry.json'), reg);
+    let rosterNote: string | undefined;
+    if (saved) this.saveRoster(reg);
+    else {
+      rosterNote = `${meta.name} started, but the team list could not be read. It was left as it is, and ${meta.name} was not added to it.`;
+      console.error('[hive] registry.json could not be read; not saved over for', meta.id);
+      this.appendLog({ kind: 'roster-unreadable', agentId: meta.id });
+    }
 
     this.appendLog({ kind: 'spawn', agentId: meta.id, name: meta.name, isGod: !!meta.isGod });
     // Only logs on an invalid cwd (rare) — not a per-spawn line, so no log spam.
@@ -1617,7 +1633,8 @@ export class HiveManager {
       // full protocol lives in developer_instructions, so argv
       // carries only the short shift seed prompt instead of the full protocol (#298).
       const userPrompt = preset.instructionsDelivery === 'system-level' ? ON_SHIFT_PROMPT : prompt;
-      const deg = degraded ? { degraded } : {};
+      const note = [degraded, rosterNote].filter(Boolean).join(' ');
+      const deg = note ? { degraded: note } : {};
       if (preset.seedDelivery === 'type-into-tui') return { args: [...preArgs], env, seedPrompt: userPrompt, ...deg };
       // If a provider somehow exposes neither a flag nor a positional prompt, spawn bare.
       if (flag) return { args: [...preArgs, flag, userPrompt], env, ...deg };
@@ -1646,7 +1663,8 @@ export class HiveManager {
       env.OTEL_RESOURCE_ATTRIBUTES = `agent.id=${encodeURIComponent(meta.id)},agent.name=${encodeURIComponent(meta.name)}`;
     }
     const args: string[] = [];
-    if (!claudeProvider) return { args, env };
+    const rosterDeg = rosterNote ? { degraded: rosterNote } : {};
+    if (!claudeProvider) return { args, env, ...rosterDeg };
     // Claude in Chrome off (owner, 2026-11-04): the team never uses it (the
     // connector gate refuses its tools), and with no saved setting Claude Code
     // looks for its extension in Chrome's own folder at each start, which macOS
@@ -1682,7 +1700,7 @@ export class HiveManager {
       const settingsPath = this.settingsPathFor(dir);
       rmSync(join(dir, 'settings.json'), { force: true });
       mkdirSync(dirname(settingsPath), { recursive: true });
-      this.writeJson(settingsPath, this.hookSettings(shim, meta.cwd, opts.mcpDefaults, opts.theme, this.sandboxWritableDirs(meta, dir, root, opts.extraWritableDirs), opts.folderPolicy, stripConnectors ? [] : opts.connectors?.deny ?? [], shell.shell, opts.network, meta.isResearch ? this.researchShellWrite(dir, meta.cwd) : undefined, opts.cliVersion));
+      this.atomicWriteJson(settingsPath, this.hookSettings(shim, meta.cwd, opts.mcpDefaults, opts.theme, this.sandboxWritableDirs(meta, dir, root, opts.extraWritableDirs), opts.folderPolicy, stripConnectors ? [] : opts.connectors?.deny ?? [], shell.shell, opts.network, meta.isResearch ? this.researchShellWrite(dir, meta.cwd) : undefined, opts.cliVersion));
       args.push('--settings', settingsPath);
       if (opts.folderPolicy?.walledMembers) this.walledAtStart.set(meta.id, opts.folderPolicy.walledMembers);
       else this.walledAtStart.delete(meta.id);
@@ -1701,7 +1719,7 @@ export class HiveManager {
       env.ENABLE_CLAUDEAI_MCP_SERVERS = 'false';
       args.push('--strict-mcp-config');
     }
-    return { args, env };
+    return { args, env, ...rosterDeg };
   }
 
   /** Update the durable job string (hire role) without respawning. Refreshes
@@ -1712,13 +1730,14 @@ export class HiveManager {
     const next = role.trim();
     if (!next) return { ok: false, error: 'empty role' };
     try {
-      const reg = this.registry();
+      const reg = this.rosterForSave();
+      if (!reg) return { ok: false, error: ROSTER_UNREADABLE };
       const agent = reg.agents[id];
       if (!agent) return { ok: false, error: 'unknown agent' };
       if (agent.role === next) return { ok: true };
       agent.role = next;
       agent.lastSeen = Date.now();
-      this.writeJson(join(root, 'registry.json'), reg);
+      this.saveRoster(reg);
       if (id === RESEARCH_ID) this.makeResearchFolderSafe();
       this.atomicWriteText(join(this.agentDir(id), 'identity.md'), this.identityText(agent));
       this.appendLog({ kind: 'role', agentId: id, role: next });
@@ -1739,12 +1758,12 @@ export class HiveManager {
     const root = this.root();
     if (!root) return;
     try {
-      const reg = this.registry();
-      const agent = reg.agents[id];
-      if (!agent || agent.archived === archived) return;
+      const reg = this.rosterForSave();
+      const agent = reg?.agents[id];
+      if (!reg || !agent || agent.archived === archived) return;
       agent.archived = archived;
       agent.lastSeen = Date.now();
-      this.atomicWriteJson(join(root, 'registry.json'), reg);
+      this.saveRoster(reg);
       this.appendLog({ kind: 'archive', agentId: id, archived });
       this.commit(`hive: ${archived ? 'archive' : 'unarchive'} ${id}`);
     } catch { /* best-effort — never crash a lifecycle handler */ }
@@ -1754,11 +1773,11 @@ export class HiveManager {
     const root = this.root();
     if (!root) return;
     try {
-      const reg = this.registry();
-      const agent = reg.agents[id];
-      if (!agent || !!agent.closedByOwner === closed) return;
+      const reg = this.rosterForSave();
+      const agent = reg?.agents[id];
+      if (!reg || !agent || !!agent.closedByOwner === closed) return;
       agent.closedByOwner = closed;
-      this.atomicWriteJson(join(root, 'registry.json'), reg);
+      this.saveRoster(reg);
       this.appendLog({ kind: 'closed-by-owner', agentId: id, closed });
     } catch { /* best-effort */ }
   }
@@ -1784,13 +1803,14 @@ export class HiveManager {
     const root = this.root();
     if (!root) return { ok: false, error: 'hive disabled (no harnessHome)' };
     try {
-      const reg = this.registry();
+      const reg = this.rosterForSave();
+      if (!reg) return { ok: false, error: ROSTER_UNREADABLE };
       const agent = reg.agents[id];
       if (!agent) return { ok: false, error: 'Agent not found' };
       if (!!agent.onHold === hold) return { ok: true, onHold: hold };
 
       agent.onHold = hold;
-      this.writeJson(join(root, 'registry.json'), reg);
+      this.saveRoster(reg);
 
       const fleetPath = join(root, 'fleet.json');
       if (existsSync(fleetPath)) {
@@ -1798,7 +1818,7 @@ export class HiveManager {
           const fleet = this.readJson<{ agents?: Array<{ id?: string; onHold?: boolean }> }>(fleetPath, {});
           if (Array.isArray(fleet.agents)) {
             const row = fleet.agents.find((candidate) => candidate.id === id);
-            if (row) { row.onHold = hold; this.writeJson(fleetPath, fleet); }
+            if (row) { row.onHold = hold; this.atomicWriteJson(fleetPath, fleet, NO_WAIT_OPS); }
           }
         } catch { /* fleet is a cache — the registry above is the record */ }
       }
@@ -1817,7 +1837,8 @@ export class HiveManager {
     if (!nextName) return { ok: false, error: 'Name is required' };
 
     try {
-      const reg = this.registry();
+      const reg = this.rosterForSave();
+      if (!reg) return { ok: false, error: ROSTER_UNREADABLE };
       const agent = reg.agents[id];
       if (!agent) return { ok: false, error: 'Agent not found' };
       if (agent.name === nextName) return { ok: true, name: nextName };
@@ -1835,7 +1856,7 @@ export class HiveManager {
       const previousName = agent.name;
       agent.name = nextName;
       this.researchNameMemo = null;
-      this.writeJson(join(root, 'registry.json'), reg);
+      this.saveRoster(reg);
 
       // fleet.json is ephemeral and may not exist yet. When it does, keep its
       // display name in lockstep with the registry so rosterContext() is fresh.
@@ -1847,7 +1868,7 @@ export class HiveManager {
             const row = fleet.agents.find((candidate) => candidate.id === id);
             if (row) {
               row.name = nextName;
-              this.writeJson(fleetPath, fleet);
+              this.atomicWriteJson(fleetPath, fleet, NO_WAIT_OPS);
             }
           }
         } catch { /* periodic snapshot will repair a malformed/stale fleet file */ }
@@ -1873,12 +1894,12 @@ export class HiveManager {
     if (!root || !sessionId) return;
     this.recordPrivateSession(agentId, sessionId);
     try {
-      const reg = this.registry();
-      const agent = reg.agents[agentId];
-      if (!agent || agent.sessionId === sessionId) return; // unknown agent or unchanged → no write
+      const reg = this.rosterForSave();
+      const agent = reg?.agents[agentId];
+      if (!reg || !agent || agent.sessionId === sessionId) return; // unreadable roster, unknown agent or unchanged → no write
       agent.sessionId = sessionId;
       agent.lastSeen = Date.now();
-      this.atomicWriteJson(join(root, 'registry.json'), reg);
+      this.saveRoster(reg);
       this.appendLog({ kind: 'session', agentId, sessionId });
       this.commit(`hive: session ${agentId}`);
     } catch { /* best-effort — never crash a hook handler */ }
@@ -1934,7 +1955,7 @@ export class HiveManager {
         // one fails this step and stays as it is (pre-landing review).
         const reg = JSON.parse(readFileSync(path, 'utf8')) as Registry;
         for (const agent of Object.values(reg.agents ?? {})) delete (agent as { sessionId?: string }).sessionId;
-        this.atomicWriteJson(path, reg);
+        this.saveRoster(reg);
       }
     } catch (e) {
       ok = false;
@@ -4476,7 +4497,7 @@ export class HiveManager {
       if (/^[0-9a-f]{16,64}$/.test(id)) return id;
     } catch { /* first look at this office */ }
     const id = randomBytes(16).toString('hex');
-    try { writeFileSync(file, `${id}\n`); } catch { /* tried again next time */ }
+    try { this.atomicWriteText(file, `${id}\n`); } catch { /* tried again next time */ }
     return id;
   }
 
@@ -5257,11 +5278,11 @@ export class HiveManager {
     const root = this.root();
     if (!root) return;
     try {
-      const reg = this.registry();
-      const agent = reg.agents[id];
-      if (!agent) return;
+      const reg = this.rosterForSave();
+      const agent = reg?.agents[id];
+      if (!reg || !agent) return;
       agent.sessionId = sessionId;
-      this.atomicWriteJson(join(root, 'registry.json'), reg);
+      this.saveRoster(reg);
       this.appendLog({ kind: 'session-restored', agentId: id, sessionId });
     } catch { /* best-effort */ }
   }
@@ -5486,7 +5507,7 @@ export class HiveManager {
     if (!root) return;
     const shim = join(root, 'bin', 'agy-hook.cjs');
     mkdirSync(join(root, 'bin'), { recursive: true });
-    writeFileSync(shim, AGY_HOOK_SHIM, 'utf8');
+    this.atomicWriteText(shim, AGY_HOOK_SHIM);
     // Bundled node, not bare `node` — agy's hooks run with a stripped PATH too.
     const command = (event: string) => process.platform === 'win32'
       ? this.nodeRunUnquoted(shim, event)
@@ -5543,7 +5564,7 @@ export class HiveManager {
     try {
       mkdirSync(home, { recursive: true });
       const shim = join(home, 'gemini-hook.cjs');
-      writeFileSync(shim, GEMINI_HOOK_SHIM, 'utf8');
+      this.atomicWriteText(shim, GEMINI_HOOK_SHIM);
       const hook = (name: string, matcher?: string) => ({
         ...(matcher ? { matcher } : {}),
         sequential: true,
@@ -5568,7 +5589,7 @@ export class HiveManager {
         },
         ...(writableDirs.length ? { context: { includeDirectories: writableDirs } } : {})
       };
-      writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf8');
+      this.atomicWriteJson(settingsPath, settings);
     } catch (e) { console.error('[hive] installGeminiHooks failed:', e); }
     return settingsPath;
   }
@@ -5590,7 +5611,7 @@ export class HiveManager {
       let config = existsSync(configPath) ? readFileSync(configPath, 'utf8') : '';
       config = config.replace(/^\s*developer_instructions\s*=.*(\r?\n)?/gm, '');
       config = `developer_instructions = ${JSON.stringify(instructions)}\n\n` + config;
-      writeFileSync(configPath, config, 'utf8');
+      this.atomicWriteText(configPath, config);
     } catch (e) {
       console.error('[hive] writeCodexInstructions failed:', e);
     }
@@ -5687,7 +5708,7 @@ export class HiveManager {
           config += `\n[[hooks.${ev}]]\n[[hooks.${ev}.hooks]]\ntype = "command"\ncommand = ${JSON.stringify(command)}\ntimeout = 30\n`;
         }
       }
-      writeFileSync(join(home, 'config.toml'), config, 'utf8');
+      this.atomicWriteText(join(home, 'config.toml'), config);
 
       // Keep each worker's CODEX_HOME isolated while putting its rollout data
       // below Codex's standard scan roots. External usage tools can then discover
@@ -5823,17 +5844,17 @@ export class HiveManager {
       // `extensions/` location (and keep it isolated per agent).
       const extDir = join(home, 'extensions');
       mkdirSync(extDir, { recursive: true });
-      writeFileSync(join(extDir, 'hive-bridge.js'), PI_EXTENSION, 'utf8');
+      this.atomicWriteText(join(extDir, 'hive-bridge.js'), PI_EXTENSION);
       // A manifest so Pi auto-loads the extension on start (best-effort; harmless if
       // Pi ignores it). Kept minimal and hive-authored.
       const manifest = { name: 'munder-hive-bridge', version: '0.3.1', main: 'extensions/hive-bridge.js', auto: true };
-      writeFileSync(join(home, 'extensions.json'), JSON.stringify(manifest, null, 2), 'utf8');
+      this.atomicWriteJson(join(home, 'extensions.json'), manifest);
 
       const userPiDir = join(homedir(), '.pi', 'agent');
       for (const fileName of ['models.json', 'models-store.json'] as const) {
         try {
           const data = readFileSync(join(userPiDir, fileName), 'utf8');
-          writeFileSync(join(home, fileName), data, 'utf8');
+          this.atomicWriteText(join(home, fileName), data);
         } catch (e) {
           if ((e as NodeJS.ErrnoException).code !== 'ENOENT') console.error(`[hive] installPiHooks copy ${fileName} failed:`, e);
         }
@@ -5865,8 +5886,8 @@ export class HiveManager {
       if (theme) {
         mkdirSync(home, { recursive: true });
         const choice = { theme: 'system' };
-        writeFileSync(join(home, 'tui.json'), JSON.stringify({ $schema: 'https://opencode.ai/tui.json', ...choice }, null, 2), 'utf8');
-        writeFileSync(join(home, 'opencode.json'), JSON.stringify({ $schema: 'https://opencode.ai/config.json', ...choice }, null, 2), 'utf8');
+        this.atomicWriteJson(join(home, 'tui.json'), { $schema: 'https://opencode.ai/tui.json', ...choice });
+        this.atomicWriteJson(join(home, 'opencode.json'), { $schema: 'https://opencode.ai/config.json', ...choice });
       }
       // BOTH `plugin/` and `plugins/`. OpenCode's current docs specify `plugins/`
       // (plural); older builds — and the shape this bridge was originally written
@@ -5879,7 +5900,7 @@ export class HiveManager {
       for (const name of ['plugin', 'plugins']) {
         const pluginDir = join(home, name);
         mkdirSync(pluginDir, { recursive: true });
-        writeFileSync(join(pluginDir, 'hive-bridge.js'), OPENCODE_PLUGIN, 'utf8');
+        this.atomicWriteText(join(pluginDir, 'hive-bridge.js'), OPENCODE_PLUGIN);
       }
     } catch (e) { console.error('[hive] installOpenCodePlugin failed:', e); }
     return home;
@@ -5924,7 +5945,7 @@ export class HiveManager {
       // sits on xterm's, which follows the app theme. Set whenever the app
       // passes a theme, dark included, so both modes look the same way.
       const options = theme ? { tui: { transparent: true } } : undefined;
-      writeFileSync(config, JSON.stringify(options ? { providers, options } : { providers }, null, 2), 'utf8');
+      this.atomicWriteJson(config, options ? { providers, options } : { providers });
     } catch (e) { console.error('[hive] installCrushConfig failed:', e); }
     return { config, data };
   }
@@ -5945,7 +5966,7 @@ export class HiveManager {
     try {
       const shim = join(root, 'bin', 'grok-hook.cjs');
       mkdirSync(join(root, 'bin'), { recursive: true });
-      writeFileSync(shim, GROK_HOOK_SHIM, 'utf8');
+      this.atomicWriteText(shim, GROK_HOOK_SHIM);
       const tool = (matcher?: string) => ({
         ...(matcher ? { matcher } : {}),
         // Let Grok apply its event-aware defaults (5s normally, 600s for Stop).
@@ -5978,7 +5999,7 @@ export class HiveManager {
   writeFleetSnapshot(snapshot: unknown): void {
     const root = this.root();
     if (!root) return;
-    try { writeFileSync(join(root, 'fleet.json'), JSON.stringify(snapshot, null, 2), 'utf8'); } catch { /* noop */ }
+    try { this.atomicWriteJson(join(root, 'fleet.json'), snapshot, NO_WAIT_OPS); } catch { /* noop */ }
   }
 
   /** Is this agent the hive's god/orchestrator? */
@@ -6247,7 +6268,7 @@ export class HiveManager {
           `--- last ${tail.length} bytes of pty output ---`,
           ''
         ].filter(Boolean).join('\n');
-        writeFileSync(p, header + tail, 'utf8');
+        this.atomicWriteText(p, header + tail);
         tailPath = p;
       } catch { /* a diagnostic must never break teardown */ }
     }
@@ -6272,7 +6293,7 @@ export class HiveManager {
     // reads "kind":"..." and "ts":N straight from the line text.
     const stamped = { ts: Date.now(), ...event };
     const line = JSON.stringify(stamped) + '\n';
-    try { appendFileSync(join(root, 'log.jsonl'), line, 'utf8'); } catch { /* noop */ }
+    try { this.appendToHive(join(root, 'log.jsonl'), line); } catch { /* noop */ }
     // Pulse telemetry mirrors the kinds it counts (docs/designs/team-performance.md).
     try { this.logObserver?.(stamped); } catch { /* best-effort */ }
   }
@@ -6323,30 +6344,61 @@ export class HiveManager {
       usd: sample.usd
     };
     try { if (this.costLedgerSink?.(row)) return; } catch { return; }
-    try { appendFileSync(join(root, 'cost-ledger.jsonl'), JSON.stringify(row) + '\n', 'utf8'); } catch { /* noop */ }
+    try { this.appendToHive(join(root, 'cost-ledger.jsonl'), JSON.stringify(row) + '\n'); } catch { /* noop */ }
   }
 
   // — json + atomic io —
   private readJson<T>(p: string, fallback: T): T {
     try { return parseJsonText(readFileSync(p, 'utf8')) as T; } catch { return fallback; }
   }
-  private writeJson(p: string, data: unknown): void {
-    writeFileSync(p, JSON.stringify(data, null, 2), 'utf8');
+  private atomicWriteJson(p: string, data: unknown, ops?: AtomicFileOps): void {
+    this.atomicWriteText(p, JSON.stringify(data, null, 2), 0o644, ops);
   }
-  private atomicWriteJson(p: string, data: unknown): void {
-    this.atomicWriteText(p, JSON.stringify(data, null, 2));
+  /** A new file, flushed, then one rename over the old (atomicFile.ts): a link
+   *  or a file with a second name at `p` is replaced, never written through.
+   *  Inside the hive, which members' shells can write, every folder on the
+   *  way must be a plain folder too (hiveFile.ts), so a planted link never
+   *  leads the app's write out of the office. Every app write into the hive
+   *  goes through here or appendToHive. */
+  private atomicWriteText(p: string, text: string, mode = 0o644, ops: AtomicFileOps = NO_SYNC_OPS): void {
+    const root = this.root();
+    if (root && isInside(root, p)) writeHiveFile(root, p, text, mode, ops);
+    else writeFileAtomic(p, text, mode, ops);
   }
-  /** A new file, then one rename over the old: a link or a file with a second
-   *  name at `p` is replaced, never written through. The temp name must be
-   *  new, so nothing put there first is followed either. */
-  private atomicWriteText(p: string, text: string): void {
-    const tmp = `${p}.tmp-${shortRand()}`;
-    try {
-      writeFileSync(tmp, text, { encoding: 'utf8', flag: 'wx' });
-      renameSync(tmp, p);
-    } catch (e) {
-      try { rmSync(tmp, { force: true }); } catch { /* none */ }
-      throw e;
+  /** Save the team roster: flushed to disk, since a power cut must not leave
+   *  it empty, and never through a link. */
+  private saveRoster(reg: Registry): void {
+    const root = this.root();
+    if (root) this.atomicWriteJson(join(root, 'registry.json'), reg, DURABLE_OPS);
+  }
+  /** Add to the end of a file in the hive, never through a link (hiveFile.ts). */
+  private appendToHive(p: string, text: string): void {
+    const root = this.root();
+    if (!root || !isInside(root, p)) throw new Error(`not a hive file: ${p}`);
+    appendHiveFile(root, p, text);
+  }
+
+  /** The roster to change and save: null when registry.json is there but can't
+   *  be read as a roster. registry() reads such a file as an empty roster, and
+   *  saving that would lose the whole team (a torn write, a file held open on
+   *  Windows, a member's shell that broke it), so a writer that gets null
+   *  leaves the file as it is. A missing file is a new office's empty roster. */
+  private rosterForSave(): Registry | null {
+    const root = this.root();
+    if (!root) return null;
+    const path = join(root, 'registry.json');
+    if (!existsSync(path)) return { godId: null, agents: {} };
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const raw = parseJsonText(readFileSync(path, 'utf8')) as Partial<Registry> | null;
+        const agents = raw?.agents;
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw) || !agents || typeof agents !== 'object' || Array.isArray(agents)) return null;
+        return raw as Registry;
+      } catch (e) {
+        // A file Windows holds for a moment (antivirus, a reader) is read again.
+        if (!isHeldRename(e) || attempt >= RENAME_RETRY_MS.length) return null;
+        sleepSync(RENAME_RETRY_MS[attempt]);
+      }
     }
   }
 
@@ -6453,7 +6505,7 @@ export class HiveManager {
     const agentsDir = join(root, 'agents');
     if (!existsSync(agentsDir)) return;
     try {
-      for (const id of readdirSync(agentsDir)) ensureMineIgnore(join(agentsDir, id));
+      for (const id of readdirSync(agentsDir)) ensureMineIgnore(join(agentsDir, id), (p, t) => this.atomicWriteText(p, t));
     } catch { /* best-effort */ }
     // The owner's messages and dock state, committed before agents/human/ was
     // ignored, leave the index (the files stay on disk).
