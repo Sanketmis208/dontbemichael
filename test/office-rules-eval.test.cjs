@@ -98,6 +98,7 @@ test('3. a task outside the member\'s role goes back to Michael, undone', { skip
 // ---- Job updates worked into a member's own job (work-style-update-card-clarity.md) ----
 
 const { toRevisePrompt } = loadTs('src/shared/workStyleText.ts');
+const { INSTRUCTIONS_MODEL } = loadTs('src/main/workStyleConvert.ts');
 
 const OWN_JOB = [
   'The owner set this work style for your role at Harbor Consulting, Portland.',
@@ -110,14 +111,18 @@ const OWN_JOB = [
   'Handle every client conversation yourself, from first call to signed contract.'
 ].join('\n');
 
-function update(duty) {
-  const prompt = toRevisePrompt({ ctx: { name: 'Dwight', title: 'Sales Director', business: business }, instructions: OWN_JOB, handles: 'Handles leads and deals', changes: [duty], update: true, routing: [] });
-  const env = { ...process.env };
+function update(duty, instructions = OWN_JOB, handles = 'Handles leads and deals') {
+  const prompt = toRevisePrompt({ ctx: { name: 'Dwight', title: 'Sales Director', business: business }, instructions, handles, changes: [duty], update: true, routing: [] });
+  // The app's own call: its model, no hidden thinking (workStyleConvert.ts).
+  const env = { ...process.env, MAX_THINKING_TOKENS: '0' };
   for (const k of Object.keys(env)) if (k.startsWith('CLAUDE')) delete env[k];
-  const r = spawnSync('claude', ['-p', '--model', 'claude-sonnet-5-5', '--tools', '', '--strict-mcp-config'], { input: prompt, env, encoding: 'utf8', timeout: 180_000 });
+  const r = spawnSync('claude', ['-p', '--model', INSTRUCTIONS_MODEL, '--tools', '', '--strict-mcp-config'], { input: prompt, env, encoding: 'utf8', timeout: 180_000 });
   assert.equal(r.status, 0, (r.stderr || r.error?.message || '').slice(0, 300));
   const text = r.stdout;
-  try { return JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)); } catch { assert.fail(`not a JSON answer: ${text.slice(0, 600)}`); }
+  let a;
+  try { a = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)); } catch { assert.fail(`not a JSON answer: ${text.slice(0, 600)}`); }
+  if (a.kind === 'ok') assert.ok(typeof a.instructions === 'string' && a.instructions.trim(), `an answer with no instructions: ${text.slice(0, 600)}`);
+  return a;
 }
 
 test('4. a duty that would narrow the role is asked, never merged', { skip, timeout: 600_000 }, () => {
@@ -133,5 +138,23 @@ test('5. a plain added duty is merged without a question, keeping the rest', { s
     assert.equal(a.kind, 'ok', JSON.stringify(a).slice(0, 400));
     assert.match(a.instructions, /Keep the pipeline current: name, referrer, service wanted, last contact, next step\./, 'untouched lines stay word for word');
     assert.match(a.instructions, /customer list/i);
+  }
+});
+
+// The duty as the app sends it, and Dwight's job from a pack before it, whose
+// one line under "The job" is about deals: the model once added the duty as a
+// line and also tacked it onto that line (owner, 2026-11-07).
+const CUSTOMER_LIST = "Keep the office's customer list: every customer ever won that the office knows by name, one row each with when and where it came from, and tell Michael about each new one.";
+const PACK_DWIGHT = require('../resources/packs/saas-consulting.json').agents.find((a) => a.id === 'dwight');
+const PACK_JOB = PACK_DWIGHT.workStyle
+  .split('\n').filter((l) => !l.startsWith(CUSTOMER_LIST.slice(0, 30))).join('\n')
+  .replace('{Business}', business.name).replace('{City}', business.city);
+
+test('6. the duty goes in one place: never both a new line and a rewrite of another', { skip, timeout: 600_000 }, () => {
+  for (let i = 0; i < RUNS; i++) {
+    const a = update(CUSTOMER_LIST, PACK_JOB, `Dwight ${PACK_DWIGHT.routing.replace(/^Runs/, 'runs')}`);
+    assert.equal(a.kind, 'ok', JSON.stringify(a).slice(0, 400));
+    assert.match(a.instructions.split('### How to work')[1] ?? '', /every customer/i, `the duty is a line under How to work: ${a.instructions}`);
+    assert.match(a.instructions, /### The job\nEvery open deal has a stage, a next step and a date, so nothing goes quiet by accident\.\n/, `the deals line is not also given the duty: ${a.instructions}`);
   }
 });

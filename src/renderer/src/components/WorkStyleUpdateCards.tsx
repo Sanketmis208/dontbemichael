@@ -9,7 +9,7 @@ import type { MemberLook } from './askMeFilter';
 import { ALWAYS_OPEN, FoldBody, FoldHeader, foldCardClass, foldCardStyle, type FoldControl } from './AskCardFold';
 import { splitAgentRole } from '@shared/agentRole';
 import { jobBase } from '@shared/jobChange';
-import { lineChanges, noLineChanges, roleLabel } from '@shared/workStyleText';
+import { lineChanges, noLineChanges, roleLabel, roleLineChange } from '@shared/workStyleText';
 import { effectiveWorkStyle } from '@shared/michaelWorkStyle';
 import { useResolvedGodName } from '@/hooks/useResolvedGodName';
 import { decisionId, type WorkStyleOffer } from '@shared/workStyleUpdates';
@@ -75,24 +75,16 @@ export function WorkStyleUpdateCards({ offers, look, hiddenIds, fold }: {
   const changesOf = (offer: WorkStyleOffer, name: string) => (ok: ReviseOk): { node: ReactNode; none: boolean } => {
     const agent = useStore.getState().agents.find((a) => a.id === offer.agentId);
     const c = lineChanges(agent ? effectiveWorkStyle(agent) : '', ok.instructions);
-    if (noLineChanges(c)) return { none: true, node: <div style={lineText}>{t('jobChange.updateNothing', { name })}</div> };
+    const role = roleLineChange(splitAgentRole(agent?.description ?? '').roleDescription, ok.handles);
+    if (noLineChanges(c) && !role) return { none: true, node: <div style={lineText}>{t('jobChange.updateNothing', { name })}</div> };
     return {
       none: false,
       node: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {c.added.length > 0 && <Group label={t('jobChange.updateAdds', { name })} lines={c.added} mark="+" />}
-          {c.changed.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span style={groupLabel}>{t('jobChange.updateChanges')}</span>
-              {c.changed.map((x, i) => (
-                <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <span style={{ ...lineText, color: 'var(--cth-ink-2)', textDecoration: 'line-through' }}>{x.before}</span>
-                  <span style={lineText}>{x.after}</span>
-                </div>
-              ))}
-            </div>
-          )}
+          {c.changed.length > 0 && <Pair label={t('jobChange.updateChanges')} pairs={c.changed} />}
           {c.removed.length > 0 && <Group label={t('jobChange.updateRemoves')} lines={c.removed} mark={'\u2212'} />}
+          {role && <Pair label={t('jobChange.handles', { name })} before={role.before} after={role.after} />}
         </div>
       )
     };
@@ -172,6 +164,22 @@ export function WorkStyleUpdateCards({ offers, look, hiddenIds, fold }: {
 // The group names use the shared field label (fieldText).
 const groupLabel = fieldLabel;
 const lineText: React.CSSProperties = { fontSize: 12, lineHeight: '16.5px', color: 'var(--cth-ink)' };
+
+/** A labelled group of old lines, struck, each above what replaces it. */
+function Pair({ label, pairs, before, after }: { label: string; pairs?: Array<{ before: string; after: string }>; before?: string; after?: string }) {
+  const list = pairs ?? [{ before: before ?? '', after: after ?? '' }];
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <span style={groupLabel}>{label}</span>
+      {list.map((x, i) => (
+        <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ ...lineText, color: 'var(--cth-ink-2)', textDecoration: 'line-through' }}>{x.before}</span>
+          <span style={lineText}>{x.after}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /** A labelled list of whole lines with a + or minus mark for the eye. */
 function Group({ label, lines, mark }: { label: string; lines: string[]; mark: string }) {

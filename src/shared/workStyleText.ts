@@ -231,6 +231,7 @@ export function toRevisePrompt(input: ReviseInput): string {
     'Ask only when you cannot tell what the owner wants: a change contradicts one of the company foundations below, or it conflicts with an approval rule in the current job without saying it replaces it. A plain change to the job is not a contradiction: the owner\'s newest words win. "question" is one or two short sentences naming both sides; "choices" are two or three short answers the owner can pick, one of them marked "suggested". When a choice would drop an approval, a spending limit or another safeguard, mark as suggested the choice that keeps it, or the narrowest one that still does what the owner asked.',
     ...(input.update && !fresh ? [
       'This change comes from the app, not the owner, so the owner\'s current job wins every conflict: never let the duty override or quietly narrow it. Use Shape 2 also when the duty contradicts a duty, limit, approval or routing line of the current job, or would make the role broader or narrower than the duty itself needs; offer the choices plainly, the current job first.',
+      'Put each duty in the job once: as one line in the section it fits, usually "### How to work", or by changing the one line it belongs to, never both. Leave the "### The job" sentences as they are unless the duty changes the outcome the whole job is for. Change "handles" only to add the requests the duty brings to this person.',
       'Copy every line the duty does not touch exactly, character for character, headings included. If the current job already covers the duty, return the current instructions unchanged, "handles": null and "summary": [].'
     ] : []),
     ...(askHome ? [
@@ -687,4 +688,14 @@ export function lineChanges(before: string, after: string): LineChanges {
 /** Nothing in the job changes. */
 export function noLineChanges(c: LineChanges): boolean {
   return !c.added.length && !c.changed.length && !c.removed.length;
+}
+
+/** The role line ("What X handles") as the update leaves it: before and after
+ *  when it changes, null when the analysis kept it (null handles) or wrote it
+ *  back the same. The card lists it with the job's lines, so the owner never
+ *  reads an unmarked paragraph and has to guess whether it changed. */
+export function roleLineChange(before: string, after: string | null | undefined): { before: string; after: string } | null {
+  const norm = (t: string): string => t.replace(/\s+/g, ' ').trim();
+  if (!after || norm(after) === norm(before)) return null;
+  return { before: norm(before), after: norm(after) };
 }

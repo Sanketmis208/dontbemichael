@@ -455,7 +455,9 @@ function Preview({ ok, who, lead, sendsTask, title, heading, applyLabel, applyin
       {!changes && ok.summary.length > SUMMARY_SHOWN && (
         <button type="button" aria-expanded={all} onClick={() => setAll((v) => !v)} style={linkStyle}>{all ? t('jobChange.showLess') : t('jobChange.showAll')}</button>
       )}
-      {!lead && (
+      {/* The pack card lists the role line with its own changes, and only
+          when it changes, so it is never shown here unmarked. */}
+      {!lead && !changes && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           <span style={fieldLabel}>{t('jobChange.handles', { name: who })}</span>
           {ok.handles
