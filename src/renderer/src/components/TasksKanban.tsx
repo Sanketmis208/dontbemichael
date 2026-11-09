@@ -15,6 +15,7 @@ export { openQuestion, openQuestions, waitsOnHuman, parseTasks, type HiveTask, t
 import { refreshNeedsYou, updateNeedsYouTasks, useNeedsYou } from '@/shell/useNeedsYou';
 import { resultHeadline, waitsOnHuman, type HiveTask, type TaskStatus, nextAtLabel, filterActive, taskMatches, byNext, nextGroup, type NextGroup } from './hiveTasks';
 import { FileText, useAskFileChecks } from './FileChip';
+import { SourceRow } from './SourceRow';
 import { blockedWithNothingAsked, michaelCardState, type WorkHours } from '@shared/ownerRequests';
 import { askAsText, isAnswered, isWithdrawn, readAskShape } from '@shared/askMeRouting';
 
@@ -613,6 +614,8 @@ export function TaskDetail({ task, all, assigneeName, onMove, onReopen, onAssign
                       </div>
                       {/* With its options or questions, which no longer sit in the text (ask-me-options.md). */}
                       <FileText source={qaShown?.[i]?.q ?? e.q} who={{ raisedBy: e.raisedBy, assignee: qaAssignee }} checks={qaFiles[e.raisedBy ?? ''] ?? {}} />
+                      {/* Its sources stay with it once answered (ask-me-source-links.md). */}
+                      <SourceRow entry={e} who={{ raisedBy: e.raisedBy, assignee: qaAssignee }} margin="8px 0 0" />
                       {isAnswered(e) ? (
                         <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--cth-line)' }}>
                           <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--cth-green-text)', marginBottom: 2 }}>{t('kanban.answer')}</div>

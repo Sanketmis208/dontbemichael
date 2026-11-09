@@ -61,6 +61,18 @@ const defaultOps: AtomicFileOps = {
   platform: process.platform
 };
 
+/** The full steps, flushed to disk: for a file a power cut must not empty
+ *  (the secret store, the team roster). */
+export const DURABLE_OPS: AtomicFileOps = defaultOps;
+/** Without the flush to disk: for the many small files the hive writes (a
+ *  message, a member's notes, a shim), where a flush on each one would slow
+ *  the main process. The rename still means no reader sees half a file. */
+export const NO_SYNC_OPS: AtomicFileOps = { ...defaultOps, fsyncSync: () => {} };
+/** Without the flush or the wait before a retried rename: for a cache the
+ *  app writes again in a few seconds anyway (fleet.json), where blocking the
+ *  main process for a held file would cost more than one missed write. */
+export const NO_WAIT_OPS: AtomicFileOps = { ...NO_SYNC_OPS, sleepSync: () => {} };
+
 function renameWithRetry(from: string, to: string, ops: AtomicFileOps): void {
   for (let attempt = 0; ; attempt++) {
     try {

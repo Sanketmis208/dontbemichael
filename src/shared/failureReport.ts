@@ -114,6 +114,9 @@ export const LOG_KIND_CLASS: Readonly<Record<string, FailureClass>> = {
   ...Object.fromEntries(HIDDEN_CALL_KINDS.map((k) => [k, 'repo'])),
   // The office break is the owner's account (credit, sign in, limit).
   'office-break': 'owner',
+  // An unreadable team list is left as it is and the owner is told at the
+  // member's start; its usual cause is outside the app (a member's shell, the disk).
+  'roster-unreadable': 'owner',
   // A frame without its secret is refused by design.
   'hook-frame-rejected': 'none',
   // The case study screen shows its own outcome to the owner (docs/designs/case-study.md).

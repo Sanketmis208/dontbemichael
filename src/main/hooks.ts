@@ -16,7 +16,7 @@ import { existsSync, lstatSync, readlinkSync, realpathSync, rmSync } from 'node:
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { homedir, tmpdir } from 'node:os';
 import { Notification, type WebContents } from 'electron';
-import { redactSecrets, type HiveManager } from './hive';
+import { redactSecrets, SOLO_ENDED, SOLO_RULES, type HiveManager } from './hive';
 import type { HarnessConfig } from './config';
 import type { ControlRegistry } from './control';
 import type { CircuitBreaker } from './breaker';
@@ -58,6 +58,12 @@ function isClaudeTranscript(path: string): boolean {
 /** Desktop notification bodies. The title is the agent's name (displayName). */
 export const NOTIFY_FINISHED = 'Finished and ready for the next thing.';
 
+/** Michael stuck on a step only a person could answer, read under his name.
+ *  The app restarts him first; these show only when that did not clear it. */
+export const MICHAEL_STUCK_RESTARTED = "I'm stuck and the office is waiting on me. Restarting me didn't clear it.";
+export const MICHAEL_STUCK_NO_RESTART = "I'm stuck and the office is waiting on me. The app couldn't restart me.";
+export const MICHAEL_WORKING_AGAIN = "I'm working again.";
+
 /** Michael gone idle at his prompt. Nothing is needed from the owner (a real
  *  ask goes on ASK ME), so never "waiting for you": a line saying he's free and
  *  the office can take on more (owner, 2026-10-02). Read under his name. */
@@ -89,7 +95,7 @@ export const ASK_TOOL_REFUSAL =
 
 import { GUARDED_TOOLS, harnessWriteDecision } from './harnessGuard';
 import { TurnCap } from './turnCap';
-import { FOLDER_READ_TOOLS, FOLDER_WRITE_TOOLS, agentTmpDecision, agentTmpName, folderDecision, folderToolTarget, AGENT_TMP_DIR, isSharedTempSave, researchFolderDecision, sharedTempWriteDecision, tempFolders, researchWallDecision, memberWallDecision } from '../shared/folderAccess';
+import { FOLDER_READ_TOOLS, FOLDER_WRITE_TOOLS, windowsShellWallDecision, agentTmpDecision, agentTmpName, folderDecision, folderToolTarget, AGENT_TMP_DIR, isSharedTempSave, researchFolderDecision, sharedTempWriteDecision, tempFolders, researchWallDecision, memberWallDecision } from '../shared/folderAccess';
 import { REFUSAL_WEB_TOOL, REFUSAL_WEB_TOOL_OFF, RESEARCH_DESK_DIR, RESEARCH_ID, RESEARCH_NAME, RESEARCH_SANDBOX_ONLY, RESEARCH_UNCHECKED_TOOL, researchText } from '../shared/research';
 import { folderLayoutFor } from './officeFile';
 import { expandTilde } from './fs';
@@ -194,6 +200,9 @@ export class HookServer {
   private deliveredFoundationsByAgent = new Map<string, { sessionId: string | null; text: string | null }>();
   /** What roster each agent's session was last given, so it is sent again only on a change. */
   private deliveredRosterByAgent = new Map<string, { sessionId: string | null; layoutKey: string; statusKey: string }>();
+  /** Whether Michael's last roster carried the solo rules, per session, so the
+   *  first hire revokes them with one line (eng review E1, 2026-11-07). */
+  private soloByAgent = new Map<string, { sessionId: string | null; solo: boolean }>();
   /** The session each agent was last given its memory index in. */
   private deliveredMemoryByAgent = new Map<string, string | null>();
   /** Whether Michael's last turn showed open owner requests, per session, so
@@ -902,6 +911,17 @@ export class HookServer {
       }
     }
 
+    // Windows has no shell sandbox (#187): a member's shell command that names
+    // another member's folder is refused by its text (owner, eng review D2).
+    if (event === 'PreToolUse' && agentId && toolName === 'Bash' && process.platform === 'win32') {
+      let d: { deny: boolean; reason?: string };
+      try { d = this.windowsShellWall(agentId, p.tool_input); } catch { d = { deny: false }; }
+      if (d.deny) {
+        this.emitRefused(agentId, event, p, 'folder');
+        return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: d.reason } };
+      }
+    }
+
     // Memory pays off only if it's used (owner, 2026-09-25): record each time an
     // agent opens one of its procedure files, next to the tidy-up's own counts.
     if (event === 'PostToolUse' && agentId && toolName === 'Read') {
@@ -966,6 +986,17 @@ export class HookServer {
       }
     } else if (wantsRoster) {
       roster = this.hive.rosterContext((id) => this.contextFor(id));
+    }
+    // A solo office (no worker member): Michael does the work himself until
+    // the first hire, then one line ends that (owner, CEO review D5).
+    if (wantsRoster && typeof this.hive.hasWorkerMember === 'function') {
+      const solo = !this.hive.hasWorkerMember();
+      const sessionId = p.session_id ?? null;
+      const was = this.soloByAgent.get(agentId!);
+      const sameSession = !!was && was.sessionId === sessionId && event !== 'SessionStart';
+      if (solo && (!sameSession || !was.solo || roster)) roster = roster ? `${roster}\n${SOLO_RULES}` : SOLO_RULES;
+      else if (!solo && sameSession && was.solo) roster = roster ? `${roster}\n${SOLO_ENDED}` : SOLO_ENDED;
+      this.soloByAgent.set(agentId!, { sessionId, solo });
     }
 
     // Standing goal (hire Briefing) — durable roster field, re-read every cycle so
@@ -1141,8 +1172,12 @@ export class HookServer {
     // member, which clears the prompt, and Michael asks the owner only if it
     // comes back right after. Not in 1:1: the owner is already there to answer
     // it. The cheap prompt check runs first; the registry is read only for a
-    // real prompt.
-    if (event === 'Notification' && agentId && isTerminalPrompt(p) && !this.isGod(agentId) && !this.onHold(agentId)) {
+    // real prompt. Michael too (2026-11-09: his command sat ten hours and the
+    // office with him, and the app never looked): restarted the same way, and
+    // the owner hears if it comes back, as he can't be told about himself.
+    // With auto mode off the owner chose to answer Michael's prompts, so his
+    // are left for the owner, as before.
+    if (event === 'Notification' && agentId && isTerminalPrompt(p) && !this.onHold(agentId) && !(this.isGod(agentId) && !this.autoModeOn())) {
       this.stuckOnPrompt(agentId, (p.message ?? '').trim());
     }
 
@@ -1175,6 +1210,11 @@ export class HookServer {
   }
 
   /** Is the owner in 1:1 with this agent (registry `onHold`)? */
+  /** Whether auto mode is on (the default); an unreadable config counts as on. */
+  private autoModeOn(): boolean {
+    try { return this.getConfig().autoMode !== false; } catch { return true; }
+  }
+
   private onHold(agentId: string): boolean {
     try { return !!this.hive.registry().agents[agentId]?.onHold; } catch { return false; }
   }
@@ -1252,6 +1292,8 @@ export class HookServer {
     if (!ep) return;
     if (event === 'SessionStart' && ep.restarted && !ep.confirmed && !ep.escalated) {
       ep.confirmed = true;
+      // Michael's own restart note already told him to carry on.
+      if (this.isGod(agentId)) return;
       const name = this.displayName(agentId);
       this.tellMichael(agentId, `${name} was restarted`, `${name}'s session stopped on a prompt only a person could answer${ep.text ? ` ("${ep.text}")` : ''}, so the app restarted ${name} and told them to carry on with their current work. Check that ${name} picks their work back up. This is not for the owner's Ask me board: if you asked the owner whether ${name} is stuck, withdraw that question.`);
     } else if (event === 'SessionStart' && ep.timedOut) {
@@ -1261,6 +1303,7 @@ export class HookServer {
       ep.confirmed = true;
       ep.escalated = false;
       this.relayedPrompts.delete(agentId);
+      if (this.isGod(agentId)) { this.notify(agentId, MICHAEL_WORKING_AGAIN); return; }
       const name = this.displayName(agentId);
       this.tellMichael(agentId, `${name} was restarted after all`, `${name}'s session started again after all, so the restart went through and ${name} is not stuck. Leave ${name}'s open work with them, and if you asked the owner whether ${name} is stuck, withdraw that question.`);
     } else if (STUCK_MOVED_ON.has(event)) {
@@ -1273,6 +1316,7 @@ export class HookServer {
       // raised stays on Ask me long after the member got going (owner,
       // 2026-10-23: Pete answered at 05:27, the card went up at 05:30).
       this.relayedPrompts.delete(agentId);
+      if (this.isGod(agentId)) { this.notify(agentId, MICHAEL_WORKING_AGAIN); return; }
       const name = this.displayName(agentId);
       this.tellMichael(agentId, `${name} is working again`, `${name} got past what stopped them and is working again, so ${name} is not stuck. If you put a question on the owner's Ask me board saying ${name} is stuck, withdraw it; if you have not raised it yet, don't. ${name} can take work again.`);
     }
@@ -1282,6 +1326,14 @@ export class HookServer {
   private relayStuckToMichael(agentId: string, text: string, restarted: boolean): boolean {
     const last = this.relayedPrompts.get(agentId);
     if (last && last.text === text && this.now() - last.at < PROMPT_RELAY_DEDUPE_MS) return true;
+    if (this.isGod(agentId)) {
+      // Michael can't be told he is stuck: the owner hears, on the desktop,
+      // the one notice he is allowed. With notifications off nothing more can
+      // be done, so it counts as told and no restart loop starts.
+      this.notify(agentId, restarted ? MICHAEL_STUCK_RESTARTED : MICHAEL_STUCK_NO_RESTART);
+      this.relayedPrompts.set(agentId, { text, at: this.now() });
+      return true;
+    }
     const name = this.displayName(agentId);
     const sent = this.tellMichael(agentId, `${name} is stuck`,
       `${name}'s session stopped on a prompt only a person could answer${text ? ` ("${text}")` : ''}, and ${restarted ? `restarting ${name} did not clear it` : `the app could not restart ${name}`}. The owner can't answer it either: never ask them to, and never mention terminals, prompts, sessions or a 1:1 chat. Move ${name}'s open work to a teammate who fits. Then put one plain question on the owner's Ask me board (a card for ${agentId}, status "blocked", one humanQA ask with "raisedBy": "${agentId}") saying ${name} is stuck and can't work until it is looked into, with options that fit, such as "Leave ${name} for now".`);
@@ -1314,6 +1366,26 @@ export class HookServer {
    *  not know is announced as the app. */
   /** One file tool call judged against the office's folder rules. Offices
    *  without a business folder (older installs) have no rules to apply. */
+  /** The Windows shell wall: every other member's work folder and hive folder
+   *  (Michael is not held: he may read members' work folders). */
+  private windowsShellWall(agentId: string, input: unknown): { deny: boolean; reason?: string } {
+    const reg = this.hive.registry();
+    const me = reg.agents[agentId];
+    if (!me || me.isGod) return { deny: false };
+    const cfg = this.getConfig();
+    const hiveRoot = this.hive.root();
+    const peers: string[] = [];
+    for (const [id, a] of Object.entries(reg.agents ?? {})) {
+      if (id === agentId || a.isGod) continue;
+      if (a.cwd) peers.push(a.cwd);
+      if (hiveRoot) peers.push(join(hiveRoot, 'agents', id));
+    }
+    for (const m of cfg.businessTeam ?? []) if (m.folder) peers.push(m.folder);
+    const own = [me.cwd ?? '', hiveRoot ? join(hiveRoot, 'agents', agentId) : ''];
+    const command = input && typeof input === 'object' ? (input as Record<string, unknown>).command : undefined;
+    return windowsShellWallDecision(process.platform, command, peers, own);
+  }
+
   private folderCheck(agentId: string, tool: string, input: unknown, cwd: string | undefined): { deny: boolean; reason?: string } {
     const cfg = this.getConfig();
     // Without a business folder there are no team folders to keep apart, but
@@ -1408,7 +1480,16 @@ export class HookServer {
     }
     const layout = folderLayoutFor(cfg.businessFolder, folders, home);
     const godName = resolveGodName(reg.agents[reg.godId ?? 'god']?.name);
-    const agent = { isGod: !!me.isGod, cwd: me.cwd, readFolders: me.isGod ? [] : (this.readFoldersOf?.(agentId) ?? []) };
+    // Where its file tools may write besides its own folder: what its settings
+    // named at start, and always its own hive and scratch folders. Anywhere
+    // else on the computer is refused, as its shell already is (owner,
+    // 2026-11-09).
+    const writable = [...(this.hive.writableOf?.(agentId) ?? []),
+      hiveRoot ? join(hiveRoot, 'agents', agentId) : '', home ? join(home, AGENT_TMP_DIR, agentTmpName(agentId)) : ''];
+    const agent = {
+      isGod: !!me.isGod, cwd: me.cwd, readFolders: me.isGod ? [] : (this.readFoldersOf?.(agentId) ?? []),
+      writeFolders: withReal(writable.filter((d) => !!d))
+    };
     // Judge the path as asked and the file it really is: a link inside the
     // agent's own folder can point anywhere (review, 2026-09-25).
     const asked = folderDecision(agent, layout, tool, target, ci, godName);

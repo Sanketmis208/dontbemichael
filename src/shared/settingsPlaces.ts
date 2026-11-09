@@ -1,7 +1,8 @@
 /**
  * Places in the app an agent can send the owner to with one click
  * (docs/designs/settings-links-in-replies.md): a Settings section, a group in
- * it, the Add a mailbox form, or a member's Access tab, Email.
+ * it, the Add a mailbox form, a member's Access tab, Email, a member's job in
+ * Edit agent, or Add agent with a cast card picked (owner, CEO review D6).
  *
  * Agents write them as links, `[Settings, Connections, Mailboxes](dbm:settings/connections/mailboxes)`,
  * and the app also spots the plain words "Settings, Connections, Mailboxes".
@@ -33,7 +34,8 @@ export type PlaceGroup = 'claude-connectors' | 'mailboxes';
 
 export type Place =
   | { kind: 'settings'; section: PlaceSection; group?: PlaceGroup; add?: true }
-  | { kind: 'member'; agentId: string; card: 'email' };
+  | { kind: 'member'; agentId: string; card: 'email' | 'job' }
+  | { kind: 'hire'; card?: string };
 
 export const PLACE_SCHEME = 'dbm:';
 
@@ -45,6 +47,8 @@ const sectionKeyOf = (section: PlaceSection): PlaceSectionKey =>
 
 /** An agent id as the app makes them: letters, digits, dash, underscore. */
 const AGENT_ID = /^[A-Za-z0-9_-]{1,64}$/;
+/** A cast card id (OFFICE_ROLES keys: lower case letters). */
+const CARD_ID = /^[a-z]{1,32}$/;
 
 /** `dbm:settings/connections/mailboxes`, `dbm:settings/connections/mailboxes/add`,
  *  `dbm:member/<id>/access/email`. Null for anything else, so it shows as words. */
@@ -65,11 +69,17 @@ export function parsePlace(href: string | null | undefined): Place | null {
   if (parts[0] === 'member' && parts.length === 4 && AGENT_ID.test(parts[1]) && parts[2] === 'access' && parts[3] === 'email') {
     return { kind: 'member', agentId: parts[1], card: 'email' };
   }
+  if (parts[0] === 'member' && parts.length === 3 && AGENT_ID.test(parts[1]) && parts[2] === 'job') {
+    return { kind: 'member', agentId: parts[1], card: 'job' };
+  }
+  if (parts[0] === 'hire' && parts.length === 1) return { kind: 'hire' };
+  if (parts[0] === 'hire' && parts.length === 2 && CARD_ID.test(parts[1])) return { kind: 'hire', card: parts[1] };
   return null;
 }
 
 export function placeHref(place: Place): string {
-  if (place.kind === 'member') return `${PLACE_SCHEME}member/${place.agentId}/access/${place.card}`;
+  if (place.kind === 'member') return place.card === 'job' ? `${PLACE_SCHEME}member/${place.agentId}/job` : `${PLACE_SCHEME}member/${place.agentId}/access/${place.card}`;
+  if (place.kind === 'hire') return place.card ? `${PLACE_SCHEME}hire/${place.card}` : `${PLACE_SCHEME}hire`;
   const parts = ['settings', sectionKeyOf(place.section)];
   if (place.group) parts.push(place.group);
   if (place.add) parts.push('add');
@@ -99,5 +109,5 @@ export function placeLinkRule(): string {
   });
   return 'When you tell the owner to change something in Settings, write the place as a link that opens it, never steps to remember: '
     + '[Settings, Connections, Mailboxes](dbm:settings/connections/mailboxes), or a section alone, [Settings, Agents](dbm:settings/agents). '
-    + `The places: ${sections.join('; ')}. A member's Access tab, Email is dbm:member/<their id>/access/email. The link's words may be in the owner's language.`;
+    + `The places: ${sections.join('; ')}. A member's Access tab, Email is dbm:member/<their id>/access/email. A member's job in Edit agent is dbm:member/<their id>/job. Add agent is dbm:hire, or dbm:hire/<card> with that cast card picked. The link's words may be in the owner's language.`;
 }

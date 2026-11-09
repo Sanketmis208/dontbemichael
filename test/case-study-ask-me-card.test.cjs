@@ -57,7 +57,8 @@ test('the card is on Ask me from Michael, and no toast says it any more', () => 
   // Value: protects=the card sits on the board under Michael's name with View and Later, and the 15 second toast is gone; fails_when=the card is unmounted, loses Michael's chip, or a toast comes back; why_new=new behavior; seam=source pin; no_claim=the look (live check in the dev app)
   const ask = read('src/renderer/src/components/AskMeTab.tsx');
   assert.match(ask, /<UpdateCard update=\{update\} later=\{updateLater\} \/>\s*<CaseStudyCard waiting=\{caseStudyWaiting\} \/>/);
-  assert.match(ask, /!engineCard && !updateShown && !caseShown && !onBreak/);
+  assert.match(ask, /const boardEmpty = !engineCard && !updateShown && !caseShown &&/);
+  assert.match(ask, /\{boardEmpty && !onBreak/);
   const card = read('src/renderer/src/components/pulse/CaseStudyCard.tsx');
   assert.match(card, /<AgentAvatar id=\{godId\} name=\{godName\} size=\{16\} \/>\{godName\}/, 'sent by Michael');
   assert.match(card, /window\.cth\.caseStudySeen/, 'Later tells main');

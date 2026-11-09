@@ -91,6 +91,18 @@
     "noteAria": "Note for {{name}}"
   },
   "askMe": {
+    "sources": "Sources",
+    "lookedIn": "Looked in: {{places}}",
+    "sourceOpens": "{{label}}, opens {{site}}",
+    "addFile": "Add a file",
+    "deptFilter": "Show one department",
+    "showing": "Showing {{shown}} of {{total}}",
+    "showAll": "Show all",
+    "showingEvery": "Showing every team",
+    "deptNew": "{{dept}}, new since you picked",
+    "personDept": "{{name}}, {{dept}}",
+    "areaQuestion": "{{dept}} question",
+    "areaQuestionFrom": "{{dept}} question, from {{name}}",
     "mailFailed": "Couldn't save that. Try again.",
     "report": "Report",
     "gotIt": "Got it",
@@ -146,9 +158,10 @@
     "workStyleReplaces": "Using it replaces {{name}}'s Work style and role line, and adds its scheduled jobs.",
     "workStyleKeep": "Keep mine",
     "workStyleWhy": {
-      "sendingSetting": "Replies go out as your Sending setting on the Access tab allows: sent, proposed for your approval, or saved as drafts.",
-      "pamInboxZero": "Inbox zero: every email gets an outcome and leaves the inbox, and nothing is deleted.",
-      "askTeammates": "Asks the teammate who has the answer directly, and the office manager only when they cannot help."
+      "sendingSetting": "Some jobs said to keep every reply as a draft, even when your Sending setting on the Access tab allows more. Replies now go out the way that setting says.",
+      "pamInboxZero": "Emails that were read and left in the inbox piled up, so the ones still waiting were easy to miss. Every email now gets an outcome and leaves the inbox, and nothing is deleted.",
+      "askTeammates": "Questions a teammate could answer went to the office manager first, which was slower. Members now ask the teammate who has the answer, and the office manager only when they cannot help.",
+      "customerLists": "No one kept a full list of the customers the office has won, so \"who are our customers\" had no clear answer. Sales now keeps that list, and Marketing keeps which customers may be named in public."
     },
     "mailTitle": "{{name}} wants to send an email",
     "mailFrom": "From: {{from}}",
@@ -1150,9 +1163,7 @@
     "body": "Claude Code {{version}} is installed, but 1 agent is still on the older version. Close the office and reopen to switch everyone over. Each agent saves its work first, so nothing is lost. Nothing restarts until you say so.",
     "bodyPlural": "Claude Code {{version}} is installed, but {{count}} agents are still on the older version. Close the office and reopen to switch everyone over. Each agent saves its work first, so nothing is lost. Nothing restarts until you say so.",
     "later": "Later",
-    "closeAndReopen": "Close office & reopen",
-    "chip": "Team upgrade ready",
-    "chipTitle": "Claude Code {{version}} is installed. Close the office and reopen to use it."
+    "closeAndReopen": "Close office & reopen"
   },
   "updateBadge": {
     "downloadingLabel": "downloading {{percent}}%",
@@ -3043,7 +3054,7 @@
       "sales_process": "How a sale happens, step by step",
       "market": "Businesses, consumers or both",
       "deals": "Where leads and deals are kept",
-      "prices": "Prices and terms",
+      "prices": "Pricing rules and payment terms, and where the price list is kept",
       "voice": "How we sound (brand voice)",
       "brand": "How we look (logo, colors, fonts)",
       "current_customers": "Who our customers are today",
@@ -3052,10 +3063,10 @@
       "fiscal_year": "Financial year",
       "money": "Every place money comes in and goes out (banks, cards, payment services, investments), and where each is recorded",
       "owed": "Who owes us and whom we owe, and where that is kept",
-      "results": "Statements, budgets or targets",
+      "results": "Our targets or budget, and where statements are kept",
       "policies": "Refunds, returns and service promises",
       "hours": "Opening hours",
-      "faq": "Common customer questions and their answers",
+      "faq": "Common customer questions and their answers, or where they are kept",
       "team": "Who is on the team and who handles what",
       "calendar": "Where meetings and bookings are kept",
       "hiring": "How we hire and welcome new people",
@@ -3063,7 +3074,11 @@
       "access": "How passwords and access are handled",
       "suppliers": "Our suppliers and how we order",
       "stock": "Where stock is tracked",
-      "shipping": "How orders are packed and delivered"
+      "shipping": "How orders are packed and delivered",
+      "reference_customers": "Who are our referenceable customers for marketing content",
+      "owed_where": "Where we keep who owes us and whom we owe",
+      "client_work": "Where client work and projects are tracked",
+      "ordering": "How we order from suppliers, and where the supplier list is kept"
     },
     "short": {
       "offer": "what we sell",
@@ -3283,7 +3298,15 @@
     "homeShowAll_two": "Show all {{count}} tools",
     "homeShowAll_few": "Show all {{count}} tools",
     "homeShowAll_many": "Show all {{count}} tools",
-    "homeShowAll_other": "Show all {{count}} tools"
+    "homeShowAll_other": "Show all {{count}} tools",
+    "updateTitle": "What changes in {{name}}'s job",
+    "updateAdds": "Adds to {{name}}'s job",
+    "updateWhyLabel": "Why this change",
+    "updateWhy": "The app's job for this role now includes this, and {{name}} was hired before that change.",
+    "updateChanges": "Changes",
+    "updateRemoves": "No longer in it",
+    "updateNothing": "Nothing changes for {{name}}: the job already covers this.",
+    "updateAgain": "Work it out again"
   },
   "runCompare": {
     "cardsLabel": "{{godName}}'s suggested job changes",

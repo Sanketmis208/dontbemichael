@@ -1,7 +1,7 @@
 import { readdir, lstat, open, realpath, stat } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
 import { constants, existsSync } from 'node:fs';
-import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, normalize, posix, relative, resolve, sep } from 'node:path';
 import { homedir } from 'node:os';
 import { imageMimeForExtension } from '../shared/imageTypes';
 import { NAME_ENDINGS, OPEN_EXTENSIONS, TAB_EXTENSIONS, extensionOf, isNameSpan, kindOf, type AskFileVerdict } from '../shared/askFiles';
@@ -358,13 +358,33 @@ export function normalizeHiveHome(
   return { home: abs, recentHives: recentHives.slice(0, cap) };
 }
 
+/** True when looking at `p` would reach another machine: a Windows share
+ *  (`\\host\share`, `//host/share`, `\\.\`), whose stat opens an SMB session
+ *  that can send the user's Windows sign-in hash, or a macOS or Linux automount
+ *  (`/net/host/...`, `/Network/...`), whose stat makes the computer contact
+ *  that host. Paths reaching statAbs come from agent text, which can carry an
+ *  email or a web page, so they never leave this computer (PR 687 review,
+ *  2026-11-06). `\\?\C:\...` is a local long path and stays allowed. */
+export function isNetworkPath(p: string, platform: string = process.platform): boolean {
+  if (typeof p !== 'string') return false;
+  const s = p.trim();
+  if (/^[\\/]{2}/.test(s)) {
+    return !(platform === 'win32' && /^[\\/]{2}\?[\\/][A-Za-z]:[\\/]/.test(s));
+  }
+  if (platform === 'win32') return false;
+  // A Mac disk ignores case by default, so /NET/host reaches /net too.
+  return /^\/(net|network)(\/|$)/i.test(posix.normalize(s));
+}
+
 /** Existence/metadata check for an ABSOLUTE path (v0.3.4 — backs the terminal
  *  ⌘-click markdown flow). `~/` is expanded here (the renderer doesn't know
  *  the home dir). Read-only metadata: returns whether a regular file exists and
- *  the normalized absolute path; never file contents. */
+ *  the normalized absolute path; never file contents. A network path is never
+ *  looked at (isNetworkPath). */
 export async function statAbs(p: string): Promise<{ exists: boolean; isFile: boolean; path: string }> {
+  if (isNetworkPath(p)) return { exists: false, isFile: false, path: p };
   const abs = expandTilde(p);
-  if (!isAbsolute(abs)) return { exists: false, isFile: false, path: p };
+  if (!isAbsolute(abs) || isNetworkPath(abs)) return { exists: false, isFile: false, path: p };
   try {
     const s = await stat(abs);
     return { exists: true, isFile: s.isFile(), path: abs };

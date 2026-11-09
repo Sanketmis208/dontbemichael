@@ -19,6 +19,20 @@ const { createMailboxNotes, newlyHeld, mailboxAddedNote, grantNote, GRANT_NOTE_F
 const { unheldMailboxesLine } = loadTs('src/shared/agentAccess.ts');
 const read = (p) => fs.readFileSync(path.resolve(__dirname, '..', p), 'utf8');
 
+test('Michael\'s No fit card links: a member\'s job and Add agent with a card', () => {
+  // Value: protects=the card links the owner chose (CEO review D6, eng E3); fails_when=a form stops parsing, round tripping, or drops out of Michael's link rule; why_new=new forms 2026-11-07; seam=none; no_claim=the renderer opening the screen
+  assert.deepEqual(parsePlace('dbm:member/oscar/job'), { kind: 'member', agentId: 'oscar', card: 'job' });
+  assert.deepEqual(parsePlace('dbm:hire'), { kind: 'hire' });
+  assert.deepEqual(parsePlace('dbm:hire/oscar'), { kind: 'hire', card: 'oscar' });
+  for (const bad of ['dbm:hire/Oscar', 'dbm:hire/../x', 'dbm:hire/oscar/now', 'dbm:member/oscar/jobs', 'dbm:member/../x/job'])
+    assert.equal(parsePlace(bad), null, bad);
+  for (const href of ['dbm:member/oscar/job', 'dbm:hire', 'dbm:hire/dwight'])
+    assert.equal(placeHref(parsePlace(href)), href, 'round trip');
+  const rule = placeLinkRule();
+  assert.match(rule, /dbm:member\/<their id>\/job/);
+  assert.match(rule, /dbm:hire\/<card>/);
+});
+
 test('a dbm: link names only our own places; anything else is words', () => {
   // Value: protects=only real, visible places become buttons; fails_when=an unknown or hidden place parses or a member id carries a path; why_new=new link scheme; seam=none; no_claim=none beyond protects
   assert.deepEqual(parsePlace('dbm:settings/connections/mailboxes'), { kind: 'settings', section: 'Connections', group: 'mailboxes' });

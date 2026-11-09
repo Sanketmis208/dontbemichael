@@ -724,6 +724,8 @@ const api = {
     handoffList?: Array<{ toId: string; scope: string; line: string; toTitle?: string }>;
     /** Edit agent only: ask where tracked numbers live when the job doesn't say. */
     askHome?: boolean;
+    /** A pack update worked into the member's current job (WORK_STYLE_UPDATES). */
+    update?: boolean;
   }): Promise<
     | { kind: 'ok'; instructions: string; plain: string; handles: string | null; summary: string[]; oneTimeTask?: string;
       handoffs?: Array<{ toId: string; scope: string }>; drops?: Array<{ toId: string; scope: string }> }

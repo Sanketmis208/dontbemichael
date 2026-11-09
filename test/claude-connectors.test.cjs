@@ -277,7 +277,9 @@ test('a change to an agent\'s connectors restarts it when idle, or at once with 
   // while it was starting still asks for a restart; signing in counts too.
   assert.match(main, /const connectorPlan = opts\.hive && claudeProvider && !isResearch \? connectorStart\(readConfig\(\), opts\.hive\.id\) : undefined;/);
   assert.match(main, /connectors: connectorPlan\?\.plan/);
-  assert.match(main, /connectorPlans\.set\(opts\.id, \{ agentId: opts\.hive\.id, sig: failures === 1 \? 'unapplied' : connectorPlan\.sig \}\);/, 'one retry after a failed injection, then quiet');
+  // A member whose injection failed never started (the test below), so every
+  // recorded plan is one the agent really started with.
+  assert.match(main, /if \(res\.ok && opts\.hive\?\.id && connectorPlan\) connectorPlans\.set\(opts\.id, \{ agentId: opts\.hive\.id, sig: connectorPlan\.sig \}\);/, 'the plan it started with');
   assert.match(main, /const signedIn = usableConnectors\(cfg, agentId, books\)\.map\(\(c\) => `\$\{c\.key\}:\$\{c\.status\}`\)/);
   assert.match(main, /connectorPlans\.delete\(id\);/);
   const hive = read('src/renderer/src/hooks/useHive.ts');
@@ -481,11 +483,36 @@ test('a Task subagent is checked as its team member, and its finish is not the a
   assert.match(shim, /if \(me && payload\.agent_id && payload\.agent_id !== me\) payload\.subagent_id = payload\.agent_id;/);
 });
 
-// Value: protects=a Claude agent whose hive injection failed or is off starts with no connector and no personal server (D8); fails_when=the spawn path continues with no --settings and no strip flags after ensureAgent throws; why_new=only the hive.ts strip path was tested, not the spawn path around it; seam=none
-test('an agent whose hive settings could not be written starts with no connectors', () => {
+// Value: protects=a Claude team member whose hive settings did not reach it (set up threw, the settings file was not written, or the hive is off) never starts without its hook, deny rules, folder walls and shell network wall (D8; owner 2026-11-09, Michael included); fails_when=the spawn path goes on after ensureAgent throws, counts an injection without --settings as applied, or refuses only Research; why_new=PR 694 review: the start went ahead with none of the walls and a member can make its own set up throw; seam=source pin for the spawn path
+test('a Claude team member whose hive settings did not reach it does not start', () => {
   const main = read('src/main/index.ts');
-  assert.match(main, /if \(connectorPlan && !connectorsApplied\) \{[\s\S]{0,300}'--strict-mcp-config'[\s\S]{0,120}ENABLE_CLAUDEAI_MCP_SERVERS: 'false'/);
-  assert.match(main, /opts\.args = \[\.\.\.\(opts\.args \?\? \[\]\), \.\.\.inj\.args\];(?:\s*\/\/[^\n]*)*\s*if \(isResearch\) opts\.args = \[\.\.\.opts\.args, '--setting-sources', ''\];\s*connectorsApplied = true;/, 'only a completed injection counts as applied');
+  assert.match(main, /opts\.args = \[\.\.\.\(opts\.args \?\? \[\]\), \.\.\.inj\.args\];(?:\s*\/\/[^\n]*)*\s*if \(isResearch\) opts\.args = \[\.\.\.opts\.args, '--setting-sources', ''\];(?:\s*\/\/[^\n]*)*\s*settingsApplied = !claudeProvider \|\| inj\.args\.includes\('--settings'\);\s*researchWalled = isResearch && settingsApplied;/, 'only the settings file on the command counts as applied');
+  const failed = main.indexOf("console.error('[hive] ensureAgent failed:', e);");
+  const research = main.indexOf("console.error('[research] walls not in place; Research did not start');");
+  const refuse = main.indexOf('if (opts.hive && (claudeProvider ? !settingsApplied : setupFailed)) {');
+  const spawn = main.indexOf('const res = ptyManager.spawn(opts, owner);');
+  assert.ok(failed > 0 && research > failed && refuse > research && spawn > refuse, 'after a failed set up and Research\'s refusal, before the terminal starts');
+  assert.match(main.slice(refuse, refuse + 400), /return \{ ok: false, error: `\$\{opts\.hive\.name\?\.trim\(\) \|\| 'This team member'\} could not be set up safely, so they did not start\. Try again\.` \};/);
+  assert.doesNotMatch(main, /starting without connectors/, 'no member starts stripped instead');
+  assert.match(main, /console\.error\('\[hive\] ensureAgent failed:', e\);\s*setupFailed = true;/, 'another engine whose set up threw is refused too');
+  // The refusal holds whatever the hive is called for: no other spawn of a team member goes round it.
+  assert.equal(main.split('ptyManager.spawn(opts, owner)').length, 2, 'one place starts a team member\'s terminal');
+});
+
+// Value: protects=whatever a member leaves in its own hive folder, its set up either completes with the settings file or throws, so the spawn path refuses rather than starting it without walls; fails_when=ensureAgent swallows a set up error and returns args with no --settings for a Claude member; why_new=PR 694 review, owner 2026-11-09; seam=temporary hive folder
+test('a member who leaves a file where its set up makes a folder is not set up without its settings', { skip: process.platform === 'win32' ? 'POSIX file layout' : false }, async (t) => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'md-conn-stray-'));
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const hive = new HiveManager(() => home);
+  const ok = await hive.ensureAgent({ id: 'pam', name: 'Pam', provider: 'claude', cwd: home });
+  assert.ok(ok.args.includes('--settings'), 'a normal set up carries the settings file');
+  // The member's own folder holds a file where a folder is made.
+  const memory = path.join(home, 'hive', 'agents', 'pam', 'memory');
+  fs.rmSync(memory, { recursive: true, force: true });
+  fs.writeFileSync(memory, 'not a folder');
+  let inj = null;
+  try { inj = await hive.ensureAgent({ id: 'pam', name: 'Pam', provider: 'claude', cwd: home }); } catch { /* the spawn path refuses */ }
+  assert.ok(inj === null || inj.args.includes('--settings'), 'never set up without its settings');
 });
 
 // Value: protects=connector deny rules sit beside the folder privacy rules in one permissions.deny list; fails_when=hookSettings writes deny: connectorDeny (or only the folder rules) and one set silently disappears; why_new=folder and connector rules were only tested apart; seam=none

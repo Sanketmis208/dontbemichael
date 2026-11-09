@@ -6,6 +6,33 @@ All notable changes to this project are documented here. The format is based on
 
 Don't Be Michael keeps its own version line, starting at 0.0.1.
 
+## [0.3.7] (2026-11-09)
+
+### Added
+- **Ask me cards show what they rest on.** The pages, records, posts, emails and files behind a card sit as chips under its question, each web chip showing the site it really opens, and a card that says nothing was found shows where the team looked. Michael's replies and standups link what they name the same way.
+- **Focus on one department.** A row of department chips on Ask me shows one team's cards at a time, keeps Michael's own cards in view, says how many others wait and marks a team whose new card arrives. Email approvals, schedule changes and Work style updates fold like questions, one card open at a time.
+- **Answer a question with a file:** paste a screenshot, drop files on the card or use the paperclip.
+- **A job update is worked into the member's own job.** The card shows exactly which lines it adds, changes and removes, colours each changed word, says when nothing changes, and asks you when a duty would clash with the job or make the role broader or narrower.
+
+### Changed
+- Each team member works within its role: it does its part of a mixed job, hands Michael the rest, and gives back work outside its role untouched. When work needs a fact it doesn't have, it asks every teammate whose role could know before Michael.
+- Records follow roles. Sales keeps the customer list, Marketing the customers you may reference, Finance who owes whom. When no one's role covers a job, Michael asks you to give it to someone, hire or drop it, with links, and never does a team member's work himself unless he is alone.
+- A customer's complaint or praise, and a new customer, supplier or debt, reach Michael, who passes it to the role that keeps that record.
+- Company foundations hold your rules and where things live, not lists that change every week. Current customers, who owes whom and the supplier list move into the records of the roles that keep them.
+- When Claude Code updates under your team, Michael says so on Ask me with Close office and reopen, or Later, in place of a chip in the corner.
+- Michael stuck on a permission prompt is restarted by the app, and you hear about it only if it happens again. With auto mode off, his prompts stay for you to answer.
+- A team member whose safe setup could not be written does not start, and says so, in place of starting without it.
+- Team members save files only in their own folders. A Codex or Gemini team member writes only its own folder and the hand off folder.
+
+### Fixed
+- The office's own files are never written, moved or read through a link or a special file a team member left, and an unreadable team list is never saved over.
+- On Windows, a team member's shell command that names another member's folder is refused.
+- The source checks reach older open cards, and an old setting no longer silences them.
+- Knowledge search finds a plural or a tense from the word it comes from, and a passage starts on a whole word (#684, with thanks to @Sanketmis208).
+- A leftover question and a Got it read the task board the way it is kept (#692, with thanks to @Sanketmis208).
+- A team folder with a long path keeps its connection to the app (#691, with thanks to @amartya1523).
+- Non Latin text from git is never cut in half (#700, with thanks to @amartya1523).
+
 ## [0.3.6] (2026-11-05)
 
 ### Added

@@ -25,7 +25,7 @@ import { AttachmentSaveError, handOverAttachment, markFromOutsideNow, saveAttach
 import { attachmentKind } from '../shared/attachmentKind';
 import { Foundations, publishCopy } from './foundations';
 import { KnowledgeEdits } from './knowledgeEdits';
-import { FOUNDATION_JOBS, FOUNDATION_QUESTIONS, isFoundationId, jobOf, jobsAsking, knowledgeNoticeDue, michaelFoundations, namedFolders, readFoldersFor, sectionFor, settledAnswers, type FoundationId, type FoundationJob } from '../shared/foundations';
+import { FOUNDATION_JOBS, FOUNDATION_QUESTIONS, holdsSystem, isFoundationId, jobOf, jobsAsking, knowledgeNoticeDue, michaelFoundations, namedFolders, readFoldersFor, sectionFor, settledAnswers, type FoundationId, type FoundationJob } from '../shared/foundations';
 import type { DepartmentSource } from '../shared/officeRoles';
 import {
   apiKeyShapeOk, checkAnthropicKey, claudeInstallScript, claudeMissingScript, ENGINE_INSTALL_PTY, ENGINE_SIGNIN_PTY,
@@ -876,6 +876,9 @@ const foundations = new Foundations({
     return [cfg.businessFolder, cfg.officeFolder, cwd].some((root) => typeof root === 'string' && !!root && isSameOrInside(expandTilde(root), path));
   },
   tell: (to, subject, body) => { if (hive.enabled()) hive.send({ to, act: 'inform', subject, body }, 'foundations'); },
+  canTell: () => hive.enabled(),
+  // The member's real access, as its profile shows it (decision 5).
+  holdsSystem: (agentId, name) => holdsSystem(caseStudyTools(agentId), name),
   changed: () => { try { liveWebContents()?.send('foundations:changed'); } catch { /* window gone */ } },
   // A file added on a foundation card (docs/designs/foundation-card-upload.md).
   readFile: (path) => knowledge.readDocument(path),
@@ -4447,8 +4450,8 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
   let seedPrompt: string | undefined;
   // Claude connectors (docs/designs/claude-connectors.md): the plan is worked
   // out once, passed to the spawn and recorded as what this agent started with,
-  // so a change in between still asks for a restart. Until the hive injection
-  // has applied it, the agent counts as unprotected and is stripped below.
+  // so a change in between still asks for a restart. It rides in the settings
+  // file, without which the agent does not start (below).
   // Research (shared/research.ts): the reserved id while the owner has it on.
   // It runs in its desk, sees no office data and is the only one on the web.
   const isResearch = !!opts.hive && opts.hive.id === RESEARCH_ID && !opts.hive.isGod && !!readConfig().research?.on && hive.enabled();
@@ -4507,7 +4510,11 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
   const cliFlags = claudeCliFlags(cliBin);
   const cliVersion = await claudeCliVersion(cliBin);
   if (cliBin && !cliVersion) console.warn(`[spawn] ${opts.hive?.id}: Claude Code version unread, starting without the newer hooks`);
-  let connectorsApplied = false;
+  // True once the app's settings file is on this agent's command: its hooks,
+  // its folder walls, its shell's network wall and its connector rules all
+  // ride in it. A Claude team member without it does not start (below).
+  let settingsApplied = false;
+  let setupFailed = false;
   if (opts.hive && hive.enabled()) {
     try {
       const home = readConfig().harnessHome ? expandTilde(readConfig().harnessHome!) : '';
@@ -4602,8 +4609,9 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
       // the trust layer (owner, 2026-10-13); the app's own settings come with
       // --settings and its instructions with --append-system-prompt.
       if (isResearch) opts.args = [...opts.args, '--setting-sources', ''];
-      connectorsApplied = true;
-      researchWalled = isResearch;
+      // Only the settings file itself counts: another engine takes none.
+      settingsApplied = !claudeProvider || inj.args.includes('--settings');
+      researchWalled = isResearch && settingsApplied;
       seedPrompt = inj.seedPrompt;
       // A degraded spawn (proxy bridge never bound) is told to the user the same
       // way breaker escalations are: a native toast, gated on the notifications
@@ -4614,13 +4622,14 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
       opts.env = isResearch ? { ...(opts.env ?? {}), ...inj.env } : { ...(opts.env ?? {}), ...inj.env, ...memory.env(), ...knowledge.env() };
       if (sessionTmp) opts.env = { ...opts.env, CLAUDE_CODE_TMPDIR: sessionTmp };
     } catch (e) {
-      // Hive provisioning is best-effort; never block a spawn on it.
+      // Caught so the refusal below can say so; a member is never started
+      // without its settings because of it.
       console.error('[hive] ensureAgent failed:', e);
+      setupFailed = true;
     }
   }
-  // No hive injection (it failed, or the hive is off) means no hook and no deny
-  // rules: a Claude agent then starts with no connector and none of the owner's
-  // own servers, whatever its grants (D8). md-mail still comes via --mcp-config.
+  // No hive injection (it failed, or the hive is off) means no hook, no deny
+  // rules, no folder walls and no network wall on the shell.
   if (isResearch && !researchWalled) {
     // A Research without its walls would be a plain Claude with the owner's
     // accounts and the web: it does not start, and the switch goes back off.
@@ -4628,10 +4637,14 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
     turnResearchOff();
     return { ok: false, error: `${hive.researchName()} could not be set up safely, so they did not start. Try again.` };
   }
-  if (connectorPlan && !connectorsApplied) {
-    console.warn(`[connectors] ${opts.hive?.id}: no hive settings, starting without connectors`);
-    if (!(opts.args ?? []).includes('--strict-mcp-config')) opts.args = [...(opts.args ?? []), '--strict-mcp-config'];
-    opts.env = { ...(opts.env ?? {}), ENABLE_CLAUDEAI_MCP_SERVERS: 'false' };
+  // Nor does any other Claude team member, Michael included (owner,
+  // 2026-11-09): only Research uses the internet, and these walls are what
+  // hold every other member to that. Another engine whose set up failed has
+  // no hooks or folder list either (ship review, 2026-11-09). It tries again
+  // on its next start.
+  if (opts.hive && (claudeProvider ? !settingsApplied : setupFailed)) {
+    console.error(`[spawn] ${opts.hive.id}: hive settings not in place; not started`);
+    return { ok: false, error: `${opts.hive.name?.trim() || 'This team member'} could not be set up safely, so they did not start. Try again.` };
   }
   // Long-run guardrails + tiering (Lane A #6.4/#6.6). All additive to the args
   // already assembled (incl. the hive injection); an explicit choice always wins.
@@ -4921,11 +4934,7 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
   }
   const res = ptyManager.spawn(opts, owner);
   // What its connectors were at start, so a later change can restart it (D2).
-  if (res.ok && opts.hive?.id && connectorPlan) {
-    const failures = connectorsApplied ? 0 : (connectorsUnapplied.get(opts.hive.id) ?? 0) + 1;
-    if (failures) connectorsUnapplied.set(opts.hive.id, failures); else connectorsUnapplied.delete(opts.hive.id);
-    connectorPlans.set(opts.id, { agentId: opts.hive.id, sig: failures === 1 ? 'unapplied' : connectorPlan.sig });
-  }
+  if (res.ok && opts.hive?.id && connectorPlan) connectorPlans.set(opts.id, { agentId: opts.hive.id, sig: connectorPlan.sig });
   // Record the Claude Code version this agent starts on, only once its terminal
   // is really running: a failed spawn must not count as an agent to upgrade.
   if (res.ok && opts.hive?.id && claudeProvider) {
@@ -5957,12 +5966,7 @@ function connectorsUpgradeCard(keys: string[]): void {
 /** What each running agent started with, by terminal: its connector plan. A
  *  config change that would start it differently asks the renderer to restart
  *  it when idle (D2), resuming its thread; the hook enforces the change until then. */
-// An agent stripped because its hive injection failed is asked to restart
-// once (the failure may have passed); after a second failure in a row it is
-// recorded with its plan, so only a real change asks again, never every config
-// save while the failure lasts.
 const connectorPlans = new Map<string, { agentId: string; sig: string; told?: string }>();
-const connectorsUnapplied = new Map<string, number>();
 /** What an agent would start with: its plan, plus whether each connector it
  *  uses is signed in (Claude loads no tools for one that needs sign in, so
  *  signing in later needs a restart too). */

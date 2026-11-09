@@ -653,6 +653,9 @@ canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
 .cth-closing-list:focus-visible { outline-offset: -2px; }
 .cth-askme-card:not(.is-open):hover { box-shadow: inset 0 0 0 1px var(--cth-line-2), var(--cth-shadow-md) !important; }
 .cth-askme-card:hover .cth-askme-chevron, .cth-askme-chevron:hover { background: var(--cth-neutral-soft); color: var(--cth-ink) !important; }
+/* The paperclip beside Reply (docs/designs/ask-me-answer-box.md). */
+.cth-askme-attach:hover:not(:disabled) { background: var(--cth-neutral-soft); color: var(--cth-ink-2); }
+.cth-askme-attach:disabled { opacity: .5; cursor: default; }
 /* Option rows and chips on an Ask me card (DESIGN.md §7.8, ask-me-options.md). */
 .cth-askme-opt {
   display: flex; align-items: flex-start; gap: 9px; padding: 8px 10px; border-radius: var(--cth-r-md);

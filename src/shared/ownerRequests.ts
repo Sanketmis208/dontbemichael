@@ -1,6 +1,8 @@
 import { isNextAt, WAITING_FOLLOW_UPS } from './cardGuards';
 import { ownValue } from './ownValue';
-import { answerMessages, cardOfConversation, cardText, isAnswered, isWithdrawn, MICHAEL_ID, openAskIndexes, raiserOf, type AnswerMessage } from './askMeRouting';
+import { answerMessages, cardOfConversation, cardText, isAnswered, isWithdrawn, MICHAEL_ID, openAskIndexes, openReportIndexes, raiserOf, type AnswerMessage } from './askMeRouting';
+import { isFileSpan, isFolderSpan, plainFilePaths } from './askFiles';
+import { hasUsableSource, sourcesOf } from './askSources';
 
 /**
  * Michael's open requests from the owner (docs/designs/card-lifecycle.md): an
@@ -411,7 +413,7 @@ export function waitingDueNote(
  *  holding an open question the wrong way (`issue`). */
 export interface StuckCard {
   id: string; title: string; assignee?: string;
-  issue?: 'filing' | 'triage' | 'ask-off-blocked' | 'several-asks' | 'bad-next' | 'ask-as-list' | 'gone-quiet' | 'leftovers' | 'no-email-link' | 'change-sends';
+  issue?: 'filing' | 'triage' | 'ask-off-blocked' | 'several-asks' | 'bad-next' | 'ask-as-list' | 'gone-quiet' | 'leftovers' | 'no-source' | 'no-search' | 'change-sends';
   /** Leftover questions with no decision, in words (askLeftovers.ts). */
   leftovers?: string;
   /** A Waiting card gone quiet: who it waits on, since when, follow ups done. */
@@ -455,7 +457,7 @@ export function askAsList(entry: { q?: unknown; askedAt?: unknown; options?: unk
   return (entry.q.match(LIST_LINES) ?? []).length >= 2;
 }
 
-type AskText = { q?: unknown; askedAt?: unknown; options?: unknown; parts?: unknown; noEmail?: unknown; kind?: unknown };
+type AskText = { q?: unknown; askedAt?: unknown; options?: unknown; parts?: unknown; noEmail?: unknown; noSource?: unknown; noSearch?: unknown; kind?: unknown; sources?: unknown };
 
 /** Every question and option label of an ask, as one text. */
 function askWords(entry: AskText): { text: string; labels: string[] } {
@@ -477,17 +479,77 @@ const askedSince = (entry: AskText, since: number): boolean => {
   return Number.isFinite(at) && at >= since;
 };
 
-/** An ask about a message someone sent (a reply, a thread, an email from
- *  someone) with no link to it, so the owner can't open the original (owner,
- *  2026-11-05: the Will Cox card). Words for sending new mail ("send the quote
- *  email") are not enough. "noEmail": true marks an ask with no message to
- *  link, or one the mail read gave no link for. English words only: the rule
- *  in Michael's instructions covers other languages. */
-export function askMissesEmailLink(entry: AskText | null | undefined, since: number): boolean {
-  if (!entry || entry.noEmail === true || entry.kind === 'foundation' || !askedSince(entry, since)) return false;
+/** Words for a message someone sent (owner, 2026-11-05: the Will Cox card).
+ *  Words for sending new mail ("send the quote email") are not enough. */
+const NAMES_EMAIL = /\b(repl(y|ies|ied)|thread|e-?mails? from|(his|her|their|its) e-?mails?|wrote (to|back|in)|in (your|the) inbox)\b/i;
+
+/** Words for something outside the office that already exists: a page, a
+ *  post, a record (docs/designs/ask-me-source-links.md). Bare "message",
+ *  "file", "doc", "site" and "post" are left out, so an ask to make or send
+ *  something new is never flagged. */
+const NAMES_OUTSIDE: readonly RegExp[] = [
+  /\bcase stud(y|ies)\b/i,
+  /\btestimonials?\b/i,
+  /\breviews? on\b/i,
+  /\blistings?\b/i,
+  /\b(our|their|your|the|his|her|its)\s+(?:[\p{L}\p{N}'’-]+\s+){0,3}?(web\s?)?page\b/iu,
+  /\bwebsite\b/i,
+  /\bon (our|their|the|his|her|its) site\b/i,
+  /\b(the|their|our|his|her|its) (blog |linkedin )?posts?\b/i,
+  /\bthe (article|thread)\b/i,
+  /\bin (HubSpot|Salesforce|QuickBooks|Pipedrive|Zoho|Xero|Shopify|Stripe)\b/i,
+  /\bthe (record|invoice|document|sheet|spreadsheet)\b/i
+];
+
+/** Phrases that look like a source but aren't one. */
+const NOT_A_SOURCE = /\b(for the record|on record)\b/gi;
+
+/** A link already in the ask's own words: a markdown link to the web or an
+ *  email, a bare web address, or a file or folder path the card shows as a
+ *  chip. */
+function linksInText(text: string): boolean {
+  if (/\]\((https?:|email:)|<email:|\bhttps?:\/\/\S/i.test(text)) return true;
+  if (plainFilePaths(text).length) return true;
+  for (const m of text.matchAll(/`([^`\n]+)`/g)) if (isFileSpan(m[1]) || isFolderSpan(m[1])) return true;
+  return false;
+}
+
+/** An open ask or report about something outside the office (a page, a post,
+ *  a record, an email someone sent) with no way to open it: no usable
+ *  "sources" entry and no link in its words. Only open entries reach this, so
+ *  the wider words count at any age: an old open card is still in front of
+ *  the owner (owner, 2026-11-08, the Masa Global card). Email words keep their
+ *  own start, `emailSince`. "noSource": true marks an entry with nothing to
+ *  link; the older "noEmail": true says only that no email is behind it, so it
+ *  quiets the email words and nothing else. English words only: the rule in
+ *  Michael's instructions covers other languages. */
+export function askMissesSource(entry: AskText | null | undefined, emailSince: number): boolean {
+  if (!entry || entry.noSource === true || entry.kind === 'foundation') return false;
+  if (hasUsableSource(sourcesOf(entry))) return false;
   const { text } = askWords(entry);
-  if (/\]\(email:|<email:/i.test(text)) return false;
-  return /\b(repl(y|ies|ied)|thread|e-?mails? from|(his|her|their|its) e-?mails?|wrote (to|back|in)|in (your|the) inbox)\b/i.test(text);
+  if (linksInText(text)) return false;
+  if (entry.noEmail !== true && askedSince(entry, emailSince) && NAMES_EMAIL.test(text)) return true;
+  const words = text.replace(NOT_A_SOURCE, ' ');
+  return NAMES_OUTSIDE.some((re) => re.test(words));
+}
+
+/** A claim that nothing was found ("Nobody in the office has any record of
+ *  Masa Global"), so the owner needs to know where the team looked. */
+const CLAIMS_NOTHING_FOUND = [
+  /\b(nobody|no one|no-one)\b.{0,30}?\b(records?|knows|has heard|heard of)\b/i,
+  /\bno records? of\b/i,
+  /\bcould(n'?t|n’t| not) find\b/i,
+  /\bno trace of\b/i,
+  /\bwe found nothing\b/i
+];
+
+/** An open ask or report saying nothing was found, with no searched place in
+ *  its "sources". "noSearch": true marks an entry that makes no such claim. */
+export function askClaimsUnsearched(entry: AskText | null | undefined): boolean {
+  if (!entry || entry.noSearch === true || entry.kind === 'foundation') return false;
+  if (sourcesOf(entry).searched.length) return false;
+  const { text } = askWords(entry);
+  return CLAIMS_NOTHING_FOUND.some((re) => re.test(text));
 }
 
 /** A choice that sends something with the owner's changes before they see
@@ -518,14 +580,22 @@ export function asksToTidy(tasks: CardLike[], since = Infinity, checksSince = In
     // A next step time the app cannot read wakes nobody (cardGuards.ts).
     const next = (t as { nextAt?: unknown }).nextAt;
     if (t.status === 'todo' && next !== undefined && next !== null && next !== '' && !isNextAt(next)) out.push(stuckOf(t, 'bad-next'));
+    const entryAt = (i: number): AskText | undefined => (t.humanQA as unknown as AskText[] | undefined)?.[i];
+    // Open reports sit on cards in any status (a notice is a Done card), so
+    // their sources are checked before the "no open ask" skip below.
+    const reports = openReportIndexes(t.humanQA as never).map(entryAt);
+    const sourceChecks = (entries: Array<AskText | undefined>): void => {
+      if (entries.some((e) => askMissesSource(e, checksSince))) out.push(stuckOf(t, 'no-source'));
+      if (entries.some((e) => askClaimsUnsearched(e))) out.push(stuckOf(t, 'no-search'));
+    };
     const open = openAskIndexes(t.humanQA as never).length;
-    if (!open) continue;
+    if (!open) { sourceChecks(reports); continue; }
     if (t.status !== 'blocked') out.push(stuckOf(t, 'ask-off-blocked'));
     else if (open > 1) out.push(stuckOf(t, 'several-asks'));
     const qa = t.humanQA as unknown as Parameters<typeof askAsList>[0][] | undefined;
     if (openAskIndexes(t.humanQA as never).some((i) => askAsList(qa?.[i], since))) out.push(stuckOf(t, 'ask-as-list'));
-    const asks = openAskIndexes(t.humanQA as never).map((i) => (t.humanQA as unknown as AskText[] | undefined)?.[i]);
-    if (asks.some((e) => askMissesEmailLink(e, checksSince))) out.push(stuckOf(t, 'no-email-link'));
+    const asks = openAskIndexes(t.humanQA as never).map(entryAt);
+    sourceChecks([...asks, ...reports]);
     if (asks.some((e) => askChangeSends(e, checksSince))) out.push(stuckOf(t, 'change-sends'));
   }
   return out;
@@ -540,7 +610,8 @@ const STUCK_HEADS: Record<NonNullable<StuckCard['issue']> | 'nothing-asked', str
   'bad-next': 'CARDS WITH A NEXT TIME THE APP CANNOT READ. Nobody is reminded when it comes. Set "nextAt" on each to an ISO date and time with its offset, such as 2026-10-12T09:00:00+01:00, or remove it.',
   'ask-as-list': 'ASKS WRITTEN AS A LIST. The owner can only type an answer to these. Rewrite the open humanQA entry on each card: keep only the bold sentence and the short context in "q"; put a choice in "options", as [{"label": "..."}] with "recommended": true on the one you recommend, or several questions in "parts", as [{"q": "..."}], giving a question its own "options" when it is a choice. Keep its "askedAt" and "raisedBy".',
   leftovers: 'LEFTOVER QUESTIONS WITHOUT A DECISION. The owner left these questions unanswered, or answered them "Not yet". Nothing unresolved is dropped: the team member who asked decides each one, and you record it on that answered humanQA entry, adding to its "leftovers" list {"question": <its number on the card, 1 for a single question>, "decision": "dropped" | "settled" | "now" | "later", "why": "<a short reason>", "at": "<ISO date and time with its offset, for later>"}. "now" means it goes back on Ask me now; "later" brings it back at "at", however far off, and the app tells you when it comes. There is no time limit on deciding: weigh who is waiting and any deadline. They stay here until each one has a decision.',
-  'no-email-link': 'ASKS ABOUT AN EMAIL WITH NO LINK TO IT. The owner can\'t open the original from the card. Ask the team member who read that email for its link from their mail read (an email: link, like [Dana Ortiz, 27 Oct](email:...)), and put it in the ask beside the words naming the email, as written. If the ask is not about a message someone sent, or the mail read gave no link, set "noEmail": true on that humanQA entry.',
+  'no-source': 'ASKS AND REPORTS ABOUT SOMETHING OUTSIDE THE OFFICE WITH NO LINK TO IT. The card names a page, post, record, document, file or email the owner can\'t open from it, so they would have to search for what the team already read. Ask the team member who read it for its link (the page\'s address, the link a tool gave, the email: link from their mail read like [Dana Ortiz, 27 Oct](email:...), or the file\'s full path), and add each to that humanQA entry\'s "sources" as {"label": "<a few words naming it>", "url": "<the link, as written>"}. For a record a tool gave no link for, add {"label": "<its name>", "id": "<where it lives and its id, like HubSpot company 1234>"}. If the card is not about anything outside the office, set "noSource": true on that entry.',
+  'no-search': 'ASKS AND REPORTS THAT SAY NOTHING WAS FOUND, WITHOUT SAYING WHERE THE TEAM LOOKED. The owner can\'t tell whether to trust "no record" or search one more place. Ask the team member where they looked, and add each place to that humanQA entry\'s "sources" as {"label": "<the place, like HubSpot companies and contacts>", "searched": true}. If the card makes no such claim, set "noSearch": true on that entry.',
   'change-sends': 'CHANGE OPTIONS THAT SEND WITHOUT ANOTHER LOOK. House rule 10: a changed version comes back to the owner before it goes. Reword each option such as "Send with my changes" to "Change it, show me again", keeping its "note".',
   'several-asks': 'CARDS WITH MORE THAN ONE OPEN QUESTION. The owner sees every one of them on Ask me. Keep one open question per card: fold what still matters into the newest, and withdraw the others by setting "dismissedAt" (the time) and a short "dismissedReason" on each.'
 };
@@ -550,7 +621,7 @@ export function stuckCardsContext(stuck: StuckCard[]): string | null {
   if (!stuck.length) return null;
   const parts: string[] = [];
   const now = Date.now();
-  for (const kind of ['filing', 'triage', 'nothing-asked', 'gone-quiet', 'leftovers', 'ask-off-blocked', 'several-asks', 'ask-as-list', 'no-email-link', 'change-sends', 'bad-next'] as const) {
+  for (const kind of ['filing', 'triage', 'nothing-asked', 'gone-quiet', 'leftovers', 'ask-off-blocked', 'several-asks', 'ask-as-list', 'no-source', 'no-search', 'change-sends', 'bad-next'] as const) {
     const cards = stuck.filter((c) => (c.issue ?? 'nothing-asked') === kind);
     if (!cards.length) continue;
     parts.push([

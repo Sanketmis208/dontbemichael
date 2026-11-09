@@ -1,4 +1,4 @@
-- **Needs you** shows what only you can do.
-- **Open questions** come back when they matter.
-- Documents link the file and email they came from.
-- Word documents keep headings, lists and tables.
+- **Cards show** the pages and files they rest on.
+- **Department chips** focus Ask me on one team.
+- A job update shows exactly what it changes.
+- Team members save only in their own folders.
