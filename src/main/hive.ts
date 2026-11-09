@@ -42,12 +42,12 @@ import { FOLDER_READ_TOOLS, FOLDER_WRITE_TOOLS, type AgentFolderPolicy } from '.
 import { STOP_FAILURE_MATCHER } from '../shared/officeBreak';
 import {
   existsSync, mkdirSync, readFileSync, writeFileSync, renameSync,
-  readdirSync, statSync, lstatSync, realpathSync, rmSync, appendFileSync,
+  readdirSync, statSync, lstatSync, mkdtempSync, realpathSync, rmSync, appendFileSync,
   symlinkSync, unlinkSync, copyFileSync, cpSync, chmodSync,
   openSync, fstatSync, closeSync, ftruncateSync, writeSync, readSync, constants, type Stats
 } from 'node:fs';
 import { join, dirname, basename, isAbsolute, relative, resolve, sep } from 'node:path';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { spawnSync, spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes, createHash, createHmac } from 'node:crypto';
 import { readMessageFile, researchDeliveredId } from './messageFile';
@@ -1015,8 +1015,21 @@ export class HiveManager {
     const root = this.root();
     if (!root) return null;
     if (process.platform === 'win32') return this.pipeName;
-    return join(root, 'hooks.sock');
+    const sock = join(root, 'hooks.sock');
+    // A socket path holds 104 bytes on macOS (108 on Linux), and a longer one
+    // is cut short without an error: the file lands under the cut name, the
+    // stale-socket cleanup never finds it, and the next launch fails with
+    // EADDRINUSE. An office in iCloud or Google Drive runs past that easily.
+    if (Buffer.byteLength(sock) < (process.platform === 'darwin' ? 104 : 108)) return sock;
+    return this.shortSockPath() ?? sock;
   }
+  /** A folder of our own for a socket that would not fit: mkdtemp makes it
+   *  0700 with a random name, once per launch, so (as for the Windows pipe)
+   *  no other account can work the path out and take the channel first. */
+  private shortSockPath(): string | null {
+    try { return this.shortSock ??= join(mkdtempSync(join(tmpdir(), 'dbm-')), 'hooks.sock'); } catch { return null; }
+  }
+  private shortSock: string | undefined;
   private readonly pipeName = `\\\\.\\pipe\\dbm-hooks-${randomBytes(16).toString('hex')}`;
   private shimPath(): string | null {
     const root = this.root();
@@ -4609,11 +4622,16 @@ export class HiveManager {
       for (const u of fixed.untriaged) tell(untriagedNote(u.card, u.to), u.card.id);
     }
     this.guard = next;
+    // The board as the guard leaves it: a Done card an agent reopened this
+    // tick is Done again, and one it deleted is back. Leftovers and reminders
+    // both read this, so a note sent in the same tick is worded for the card
+    // the owner will see, not the one the agent wrote.
+    const guarded = applyGuardFixes(tasks, fixed.fixes, fixed.restored);
     // A leftover question kept for later comes back to Michael at its time,
     // on any card, a Done one included (docs/designs/ask-me-leftovers.md).
     if (godId) {
       const told = new Set(this.guard.leftoversTold ?? []);
-      const due = dueLeftovers(tasks as Parameters<typeof dueLeftovers>[0], Date.now(), told);
+      const due = dueLeftovers(guarded as Parameters<typeof dueLeftovers>[0], Date.now(), told);
       if (due.length) {
         // Recorded once it went out, so a failed write is tried again on the
         // next tick and the question is never lost (ship review, 2026-11-05).
@@ -4630,10 +4648,7 @@ export class HiveManager {
     }
     const reg = this.registry();
     const godName = resolveGodName(reg.agents[godId ?? 'god']?.name);
-    const reminders = dueReminders(tasks.map((t) => {
-      const id = (t as GuardCard | null)?.id;
-      return typeof id === 'string' && fixed.fixes[id] ? { ...(t as GuardCard), ...fixed.fixes[id] } : t;
-    }) as GuardCard[], this.guard.reminders, Date.now());
+    const reminders = dueReminders(guarded as GuardCard[], this.guard.reminders, Date.now());
     // The card's person, while they are on the team; otherwise Michael. Off the
     // team is closed by the owner (deleting closes first). `archived` only means
     // no terminal right now, which is every member at launch until the team is

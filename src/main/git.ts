@@ -10,21 +10,26 @@ function runGit(cwd: string, args: string[], timeoutMs = 8000): Promise<{
 } | { ok: false; error: string }> {
   return new Promise((resolve) => {
     const proc = spawn('git', args, { cwd });
-    let stdout = '';
-    let stderr = '';
+    // Decoded once at the end, not per chunk: a pipe chunk (64 KB) can end in
+    // the middle of a multi-byte character, and decoding the halves apart
+    // turns it into U+FFFD. A Hindi or Chinese file name in a large status
+    // then names a file that doesn't exist, and an unchanged file shows a
+    // changed line in its diff.
+    const out: Buffer[] = [];
+    const err: Buffer[] = [];
     const timer = setTimeout(() => {
       try { proc.kill('SIGKILL'); } catch { /* noop */ }
     }, timeoutMs);
-    proc.stdout.on('data', d => { stdout += d.toString(); });
-    proc.stderr.on('data', d => { stderr += d.toString(); });
+    proc.stdout.on('data', (d: Buffer) => { out.push(d); });
+    proc.stderr.on('data', (d: Buffer) => { err.push(d); });
     proc.on('error', e => {
       clearTimeout(timer);
       resolve({ ok: false, error: e.message });
     });
     proc.on('close', code => {
       clearTimeout(timer);
-      if (code === 0) resolve({ ok: true, stdout });
-      else resolve({ ok: false, error: stderr.trim() || `git exited ${code}` });
+      if (code === 0) resolve({ ok: true, stdout: Buffer.concat(out).toString('utf8') });
+      else resolve({ ok: false, error: Buffer.concat(err).toString('utf8').trim() || `git exited ${code}` });
     });
   });
 }
