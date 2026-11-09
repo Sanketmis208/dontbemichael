@@ -283,7 +283,10 @@ test('in every office no other agent runs a command outside its sandbox', async 
   const bash = (id, outside) => hook(id, 'PreToolUse', { tool_name: 'Bash', tool_input: { command: `cat ${o.desk}/notes.md`, ...(outside ? { dangerouslyDisableSandbox: true } : {}) } });
   for (const id of ['god', 'pam']) {
     assert.equal(reason(bash(id, true)), R.RESEARCH_SANDBOX_ONLY, id);
-    assert.ok(!denied(bash(id, false)), `${id} in its sandbox is the sandbox's call`);
+    // On Windows there is no sandbox to make that call: a member's command
+    // naming another member's folder is refused by the app (owner, 2026-11-07).
+    if (process.platform === 'win32' && id !== 'god') assert.match(reason(bash(id, false)), /names another team member's folder/, `${id} on Windows`);
+    else assert.ok(!denied(bash(id, false)), `${id} in its sandbox is the sandbox's call`);
   }
   const off = await office(t, { on: false });
   assert.equal(reason(hookFor(off)('god', 'PreToolUse', { tool_name: 'Bash', tool_input: { command: 'curl https://example.com', dangerouslyDisableSandbox: true } })), R.RESEARCH_SANDBOX_ONLY, 'Research off too: Michael\'s shell reaches no host (owner, D9.1)');
