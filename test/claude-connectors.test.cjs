@@ -489,11 +489,12 @@ test('a Claude team member whose hive settings did not reach it does not start',
   assert.match(main, /opts\.args = \[\.\.\.\(opts\.args \?\? \[\]\), \.\.\.inj\.args\];(?:\s*\/\/[^\n]*)*\s*if \(isResearch\) opts\.args = \[\.\.\.opts\.args, '--setting-sources', ''\];(?:\s*\/\/[^\n]*)*\s*settingsApplied = !claudeProvider \|\| inj\.args\.includes\('--settings'\);\s*researchWalled = isResearch && settingsApplied;/, 'only the settings file on the command counts as applied');
   const failed = main.indexOf("console.error('[hive] ensureAgent failed:', e);");
   const research = main.indexOf("console.error('[research] walls not in place; Research did not start');");
-  const refuse = main.indexOf('if (opts.hive && claudeProvider && !settingsApplied) {');
+  const refuse = main.indexOf('if (opts.hive && (claudeProvider ? !settingsApplied : setupFailed)) {');
   const spawn = main.indexOf('const res = ptyManager.spawn(opts, owner);');
   assert.ok(failed > 0 && research > failed && refuse > research && spawn > refuse, 'after a failed set up and Research\'s refusal, before the terminal starts');
-  assert.match(main.slice(refuse, refuse + 300), /return \{ ok: false, error: `\$\{opts\.hive\.name\?\.trim\(\) \|\| 'This team member'\} could not be set up safely, so they did not start\. Try again\.` \};/);
+  assert.match(main.slice(refuse, refuse + 400), /return \{ ok: false, error: `\$\{opts\.hive\.name\?\.trim\(\) \|\| 'This team member'\} could not be set up safely, so they did not start\. Try again\.` \};/);
   assert.doesNotMatch(main, /starting without connectors/, 'no member starts stripped instead');
+  assert.match(main, /console\.error\('\[hive\] ensureAgent failed:', e\);\s*setupFailed = true;/, 'another engine whose set up threw is refused too');
   // The refusal holds whatever the hive is called for: no other spawn of a team member goes round it.
   assert.equal(main.split('ptyManager.spawn(opts, owner)').length, 2, 'one place starts a team member\'s terminal');
 });

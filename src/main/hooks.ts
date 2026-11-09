@@ -1175,7 +1175,9 @@ export class HookServer {
     // real prompt. Michael too (2026-11-09: his command sat ten hours and the
     // office with him, and the app never looked): restarted the same way, and
     // the owner hears if it comes back, as he can't be told about himself.
-    if (event === 'Notification' && agentId && isTerminalPrompt(p) && !this.onHold(agentId)) {
+    // With auto mode off the owner chose to answer Michael's prompts, so his
+    // are left for the owner, as before.
+    if (event === 'Notification' && agentId && isTerminalPrompt(p) && !this.onHold(agentId) && !(this.isGod(agentId) && !this.autoModeOn())) {
       this.stuckOnPrompt(agentId, (p.message ?? '').trim());
     }
 
@@ -1208,6 +1210,11 @@ export class HookServer {
   }
 
   /** Is the owner in 1:1 with this agent (registry `onHold`)? */
+  /** Whether auto mode is on (the default); an unreadable config counts as on. */
+  private autoModeOn(): boolean {
+    try { return this.getConfig().autoMode !== false; } catch { return true; }
+  }
+
   private onHold(agentId: string): boolean {
     try { return !!this.hive.registry().agents[agentId]?.onHold; } catch { return false; }
   }

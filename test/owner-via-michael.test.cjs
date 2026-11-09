@@ -266,6 +266,22 @@ test('Michael stuck on a prompt is restarted too, and the owner hears only if it
   }
 });
 
+test('with auto mode off, Michael\'s prompt is left for the owner, never restarted', async (t) => {
+  // Value: protects=an owner who turned auto mode off answers Michael's prompts and never sees him restarted mid ask; fails_when=Michael is restarted or the owner gets a stuck notice while auto mode is off, or a member stops being restarted; why_new=ship adversarial review 2026-11-09; seam=HookServer.getConfig
+  const { server } = await office(t);
+  const cfg = server.getConfig();
+  server.getConfig = () => ({ ...cfg, autoMode: false });
+  const restarted = [];
+  const notices = [];
+  server.restartStuck = (id) => { restarted.push(id); return true; };
+  server.notify = (id, body) => { notices.push([id, body]); return true; };
+  await server.handle({ agent_id: 'god', session_id: 's', hook_event_name: 'Notification', notification_type: 'permission_prompt', message: 'Claude needs your permission to use Bash' });
+  assert.deepEqual(restarted, []);
+  assert.deepEqual(notices, []);
+  await server.handle({ agent_id: 'pam', session_id: 's', hook_event_name: 'Notification', notification_type: 'permission_prompt', message: 'needs your permission' });
+  assert.deepEqual(restarted, ['pam'], 'members are still restarted');
+});
+
 test("Michael's own prompts are not relayed to himself", async (t) => {
   const { hive, server } = await office(t);
   await server.handle({ agent_id: 'god', session_id: 's', hook_event_name: 'Notification', notification_type: 'permission_prompt', message: 'needs your permission' });

@@ -4514,6 +4514,7 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
   // its folder walls, its shell's network wall and its connector rules all
   // ride in it. A Claude team member without it does not start (below).
   let settingsApplied = false;
+  let setupFailed = false;
   if (opts.hive && hive.enabled()) {
     try {
       const home = readConfig().harnessHome ? expandTilde(readConfig().harnessHome!) : '';
@@ -4624,6 +4625,7 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
       // Caught so the refusal below can say so; a member is never started
       // without its settings because of it.
       console.error('[hive] ensureAgent failed:', e);
+      setupFailed = true;
     }
   }
   // No hive injection (it failed, or the hive is off) means no hook, no deny
@@ -4637,8 +4639,10 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
   }
   // Nor does any other Claude team member, Michael included (owner,
   // 2026-11-09): only Research uses the internet, and these walls are what
-  // hold every other member to that. It tries again on its next start.
-  if (opts.hive && claudeProvider && !settingsApplied) {
+  // hold every other member to that. Another engine whose set up failed has
+  // no hooks or folder list either (ship review, 2026-11-09). It tries again
+  // on its next start.
+  if (opts.hive && (claudeProvider ? !settingsApplied : setupFailed)) {
     console.error(`[spawn] ${opts.hive.id}: hive settings not in place; not started`);
     return { ok: false, error: `${opts.hive.name?.trim() || 'This team member'} could not be set up safely, so they did not start. Try again.` };
   }
