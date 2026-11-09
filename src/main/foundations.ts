@@ -440,7 +440,7 @@ export class Foundations {
     for (const id of due) {
       const a = rec.answers[id]!;
       const seen = (rec.seen?.[id] ?? []).map((s) => s.item);
-      this.toMichael('Foundation list retired', `"${FOUNDATION_QUESTIONS[id].text}" (${id}) is no longer a company foundations question: the list now lives with the member whose role keeps it. The office's answer was: ${a.text}${seen.length ? `\nSeen by the team but not yet on it: ${seen.join('; ')}.` : ''}\n\nHand it to the member whose role covers that list and ask them to write it into their record (one row per item, source "the owner's foundation answer", ${day(a.at)}), or to point it at a connected system that already holds it. When they have, they send "foundations" a message with "foundation": {"question": "${id}", "retired": "kept"}. If no member's role covers it, use When no one fits. Withdraw any open foundation card for it.`);
+      this.toMichael('Foundation list retired', `"${FOUNDATION_QUESTIONS[id].text}" (${id}) is no longer a company foundations question: the list now lives with the member whose role keeps it. The office's answer was: ${a.text}${seen.length ? `\nSeen by the team but not yet on it: ${seen.join('; ')}.` : ''}\n\nHand it to the member whose role covers that list and ask them to write it into their record (one row per item, source "${a.source === 'owner' || a.source === 'profile' ? "the owner's foundation answer" : `the foundation answer from ${this.nameOf(a.by)}`}", ${day(a.at)}), or to point it at a connected system that already holds it. When they have, they send "foundations" a message with "foundation": {"question": "${id}", "retired": "kept"}. If no member's role covers it, use When no one fits. Withdraw any open foundation card for it.`);
     }
   }
 

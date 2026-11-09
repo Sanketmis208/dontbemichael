@@ -112,12 +112,18 @@ export function systemAnswerable(id: FoundationId): boolean {
 }
 
 /** Whether a member's connected systems include the one an answer names: the
- *  names compared as plain lower case letters and digits, either way round
- *  ("HubSpot" holds "hubspot crm"). */
+ *  names compared as plain lower case letters and digits, one starting the
+ *  other ("HubSpot" holds "hubspot crm"). The shorter needs at least 4 of
+ *  them, so "q" or "Books" never stands for QuickBooks, nor "Mail" for Email. */
 export function holdsSystem(held: readonly string[], name: string): boolean {
   const n = (s: string): string => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
   const want = n(name);
-  return !!want && held.some((h) => { const k = n(h); return !!k && (k.includes(want) || want.includes(k)); });
+  return held.some((h) => {
+    const k = n(h);
+    if (k === want) return !!k;
+    const [short, long] = k.length < want.length ? [k, want] : [want, k];
+    return short.length >= 4 && long.startsWith(short);
+  });
 }
 
 /** Whether a question is an open ended list (R1). */

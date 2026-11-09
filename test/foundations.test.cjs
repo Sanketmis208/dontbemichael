@@ -1220,8 +1220,13 @@ test('a connected system answers only where a record lives, only from a member w
   assert.equal(o.told.filter((m) => m.subject === 'Foundation system no longer reached').length, 1);
   // The owner's answer stands over a system answer.
   held.dwight = ['HubSpot'];
-  assert.ok(o.w.ownerAnswer('stock', 'In the till').ok);
-  assert.match(o.w.handle('dwight', { question: 'stock', answer: 'In HubSpot', source: { system: 'HubSpot' } }), /owner's answer to .* stands|not one of your job's/);
+  assert.ok(o.w.ownerAnswer('deals', 'In the shared sheet').ok);
+  assert.match(o.w.handle('dwight', { question: 'deals', answer: 'In HubSpot', source: { system: 'HubSpot' } }), /owner's answer to .* stands/);
+  assert.equal(o.w.read().answers.deals.text, 'In the shared sheet');
   assert.equal(F.holdsSystem(['QuickBooks'], 'quickbooks online'), true);
   assert.equal(F.holdsSystem(['Email'], 'HubSpot'), false);
+  // A fragment never stands for a system the member reaches.
+  assert.equal(F.holdsSystem(['QuickBooks'], 'q'), false);
+  assert.equal(F.holdsSystem(['QuickBooks'], 'Books'), false);
+  assert.equal(F.holdsSystem(['Email'], 'Mail'), false);
 });
