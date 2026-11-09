@@ -31,7 +31,7 @@ import { FOUNDATION_CAP, LIST_CAP, foundationAsk } from '../shared/foundations';
 type FoundationAskShape = { kind?: unknown; foundation?: unknown };
 
 import { hookShell, shellCommand, type HookShell } from './hookShell';
-import { hooksForCli } from '../shared/modelCliFloor';
+import { hooksForCli, takesWriteBlock } from '../shared/modelCliFloor';
 import { CLOSING_COMPLETE_RE } from '../shared/closingTime';
 import {
   entriesBlock, isProcedureSlug, MAX_PROCEDURE_CHARS, parseIndex, parseInbox, renderIndex, type MemoryEntry
@@ -921,6 +921,11 @@ export class HiveManager {
    *  every member's folder while someone hired since is not among them. */
   private walledAtStart = new Map<string, readonly string[]>();
   walledMembersOf(id: string): readonly string[] | null { return this.walledAtStart.get(id) ?? null; }
+  /** Per agent: the folders besides its own that its file tools may write, as
+   *  its settings named them when it started (its hive folder, the hive, the
+   *  palace, its scratch folder). The hook refuses a write anywhere else. */
+  private writableAtStart = new Map<string, readonly string[]>();
+  writableOf(id: string): readonly string[] | null { return this.writableAtStart.get(id) ?? null; }
 
   /**
    * What a running agent should be told because the owner turned company
@@ -1700,7 +1705,9 @@ export class HiveManager {
       const settingsPath = this.settingsPathFor(dir);
       rmSync(join(dir, 'settings.json'), { force: true });
       mkdirSync(dirname(settingsPath), { recursive: true });
-      this.atomicWriteJson(settingsPath, this.hookSettings(shim, meta.cwd, opts.mcpDefaults, opts.theme, this.sandboxWritableDirs(meta, dir, root, opts.extraWritableDirs), opts.folderPolicy, stripConnectors ? [] : opts.connectors?.deny ?? [], shell.shell, opts.network, meta.isResearch ? this.researchShellWrite(dir, meta.cwd) : undefined, opts.cliVersion));
+      const writable = this.sandboxWritableDirs(meta, dir, root, opts.extraWritableDirs);
+      this.atomicWriteJson(settingsPath, this.hookSettings(shim, meta.cwd, opts.mcpDefaults, opts.theme, writable, opts.folderPolicy, stripConnectors ? [] : opts.connectors?.deny ?? [], shell.shell, opts.network, meta.isResearch ? this.researchShellWrite(dir, meta.cwd) : undefined, opts.cliVersion));
+      this.writableAtStart.set(meta.id, writable);
       args.push('--settings', settingsPath);
       if (opts.folderPolicy?.walledMembers) this.walledAtStart.set(meta.id, opts.folderPolicy.walledMembers);
       else this.walledAtStart.delete(meta.id);
@@ -2124,7 +2131,14 @@ export class HiveManager {
               // (owner, 2026-10-15). Its tools are allowed here instead; the deny
               // rules, the sandbox and the app's own hook still hold them.
               ...(shellWrite ? { allow: [...RESEARCH_ALLOWED_TOOLS] } : {}),
-              ...(folders?.deny.length || connectorDeny.length ? { deny: [...(folders?.deny ?? []), ...connectorDeny] } : {})
+              ...(folders?.deny.length || connectorDeny.length ? { deny: [...(folders?.deny ?? []), ...connectorDeny] } : {}),
+              // The file tools write only where the shell may: the agent's
+              // own folder and the ones above, never the rest of the computer
+              // (owner, 2026-11-09). Bypass mode asks nothing, and the deny
+              // rules list only the office's own folders. A Claude Code too
+              // old to know the key goes without it (an unknown key stops the
+              // start); the app's hook holds the same line either way.
+              ...(takesWriteBlock(cliVersion) ? { blockWritesOutsideWorkingDirectories: true } : {})
             }
           }
         : connectorDeny.length ? { permissions: { deny: connectorDeny } } : {}),

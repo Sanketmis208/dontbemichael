@@ -75,7 +75,22 @@ export interface FolderAgent {
    *  job uses (shared/foundations.ts readFoldersFor): read only, even inside
    *  the business folder (eng review 2026-10-26, D1). */
   readFolders?: string[];
+  /** Folders besides `cwd` its file tools may write: its hive folder, its
+   *  scratch folder and the like, as its settings named them at start. When
+   *  given, a write anywhere else on the computer is refused (owner,
+   *  2026-11-09), as the shell's sandbox already refuses it. */
+  writeFolders?: string[];
 }
+
+/** A write outside every folder the agent may write. Reads are not this rule's
+ *  business; the office's own folders are judged above. */
+function writesOutside(agent: FolderAgent, target: string, caseInsensitive: boolean): boolean {
+  if (!agent.writeFolders) return false;
+  const inside = insideFn(caseInsensitive);
+  return !inside(agent.cwd, target) && !agent.writeFolders.some((f) => !!f && inside(f, target));
+}
+
+const OUTSIDE_WRITE_REASON = 'That is outside your own folders, so nothing is saved there. Save it in your own folder and say where it is.';
 
 /** The named folders a member may read: never one holding the business
  *  folder, a team folder or the app's own folders, nor one inside another
@@ -188,6 +203,7 @@ export function folderDecision(
         reason: 'Team members\' folders are theirs to change. You can read this one, but to get something into it, ask the team member it belongs to.'
       };
     }
+    if (writes && !teamFolder && writesOutside(agent, target, caseInsensitive)) return { deny: true, reason: OUTSIDE_WRITE_REASON };
     return { deny: false };
   }
 
@@ -214,6 +230,7 @@ export function folderDecision(
       reason: `The owner shared that folder for reading only. If something in it needs to change, ask ${godName}.`
     };
   }
+  if (writes && writesOutside(agent, target, caseInsensitive)) return { deny: true, reason: OUTSIDE_WRITE_REASON };
   return { deny: false };
 }
 

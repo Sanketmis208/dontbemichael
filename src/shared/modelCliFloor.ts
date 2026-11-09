@@ -62,6 +62,19 @@ export const CLAUDE_HOOK_CLI_FLOOR: Readonly<Record<string, string>> = {
   PostToolBatch: '2.1.118'
 };
 
+/** The first Claude Code known to take `permissions.blockWritesOutsideWorkingDirectories`
+ *  (2.1.309 lacks it, 2.1.317 has it). An unknown key stops a start on a
+ *  Settings Warning, so an older or unread version goes without it and the
+ *  app's own folder rule holds the file tools alone. */
+export const WRITE_BLOCK_CLI_FLOOR = '2.1.317';
+
+/** Whether this Claude Code takes the setting that keeps file tools to the
+ *  agent's own folders. */
+export function takesWriteBlock(cliVersion: string | null | undefined): boolean {
+  const have = cliVersion && /\d+\.\d+\.\d+/.test(cliVersion) ? cliVersion : null;
+  return !!have && !isNewer(WRITE_BLOCK_CLI_FLOOR, have);
+}
+
 /** The hooks this Claude Code takes, the rest left out. A version nobody could
  *  read leaves out every hook with a floor: a missing hook costs far less than
  *  a refused file. */

@@ -1473,7 +1473,16 @@ export class HookServer {
     }
     const layout = folderLayoutFor(cfg.businessFolder, folders, home);
     const godName = resolveGodName(reg.agents[reg.godId ?? 'god']?.name);
-    const agent = { isGod: !!me.isGod, cwd: me.cwd, readFolders: me.isGod ? [] : (this.readFoldersOf?.(agentId) ?? []) };
+    // Where its file tools may write besides its own folder: what its settings
+    // named at start, and always its own hive and scratch folders. Anywhere
+    // else on the computer is refused, as its shell already is (owner,
+    // 2026-11-09).
+    const writable = [...(this.hive.writableOf?.(agentId) ?? []),
+      hiveRoot ? join(hiveRoot, 'agents', agentId) : '', home ? join(home, AGENT_TMP_DIR, agentTmpName(agentId)) : ''];
+    const agent = {
+      isGod: !!me.isGod, cwd: me.cwd, readFolders: me.isGod ? [] : (this.readFoldersOf?.(agentId) ?? []),
+      writeFolders: withReal(writable.filter((d) => !!d))
+    };
     // Judge the path as asked and the file it really is: a link inside the
     // agent's own folder can point anywhere (review, 2026-09-25).
     const asked = folderDecision(agent, layout, tool, target, ci, godName);

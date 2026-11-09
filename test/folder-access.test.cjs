@@ -330,3 +330,29 @@ test('Windows: a member shell command naming another member\'s folder is refused
   assert.equal(windowsShellWallDecision('darwin', 'echo x > /Office/Sales/a.csv', ['/Office/Sales'], own).deny, false, 'the sandbox holds other platforms');
   assert.match(WINDOWS_SHELL_WALL, /Ask that teammate/);
 });
+
+test('file tools write only in the agent\'s own folders, Michael included; reads elsewhere are not this rule', () => {
+  // Value: protects=no team member, Michael included, saves a file anywhere else on the computer (a folder that runs programs at login, a folder on the owner's PATH), as its shell already cannot; fails_when=folderDecision lets a write outside the agent's own folder and the folders its settings named, or refuses one inside them, or refuses a read outside; why_new=owner 2026-11-09 after PR 697's security review found file tools unwalled outside the office; seam=none; no_claim=Claude Code's own blockWritesOutsideWorkingDirectories
+  const HIVE = abs('/Users/me/HarnessAgents/hive/agents/oscar');
+  const TMP = abs('/Users/me/HarnessAgents/agent-tmp/oscar');
+  const member = { ...oscar, writeFolders: [HIVE, TMP] };
+  const boss = { ...michael, writeFolders: [abs('/Users/me/HarnessAgents/hive/agents/god')] };
+  const elsewhere = [abs('/Users/me/Library/LaunchAgents/x.plist'), abs('/Users/me/.local/bin/gh'), abs('/Users/me/Desktop/report.md'), abs('/tmp/draft.md')];
+  for (const p of elsewhere) {
+    for (const tool of ['Write', 'Edit', 'MultiEdit', 'NotebookEdit']) {
+      const d = folderDecision(member, layout, tool, p, true);
+      assert.equal(d.deny, true, `${tool} ${p}`);
+      assert.match(d.reason, /outside your own folders/);
+      assert.doesNotMatch(d.reason, /[—–]/, 'no dashes in what the agent is told');
+    }
+    assert.equal(folderDecision(boss, layout, 'Write', p, true).deny, true, `Michael: ${p}`);
+    assert.equal(folderDecision(member, layout, 'Read', p, true).deny, false, `reading ${p}`);
+  }
+  for (const p of [path.join(oscar.cwd, 'june.md'), path.join(HIVE, 'memory', 'inbox.md'), path.join(TMP, 'draft.md')]) {
+    assert.equal(folderDecision(member, layout, 'Write', p, true).deny, false, p);
+  }
+  assert.equal(folderDecision(boss, layout, 'Write', path.join(B, 'plan.md'), true).deny, false, 'Michael\'s own folder');
+  assert.match(folderDecision(boss, layout, 'Write', path.join(B, 'Finance', 'x.md'), true).reason, /theirs to change/, 'a team folder keeps its own reason');
+  // An agent the hook knows nothing about keeps the old rule.
+  assert.equal(folderDecision(oscar, layout, 'Write', elsewhere[0], true).deny, false);
+});
