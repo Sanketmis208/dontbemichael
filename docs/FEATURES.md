@@ -42,6 +42,11 @@ moving, and brings you only the decisions that need you.
   office and team folders open. A team folder named on a card opens that folder.
 - A document a team member writes from an email or its attachment links its source: the original
   file it saved and the email, both a click away from the file tab.
+- An Ask me card opens what it talks about: the pages, records, posts, emails and files it rests
+  on sit as chips under its question, each web chip showing the site it opens, and a card that
+  says nothing was found shows where the team looked. They stay on the card in its history.
+  Michael's replies and standups link what they name the same way, and Michael fixes any card
+  that doesn't.
 - An Ask me card about an email links that email, even when a teammate did the rest of the work,
   and Michael fixes any card that doesn't. A card that points to a file is a short summary: the
   result in bold, at most three figures, one to a line, what needs you, then the file. Amounts

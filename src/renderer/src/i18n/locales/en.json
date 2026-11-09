@@ -91,6 +91,9 @@
     "noteAria": "Note for {{name}}"
   },
   "askMe": {
+    "sources": "Sources",
+    "lookedIn": "Looked in: {{places}}",
+    "sourceOpens": "{{label}}, opens {{site}}",
     "addFile": "Add a file",
     "deptFilter": "Show one department",
     "showing": "Showing {{shown}} of {{total}}",

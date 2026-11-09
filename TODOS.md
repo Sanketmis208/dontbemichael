@@ -1,5 +1,31 @@
 # TODOS
 
+## Source links on cards (from the CEO review of docs/designs/ask-me-source-links.md, 2026-11-08)
+
+### Links to connector records that come with only an id
+
+**What:** Build a record's web link for each connector whose tools return only an id, HubSpot first: from the account and the record's id and type, make the link to its page.
+
+**Why:** Until then a record with no web address shows as a Named only source ("Masa Global · HubSpot company 1234") the owner can't click. Owner deferred this (SRC-3) because link formats differ by service and account region, and a wrong link opens the wrong record.
+
+**Context:** `sourcesOf` in `src/shared/askSources.ts` reads Named only entries as `{"label", "id"}`. Check each service's documented record URL against a live account before building, and keep the Named only fallback when the account details are unknown.
+
+**Effort:** M (human: M / CC: S)
+**Priority:** P2
+**Depends on:** the Sources row (docs/designs/ask-me-source-links.md)
+
+### A source may carry the line it backs up
+
+**What:** Let a source carry one short quoted line (up to about 200 characters), shown on hover and in See full context.
+
+**Why:** A link opens a long page, and the owner still has to hunt for the sentence the card rests on. Owner deferred this (SRC-6) until real Sources rows show which kinds need it.
+
+**Context:** It would be an optional `quote` field on a source, rendered as plain text. Members must quote exactly, never paraphrase.
+
+**Effort:** S (human: S / CC: S)
+**Priority:** P3
+**Depends on:** the Sources row
+
 ## Ask me notices and leftovers (from the ship review of mit/ceo-review-workflow-clarity, 2026-11-05)
 
 ### A skipped kind still surfaces when it has real stakes

@@ -91,6 +91,9 @@
     "noteAria": "ملاحظة {{name}}"
   },
   "askMe": {
+    "sources": "المصادر",
+    "lookedIn": "بحثنا في: {{places}}",
+    "sourceOpens": "{{label}}، يفتح {{site}}",
     "addFile": "إضافة ملف",
     "deptFilter": "عرض قسم واحد",
     "showing": "عرض {{shown}} من {{total}}",

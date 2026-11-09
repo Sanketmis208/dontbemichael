@@ -91,6 +91,9 @@
     "noteAria": "{{name}} 的笔记"
   },
   "askMe": {
+    "sources": "来源",
+    "lookedIn": "查找过：{{places}}",
+    "sourceOpens": "{{label}}，打开 {{site}}",
     "addFile": "添加文件",
     "deptFilter": "只看一个部门",
     "showing": "显示 {{shown}} / {{total}}",
