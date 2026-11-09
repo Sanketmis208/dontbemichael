@@ -86,6 +86,9 @@ moving, and brings you only the decisions that need you.
   of the roles that keep them. A team member who can reach a connected system can say where a
   record lives from it; your own answer always stands.
 - On Windows, a team member's shell command that names another member's folder is refused.
+- Team members save files only in their own folders, and a team member whose safe setup could not
+  be written does not start. When Michael stops at a permission prompt, the app restarts him, and
+  you hear about it only if it happens again.
 - Only Michael sends you desktop notifications. Talk 1:1 with any team member when you want to.
 
 ### 2. Hire the right person in four steps
@@ -300,6 +303,58 @@ moving, and brings you only the decisions that need you.
   as a picture, and a part you select pastes as clean as the whole, in light or dark mode.
 
 ## Part 2: Every change, release by release
+
+### 0.3.7 (not yet released)
+- An Ask me card shows what it rests on: the pages, records, posts, emails and files behind it sit
+  as chips under its question and stay in its history, each web chip showing the site it really
+  opens. A card that says nothing was found has a Looked in line naming where the team searched.
+  Team members keep the link of everything their work rests on, and Michael fills in sources and
+  links what his replies and standups name. The app lists for Michael any ask about something
+  outside the office with no link, on older open cards too.
+- A row of department chips on Ask me shows one team's cards at a time, say finance or IT. It keeps
+  Michael's own cards in view, says how many others are waiting and marks a team whose new card
+  arrives meanwhile. Cards stay white. A Company foundations question files under the area it is
+  about.
+- Email approvals, schedule changes and Work style updates fold like questions, one card open at a
+  time.
+- Answer an Ask me question with a file: paste a screenshot into the answer box, drop files on the
+  card, or use the paperclip. The question Michael asks for an option stays readable above the box.
+- A Work style update is worked into the member's own job instead of replacing it. Untouched lines
+  stay word for word, and your current job wins a conflict. The card lists what it adds, changes
+  (before and after, each changed word coloured) and removes, says when nothing changes, and asks
+  you when a duty would clash with the job or make the role broader or narrower. Keep mine is on
+  the card in every state, and deciding a newer update decides the older ones.
+- Each team member works within its role: it does what its role covers, does its part of a mixed
+  job and hands Michael the rest, and gives back what is outside its role untouched. When work
+  needs a fact it doesn't have, it asks every teammate whose role could know before Michael.
+- Records follow roles: Sales keeps the customer list, Marketing the customers you may reference,
+  Finance who owes whom. When no one's role covers a job, Michael asks you to give it to someone
+  (a link opens their job), hire (a link opens Add agent on the right card) or drop it. He does a
+  team member's work himself only when he is alone in the office.
+- A customer's complaint or praise, and a new customer, supplier or debt, reach Michael, who passes
+  it to the role that keeps that record.
+- Company foundations hold rules and where things live: who our customers are today, who owes whom
+  and the supplier list are retired into the records of the roles that keep them, and new questions
+  ask which customers you may reference and where debts are kept. A team member who can reach a
+  connected system can say where a record lives from it; your own answer always stands. The
+  Marketing and Sales Work styles keep the customer lists, offered as Work style updates.
+- When Claude Code updates underneath your team, Michael says so on Ask me, with Close office and
+  reopen or Later, instead of a chip in the corner.
+- When Michael stops at a permission prompt, the app restarts him by itself, and a desktop notice
+  tells you only if it happens again. Before, you were told at once. With auto mode off, his
+  prompts stay for you to answer, as before.
+- A team member whose safe setup could not be written does not start, and the office says so. Before,
+  a Claude team member started without its settings.
+- Team members' file tools save only in their own folders, so a file meant for your Desktop or
+  Downloads is saved in the member's folder and named on the card. A Codex or Gemini team member
+  writes only its own folder and the hand off folder, no longer the whole office folder.
+- The office's own files are never written, moved or read through a link or a special file a team
+  member left, and an unreadable team list is never saved over.
+- On Windows, a team member's shell command that names another member's folder is refused.
+- Knowledge search finds a plural or a tense from the word it comes from, never turns a word into
+  another short word, and starts a passage on a whole word (#684). A leftover question and a Got it
+  read the task board the way it is kept (#692). A team folder with a long path keeps its
+  connection to the app (#691). Non Latin text from git is never cut in half (#700).
 
 ### 0.3.6 (2026-11-05)
 - Asking for changes on an approval no longer sends the changed version unseen. The choice now
