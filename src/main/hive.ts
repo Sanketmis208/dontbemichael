@@ -1536,10 +1536,10 @@ export class HiveManager {
               preArgs.push('--dangerously-bypass-hook-trust');
               // Auto mode keeps codex's OS sandbox (`-a never -s workspace-write`,
               // agentProvider.ts). workspace-write only covers cwd, so the agent
-              // folder (inbox/.done, memory.md, outbox) and the shared hive root
-              // (research deliverables, the board for god) are added as extra
-              // writable roots. Harmless outside auto mode.
-              for (const d of this.sandboxWritableDirs(meta, dir, root, opts.extraWritableDirs)) preArgs.push('--add-dir', d);
+              // folder (inbox/.done, memory.md, outbox) and the triage folder are
+              // added as extra writable roots; Michael also gets the hive for the
+              // board (engineWritableDirs). Harmless outside auto mode.
+              for (const d of this.engineWritableDirs(meta, dir, root, opts.extraWritableDirs)) preArgs.push('--add-dir', d);
             }
             else if (desc.shim === 'pi') {
               // Pi (earendil-works) has a rich pi.on(event) lifecycle. We drop a
@@ -1565,11 +1565,11 @@ export class HiveManager {
             else if (desc.shim === 'gemini') {
               // Point only this worker at a per-agent system settings file so
               // the bridge is trusted and ~/.gemini/settings.json stays untouched.
-              const writable = this.sandboxWritableDirs(meta, dir, root, opts.extraWritableDirs);
+              const writable = this.engineWritableDirs(meta, dir, root, opts.extraWritableDirs);
               env.GEMINI_CLI_TRUST_WORKSPACE = "true";
               env.GEMINI_CLI_SYSTEM_SETTINGS_PATH = this.installGeminiHooks(dir, writable);
-              // The agent folder and hive root join its workspace, the folders
-              // codex gets with --add-dir above. On argv too: Gemini CLI 0.60
+              // The agent folder and triage folder join its workspace, the
+              // folders codex gets with --add-dir above. On argv too: Gemini CLI 0.60
               // and later skip a system settings file in a folder the user owns.
               for (const d of writable) {
                 const arg = geminiIncludeDirArg(meta.cwd, d);
@@ -2016,6 +2016,21 @@ export class HiveManager {
     if (meta.isResearch) return Array.from(new Set([dir, meta.cwd].filter((d) => typeof d === 'string' && d.length > 0)));
     const out = [dir, root, ...(extra ?? [])].filter((d) => typeof d === 'string' && d.length > 0);
     return Array.from(new Set(out));
+  }
+
+  /**
+   * What an engine that can't wall part of a folder (Codex `--add-dir`, Gemini
+   * `--include-directories`) may write: never the whole hive, which holds the
+   * hook program every Claude agent runs outside its sandbox (`bin`) and every
+   * member's private folder (owner, 2026-11-09). A member gets its own folder
+   * and the triage folder it files into. Michael keeps the hive, since he alone
+   * writes the board and tasks.json at its top.
+   */
+  private engineWritableDirs(meta: AgentMeta, dir: string, root: string, extra?: string[]): string[] {
+    if (meta.isGod || meta.isResearch) return this.sandboxWritableDirs(meta, dir, root, extra);
+    const triage = join(root, 'triage');
+    try { mkdirSync(triage, { recursive: true }); } catch { /* the agent's filing fails and says so */ }
+    return Array.from(new Set([dir, triage, ...(extra ?? [])].filter((d) => typeof d === 'string' && d.length > 0)));
   }
 
   /** Where Research's shell may write: its mail, its notes and its desk, never
