@@ -6,7 +6,7 @@ All notable changes to this project are documented here. The format is based on
 
 Don't Be Michael keeps its own version line, starting at 0.0.1.
 
-## [Unreleased]
+## [0.3.7] (2026-11-09)
 
 ### Added
 - **Ask me cards show what they rest on.** The pages, records, posts, emails and files behind a card sit as chips under its question, each web chip showing the site it really opens, and a card that says nothing was found shows where the team looked. Michael's replies and standups link what they name the same way.

@@ -41,9 +41,9 @@ runs on your computer.
 > brings you only the calls that need you.
 
 > [!TIP]
-> **New in 0.3.6: Anything your team finds for you reaches Needs you.**
-> A question you leave open comes back when it matters. In 0.3.5, Pulse builds a case study of
-> your office.
+> **New in 0.3.7: Ask me cards show the pages and files they rest on.**
+> Department chips focus Ask me on one team. In 0.3.6, anything your team finds for you reaches
+> Needs you.
 
 ## Contents
 

@@ -1,6 +1,6 @@
 # Don't Be Michael: features and changes
 
-Everything the app does today, and every release that got it here (0.0.1 to 0.3.6). Part 1 is
+Everything the app does today, and every release that got it here (0.0.1 to 0.3.7). Part 1 is
 written to be lifted onto the GitHub page and the website as it is; Part 2 is the full list, release
 by release.
 
@@ -304,7 +304,7 @@ moving, and brings you only the decisions that need you.
 
 ## Part 2: Every change, release by release
 
-### 0.3.7 (not yet released)
+### 0.3.7 (2026-11-09)
 - An Ask me card shows what it rests on: the pages, records, posts, emails and files behind it sit
   as chips under its question and stay in its history, each web chip showing the site it really
   opens. A card that says nothing was found has a Looked in line naming where the team searched.
