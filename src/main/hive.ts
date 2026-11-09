@@ -99,7 +99,7 @@ import {
 import { HOUSE_RULES_CHANGED_SUBJECT, houseRulesNoticeBody, houseRulesToTell } from '../shared/houseRulesNotice';
 import { applyGuardFixes, restoreDone, dueReminders, guardSignature, emptyGuardState, guardCards, waitingChecks, type GuardCard, type GuardState } from '../shared/cardGuards';
 import { DURABLE_OPS, isHeldRename, NO_SYNC_OPS, NO_WAIT_OPS, RENAME_RETRY_MS, sleepSync, writeFileAtomic, type AtomicFileOps } from './atomicFile';
-import { appendHiveFile, isInside, writeHiveFile } from './hiveFile';
+import { appendHiveFile, isInside, plainFolderBelow, readHiveText, writeHiveFile } from './hiveFile';
 import { exitCause } from '../shared/agentExit';
 import { TELEMETRY_TOKEN_HEADER } from './telemetry';
 
@@ -3890,6 +3890,12 @@ export class HiveManager {
    *  again on the next tick. */
   private archiveOutboxFile(fromPath: string, destDir: string, f: string): void {
     const dest = join(destDir, f);
+    // A member can swap its .sent folder for a link: the file is dropped
+    // rather than moved wherever that leads.
+    if (!this.plainHiveFolder(destDir)) {
+      try { rmSync(fromPath, { force: true }); } catch { /* best effort */ }
+      return;
+    }
     try {
       if (!existsSync(dest)) {
         renameSync(fromPath, dest);
@@ -3901,6 +3907,13 @@ export class HiveManager {
     } catch {
       try { rmSync(fromPath, { force: true }); } catch { /* best effort */ }
     }
+  }
+
+  /** A folder the app may move a file into: outside the hive, or a real
+   *  folder all the way down from the hive root, never a link a member left. */
+  private plainHiveFolder(dir: string): boolean {
+    const root = this.root();
+    return !root || !isInside(root, dir) || plainFolderBelow(root, dir);
   }
 
   /** Set an unreadable outbox file aside and tell its sender, who otherwise
@@ -4353,9 +4366,11 @@ export class HiveManager {
     if (triage && existsSync(triage)) {
       for (const f of readdirSync(triage).filter((x) => x.endsWith('.json'))) {
         try {
-          const raw = JSON.parse(readFileSync(join(triage, f), 'utf8')) as { filedBy?: unknown };
+          // Never through a link or a pipe a member left there.
+          const raw = JSON.parse(readHiveText(join(triage, f)) ?? '') as { filedBy?: unknown };
           if (raw.filedBy !== id) continue;
           mkdirSync(join(triage, '.done'), { recursive: true });
+          if (!this.plainHiveFolder(join(triage, '.done'))) continue;
           renameSync(join(triage, f), join(triage, '.done', f));
           setAside++;
         } catch { /* unreadable or moved meanwhile: Michael works it as usual */ }
@@ -4724,7 +4739,8 @@ export class HiveManager {
       if (!hit || hit.mtimeMs !== mtimeMs) {
         let filing: { title: string; filedBy?: string; filedAt: string } | null = null;
         try {
-          const raw = JSON.parse(readFileSync(p, 'utf8')) as { title?: unknown; filedBy?: unknown };
+          // Never through a link or a pipe a member left there.
+          const raw = JSON.parse(readHiveText(p) ?? '') as { title?: unknown; filedBy?: unknown };
           filing = {
             title: typeof raw.title === 'string' && raw.title.trim() ? raw.title : f,
             ...(typeof raw.filedBy === 'string' && raw.filedBy ? { filedBy: raw.filedBy } : {}),
@@ -4859,8 +4875,10 @@ export class HiveManager {
       if (!stray.length) return;
       const rejected = join(outbox, '.rejected');
       mkdirSync(rejected, { recursive: true });
+      const plain = this.plainHiveFolder(rejected);
       for (const f of stray) {
-        renameSync(join(outbox, f), join(rejected, f));
+        if (plain) renameSync(join(outbox, f), join(rejected, f));
+        else rmSync(join(outbox, f), { force: true });
         this.appendLog({ kind: 'drop', reason: 'owner-outbox-not-routed', file: f });
       }
     } catch { /* best-effort */ }
@@ -5278,7 +5296,7 @@ export class HiveManager {
     const p = this.handoffPath(id);
     if (!existsSync(p)) return null;
     try {
-      const text = (id === RESEARCH_ID ? (readResearchFile(this.agentDir(id), p) ?? '') : readFileSync(p, 'utf8')).trim();
+      const text = (id === RESEARCH_ID ? (readResearchFile(this.agentDir(id), p) ?? '') : (readHiveText(p) ?? '')).trim();
       // Research's is taken and removed, never moved: a folder it can write
       // could be swapped for a link on the way (red team, third ship).
       if (id === RESEARCH_ID) {
@@ -5288,7 +5306,8 @@ export class HiveManager {
       }
       const archive = join(this.agentDir(id), 'memory', 'handoffs');
       mkdirSync(archive, { recursive: true });
-      renameSync(p, join(archive, `${new Date().toISOString().replace(/[:.]/g, '-')}.md`));
+      if (this.plainHiveFolder(archive)) renameSync(p, join(archive, `${new Date().toISOString().replace(/[:.]/g, '-')}.md`));
+      else rmSync(p, { force: true });
       return text || null;
     } catch { return null; }
   }

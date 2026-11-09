@@ -149,3 +149,50 @@ test('the memory tidy never reads or writes through a link in a member\'s folder
   const backups = path.join(home, 'hive', 'backups');
   assert.ok(!fs.existsSync(backups) || !filesIn(backups).some((f) => fs.readFileSync(f, 'utf8').includes('Bank PIN')), 'not copied into backups');
 });
+
+test('a file the app moves aside never lands through a folder a member swapped for a link', { skip }, async () => {
+  // Value: protects=the owner's folders from the app's own moves (outbox archive, triage set aside, handoff archive), which run with the owner's rights and no sandbox (ship review 2026-11-09); fails_when=a rename follows a linked .sent, triage .done or memory/handoffs folder; why_new=bug fix; seam=a real hive; no_claim=a folder swapped in the instant between the check and the move
+  const home = path.join(base, 'office-moves');
+  const hive = new HiveManager(() => home);
+  await hive.ensureAgent({ id: 'god', name: 'Michael', cwd: base, isGod: true });
+  await hive.ensureAgent({ id: 'pam', name: 'Pam', cwd: base });
+  const root = hive.root();
+  const away = ownersFile('keep.txt');
+  const outbox = path.join(root, 'agents', 'pam', 'outbox');
+  fs.rmSync(path.join(outbox, '.sent'), { recursive: true, force: true });
+  fs.symlinkSync(away.dir, path.join(outbox, '.sent'));
+  fs.writeFileSync(path.join(outbox, 'settings.json'), JSON.stringify({ to: 'god', act: 'inform', subject: 'Hello', body: 'A note.' }));
+  fs.writeFileSync(path.join(outbox, 'broken.json'), '{ not json');
+  const old = Date.now() / 1000 - 3600;
+  fs.utimesSync(path.join(outbox, 'broken.json'), old, old);
+  hive.routeOnce();
+  assert.deepEqual(filesIn(away.dir), [away.file], 'nothing was moved into the linked folder');
+  assert.equal(fs.existsSync(path.join(outbox, 'settings.json')), false, 'the message left the outbox');
+
+  const mem = path.join(root, 'agents', 'pam', 'memory');
+  fs.mkdirSync(mem, { recursive: true });
+  fs.rmSync(path.join(mem, 'handoffs'), { recursive: true, force: true });
+  fs.symlinkSync(away.dir, path.join(mem, 'handoffs'));
+  fs.writeFileSync(path.join(mem, 'handoff.md'), 'Where I was.');
+  assert.equal(hive.takeHandoff('pam'), 'Where I was.');
+  assert.deepEqual(filesIn(away.dir), [away.file], 'the handoff was not archived through the link');
+  assert.equal(fs.existsSync(path.join(mem, 'handoff.md')), false, 'and is taken once');
+});
+
+test('a pipe left where the app reads or appends never stalls it', { skip }, async () => {
+  // Value: protects=the app's main process from a member's named pipe at a triage filing, a handoff or the office log (ship review 2026-11-09); fails_when=reading a filing or handoff, or appending to the log, waits on a pipe; why_new=bug fix; seam=a real hive and mkfifo; no_claim=other modules' reads
+  const { execFileSync } = require('node:child_process');
+  const home = path.join(base, 'office-pipes');
+  const hive = new HiveManager(() => home);
+  await hive.ensureAgent({ id: 'god', name: 'Michael', cwd: base, isGod: true });
+  await hive.ensureAgent({ id: 'pam', name: 'Pam', cwd: base });
+  const root = hive.root();
+  fs.mkdirSync(path.join(root, 'triage'), { recursive: true });
+  execFileSync('mkfifo', [path.join(root, 'triage', 'stall.json')]);
+  execFileSync('mkfifo', [path.join(root, 'agents', 'pam', 'memory', 'handoff.md')]);
+  fs.rmSync(path.join(root, 'log.jsonl'), { force: true });
+  execFileSync('mkfifo', [path.join(root, 'log.jsonl')]);
+  assert.ok(Array.isArray(hive.pendingFilings()), 'the filing is skipped, not waited on');
+  assert.equal(hive.takeHandoff('pam'), null);
+  hive.appendLog({ kind: 'test' });
+});

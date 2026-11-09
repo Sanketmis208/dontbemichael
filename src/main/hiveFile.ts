@@ -89,7 +89,8 @@ export function readHiveText(path: string): string | null {
 export function emptyHiveFile(root: string, path: string): void {
   checkFolder(root, path);
   // Opened without O_TRUNC: nothing is cut until the file is known to be plain.
-  const fd = openSync(path, constants.O_WRONLY | (constants.O_NOFOLLOW ?? 0));
+  // Never waits on a pipe a member left in its place.
+  const fd = openSync(path, constants.O_WRONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
   try {
     const st = fstatSync(fd);
     if (!st.isFile() || st.nlink !== 1) throw new HiveFileError(`not emptied: ${relative(root, path)} is not a plain file`);
@@ -103,7 +104,8 @@ export function emptyHiveFile(root: string, path: string): void {
  *  when the file is a link, a second name for another file, or not a file. */
 export function appendHiveFile(root: string, path: string, text: string): void {
   checkFolder(root, path);
-  const fd = openSync(path, constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | (constants.O_NOFOLLOW ?? 0), 0o644);
+  // Never waits on a pipe a member left in its place.
+  const fd = openSync(path, constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0), 0o644);
   try {
     const st = fstatSync(fd);
     if (!st.isFile() || st.nlink !== 1) throw new HiveFileError(`not written: ${relative(root, path)} is not a plain file`);
