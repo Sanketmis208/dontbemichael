@@ -184,6 +184,10 @@ const BARE_AFFIRMATIONS = new Set([
 
 const str = (x: unknown): string => (typeof x === 'string' ? x : '');
 const norm = (s: string): string => s.toLowerCase().replace(/[.!?,;:'"]/g, ' ').replace(/\s+/g, ' ').trim();
+/** A name as it is matched in a confirm: letters and digits of any script, all
+ *  else a space, so "日报" or an Arabic name keeps its letters and "m-invoice"
+ *  is "m invoice" on both sides. */
+const normName = (s: string): string => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 /** N1 (rt-10 hardening): escape regex metachars before interpolating a verb word into
  *  `new RegExp`. Safe with today's verb vocab (plain words) — defense in depth. */
 const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -290,20 +294,29 @@ const settingWords = (key: string): string[] =>
  * Does the phrase name one of `others` (a schedule's name or id, a setting key)
  * that is not the staged one? "confirm, delete the Invoice check schedule"
  * while a delete of Morning report waits is about Invoice check, so it must
- * not delete Morning report. Matched as whole words; a name the staged one's
- * own names contain ("report" inside "Morning report") is not someone else's,
- * and neither is one shared by two of them.
+ * not delete Morning report. Matched as whole words. Another name counts
+ * unless that spot in the phrase is the staged name said in full: the staged
+ * name is taken out first and the others are looked for in what is left, so
+ * "morning report" names Morning report while Morning report weekly waits, but
+ * "morning report weekly" does not. An other name that holds the staged one
+ * (Morning report weekly while Morning report waits) is checked against the
+ * whole phrase first.
  */
 function namesOtherThing(phrase: string, own: readonly string[], others: readonly string[]): string | null {
-  const p = ` ${normMatch(phrase)} `;
-  const mine = own.map((o) => ` ${normMatch(o)} `);
-  for (const o of others) {
-    const w = normMatch(o);
+  const p = ` ${normName(phrase)} `;
+  const mine = own.map(normName).filter(Boolean).sort((a, b) => b.length - a.length);
+  const named = others.map((o) => [o, normName(o)] as const)
     // A name made only of the words a confirm is said with ("Schedule",
     // "Confirm") would cancel every confirm, so it names nothing here.
-    if (w.length < 2 || w.split(' ').every((x) => CONFIRM_WORDS.has(x))) continue;
-    if (p.includes(` ${w} `) && !mine.some((m) => m.includes(` ${w} `))) return o;
+    .filter(([, w]) => w.length >= 2 && !w.split(' ').every((x) => CONFIRM_WORDS.has(x)));
+  for (const [o, w] of named) {
+    if (mine.some((m) => w !== m && ` ${w} `.includes(` ${m} `)) && p.includes(` ${w} `)) return o;
   }
+  // A marker, not a space, where the staged name was, so the words on either
+  // side never join into another name.
+  let rest = p;
+  for (const m of mine) while (rest.includes(` ${m} `)) rest = rest.replace(` ${m} `, ' \u0000 ');
+  for (const [o, w] of named) if (rest.includes(` ${w} `)) return o;
   return null;
 }
 
@@ -792,7 +805,7 @@ function proposeDestructive(deps: RealtimeActionDeps, verb: string, a: Record<st
       verb,
       confirmWord: 'schedule',
       targetLabel: m.label,
-      other: scheduleTarget(deps, [m.label, m.id], m.id),
+      other: scheduleTarget(deps, m.label, m.id),
       createdAt: Date.now(),
       commit: buildEditSchedule(deps, m, action)
     };
@@ -837,7 +850,7 @@ function proposeDestructive(deps: RealtimeActionDeps, verb: string, a: Record<st
     };
     pending = {
       verb, confirmWord: 'schedule', targetLabel: label, targetId, createdAt: Date.now(),
-      other: scheduleTarget(deps, [label, mission.id], mission.id),
+      other: scheduleTarget(deps, label, mission.id),
       commit: async () => {
         deps.saveMissions([...deps.listMissions(), mission]);
         attribute(deps, 'create_schedule', mission.id, { title: label.slice(0, 120) });
@@ -908,12 +921,14 @@ function proposeDestructive(deps: RealtimeActionDeps, verb: string, a: Record<st
   return { ok: false, spoken: `I don't know how to ${verb}.` };
 }
 
-/** A staged schedule's names, and every other schedule's, for the confirm. */
-function scheduleTarget(deps: RealtimeActionDeps, own: string[], id: string): NonNullable<Pending['other']> {
+/** A staged schedule's name, and every other schedule's name and id, for the
+ *  confirm. The staged id is not one of its own names: a voice-made id holds
+ *  the name it was made with, and a rename keeps the id. */
+function scheduleTarget(deps: RealtimeActionDeps, label: unknown, id: string): NonNullable<Pending['other']> {
   return {
     kind: 'schedule',
-    own,
-    others: () => deps.listMissions().filter((x) => x.id !== id).flatMap((x) => [x.label || '', x.id])
+    own: [String(label ?? '')],
+    others: () => deps.listMissions().filter((x) => x.id !== id).flatMap((x) => [String(x.label ?? ''), String(x.id ?? '')])
   };
 }
 

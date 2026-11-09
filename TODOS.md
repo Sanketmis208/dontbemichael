@@ -78,6 +78,15 @@ Go with it: keep only the owner's own words (the answer, the edit, the note) in 
 **Effort:** S
 **Priority:** P3
 
+### A member named with an ordinary word can cancel a valid voice confirm
+
+**What:** Let `namesSomeoneElse` tell a member's name from the same word used plainly.
+
+**Why:** A member called "Will" cancels "confirm, I will kill Jim" while Jim's kill waits. It fails safe: nothing runs, and the owner asks again.
+
+**Effort:** S
+**Priority:** P3
+
 ## Overlap split (deferred from the CEO review, 2026-10-24)
 
 ### Explain how they split it in the hire wizard

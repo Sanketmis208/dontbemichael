@@ -113,12 +113,66 @@ test('a setting confirm naming the staged key, or none, still applies it', async
     assert.equal((await confirm(phrase)).ok, true, phrase);
     assert.deepEqual(patched, [{ maxConcurrentWorkers: 8 }], phrase);
   }
-  // godModel and defaultModel share "model": the staged key's own words cancel nothing.
+  // godModel and defaultModel share "model": the shared word decides nothing,
+  // only the whole key does. "god model" applies it, "default model" cancels.
   config = { godModel: 'a' };
   patched.length = 0;
   await act({ verb: 'update_setting', key: 'godModel', value: 'b' });
   assert.equal((await confirm('confirm god model')).ok, true);
   assert.deepEqual(patched, [{ godModel: 'b' }]);
+  await act({ verb: 'update_setting', key: 'godModel', value: 'c' });
+  assert.equal((await confirm('confirm the default model')).ok, false);
+  assert.deepEqual(patched, [{ godModel: 'b' }]);
+});
+
+test('a shorter schedule name cancels when the longer one is staged, unless the longer one is said in full', async () => {
+  // Value: protects=a shorter name inside the staged one still names the other schedule; fails_when="confirm, delete morning report" runs Morning report weekly; why_new=PR 693 review; seam=the real ipc handlers
+  office();
+  await act({ verb: 'edit_schedule', missionId: 'm-weekly', action: 'delete' });
+  const res = await confirm('confirm, delete morning report');
+  assert.equal(res.ok, false);
+  assert.match(res.spoken, /^That named a different schedule than the "Morning report weekly" schedule/);
+  assert.deepEqual(missions.map((m) => m.id), ['m-morning', 'm-invoice', 'm-weekly']);
+  await act({ verb: 'edit_schedule', missionId: 'm-weekly', action: 'delete' });
+  assert.equal((await confirm('confirm, delete morning report weekly')).ok, true);
+  assert.deepEqual(missions.map((m) => m.id), ['m-morning', 'm-invoice']);
+});
+
+test('a schedule\'s id never counts as its name, so a renamed voice schedule still cancels on the old name', async () => {
+  // Value: protects=an id holding an old name never hides another schedule's name; fails_when=with renamed "Morning report" (id voice-invoice-check-*) staged, "confirm, delete the Invoice check schedule" deletes it; why_new=PR 693 review; seam=the real ipc handlers
+  missions = [mission('voice-invoice-check-ab12cd', 'Morning report'), mission('m-invoice', 'Invoice check')];
+  await act({ verb: 'edit_schedule', label: 'Morning report', action: 'delete' });
+  assert.equal((await confirm('confirm, delete the Invoice check schedule')).ok, false);
+  assert.equal(missions.length, 2, 'nothing deleted');
+  await nothingLeft('nothing is left staged');
+  await act({ verb: 'edit_schedule', label: 'Morning report', action: 'delete' });
+  assert.equal((await confirm('confirm, delete the Morning report schedule')).ok, true);
+  assert.deepEqual(missions.map((m) => m.id), ['m-invoice']);
+});
+
+test('a non-Latin schedule name cancels too', async () => {
+  // Value: protects=the other-name check works for every script the app ships; fails_when="confirm, delete 日报" or an Arabic name runs the staged schedule; why_new=PR 693 review; seam=the real ipc handlers
+  for (const [name, phrase] of [['日报', 'confirm, delete 日报'], ['تقرير الصباح', 'confirm, delete تقرير الصباح']]) {
+    missions = [mission('m-morning', 'Morning report'), mission('m-other', name)];
+    await act({ verb: 'edit_schedule', label: 'Morning report', action: 'delete' });
+    assert.equal((await confirm(phrase)).ok, false, phrase);
+    assert.equal(missions.length, 2, `${phrase}: nothing deleted`);
+  }
+  // And a staged non-Latin name said in full runs.
+  missions = [mission('m-morning', 'Morning report'), mission('m-other', '日报')];
+  await act({ verb: 'edit_schedule', missionId: 'm-other', action: 'delete' });
+  assert.equal((await confirm('confirm, delete 日报')).ok, true);
+  assert.deepEqual(missions.map((m) => m.id), ['m-morning']);
+});
+
+test('a schedule with a label that is not a string does not break the confirm', async () => {
+  // Value: protects=a stored number label never throws in the confirm and leaves the change staged; fails_when=the confirm rejects on .toLowerCase; why_new=PR 693 review; seam=the real ipc handlers
+  missions = [mission('m-morning', 'Morning report'), mission('m-num', 2026)];
+  await act({ verb: 'edit_schedule', label: 'Morning report', action: 'delete' });
+  assert.equal((await confirm('confirm, delete 2026')).ok, false);
+  await act({ verb: 'edit_schedule', label: 'Morning report', action: 'delete' });
+  assert.equal((await confirm('confirm')).ok, true);
+  assert.deepEqual(missions.map((m) => m.id), ['m-num']);
 });
 
 test('a no still cancels a schedule or a setting first', async () => {
