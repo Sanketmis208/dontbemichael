@@ -231,6 +231,41 @@ test('with no window to restart them, Michael is told the member is stuck', asyn
   assert.match(inbox[0].body, /the app could not restart Pam/);
 });
 
+test('Michael stuck on a prompt is restarted too, and the owner hears only if it comes back', async (t) => {
+  // Value: protects=the office never waits all night on Michael's prompt, and he is never told about himself; fails_when=Michael is skipped again, gets a note about his own restart, is restarted in a loop, or the owner is not told a restart failed; why_new=2026-11-09 (Michael sat ten hours on a prompt); seam=HookServer.restartStuck
+  const { hive, server } = await office(t);
+  server.getCompanyProfile = () => 'Acme Dental, a clinic in Austin.';
+  let clock = 1_000_000;
+  server.now = () => clock;
+  const restarted = [];
+  const notices = [];
+  server.restartStuck = (id) => { restarted.push(id); return true; };
+  server.notify = (id, body) => { notices.push([id, body]); return true; };
+  const prompt = { agent_id: 'god', session_id: 's', hook_event_name: 'Notification', notification_type: 'permission_prompt', message: 'Claude needs your permission to use Bash' };
+  await server.handle(prompt);
+  assert.deepEqual(restarted, ['god']);
+  let inbox = hive.inbox('god');
+  assert.equal(inbox.length, 1, 'only the carry on note');
+  assert.match(inbox[0].subject, /You were restarted/);
+  await server.handle({ agent_id: 'god', session_id: 's2', hook_event_name: 'SessionStart', source: 'resume' });
+  assert.equal(hive.inbox('god').length, 1, 'no note to Michael about his own restart');
+  assert.deepEqual(notices, []);
+  // Back before he moved on: no second restart, one notice to the owner.
+  clock += 10 * 60_000;
+  await server.handle(prompt);
+  await server.handle(prompt);
+  assert.deepEqual(restarted, ['god']);
+  const H = loadTs('src/main/hooks.ts');
+  assert.deepEqual(notices, [['god', H.MICHAEL_STUCK_RESTARTED]]);
+  assert.equal(hive.inbox('god').length, 1, 'nothing relayed to himself');
+  // Working again: the owner hears that too.
+  await server.handle({ agent_id: 'god', session_id: 's2', hook_event_name: 'PostToolUse', tool_name: 'Read' });
+  assert.deepEqual(notices.at(-1), ['god', H.MICHAEL_WORKING_AGAIN]);
+  for (const line of [H.MICHAEL_STUCK_RESTARTED, H.MICHAEL_STUCK_NO_RESTART, H.MICHAEL_WORKING_AGAIN]) {
+    assert.doesNotMatch(line, /[–—]|terminal|prompt|1:1/i);
+  }
+});
+
 test("Michael's own prompts are not relayed to himself", async (t) => {
   const { hive, server } = await office(t);
   await server.handle({ agent_id: 'god', session_id: 's', hook_event_name: 'Notification', notification_type: 'permission_prompt', message: 'needs your permission' });

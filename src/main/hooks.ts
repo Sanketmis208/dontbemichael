@@ -58,6 +58,12 @@ function isClaudeTranscript(path: string): boolean {
 /** Desktop notification bodies. The title is the agent's name (displayName). */
 export const NOTIFY_FINISHED = 'Finished and ready for the next thing.';
 
+/** Michael stuck on a step only a person could answer, read under his name.
+ *  The app restarts him first; these show only when that did not clear it. */
+export const MICHAEL_STUCK_RESTARTED = "I'm stuck and the office is waiting on me. Restarting me didn't clear it.";
+export const MICHAEL_STUCK_NO_RESTART = "I'm stuck and the office is waiting on me. The app couldn't restart me.";
+export const MICHAEL_WORKING_AGAIN = "I'm working again.";
+
 /** Michael gone idle at his prompt. Nothing is needed from the owner (a real
  *  ask goes on ASK ME), so never "waiting for you": a line saying he's free and
  *  the office can take on more (owner, 2026-10-02). Read under his name. */
@@ -1166,8 +1172,10 @@ export class HookServer {
     // member, which clears the prompt, and Michael asks the owner only if it
     // comes back right after. Not in 1:1: the owner is already there to answer
     // it. The cheap prompt check runs first; the registry is read only for a
-    // real prompt.
-    if (event === 'Notification' && agentId && isTerminalPrompt(p) && !this.isGod(agentId) && !this.onHold(agentId)) {
+    // real prompt. Michael too (2026-11-09: his command sat ten hours and the
+    // office with him, and the app never looked): restarted the same way, and
+    // the owner hears if it comes back, as he can't be told about himself.
+    if (event === 'Notification' && agentId && isTerminalPrompt(p) && !this.onHold(agentId)) {
       this.stuckOnPrompt(agentId, (p.message ?? '').trim());
     }
 
@@ -1277,6 +1285,8 @@ export class HookServer {
     if (!ep) return;
     if (event === 'SessionStart' && ep.restarted && !ep.confirmed && !ep.escalated) {
       ep.confirmed = true;
+      // Michael's own restart note already told him to carry on.
+      if (this.isGod(agentId)) return;
       const name = this.displayName(agentId);
       this.tellMichael(agentId, `${name} was restarted`, `${name}'s session stopped on a prompt only a person could answer${ep.text ? ` ("${ep.text}")` : ''}, so the app restarted ${name} and told them to carry on with their current work. Check that ${name} picks their work back up. This is not for the owner's Ask me board: if you asked the owner whether ${name} is stuck, withdraw that question.`);
     } else if (event === 'SessionStart' && ep.timedOut) {
@@ -1286,6 +1296,7 @@ export class HookServer {
       ep.confirmed = true;
       ep.escalated = false;
       this.relayedPrompts.delete(agentId);
+      if (this.isGod(agentId)) { this.notify(agentId, MICHAEL_WORKING_AGAIN); return; }
       const name = this.displayName(agentId);
       this.tellMichael(agentId, `${name} was restarted after all`, `${name}'s session started again after all, so the restart went through and ${name} is not stuck. Leave ${name}'s open work with them, and if you asked the owner whether ${name} is stuck, withdraw that question.`);
     } else if (STUCK_MOVED_ON.has(event)) {
@@ -1298,6 +1309,7 @@ export class HookServer {
       // raised stays on Ask me long after the member got going (owner,
       // 2026-10-23: Pete answered at 05:27, the card went up at 05:30).
       this.relayedPrompts.delete(agentId);
+      if (this.isGod(agentId)) { this.notify(agentId, MICHAEL_WORKING_AGAIN); return; }
       const name = this.displayName(agentId);
       this.tellMichael(agentId, `${name} is working again`, `${name} got past what stopped them and is working again, so ${name} is not stuck. If you put a question on the owner's Ask me board saying ${name} is stuck, withdraw it; if you have not raised it yet, don't. ${name} can take work again.`);
     }
@@ -1307,6 +1319,14 @@ export class HookServer {
   private relayStuckToMichael(agentId: string, text: string, restarted: boolean): boolean {
     const last = this.relayedPrompts.get(agentId);
     if (last && last.text === text && this.now() - last.at < PROMPT_RELAY_DEDUPE_MS) return true;
+    if (this.isGod(agentId)) {
+      // Michael can't be told he is stuck: the owner hears, on the desktop,
+      // the one notice he is allowed. With notifications off nothing more can
+      // be done, so it counts as told and no restart loop starts.
+      this.notify(agentId, restarted ? MICHAEL_STUCK_RESTARTED : MICHAEL_STUCK_NO_RESTART);
+      this.relayedPrompts.set(agentId, { text, at: this.now() });
+      return true;
+    }
     const name = this.displayName(agentId);
     const sent = this.tellMichael(agentId, `${name} is stuck`,
       `${name}'s session stopped on a prompt only a person could answer${text ? ` ("${text}")` : ''}, and ${restarted ? `restarting ${name} did not clear it` : `the app could not restart ${name}`}. The owner can't answer it either: never ask them to, and never mention terminals, prompts, sessions or a 1:1 chat. Move ${name}'s open work to a teammate who fits. Then put one plain question on the owner's Ask me board (a card for ${agentId}, status "blocked", one humanQA ask with "raisedBy": "${agentId}") saying ${name} is stuck and can't work until it is looked into, with options that fit, such as "Leave ${name} for now".`);
