@@ -694,7 +694,7 @@ const bodyStyle: CSSProperties = { fontSize: 13, lineHeight: '19px', color: 'var
 const KeepSlot = createContext<ReactNode>(null);
 function Keep() {
   const keep = useContext(KeepSlot);
-  return keep ? <span style={{ marginRight: 'auto', display: 'inline-flex' }}>{keep}</span> : null;
+  return keep ? <span style={{ marginInlineEnd: 'auto', display: 'inline-flex' }}>{keep}</span> : null;
 }
 const rowEnd: CSSProperties = { display: 'flex', gap: 7, justifyContent: 'flex-end', alignItems: 'center' };
 const dotLine: CSSProperties = { display: 'flex', gap: 8, alignItems: 'baseline', fontSize: 13, lineHeight: '19px', color: 'var(--cth-ink)' };

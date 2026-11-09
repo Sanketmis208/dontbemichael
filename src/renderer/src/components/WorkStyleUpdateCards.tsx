@@ -106,6 +106,7 @@ export function WorkStyleUpdateCards({ offers, look, hiddenIds, fold }: {
         const f = fold?.(id) ?? ALWAYS_OPEN;
         if (f.open) opened.current.add(id);
         const started = opened.current.has(id) && !stopped.has(id);
+        const run = runs[id] ?? 0;
         const from = agent ? jobBase(agent) : '';
         const headline = dutyHeadline(offer.duties ?? []) || t(offer.whyKey);
         const keepMine = <PixelButton variant="secondary" size="sm" disabled={busy === id} onClick={() => void keep(offer)}>{t('askMe.workStyleKeep')}</PixelButton>;
@@ -125,7 +126,7 @@ export function WorkStyleUpdateCards({ offers, look, hiddenIds, fold }: {
             )}
             {started ? (
               <JobChangeReview
-                key={runs[id] ?? 0}
+                key={run}
                 who={name || roleLabel(splitAgentRole(agent?.description ?? '').role)}
                 run={analyze(offer, name)}
                 previewTitle={t('jobChange.updateTitle', { name })}
@@ -151,7 +152,7 @@ export function WorkStyleUpdateCards({ offers, look, hiddenIds, fold }: {
               // Keep mine is on the card in every state (eng review E6), in
               // the one row of buttons (owner, 2026-11-07).
               <div style={{ display: 'flex', gap: 7, justifyContent: 'flex-end', alignItems: 'center' }}>
-                <span style={{ marginRight: 'auto', display: 'inline-flex' }}>{keepMine}</span>
+                <span style={{ marginInlineEnd: 'auto', display: 'inline-flex' }}>{keepMine}</span>
                 {stopped.has(id) && <PixelButton variant="primary" size="sm" onClick={() => { setStopped((x) => { const n = new Set(x); n.delete(id); return n; }); setRuns((r) => ({ ...r, [id]: (r[id] ?? 0) + 1 })); }}>{t('jobChange.updateAgain')}</PixelButton>}
               </div>
             )}

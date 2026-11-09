@@ -80,7 +80,7 @@ export function SourceRow({ entry, who, margin = '-4px 0 12px' }: { entry: unkno
   const [gone, setGone] = useState<Record<string, true>>({});
   if (!items.length && !searched.length) return null;
   return (
-    <div aria-label={t('askMe.sources')} style={{ display: 'flex', flexDirection: 'column', gap: 4, margin }}>
+    <div role="group" aria-label={t('askMe.sources')} style={{ display: 'flex', flexDirection: 'column', gap: 4, margin }}>
       {items.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {items.map((s, i) => {
