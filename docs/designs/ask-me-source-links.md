@@ -790,3 +790,22 @@ REALITY: pr-count pass one change on the running branch docs/designs/ask-me-sour
 - **VERDICT:** CEO + ENG CLEARED. Ready to implement.
 
 NO UNRESOLVED DECISIONS
+
+## Change after the first build (2026-11-08)
+
+The owner restarted the app and the Masa Global card still had no Sources row. Two gaps kept the
+check from ever reaching it, so Michael was never told to add the links:
+
+- **The start date skipped it.** The card was asked on 2026-11-06, before `sourcesSince`. The
+  checks only ever read open asks and open reports, which are still in front of the owner, so the
+  date hid exactly the cards the owner was looking at. `sourcesSince` is removed (with its file,
+  its factory reset entry and its office move entry); the wider words count at any age. The email
+  words keep their own start, `leftoversSince`, as before. On the reference office this lists two
+  cards, not a flood.
+- **The old `noEmail` flag silenced it.** Earlier rules told Michael to set `"noEmail": true` on an
+  ask with no email behind it, and the first build read that as "nothing outside the office". The
+  Masa Global ask carries it. `noEmail` now quiets only the email words; `noSource` is the way out
+  for the whole check.
+
+Behavior change: Michael is now listed older open asks and reports that name a page, record or
+post with no link, or say nothing was found without saying where the team looked.

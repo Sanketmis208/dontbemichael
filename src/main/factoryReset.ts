@@ -45,8 +45,6 @@ export const PRIVATE_ENTRIES = [
   'house-rules-seen.json',
   'ask-list-since.json',
   'leftovers-since.json',
-  // When the source checks began (ask-me-source-links.md).
-  'sources-since.json',
   'research-stamp.key',
   'research-threads.json',
   'research-outbox',

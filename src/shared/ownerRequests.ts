@@ -516,21 +516,19 @@ function linksInText(text: string): boolean {
 
 /** An open ask or report about something outside the office (a page, a post,
  *  a record, an email someone sent) with no way to open it: no usable
- *  "sources" entry and no link in its words. Email words count from
- *  `emailSince`, when that check began; the wider words from `sourcesSince`,
- *  so cards made before each check are never listed. "noSource": true (or
- *  "noEmail": true, from before) marks an entry with nothing to link. English
- *  words only: the rule in Michael's instructions covers other languages. */
-export function askMissesSource(entry: AskText | null | undefined, emailSince: number, sourcesSince: number): boolean {
-  if (!entry || entry.noSource === true || entry.noEmail === true || entry.kind === 'foundation') return false;
-  const email = askedSince(entry, emailSince);
-  const outside = askedSince(entry, sourcesSince);
-  if (!email && !outside) return false;
+ *  "sources" entry and no link in its words. Only open entries reach this, so
+ *  the wider words count at any age: an old open card is still in front of
+ *  the owner (owner, 2026-11-08, the Masa Global card). Email words keep their
+ *  own start, `emailSince`. "noSource": true marks an entry with nothing to
+ *  link; the older "noEmail": true says only that no email is behind it, so it
+ *  quiets the email words and nothing else. English words only: the rule in
+ *  Michael's instructions covers other languages. */
+export function askMissesSource(entry: AskText | null | undefined, emailSince: number): boolean {
+  if (!entry || entry.noSource === true || entry.kind === 'foundation') return false;
   if (hasUsableSource(sourcesOf(entry))) return false;
   const { text } = askWords(entry);
   if (linksInText(text)) return false;
-  if (email && NAMES_EMAIL.test(text)) return true;
-  if (!outside) return false;
+  if (entry.noEmail !== true && askedSince(entry, emailSince) && NAMES_EMAIL.test(text)) return true;
   const words = text.replace(NOT_A_SOURCE, ' ');
   return NAMES_OUTSIDE.some((re) => re.test(words));
 }
@@ -547,8 +545,8 @@ const CLAIMS_NOTHING_FOUND = [
 
 /** An open ask or report saying nothing was found, with no searched place in
  *  its "sources". "noSearch": true marks an entry that makes no such claim. */
-export function askClaimsUnsearched(entry: AskText | null | undefined, since: number): boolean {
-  if (!entry || entry.noSearch === true || entry.kind === 'foundation' || !askedSince(entry, since)) return false;
+export function askClaimsUnsearched(entry: AskText | null | undefined): boolean {
+  if (!entry || entry.noSearch === true || entry.kind === 'foundation') return false;
   if (sourcesOf(entry).searched.length) return false;
   const { text } = askWords(entry);
   return CLAIMS_NOTHING_FOUND.some((re) => re.test(text));
@@ -572,7 +570,7 @@ export function askChangeSends(entry: AskText | null | undefined, since: number)
  * questions into one, or withdraws what no longer matters. An ask written as
  * a list since `since` (ms) is listed too (askAsList).
  */
-export function asksToTidy(tasks: CardLike[], since = Infinity, checksSince = Infinity, sourcesSince = Infinity): StuckCard[] {
+export function asksToTidy(tasks: CardLike[], since = Infinity, checksSince = Infinity): StuckCard[] {
   const out: StuckCard[] = [];
   for (const t of tasks) {
     if (!t || typeof t.id !== 'string') continue;
@@ -587,8 +585,8 @@ export function asksToTidy(tasks: CardLike[], since = Infinity, checksSince = In
     // their sources are checked before the "no open ask" skip below.
     const reports = openReportIndexes(t.humanQA as never).map(entryAt);
     const sourceChecks = (entries: Array<AskText | undefined>): void => {
-      if (entries.some((e) => askMissesSource(e, checksSince, sourcesSince))) out.push(stuckOf(t, 'no-source'));
-      if (entries.some((e) => askClaimsUnsearched(e, sourcesSince))) out.push(stuckOf(t, 'no-search'));
+      if (entries.some((e) => askMissesSource(e, checksSince))) out.push(stuckOf(t, 'no-source'));
+      if (entries.some((e) => askClaimsUnsearched(e))) out.push(stuckOf(t, 'no-search'));
     };
     const open = openAskIndexes(t.humanQA as never).length;
     if (!open) { sourceChecks(reports); continue; }

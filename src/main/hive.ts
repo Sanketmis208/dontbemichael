@@ -4739,7 +4739,7 @@ export class HiveManager {
     try { this.filingsCache = this.pendingFilings(); } catch (e) { console.error('[hive] triage filings:', e); }
     // A list-style ask is flagged only when written since the reminder first
     // ran here, so asks already on the board keep their look (ask-me-options.md, 1A).
-    this.stuckCardsCache = [...blockedWithNothingAsked(tasks, this.ownerRequestsCache), ...this.goneQuiet, ...asksToTidy(tasks, this.askListSince(), this.leftoversSince(), this.sourcesSince()), ...leftoversToDecide(tasks, this.leftoversSince())];
+    this.stuckCardsCache = [...blockedWithNothingAsked(tasks, this.ownerRequestsCache), ...this.goneQuiet, ...asksToTidy(tasks, this.askListSince(), this.leftoversSince()), ...leftoversToDecide(tasks, this.leftoversSince())];
     return this.ownerRequestsCache;
   }
 
@@ -4825,23 +4825,6 @@ export class HiveManager {
   /** Whether an id is a question the owner asked in the dock. */
   private isOwnerQuestion(id: string): boolean {
     return /^[\w.-]+$/.test(id) && !!this.root() && existsSync(join(this.ownerSentDir(), `${id}.json`));
-  }
-  private sourcesSinceAt: { home: string; at: number } | null = null;
-  /** When this office first ran with the source checks (ask-me-source-links.md).
-   *  Saved once, so cards made before it are never listed for Michael. */
-  private sourcesSince(): number {
-    const home = this.getHome();
-    if (!home) return this.startedAt;
-    if (this.sourcesSinceAt?.home === home) return this.sourcesSinceAt.at;
-    const path = join(privateRoot(home), 'sources-since.json');
-    let at = NaN;
-    try { at = Date.parse((JSON.parse(readFileSync(path, 'utf8')) as { since?: string }).since ?? ''); } catch { /* first run */ }
-    if (!Number.isFinite(at)) {
-      at = this.startedAt;
-      try { mkdirSync(dirname(path), { recursive: true }); this.atomicWriteJson(path, { since: new Date(at).toISOString() }); } catch (e) { console.error('[hive] sources since:', e); }
-    }
-    this.sourcesSinceAt = { home, at };
-    return at;
   }
   private leftoversSinceAt: { home: string; at: number } | null = null;
   /** When this office first ran with the leftover check (ask-me-leftovers.md).

@@ -15,9 +15,8 @@ const loadTs = require('./load-ts.cjs');
 const R = loadTs('src/shared/ownerRequests.ts');
 
 const EMAIL_SINCE = Date.parse('2026-11-05T19:00:00Z');
-const SOURCES_SINCE = Date.parse('2026-11-08T12:00:00Z');
 const at = '2026-11-08T15:00:00Z';
-const misses = (e) => R.askMissesSource({ askedAt: at, ...e }, EMAIL_SINCE, SOURCES_SINCE);
+const misses = (e) => R.askMissesSource({ askedAt: at, ...e }, EMAIL_SINCE);
 
 const masa = {
   q: '**May Ryan take the Mark McCulloh testimonial off our HubSpot consulting page?** Nobody in the office has any record of Masa Global or Mark McCulloh, so we can\'t stand behind a quote shown under a client\'s name.',
@@ -30,16 +29,16 @@ const masa = {
 
 test('the Masa Global card is flagged until it links what it names and says where the team looked', () => {
   // Value: protects=the owner opens what a card rests on without searching (owner, 2026-11-08); fails_when=a card naming a page, post or case study passes with no source; why_new=the Masa Global card; seam=none; no_claim=whether Michael then fixes it (agent behavior)
-  assert.equal(R.askMissesSource(masa, EMAIL_SINCE, SOURCES_SINCE), true);
-  assert.equal(R.askClaimsUnsearched(masa, SOURCES_SINCE), true);
+  assert.equal(R.askMissesSource(masa, EMAIL_SINCE), true);
+  assert.equal(R.askClaimsUnsearched(masa), true);
   const fixed = { ...masa, sources: [
     { label: 'Our HubSpot consulting page', url: 'https://example.com/hubspot-consulting' },
     { label: 'The Masa Global case study', url: 'https://example.com/case-studies/masa-global' },
     { label: 'HubSpot companies and contacts', searched: true },
     { label: 'The sales mailbox', searched: true }
   ] };
-  assert.equal(R.askMissesSource(fixed, EMAIL_SINCE, SOURCES_SINCE), false);
-  assert.equal(R.askClaimsUnsearched(fixed, SOURCES_SINCE), false);
+  assert.equal(R.askMissesSource(fixed, EMAIL_SINCE), false);
+  assert.equal(R.askClaimsUnsearched(fixed), false);
 });
 
 test('what counts as a usable source', () => {
@@ -52,7 +51,7 @@ test('what counts as a usable source', () => {
   assert.equal(misses({ q, sources: [{ label: 'Masa Global' }] }), true, 'a label alone names nothing to open');
   assert.equal(misses({ q, sources: [{ label: 'The page', url: 'javascript:alert(1)' }] }), true, 'a refused link counts for nothing');
   assert.equal(misses({ q, noSource: true }), false, 'nothing outside the office to link');
-  assert.equal(misses({ q, noEmail: true }), false, 'the old way out still reads');
+  assert.equal(misses({ q, noEmail: true }), true, 'no email behind it is not nothing outside the office');
 });
 
 test('words for existing outside things are flagged; asks to make or send something new are not', () => {
@@ -77,17 +76,20 @@ test('words for existing outside things are flagged; asks to make or send someth
   assert.equal(misses({ kind: 'foundation', q: 'Which website do we sell from?' }), false, 'a foundation question');
 });
 
-test('each check counts only from its own start, so older cards are never listed', () => {
-  // Value: protects=no backlog flood the day this ships; fails_when=a card asked before sourcesSince is flagged for outside words, or the email check loses its own date; why_new=new start date; seam=none; no_claim=none beyond protects
-  const before = '2026-11-07T10:00:00Z';
-  assert.equal(misses({ q: '**Update our pricing page?**', askedAt: before }), false, 'outside words before the source check');
-  assert.equal(misses({ q: '**Approve the reply to Will Cox?**', askedAt: before }), true, 'email words keep their own start');
-  assert.equal(R.askClaimsUnsearched({ q: 'Nobody has any record of them.', askedAt: before }, SOURCES_SINCE), false);
+test('an open card is checked at any age, and the old no email flag quiets only email words', () => {
+  // Value: protects=the Masa Global card itself (asked 2026-11-06, still open, carrying "noEmail": true) is listed until it links what it names (owner, 2026-11-08: "still not seeing the context and link"); fails_when=an older open ask is skipped by date, or "noEmail" silences the page and record words; why_new=the first build skipped both; seam=none; no_claim=whether Michael then fixes it
+  const old = { ...masa, askedAt: '2026-11-06T15:16:00Z', noEmail: true };
+  assert.equal(R.askMissesSource(old, EMAIL_SINCE), true, 'old and flagged noEmail, still names a page and a case study');
+  assert.equal(R.askClaimsUnsearched(old), true);
+  assert.equal(R.askMissesSource({ q: '**Approve the reply to Will Cox?**', askedAt: '2026-11-01T10:00:00Z' }, EMAIL_SINCE), false, 'email words keep their own start');
+  assert.equal(R.askMissesSource({ q: '**Approve the reply to Will Cox?**', askedAt: at, noEmail: true }, EMAIL_SINCE), false, 'noEmail still quiets email words');
+  const blocked = { id: 'ryan-masa-ask', title: 'Masa Global testimonial and drafts', status: 'blocked', assignee: 'ryan', humanQA: [old] };
+  assert.deepEqual(R.asksToTidy([blocked]).map((c) => c.issue).sort(), ['no-search', 'no-source'], 'no start date needed');
 });
 
 test('a claim that nothing was found needs where the team looked; harmless phrases do not', () => {
   // Value: protects=absence claims show where the team looked; fails_when=a no-record claim passes with no searched place, or "page not found" is flagged; why_new=SRC-4; seam=none; no_claim=whether the places named were really searched
-  const un = (q, extra = {}) => R.askClaimsUnsearched({ q, askedAt: at, ...extra }, SOURCES_SINCE);
+  const un = (q, extra = {}) => R.askClaimsUnsearched({ q, askedAt: at, ...extra });
   for (const q of ['No one in the office knows who Mark is.', 'There is no record of this customer.', "We couldn't find the contract.", 'We could not find the invoice.', 'No trace of the payment.', 'We found nothing on them.'])
     assert.equal(un(q), true, q);
   for (const q of ['The page shows "page not found".', 'There is nothing on the calendar that day.', 'Approve the refund?'])
@@ -100,7 +102,7 @@ test('open reports are checked on any card, and both kinds reach Michael with wh
   // Value: protects=a notice or scheduled report on a Done card links its sources too (SRC-2), and Michael is told each turn; fails_when=asksToTidy skips cards with no open ask, or a head is missing; why_new=reports were never checked; seam=none; no_claim=whether Michael acts on it
   const report = { kind: 'report', q: '**Ryan found the Masa Global testimonial on our consulting page.** Nobody in the office has any record of them.', askedAt: at, raisedBy: 'ryan' };
   const done = { id: 'ryan-masa', title: 'Masa Global testimonial', status: 'done', assignee: 'ryan', humanQA: [report] };
-  const stuck = R.asksToTidy([done], Infinity, EMAIL_SINCE, SOURCES_SINCE);
+  const stuck = R.asksToTidy([done], Infinity, EMAIL_SINCE);
   assert.deepEqual(stuck.map((c) => c.issue).sort(), ['no-search', 'no-source']);
   const said = R.stuckCardsContext(stuck);
   assert.match(said, /ASKS AND REPORTS ABOUT SOMETHING OUTSIDE THE OFFICE WITH NO LINK TO IT\.[^\n]*"sources"[^\n]*"noSource": true/);
@@ -108,11 +110,10 @@ test('open reports are checked on any card, and both kinds reach Michael with wh
   assert.ok(said.indexOf('NO LINK TO IT') < said.indexOf('NOTHING WAS FOUND'), 'in order');
   // A report the owner already read with Got it is not open any more.
   const read = { ...done, humanQA: [{ ...report, dismissedAt: at, dismissedBy: 'owner', dismissedReason: 'Got it' }] };
-  assert.deepEqual(R.asksToTidy([read], Infinity, EMAIL_SINCE, SOURCES_SINCE), []);
+  assert.deepEqual(R.asksToTidy([read], Infinity, EMAIL_SINCE), []);
   // The Masa Global ask on a Blocked card: both kinds, once each.
   const blocked = { id: 'ryan-masa-ask', title: 'Masa Global testimonial and drafts', status: 'blocked', assignee: 'ryan', humanQA: [masa] };
-  assert.deepEqual(R.asksToTidy([blocked], Infinity, EMAIL_SINCE, SOURCES_SINCE).map((c) => c.issue).sort(), ['no-search', 'no-source']);
-  assert.deepEqual(R.asksToTidy([blocked]), [], 'no start, no check');
+  assert.deepEqual(R.asksToTidy([blocked], Infinity, EMAIL_SINCE).map((c) => c.issue).sort(), ['no-search', 'no-source']);
 });
 
 test('every rule site tells members and Michael to keep and show sources', () => {

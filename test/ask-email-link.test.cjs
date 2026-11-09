@@ -32,20 +32,20 @@ const willCox = {
 
 test('an ask about an email with no link to it is flagged until the link is there', () => {
   // Value: protects=the owner can open the email an ask is about (owner, 2026-11-05), now through the source check (ask-me-source-links.md); fails_when=an ask naming a thread or a reply passes with no email link, or one with a link or marked noEmail is flagged; why_new=the Will Cox card; seam=none
-  assert.equal(R.askMissesSource(willCox, SINCE, Infinity), true, 'the Will Cox card');
+  assert.equal(R.askMissesSource(willCox, SINCE), true, 'the Will Cox card');
   const linked = { ...willCox, q: willCox.q.replace('on his thread', 'on [his thread](email:vikram-moblize-it/%3Cabc%40hubspot.com%3E)') };
-  assert.equal(R.askMissesSource(linked, SINCE, Infinity), false);
-  assert.equal(R.askMissesSource({ ...willCox, noEmail: true }, SINCE, Infinity), false, 'about email in general');
-  assert.equal(R.askMissesSource({ ...willCox, askedAt: '2026-11-01T10:00:00Z' }, SINCE, Infinity), false, 'an older ask keeps its look');
-  assert.equal(R.askMissesSource({ q: '**Approve the price change for Northwind?**', askedAt: '2026-11-05T20:10:00Z' }, SINCE, Infinity), false, 'no email named');
+  assert.equal(R.askMissesSource(linked, SINCE), false);
+  assert.equal(R.askMissesSource({ ...willCox, noEmail: true }, SINCE), false, 'about email in general');
+  assert.equal(R.askMissesSource({ ...willCox, askedAt: '2026-11-01T10:00:00Z' }, SINCE), false, 'an older ask keeps its look');
+  assert.equal(R.askMissesSource({ q: '**Approve the price change for Northwind?**', askedAt: '2026-11-05T20:10:00Z' }, SINCE), false, 'no email named');
   // Ship review, 2026-11-05: what counts, and what must not nag every turn.
   const at = '2026-11-05T20:10:00Z';
-  assert.equal(R.askMissesSource({ q: '**Approve the reply to Will Cox?** Pam sends it.', askedAt: at }, SINCE, Infinity), true, 'a reply is about a message someone sent');
-  assert.equal(R.askMissesSource({ q: '**Send the quote email to Northwind?**', askedAt: at }, SINCE, Infinity), false, 'new outbound mail has no original');
-  assert.equal(R.askMissesSource({ q: '**Approve the price change?** Oscar wrote the report.', askedAt: at }, SINCE, Infinity), false, 'a bare "wrote" is not an email');
-  assert.equal(R.askMissesSource({ q: '**Turn on Email on Pam\'s Access tab?**', askedAt: at }, SINCE, Infinity), false, 'a setting');
-  assert.equal(R.askMissesSource({ kind: 'foundation', q: 'Inbox triage ran without our brand voice; her email tone is unknown.', askedAt: at }, SINCE, Infinity), false, 'a foundation question');
-  assert.equal(R.askMissesSource({ q: '**Approve the reply?** (email: dana@x.com)', askedAt: at }, SINCE, Infinity), true, 'an address is not a link');
+  assert.equal(R.askMissesSource({ q: '**Approve the reply to Will Cox?** Pam sends it.', askedAt: at }, SINCE), true, 'a reply is about a message someone sent');
+  assert.equal(R.askMissesSource({ q: '**Send the quote email to Northwind?**', askedAt: at }, SINCE), false, 'new outbound mail has no original');
+  assert.equal(R.askMissesSource({ q: '**Approve the price change?** Oscar wrote the report.', askedAt: at }, SINCE), false, 'a bare "wrote" is not an email');
+  assert.equal(R.askMissesSource({ q: '**Turn on Email on Pam\'s Access tab?**', askedAt: at }, SINCE), false, 'a setting');
+  assert.equal(R.askMissesSource({ kind: 'foundation', q: 'Inbox triage ran without our brand voice; her email tone is unknown.', askedAt: at }, SINCE), false, 'a foundation question');
+  assert.equal(R.askMissesSource({ q: '**Approve the reply?** (email: dana@x.com)', askedAt: at }, SINCE), true, 'an address is not a link');
 });
 
 test('a change option that sends without another look is flagged; one that comes back is not', () => {
@@ -80,5 +80,5 @@ test('members link the email in messages too, and Michael asks for a missing lin
   assert.ok(hive.includes('When a filing or a message to ${michael} is about an email you read (a reply to approve, what a sender asked), put that email\'s link from your mail read'));
   assert.ok(hive.includes('even when a teammate does the rest of the work'));
   assert.ok(hive.includes("when the report or filing you have lacks one, ask the team member who read it for it before the card goes on Ask me"), 'now through sources (ask-me-source-links.md)');
-  assert.match(hive, /asksToTidy\(tasks, this\.askListSince\(\), this\.leftoversSince\(\), this\.sourcesSince\(\)\)/);
+  assert.match(hive, /asksToTidy\(tasks, this\.askListSince\(\), this\.leftoversSince\(\)\)/);
 });
