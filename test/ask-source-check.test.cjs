@@ -132,7 +132,12 @@ test('every rule site tells members and Michael to keep and show sources', () =>
     'Never shorten or rewrite a link, and never put a tracking link in place of the page.',
     'list each place you looked as {"label": "<the place, like HubSpot contacts>", "searched": true}',
     '- an ask that says nothing was found lists each place the team looked as \\`{"label": "...", "searched": true}\\`;',
-    'A filing about something outside the office adds \\`"sources"\\`'
+    'A filing about something outside the office adds \\`"sources"\\`',
+    // Records named in an ask are linked where they are named (owner, 2026-11-10).
+    'Each record the ask, a part or an option names (a deal, a contact, a company, an invoice) is a link right where its name is',
+    'for a record a tool gave no link for, with the record\\\'s own id from the tool, never its name again; at most six.',
+    'In an "ask", write each record you name (a deal, a contact, a company, an invoice) as a link where you name it',
+    "- each record an ask, a part or an option names (a deal, a contact, a company, an invoice) is a link where its name is"
   ]) assert.ok(hive.includes(pin), pin.slice(0, 70));
   assert.ok(!hive.includes('An ask about a particular email always carries that email'), 'the email-only rule is gone');
   assert.ok(!hive.includes('- an ask built on an email keeps that email'), 'the email-only protocol line is gone');

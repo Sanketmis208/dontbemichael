@@ -97,6 +97,11 @@ An entry is one of three kinds:
 - Revised (owner, 2026-11-10): the Sources row is not on the Ask me card. It shows under See full
   context, in the card detail's question trail, so the card keeps only the decision and the file the
   question names. A link the owner needs to act, like a sign in page, still goes in the question.
+- Records named on the card (owner, 2026-11-10): a deal, contact, company or invoice that the ask,
+  a part or an option names is a link right where its name is, so the owner opens it beside the
+  choice, and it stays in `"sources"` too. Michael asks the member for a missing link before the
+  card goes up. A named only source carries the record's own id from the tool, never its name
+  again (a deal stored as "HubSpot deal, <its name>" left the owner nothing to open).
 - The row leaves out a file the card's words already show as a chip (the question, its parts and
   its options; `sourcesBesideText`), so the draft to approve shows once (owner, 2026-11-10). Only
   the row changes: the checks still count the file. A file chip in the row shows its label, like
