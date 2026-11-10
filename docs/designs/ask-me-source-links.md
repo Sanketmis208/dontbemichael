@@ -94,6 +94,10 @@ An entry is one of three kinds:
   It keeps at most 6 links or named-only entries and 6 searched places, in the order given.
 - A web chip shows its site as the hostname without `www.`, written in punycode, so a lookalike
   domain can't pass for a real one.
+- The row leaves out a file the card's words already show as a chip (the question, its parts and
+  its options; `sourcesBesideText`), so the draft to approve shows once (owner, 2026-11-10). Only
+  the row changes: the checks still count the file. A file chip in the row shows its label, like
+  "First email to Emily, 26 Oct", in place of the file name, which stays in its tooltip.
 
 ```
   member reads page / record / email / file

@@ -101,3 +101,29 @@ export function sourcesOf(entry: unknown): EntrySources {
 export function hasUsableSource(s: EntrySources): boolean {
   return s.items.some((x) => x.kind !== 'rejected');
 }
+
+/** The words a card draws for an entry, where its file chips come from: the
+ *  question, each part's question and each option's label. */
+export function entryText(entry: unknown): string {
+  if (!entry || typeof entry !== 'object') return '';
+  const e = entry as { q?: unknown; parts?: unknown; options?: unknown };
+  const out = [text(e.q)];
+  for (const list of [e.parts, e.options]) {
+    if (!Array.isArray(list)) continue;
+    for (const x of list) {
+      const o = x && typeof x === 'object' ? (x as { q?: unknown; label?: unknown }) : {};
+      out.push(text(o.q), text(o.label));
+    }
+  }
+  return out.filter(Boolean).join('\n\n');
+}
+
+/** The sources a card lists beside words that already draw `shownFiles` as
+ *  chips: a file the words name is not listed again (owner, 2026-11-10: the
+ *  draft to approve showed twice). Only what shows changes; Michael's checks
+ *  read sourcesOf whole, so a file named in both still counts. */
+export function sourcesBesideText(s: EntrySources, shownFiles: readonly string[]): EntrySources {
+  if (!shownFiles.length) return s;
+  const shown = new Set(shownFiles.map((p) => p.trim()));
+  return { items: s.items.filter((x) => x.kind !== 'file' || !shown.has(x.url)), searched: s.searched };
+}

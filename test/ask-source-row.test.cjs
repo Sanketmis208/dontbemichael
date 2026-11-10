@@ -48,3 +48,12 @@ test('the row sits under the question on Ask me and stays in card history', () =
     assert.ok(!/[–—]/.test(d.lookedIn + d.sourceOpens), `${loc}: no dashes`);
   }
 });
+
+test('a source the question already shows is dropped, and a file source shows its label', () => {
+  // Value: protects=the draft to review shows once and a background file says what it is (owner, 2026-11-10: three rows read as three drafts); fails_when=the row lists files the question already draws, or file chips go back to the bare file name; why_new=new display rule; seam=source pins; no_claim=a rendered card (renderer not run)
+  assert.match(row, /sourcesBesideText\(sourcesOf\(entry\), chipPaths\(entryText\(entry\)\)\)/, 'the same parse that draws the question chips');
+  assert.match(row, /<FileChip key=\{i\} path=\{s\.url\} label=\{s\.label\}/);
+  const chip = read('src/renderer/src/components/FileChip.tsx');
+  assert.match(chip, /const name = label\?\.trim\(\) \|\| \(folder \? folderTitle\(path\) : fileTitle\(path\)\);/);
+  assert.match(chip, /title=\{`\u2068\$\{path\}\u2069`\}/, 'the path stays in the tooltip');
+});
