@@ -3195,6 +3195,9 @@
       "sentToMichaelWhole": "已发给 {{godName}}，由其保存为完整清单。"
     }
   },
+  "degradedNotice": {
+    "title": "{{name}} 启动时缺了一些东西"
+  },
   "knowledgeNotice": {
     "title": "公司知识始终开启",
     "body": "你之前关闭了公司知识。它现在没有开关，所以你的团队可以搜索其中的文档。打开列表，移除你不希望他们阅读的文档。",

@@ -111,7 +111,7 @@ test('the card, the tag and the panel line are placed where the design says (SD1
   assert.match(ask, /<OfficeBreakCard \/>\s*<SilentEngineCards \/>/);
   // All clear reads the whole board, whatever department is picked.
   assert.match(ask, /const boardEmpty = !engineCard && !updateShown && !caseShown && !silentShown &&/);
-  assert.match(ask, /\{boardEmpty && !onBreak && !researchNotice && !knowledgeNotice && \(/);
+  assert.match(ask, /\{boardEmpty && !onBreak && !researchNotice && !knowledgeNotice && degraded\.length === 0 && \(/);
   assert.match(read('src/renderer/src/shell/PanelChrome.tsx'), /\{silent \? <NotReportingTag/);
   const stage = read('src/renderer/src/scene/studio/StudioStage.tsx');
   assert.equal((stage.match(/<NotReportingTag/g) ?? []).length, 2, 'member pods and Michael\'s');

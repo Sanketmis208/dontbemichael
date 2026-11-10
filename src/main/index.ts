@@ -220,6 +220,7 @@ import { copyImage, copyRich } from './clipboardCopy';
 import { createReporter } from './reportProblem';
 import { createMailboxNotes, newlyHeld, GRANT_NOTES_FILE, type PendingGrant } from './mailboxNotes';
 import { PromptSubmits, confirmSubmit } from '../shared/submitConfirm';
+import { dismissNotice, emptyDegraded, noteStart, shownNotices, type DegradedNotice } from '../shared/degradedNotices';
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
 
@@ -2458,6 +2459,24 @@ function ownerToast(title: string, body: string): void {
   catch { /* unsupported platform */ }
 }
 
+// Members that started with something missing, kept for Michael's report card
+// on Ask me (src/shared/degradedNotices.ts): the desktop notification above is
+// off when notifications are, and then nobody heard (owner, 2026-11-10).
+let degradedState = emptyDegraded();
+function degradedShown(): DegradedNotice[] {
+  const agents = hive.enabled() ? hive.registry().agents ?? {} : {};
+  return shownNotices(degradedState, (id) => !!agents[id]);
+}
+function pushDegraded(): void {
+  try { liveWebContents()?.send('degraded:changed', degradedShown()); } catch { /* window torn down */ }
+}
+/** A member started: keep what it started without, or clear it. */
+function noteDegradedStart(agentId: string, name: string, degraded: string | undefined): void {
+  const before = JSON.stringify(degradedShown());
+  degradedState = noteStart(degradedState, agentId, name, degraded, Date.now());
+  if (JSON.stringify(degradedShown()) !== before) pushDegraded();
+}
+
 // ─── Office break (issue 124) ────────────────────────────────────────────────
 // The Claude plan reached its usage limit: the office says so and stops typing
 // into Claude terminals, and starts again by itself. Schedules still run on
@@ -4613,10 +4632,13 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
       settingsApplied = !claudeProvider || inj.args.includes('--settings');
       researchWalled = isResearch && settingsApplied;
       seedPrompt = inj.seedPrompt;
-      // A degraded spawn (proxy bridge never bound) is told to the user the same
-      // way breaker escalations are: a native toast, gated on the notifications
-      // setting. The hive already logged it and pushed hive:degraded to the floor.
+      // A degraded spawn (a proxy bridge that never bound, a team list it
+      // couldn't read, a hooks file of the owner's it left alone) is told the
+      // same way breaker escalations are, a native toast gated on the
+      // notifications setting, and always as Michael's report card on Ask me.
+      // A clean start clears the card.
       if (inj.degraded) ownerToast('Agent running degraded', inj.degraded);
+      noteDegradedStart(opts.hive.id, opts.hive.name, inj.degraded);
       // Point the agent's mempalace CLI at the shared palace + the `kg` CLI at the
       // enterprise knowledge store (both no-ops / empty when their flags are off).
       opts.env = isResearch ? { ...(opts.env ?? {}), ...inj.env } : { ...(opts.env ?? {}), ...inj.env, ...memory.env(), ...knowledge.env() };
@@ -6082,6 +6104,15 @@ ipcMain.handle('kg:notice', () => {
   try { return { notice: knowledgeNoticeDue(cfg.knowledgeGraph?.enabled, cfg.knowledgeOnNoticeSeen, () => knowledge.list()) }; } catch { return { notice: false }; }
 });
 ipcMain.handle('kg:noticeSeen', () => { writeConfig({ knowledgeOnNoticeSeen: true }); return { ok: true }; });
+/** Members that started with something missing: Michael's report cards. */
+ipcMain.handle('degraded:list', () => degradedShown());
+/** Got it on one: hidden until it changes or the member starts clean. */
+ipcMain.handle('degraded:dismiss', (_evt, agentId: unknown) => {
+  if (typeof agentId !== 'string') return { ok: false };
+  degradedState = dismissNotice(degradedState, agentId);
+  pushDegraded();
+  return { ok: true };
+});
 /** The one time update card was read (Got it or Open Research settings). */
 ipcMain.handle('research:noticeSeen', () => {
   const cfg = readConfig();

@@ -1,4 +1,5 @@
 import type { StoppedMember } from '../shared/agentExit';
+import type { DegradedNotice } from '../shared/degradedNotices';
 import type { Period } from '../shared/teamPerformance';
 import type { JobRun, RunSuggestion } from '../shared/runCompare';
 import type { HeldRow } from '../shared/heldRecord';
@@ -1082,6 +1083,14 @@ const api = {
   /** Company knowledge has no switch now: whether this owner, who had turned it off, is still to be told. */
   kgNotice: (): Promise<{ notice: boolean }> => ipcRenderer.invoke('kg:notice'),
   kgNoticeSeen: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('kg:noticeSeen'),
+  /** Members that started with something missing: Michael's report cards on Ask me. */
+  degradedNotices: (): Promise<DegradedNotice[]> => ipcRenderer.invoke('degraded:list'),
+  degradedDismiss: (agentId: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('degraded:dismiss', agentId),
+  onDegradedChanged: (cb: (list: DegradedNotice[]) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, list: DegradedNotice[]) => cb(Array.isArray(list) ? list : []);
+    ipcRenderer.on('degraded:changed', listener);
+    return () => ipcRenderer.removeListener('degraded:changed', listener);
+  },
   /** Agents whose connectors changed since they started (missed pushes). */
   connectorsPendingRestarts: (): Promise<string[]> => ipcRenderer.invoke('connectors:pendingRestarts'),
   /** An agent's connectors changed since it started: restart it when idle. */

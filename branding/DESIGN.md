@@ -877,6 +877,12 @@ the person chip's tooltip and spoken label ("Oscar, Finance"; on a foundations c
   longer uses the internet", "This keeps your private data in. One team member, Pete, can look
   things up for them, after a privacy check. Pete is off until you turn them on.", Got it and Open
   Research & privacy (primary, opens Settings on Research & privacy); either clears it for good.
+- **Started with something missing** (owner, 2026-11-10; `src/shared/degradedNotices.ts`): one
+  Report card per member whose last start was degraded (a proxy bridge that never bound, a team
+  list it couldn't read). Title row: the member's avatar and "<name> started with something
+  missing"; the body is the same sentence as the desktop notification; Got it only. It shows
+  whatever the notifications setting is. A clean start clears it; Got it hides it until the
+  sentence changes or the member starts clean.
 
 ### 7.9 Schedule request card (ScheduleRequestCards)
 

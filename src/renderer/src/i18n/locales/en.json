@@ -3195,6 +3195,9 @@
       "sentToMichaelWhole": "Sent to {{godName}} to save as the whole list."
     }
   },
+  "degradedNotice": {
+    "title": "{{name}} started with something missing"
+  },
   "knowledgeNotice": {
     "title": "Company knowledge is always on",
     "body": "You had turned company knowledge off. It has no switch now, so your team can search the documents in it. Open the list to remove any you would rather they not read.",

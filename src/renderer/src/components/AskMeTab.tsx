@@ -6,6 +6,7 @@ import { askHeadline, askTitle, askedAgo } from './askHeadline';
 import { family } from '@/scene/studio/theme';
 import { PixelButton } from './PixelButton';
 import { useStore } from '@/store/store';
+import type { DegradedNotice } from '@shared/degradedNotices';
 import { AgentAvatar } from './AgentAvatar';
 import { type HiveTask, type HumanQA } from './TasksKanban';
 import { compareByNewestAsk } from './askMeOrder';
@@ -90,7 +91,7 @@ export function AskMeTab() {
   const agents = useStore((s) => s.agents);
   const restorable = useStore((s) => s.restorableAgents);
   // One shared read with the pill, the strip and the chips (D3, eng R4).
-  const { tasks, requests: scheduleRequests, offers, proposals, engineSetup, stop, researchNotice, knowledgeNotice, silent, foundations, update, updateLater, cliUpdate, cliUpdateLater, caseStudyWaiting, count: needsCount } = useNeedsYou();
+  const { tasks, requests: scheduleRequests, offers, proposals, engineSetup, stop, researchNotice, knowledgeNotice, degraded, silent, foundations, update, updateLater, cliUpdate, cliUpdateLater, caseStudyWaiting, count: needsCount } = useNeedsYou();
   // Michael's team upgrade card (docs/designs/team-upgrade-card.md) keeps All clear away too.
   const cliShown = cliUpdateToastVisible(cliUpdate, cliUpdateLater);
   // Michael's card for a new version (UpdateCard) keeps All clear away too.
@@ -408,7 +409,7 @@ export function AskMeTab() {
       </div>
       {/* Nothing left (D4, D8): All clear, one light line, and what was just
           answered. The column closes on the next click outside it. */}
-      {boardEmpty && !onBreak && !researchNotice && !knowledgeNotice && (
+      {boardEmpty && !onBreak && !researchNotice && !knowledgeNotice && degraded.length === 0 && (
         <div style={{ padding: '4px 2px 2px' }}>
           <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--cth-ink)' }}>{translate('shell.allClear')}</div>
           <div style={{ marginTop: 4, fontSize: 13, lineHeight: '19px', color: 'var(--cth-ink-3)' }}>{translate(`shell.allClearLine${line}`, { godName })}</div>
@@ -723,6 +724,9 @@ export function AskMeTab() {
       {/* A report, after the questions like every Report card (DESIGN.md 7.8). */}
       {researchNotice && <ResearchNoticeCard />}
       {knowledgeNotice && <KnowledgeNoticeCard />}
+      {degraded.map((n) => (
+        <DegradedNoticeCard key={n.agentId} notice={n} name={agents.find((a) => a.id === n.agentId)?.name ?? n.name} />
+      ))}
     </div>
   );
 }
@@ -792,6 +796,27 @@ function KnowledgeNoticeCard() {
           seen();
           window.dispatchEvent(new CustomEvent('cth:open-settings', { detail: { section: 'Memory & Knowledge' } }));
         }}>{t('knowledgeNotice.open')}</PixelButton>
+      </div>
+    </section>
+  );
+}
+
+/** A member that started with something missing (shared/degradedNotices.ts):
+ *  the sentence the desktop notification says, as a report, so it reaches an
+ *  owner with notifications off too. Got it clears it until it changes. */
+function DegradedNoticeCard({ notice, name }: { notice: DegradedNotice; name: string }) {
+  const { t } = useTranslation();
+  const seen = (): void => { void window.cth.degradedDismiss?.(notice.agentId).then(() => refreshNeedsYou()).catch(() => undefined); };
+  return (
+    <section aria-label={t('degradedNotice.title', { name })} style={card}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <AgentAvatar id={notice.agentId} name={name} size={18} />
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--cth-ink)' }}>{t('degradedNotice.title', { name })}</span>
+        <span style={reportTag}>{t('askMe.report')}</span>
+      </div>
+      <p style={{ margin: '8px 0 12px', fontSize: 12.5, lineHeight: '18px', color: 'var(--cth-ink)', overflowWrap: 'anywhere' }}>{notice.message}</p>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+        <PixelButton variant="secondary" size="sm" onClick={seen}>{t('askMe.gotIt')}</PixelButton>
       </div>
     </section>
   );

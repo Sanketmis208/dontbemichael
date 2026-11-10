@@ -556,8 +556,10 @@ export interface SpawnInjection {
    *  per-pty write-chain as the inbox-wake nudge. (ondev-b) */
   seedPrompt?: string;
   /** Set when the agent spawned in a DEGRADED posture the user should know about
-   *  (today: the proxy-bridge sidecar never bound after retries, so a proxy-tier
-   *  agent such as Crush runs without hive events). Human-readable, one line. */
+   *  (the proxy-bridge sidecar never bound after retries, so a proxy-tier agent
+   *  such as Crush runs without hive events; or the team list couldn't be read).
+   *  Human-readable, one line: the owner reads it as a desktop notification and
+   *  as Michael's report card on Ask me (shared/degradedNotices.ts). */
   degraded?: string;
 }
 
