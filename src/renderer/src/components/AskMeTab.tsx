@@ -21,7 +21,6 @@ import { OfficeBreakCard, useOfficeBreak } from './OfficeBreakNotice';
 import { SilentEngineCards } from './SilentEngine';
 import { silentCards } from '@shared/silentEngine';
 import { FileText } from './FileChip';
-import { SourceRow } from './SourceRow';
 import { ChoiceRows, PartLines } from './AskAnswerFields';
 import { refreshNeedsYou, setupCardShown, updateNeedsYouTasks, useNeedsYou } from '@/shell/useNeedsYou';
 import { useResolvedGodName } from '@/hooks/useResolvedGodName';
@@ -563,8 +562,8 @@ export function AskMeTab() {
               {/* Files the question names are chips that open them (docs/designs/open-file-tab.md). */}
               <FileText source={open.q} who={{ raisedBy: open.raisedBy, assignee: typeof t.assignee === 'string' ? t.assignee : undefined }} />
             </div>
-            {/* What the card rests on, under the question and above the answer (ask-me-source-links.md). */}
-            <SourceRow entry={open} who={{ raisedBy: open.raisedBy, assignee: typeof t.assignee === 'string' ? t.assignee : undefined }} />
+            {/* What the card rests on is under See full context, not here (owner,
+                2026-11-10): the card keeps the decision and the file it names. */}
             {shape.kind === 'choice' && (
               <ChoiceRows
                 options={shape.options}

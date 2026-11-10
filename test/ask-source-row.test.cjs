@@ -33,13 +33,10 @@ test('a web chip shows the site it opens, and labels are plain text', () => {
   assert.match(row, /t\('askMe\.lookedIn', \{ places:/);
 });
 
-test('the row sits under the question on Ask me and stays in card history', () => {
-  // Value: protects=the owner sees sources where they decide and when they look back; fails_when=either mount is removed; why_new=new row; seam=source pins; no_claim=none beyond protects
+test('the row is under See full context, not on the Ask me card', () => {
+  // Value: protects=the Ask me card shows the decision and its file, background sources sit in the card detail (owner, 2026-11-10, revising D1); fails_when=the row comes back on the card or leaves card detail; why_new=owner moved it; seam=source pins; no_claim=none beyond protects
   const ask = read('src/renderer/src/components/AskMeTab.tsx');
-  const q = ask.indexOf('<FileText source={open.q}');
-  const r = ask.indexOf('<SourceRow entry={open}');
-  const choice = ask.indexOf("{shape.kind === 'choice' && (");
-  assert.ok(q > 0 && r > q && choice > r, 'under the question, above the answer');
+  assert.ok(!/SourceRow/.test(ask), 'no sources row on the Ask me card');
   assert.match(read('src/renderer/src/components/TasksKanban.tsx'), /<SourceRow entry=\{e\} who=\{\{ raisedBy: e\.raisedBy, assignee: qaAssignee \}\} margin="8px 0 0" \/>/);
   for (const loc of ['en', 'ar', 'zh-CN']) {
     const d = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).askMe;

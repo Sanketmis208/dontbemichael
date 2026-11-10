@@ -94,6 +94,9 @@ An entry is one of three kinds:
   It keeps at most 6 links or named-only entries and 6 searched places, in the order given.
 - A web chip shows its site as the hostname without `www.`, written in punycode, so a lookalike
   domain can't pass for a real one.
+- Revised (owner, 2026-11-10): the Sources row is not on the Ask me card. It shows under See full
+  context, in the card detail's question trail, so the card keeps only the decision and the file the
+  question names. A link the owner needs to act, like a sign in page, still goes in the question.
 - The row leaves out a file the card's words already show as a chip (the question, its parts and
   its options; `sourcesBesideText`), so the draft to approve shows once (owner, 2026-11-10). Only
   the row changes: the checks still count the file. A file chip in the row shows its label, like
@@ -250,7 +253,7 @@ Find each by its quoted text; line numbers drift.
 | `askMissesSource` table test | The Masa Global card text with no sources is flagged; with a link, a Named only entry with an `id`, an inline or bare link, or a backticked path, it isn't; a Named only entry without an `id`, or only a rejected link, is still flagged; "Draft a new post" and "send the quote email" aren't flagged; `noSource` and `noEmail` opt out; an open report on a Done card is checked; an ask from before `sourcesSince` isn't | The check nags on new work or old cards, or misses a card about an existing page |
 | `askClaimsUnsearched` table test | "Nobody in the office has any record of Masa Global" with no searched place is flagged, and with one it isn't; "page not found" isn't flagged; `noSearch` opts out | An absence claim slips through, or harmless text is flagged |
 | Stuck-card context test | The new heads appear in Michael's turn context in order, and name the ways out | Michael never hears of a missing source |
-| Card render test (the renderer test style the repo uses for AskMeTab) | `SourceRow` in both `AskMeTab.tsx` and `TasksKanban.tsx`; chips with label and site; `javascript:` never a link; the email and file chips reused; the "Looked in" line; no row when there are no sources | A label hides its site, the row shows empty, or history drops it |
+| Card render test (the renderer test style the repo uses for AskMeTab) | `SourceRow` in `TasksKanban.tsx` card detail, never on the Ask me card (revised 2026-11-10); chips with label and site; `javascript:` never a link; the email and file chips reused; the "Looked in" line; no row when there are no sources | A label hides its site, the row shows empty, or history drops it |
 | Protocol text test | Member, filing and Michael rule sites mention `sources` and searched places; the email-only line is gone | A rule site is missed |
 
 Agent rule changes go through the behavior replay ship gate (CEO review 2026-11-07) before shipping.
