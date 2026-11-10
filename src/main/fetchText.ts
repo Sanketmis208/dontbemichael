@@ -21,9 +21,17 @@ export const MAX_REDIRECTS = 5;
  *  so an endless or huge body must not fill memory. */
 export const MAX_BYTES = 8 * 1024 * 1024;
 
+/** Default limit on the whole fetch, redirects included. A skill file can be
+ *  up to 2 MB, and a slow link that is still making progress must not lose it,
+ *  so this is far above the idle limit: it is the cap for a server that keeps
+ *  a fetch alive by trickling, not a speed test. */
+export const DEADLINE_MS = 120_000;
+
 export interface FetchOptions {
-  /** Whole fetch, redirects included. */
+  /** Longest wait with no bytes arriving (the socket's idle timer). */
   timeoutMs?: number;
+  /** Longest the whole fetch may take, redirects included. */
+  deadlineMs?: number;
   maxBytes?: number;
   /** Extra request headers (an API's Accept, its own User-Agent). */
   headers?: Record<string, string>;
@@ -36,10 +44,11 @@ export function getText(url: string, opts: FetchOptions = {}): Promise<string> {
 export function getBuffer(url: string, opts: FetchOptions = {}, redirects = 0, deadlineAt?: number): Promise<Buffer> {
   const timeoutMs = opts.timeoutMs ?? 12000;
   const maxBytes = opts.maxBytes ?? MAX_BYTES;
-  // One deadline for the whole fetch. req.setTimeout alone is an idle timer:
-  // it starts only once the socket connects and restarts on every byte, so a
-  // server sending a byte every few seconds was never cut off.
-  const until = deadlineAt ?? Date.now() + timeoutMs;
+  // Two limits. The idle timer (req.setTimeout) starts only once the socket
+  // connects and restarts on every byte, so a server sending a byte every few
+  // seconds never trips it; the deadline covers the whole fetch, redirects
+  // included, and ends that.
+  const until = deadlineAt ?? Date.now() + (opts.deadlineMs ?? DEADLINE_MS);
   return new Promise((resolve, reject) => {
     // Every way out goes through here, so the promise settles exactly once and
     // a failure always drops the connection.
@@ -59,7 +68,9 @@ export function getBuffer(url: string, opts: FetchOptions = {}, redirects = 0, d
         let next: string;
         try { next = new URL(res.headers.location, url).href; }
         catch { fail(new Error('bad redirect')); return; }
-        settled = true; clearTimeout(timer);
+        // This hop is done: drop its connection, or a 3xx whose body never
+        // ends (or trickles) would hold the socket with nothing left to close it.
+        settled = true; clearTimeout(timer); req.destroy();
         getBuffer(next, opts, redirects + 1, until).then(resolve, reject);
         return;
       }

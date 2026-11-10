@@ -198,13 +198,15 @@ export function pickDownloadAsset(
 
 /** Body of the release tagged v{version}, or undefined. Never throws, and
  *  always answers: through getText, a body cut partway or sent a byte at a
- *  time ends at the 10 s deadline instead of leaving "What's new" spinning
- *  until the window reloads. */
+ *  time ends within 20 s instead of leaving "What's new" spinning until the
+ *  window reloads. The cap counts bytes; the old check counted characters
+ *  (262,144), and notes in a non-Latin script take up to 4 bytes each. */
 function fetchReleaseBody(version: string, done: (notes: string | undefined) => void): void {
   getText(`https://api.github.com/repos/${REPO}/releases/tags/v${version}`, {
     timeoutMs: 10_000,
-    maxBytes: 262_144,
-    headers: { 'User-Agent': 'dontbemichael-updater', Accept: 'application/vnd.github+json' }
+    deadlineMs: 20_000,
+    maxBytes: 1_048_576,
+    headers: { 'user-agent': 'dontbemichael-updater', accept: 'application/vnd.github+json' }
   }).then((text) => {
     const rel = JSON.parse(text) as { body?: string };
     return typeof rel.body === 'string' ? rel.body : undefined;
