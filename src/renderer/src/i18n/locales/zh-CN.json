@@ -1856,6 +1856,7 @@
     "office": "办公室",
     "openInApp": "在应用中打开",
     "copy": "复制",
+    "copyPost": "复制帖子",
     "copied": "已复制",
     "copyFailed": "无法复制",
     "reading": "正在读取…",
@@ -2529,7 +2530,8 @@
     "opensInBrowser": "在浏览器中打开",
     "opensInEmail": "打开邮件应用",
     "copyLinkAddress": "复制链接地址",
-    "table": "表格"
+    "table": "表格",
+    "copyPost": "复制要发布的文字"
   },
   "crash": {
     "line": "此页面出了点问题。",

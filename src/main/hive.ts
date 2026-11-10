@@ -563,6 +563,12 @@ export interface SpawnInjection {
   degraded?: string;
 }
 
+/** A draft the owner posts or sends themselves keeps that text in one fenced
+ *  block tagged `post`, so the file tab shows it as a box with its own Copy and
+ *  the header Copy takes only it (owner, 2026-11-10: Copy took a LinkedIn
+ *  draft's notes along with the post). */
+export const POST_BLOCK_RULE = 'When you write a draft the owner will post or send themselves (a social post, an email or reply they send, a message), put the exact text to post or send in one fenced block tagged post: a line with ```post, the text, then a line with ```. Write it as plain text, exactly as it should appear, with no Markdown marks inside, and keep the status, sources and notes for the owner outside it. The owner sees that block as a box with its own Copy, and Copy takes only it.';
+
 const HOP_CAP = 12;
 /** How many routed messages' hop counts the router keeps, so a reply can be
  *  counted from the message it answers. Oldest go first. */
@@ -2512,7 +2518,7 @@ export class HiveManager {
       ? (meta.isGod
         ? `YOUR FOLDERS: you work in ${meta.cwd}, your folder. It is private: only you and the owner can open it. Each team member has a folder of their own, inside this one unless the owner put it elsewhere. You can read their files, but only they change them, so when something needs to go into a team member's folder, ask them.`
         : `YOUR FOLDERS: you work in ${meta.cwd}. The owner keeps the documents you need there, so read it for context first, and save everything you produce there: drafts, reports, spreadsheets. It is private: only you, anyone sharing this folder, and ${godNameForPrompt} can open it, and other team members' folders are private to them.`)
-        + ` The hive (${root}) is only for coordination: your memory notes, inbox and outbox. Save documents, drafts and other work outside it. You can open PDFs and images directly.`
+        + ` The hive (${root}) is only for coordination: your memory notes, inbox and outbox. Save documents, drafts and other work outside it. You can open PDFs and images directly. ${POST_BLOCK_RULE}`
       : '';
 
     // A business office (one with a business folder) gets the rewritten

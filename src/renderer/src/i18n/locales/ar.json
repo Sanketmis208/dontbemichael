@@ -1856,6 +1856,7 @@
     "office": "المكتب",
     "openInApp": "فتح في التطبيق",
     "copy": "نسخ",
+    "copyPost": "نسخ المنشور",
     "copied": "تم النسخ",
     "copyFailed": "تعذّر النسخ",
     "reading": "جارٍ القراءة…",
@@ -2529,7 +2530,8 @@
     "opensInBrowser": "يفتح في متصفحك",
     "opensInEmail": "يفتح تطبيق البريد",
     "copyLinkAddress": "نسخ عنوان الرابط",
-    "table": "جدول"
+    "table": "جدول",
+    "copyPost": "نسخ النص المراد نشره"
   },
   "crash": {
     "line": "حدث خطأ في هذه الشاشة.",

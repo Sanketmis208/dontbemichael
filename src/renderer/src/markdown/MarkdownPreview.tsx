@@ -38,6 +38,8 @@ import { PLACE_SCHEME, parsePlace } from '@shared/settingsPlaces';
 import { EMAIL_SCHEME, parseEmailHref } from '@shared/emailLink';
 import { EmailChip } from './EmailChip';
 import { placeUrlTransform } from './placeUrl';
+import { PostBox } from './PostBox';
+import { isPostLang } from '@/components/fileTabCopy';
 import { rehypeAutoDir } from './rehypeAutoDir';
 import { useRtl } from '@/i18n/useDirection';
 
@@ -200,6 +202,16 @@ export const MarkdownPreview = memo(function MarkdownPreview({
           ),
           // Right aligned columns (GFM `--:`) are amounts: marked here, not
           // matched on the inline style, so the dock can set them in mono (5.1A).
+          // A fenced block tagged `post` is the exact text a draft is meant to
+          // post or send: a box in the page's own type with its own Copy
+          // (PostBox). Any other fenced block stays code.
+          pre: ({ node, ...props }) => {
+            const code = (node as { children?: Array<{ tagName?: string; properties?: Record<string, unknown> }> } | undefined)?.children?.[0];
+            if (code?.tagName === 'code' && isPostLang(code.properties?.className)) {
+              return <PostBox text={hastText(code).replace(/\n$/, '')} />;
+            }
+            return <pre {...props} />;
+          },
           th: ({ node: _node, ...props }) => <th {...props} className={numClass(props.style)} />,
           td: ({ node: _node, ...props }) => <td {...props} className={numClass(props.style)} />,
           // Images. LOCAL ones render for real (bytes via the root-confined fs

@@ -1856,6 +1856,7 @@
     "office": "Office",
     "openInApp": "Open in app",
     "copy": "Copy",
+    "copyPost": "Copy post",
     "copied": "Copied",
     "copyFailed": "Couldn't copy",
     "reading": "Reading…",
@@ -2529,7 +2530,8 @@
     "opensInBrowser": "opens in your browser",
     "opensInEmail": "opens your email app",
     "copyLinkAddress": "Copy link address",
-    "table": "Table"
+    "table": "Table",
+    "copyPost": "Copy the text to post"
   },
   "crash": {
     "line": "Something went wrong on this screen.",
