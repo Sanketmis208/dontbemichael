@@ -1479,8 +1479,11 @@ half written message survives the switch.
   border at 40%, never a left stripe (that stays Ask me's); avatar, title 13/600, evidence 12
   in `amber` text, primary Apply, secondary Not now, and a `green` soft "Saves about $N a
   week" chip. An applied card turns `green` soft with "Applied." and Undo. Beside them, once a
-  change was applied, Saved by your changes: "Measuring" with the first result date for 7
-  days, then mono dollars in `green` text; before any change it is not there. With nothing to
+  change was applied, Your changes: one line per change still in place (owner, 2026-11-09),
+  avatar, what it set (13/600), its result in 12 ("Saved about $N since <day>" in `green`
+  text, "Cost about $N more since <day>" in `amber` text, or `ink-3` "Measuring, first result
+  <day>" and "Too little work to tell yet") and a secondary Undo. Never one signed total and
+  never a minus sign; before any change it is not there. With nothing to
   recommend, no card: one short `t-meta` `ink-3` line under the header, "Nothing to change
   this week", or before two full weeks of work "Advice from Thu, Oct 29" (owner, 2026-10-19).
   A run suggestion, from the owner's Went wrong on a scheduled job (§7.26, Scheduled jobs;

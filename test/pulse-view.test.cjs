@@ -33,8 +33,13 @@ test('Pulse is a fixed view tab between Tasks and Who talks to whom, and takes t
 test('sections run recommendations, what got done (one grid, then the quiet chips), then team at work', () => {
   // Value: protects=D2 and D3 order (owner, 2026-10-15) as the smart view set it on 2026-10-19 (pulse-smart-view.md 1E: Kept safe and the row of four join the What got done grid, eng R3), the saved card only once something was applied, and the start date with its reason behind the (i); fails_when=a section moves, the grid stops reading pulseTiles, a table returns, the saved card shows with nothing in it, or the start date loses its reason; why_new=owner asks 2026-10-15 and 2026-10-19; seam=none; no_claim=pixel layout (live check)
   assert.equal(en.pulse.recommendations, 'Recommendations');
-  assert.match(view, /const savedShown = view\.saved\.state !== 'none';/);
+  assert.match(view, /const savedShown = savedChanges\.length > 0;/);
   assert.match(view, /\{savedShown && <div/);
+  // One line per change with its own Undo, never a signed total (owner, 2026-11-09).
+  assert.match(view, /\{savedChanges\.map\(\(c\) => \{[\s\S]*?onClick=\{\(\) => \{ void undo\(c\.appliedId\); \}\}/);
+  assert.doesNotMatch(view, /'−'/, 'no minus sign: the words say saved or cost more');
+  assert.equal(en.pulse.changeCostMore, 'Cost about {{usd}} more since {{day}}');
+  assert.equal(en.pulse.savedByChanges, undefined);
   assert.match(en.pulse.adviceStarts, /\{\{day\}\}[\s\S]*two full weeks[\s\S]*\{\{since\}\}/);
   assert.doesNotMatch(en.pulse.adviceStarts, /record/i, 'business words, not records (owner, 2026-10-15)');
   assert.match(view, /tip=\{noAdvice && view\.adviceFrom \? t\('pulse\.adviceStarts', \{ day: fmtDay\(view\.adviceFrom\), since: /, 'the why sits behind the header (i) (1D)');
@@ -76,7 +81,7 @@ test('Team at work folds members with no working time into one disclosure row, a
 test('suggestions are amber soft cards, applied ones green with Undo; no coral and no left stripe anywhere', () => {
   // Value: protects=D10, D12 and calm by default; fails_when=a suggestion gets coral or a stripe, or Apply loses its Undo; why_new=design D12; seam=none; no_claim=none beyond protects
   assert.match(view, /background: 'var\(--cth-amber-soft\)'/);
-  assert.match(view, /background: 'var\(--cth-green-soft\)'[\s\S]{0,400}t\('pulse\.undo'\)/);
+  assert.match(view, /background: 'var\(--cth-green-soft\)'[\s\S]{0,420}t\('pulse\.undo'\)/);
   assert.doesNotMatch(view, /--cth-coral/, 'no coral color on Pulse');
   assert.doesNotMatch(view, /borderLeft|borderInlineStart/);
   assert.match(view, /window\.cth\.pulseApply\(a\.id, a\.change\)/, 'apply sends what the card showed');

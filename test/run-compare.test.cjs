@@ -117,7 +117,7 @@ test('Pulse keeps its cards and their Apply, Undo and Not now; the suggestion ca
   // Value: protects=existing Pulse behavior; fails_when=the new card replaces or breaks the schedule and model cards; why_new=D6; seam=source; no_claim=the rendered view
   const view = read('src/renderer/src/components/pulse/PulseView.tsx');
   assert.match(view, /const r = await window\.cth\.pulseApply\(a\.id, a\.change\);/);
-  assert.match(view, /const r = await window\.cth\.pulseUndo\(item\.appliedId\);/);
+  assert.match(view, /const r = await window\.cth\.pulseUndo\(appliedId\);/);
   assert.match(view, /const notNow = async \(a: Advice\): Promise<void> => \{ await window\.cth\.pulseDismiss\(a\.id\); await load\(\); \};/);
   assert.match(view, /<Section title=\{t\('pulse\.recommendations'\)\}[^\n]*\n\s*\{\/\* Run comparisons[^\n]*\*\/\}\n\s*<RunSuggestions onShown=\{setRunCards\} \/>/);
   const cards = read('src/renderer/src/components/pulse/RunSuggestions.tsx');

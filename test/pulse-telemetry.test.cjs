@@ -300,7 +300,9 @@ test('Apply changes a schedule only if it still is what the advice saw; Undo res
   assert.equal(missions()[0].intervalMs, 4 * 3600_000);
   assert.deepEqual(svc.apply(advice.id, advice.change), { ok: false, error: 'stale' }, 'a second click finds it changed');
   assert.equal(svc.snapshot('this-week').advice.length, 0, 'an applied suggestion waits for new evidence');
-  assert.equal(svc.snapshot('this-week').saved.state, 'measuring');
+  const saved = svc.snapshot('this-week').saved;
+  assert.equal(saved.state, 'changes');
+  assert.deepEqual(saved.changes.map((c) => [c.appliedId, c.agentId, c.change, c.result.state]), [[r.appliedId, 'toby', { kind: 'schedule', missionId: 'm1', toMs: 4 * 3600_000 }, 'measuring']], 'one line per change, what it set, measuring for a week');
   assert.equal(svc.undo(r.appliedId).ok, true);
   assert.equal(missions()[0].intervalMs, 2 * 3600_000);
   assert.deepEqual(svc.undo(r.appliedId), { ok: false, error: 'stale' }, 'undone once');

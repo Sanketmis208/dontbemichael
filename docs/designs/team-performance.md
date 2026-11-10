@@ -1143,7 +1143,7 @@ Step 0: 4/10. Focus: all 7 passes (owner, D1).
   FEATURE              | LOADING          | EMPTY                          | ERROR                              | SUCCESS             | PARTIAL
   ---------------------|------------------|--------------------------------|------------------------------------|---------------------|------------------------------
   Ways to save         | last snapshot    | "Nothing to change this week." | hidden (store unavailable message) | amber soft cards    | days with gaps left out (D15)
-  Saved by your changes| last snapshot    | "Apply a suggestion to start"  | hidden                             | $ amount, since     | "Measuring, first result <d>"
+  Your changes         | last snapshot    | "Apply a suggestion to start"  | hidden                             | a line per change   | "Measuring, first result <d>"
   What got done        | last snapshot    | zeros with "Collecting since"  | "Pulse numbers are unavailable"    | 4 tiles             | gap notice above the tiles
   Team tiles           | last snapshot    | "Your office is empty" + Hire  | per tile "Could not load"          | tiles               | "Too few to compare yet"
   Office row           | last snapshot    | zeros                          | per section message                | bar, ring, numbers  | ring hidden on an API key
@@ -1203,6 +1203,13 @@ action or opens a member); motion none needed; premium without shadows yes.
 - D16 (7A): Saved by your changes is measured: (cost per piece in the 14 days before the
   change minus cost per piece since) x pieces since, at API prices, labelled "about";
   "Measuring, first result <date>" for the first 7 days; zero or negative says so.
+  Revised 2026-11-09 (owner: "Saved −$49.53" meant nothing to a business owner): the card is
+  Your changes, one line per change still in place with its own Undo, never summed. A
+  schedule change is measured by its runs' cost a day (before, from the first record in the
+  14 days, minus since, times whole days since; the change's day and today left out), since
+  running less often lowers the runs that do work and so raised cost per piece even when
+  spend fell. A model change keeps cost per piece. Fewer than 7 days before a schedule
+  change, or under 5 pieces on either side of a model change: "Too little work to tell yet".
 - D17: the final reference mockup was updated to match every decision.
 
 ## Approved Mockups
