@@ -7,15 +7,9 @@ import { readFileSync, copyFileSync, mkdirSync, statSync } from 'node:fs';
 const pkg = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf-8'));
 const define = { __APP_VERSION__: JSON.stringify(pkg.version) };
 
-// Anonymous product analytics (src/main/analytics.ts, contract in TELEMETRY.md).
-// The PostHog project key is a PUBLIC write-only token, but it is still injected
-// at BUILD time from the environment (release CI sets it from a repo secret)
-// rather than committed: local dev builds and forks compile with '' and the
-// whole analytics module no-ops for them. Main-process only.
+// Main-process only build-time values.
 const defineMain = {
   ...define,
-  __POSTHOG_KEY__: JSON.stringify(process.env.POSTHOG_KEY ?? ''),
-  __POSTHOG_HOST__: JSON.stringify(process.env.POSTHOG_HOST ?? 'https://us.i.posthog.com'),
   // Automatic failure reports (docs/designs/auto-report-failures.md): a key that
   // can write issues in the private reports repo only. Release CI injects it;
   // local and forked builds get '' and never send.

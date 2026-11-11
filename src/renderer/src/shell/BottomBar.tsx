@@ -151,7 +151,6 @@ function TalkToMichael() {
     const ok = await sendToMichael(godId, text, attachments, replyTo ? { inReplyTo: replyTo.inReplyTo, conversation: replyTo.conversation } : undefined);
     setSending(false);
     if (!ok) { setSendFailed(true); return; }
-    void window.cth.trackMessageSent('composer');
     setDraft(godId, '');
     setAttachments([]);
     setReplyTo(null);

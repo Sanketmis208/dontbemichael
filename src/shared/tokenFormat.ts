@@ -28,14 +28,6 @@ export function fmtTokens(n: number): string {
   ]);
 }
 
-/** The tool waterfall's count: whole thousands, one decimal of millions. */
-export function fmtToolTokens(n: number): string {
-  return compact(n, [
-    { size: 1e3, suffix: 'K', text: (v) => v.toFixed(0) },
-    { size: 1e6, suffix: 'M', text: (v) => v.toFixed(1) }
-  ]);
-}
-
 /** A worker row's count: 1.5k / 15k / 1.50M. */
 export function fmtWorkerTokens(n: number): string {
   return compact(n, [

@@ -203,21 +203,11 @@
     "terminal": "工作",
     "git": "Git",
     "messages": "消息",
-    "traces": "追踪",
     "memory": "记忆",
     "profile": "简介",
     "capabilities": "权限",
     "resizeLabel": "调整侧边栏大小",
     "resizeTitle": "拖动以调整大小，双击以重置。"
-  },
-  "toolWaterfall": {
-    "fresh": "新计 {{tokens}}t",
-    "cache": "缓存 {{tokens}}t（{{pct}}%）",
-    "total": "共 {{tokens}}t",
-    "noTelemetry": "尚无实时遥测，生成/重新生成该智能体以接入",
-    "empty": "尚未捕获到工具调用。智能体运行的每个工具都会以真实耗时显示在这里。",
-    "barOk": "{{tool}} · {{ms}}ms · 成功",
-    "barFailed": "{{tool}} · {{ms}}ms · 失败"
   },
   "agentDetail": {
     "open": "打开",
@@ -303,8 +293,6 @@
       "maintenance": "维护",
       "autoCompact": "定时自动压缩",
       "autoCompactDesc": "按计划为每个智能体排队执行 /compact（默认每小时；间隔在触发器标签页设置）。默认关闭，长期运行的智能体不开启可能会撑爆上下文。",
-      "telemetry": "匿名使用统计",
-      "telemetryDesc": "少量匿名事件（打开应用、生成智能体、使用功能），绝不包含提示词、代码、路径或智能体输出。完整清单见 TELEMETRY.md。",
       "language": "语言",
       "languageDesc": "选择应用界面的语言。默认英文。",
       "dangerZone": "危险区",
@@ -810,8 +798,6 @@
       "notificationsDesc": "有事需要你时，{{godName}} 会提醒你，即使你不在电脑前。第一次提醒时，系统可能会请求权限。",
       "openAtLogin": "开机启动",
       "openAtLoginDesc": "重启后自动重新启动 harness，让计划任务自行恢复。无提示，立即生效。",
-      "shareStats": "共享匿名使用统计",
-      "shareStatsDesc": "少量匿名事件（打开应用、生成智能体、使用功能），用于改进本应用。绝不包含提示词、代码、文件路径或智能体输出。完整清单见 TELEMETRY.md；可随时在设置中更改。",
       "stayAwake": "接电源时保持唤醒（手动）",
       "stayAwakeDescMac": "macOS 只允许你自己设置这一项。在「电池」→「选项」中，开启「防止显示器关闭时自动进入睡眠」（接电源适配器时），这样显示器休眠时定时器也能继续触发。没有防休眠设置的话 Mac 仍会真正休眠，工作会保存并在唤醒后补上。",
       "stayAwakeDescWindows": "Windows 只允许你自己设置这一项。在「设置」→「系统」→「电源和电池」→「屏幕和睡眠」中，将「使用电源时，使设备进入睡眠状态」设为「从不」（或延长时间），这样定时器也能继续触发。没有防休眠设置的话 Windows 仍会真正休眠，工作会保存并在唤醒后补上。",
@@ -1792,8 +1778,6 @@
     "saved": "已保存",
     "save": "保存",
     "copyAbsolutePath": "复制绝对路径",
-    "openInIde": "在 IDE 中打开",
-    "saveFailed": "出错",
     "loading": "加载中…",
     "loadingEditor": "正在加载编辑器…",
     "nothingOpen": "没有打开的文件",
@@ -2350,14 +2334,6 @@
     "confirmForce": "不等了直接退出？未保存的工作会丢失。",
     "keepClosing": "继续收尾",
     "tryAgain": "重试"
-  },
-  "releaseDrop": {
-    "loading": "稍等…",
-    "title": "新功能",
-    "dialogLabel": "{{version}} 版本的新功能",
-    "frameTitle": "{{version}} 的新功能",
-    "close": "关闭版本说明",
-    "closeTip": "关闭 (Esc)"
   },
   "connectors": {
     "title": "Claude 连接器",

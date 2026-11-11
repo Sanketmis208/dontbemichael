@@ -3,8 +3,7 @@ import type { WebContents } from 'electron';
 import { request as httpsRequest } from 'node:https';
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { DEFAULT_DROP_HTML } from '../shared/releaseDrop';
-import { reduceStatus, clampPercent, isNewerRelease, installerUrl, isInstallRefusal, shouldShowReleaseDrop, REPO, type UpdateStatus } from '../shared/updateState';
+import { reduceStatus, clampPercent, isNewerRelease, installerUrl, isInstallRefusal, shouldMarkJustUpdated, REPO, type UpdateStatus } from '../shared/updateState';
 
 /**
  * Auto-update from GitHub releases.
@@ -453,90 +452,58 @@ export function initAutoUpdater(getWebContents: () => WebContents | null): void 
    */
   ipcMain.handle('update:simulate', (_evt, opts: unknown) => {
     if (app.isPackaged) return { ok: false, error: 'simulate is dev-only' };
-    const o = (opts ?? {}) as { state?: string; version?: string; notes?: string; drop?: boolean };
+    const o = (opts ?? {}) as { state?: string; version?: string; notes?: string };
     const version = typeof o.version === 'string' && o.version ? o.version : '9.9.9';
-    // `drop: true` previews the centered release page built from the default
-    // template; without it you get Michael's update card on Ask me. Both paths ship, so
-    // both need to be previewable — defaulting to one would leave the other
-    // only ever seen by users.
-    const notes = typeof o.notes === 'string'
-      ? o.notes
-      : o.drop === true
-        ? `<!-- drop -->\n${DEFAULT_DROP_HTML}\n<!-- /drop -->`
-        : SIMULATED_NOTES;
+    const notes = typeof o.notes === 'string' ? o.notes : SIMULATED_NOTES;
     emit(o.state === 'downloaded'
       ? { state: 'downloaded', version, notes }
       : { state: 'available-manual', version, notes, url: `https://github.com/${REPO}/releases/tag/v${version}`, downloadUrl: installerUrl(version, process.platform, process.arch) });
     logLine(`SIMULATED ${o.state === 'downloaded' ? 'downloaded' : 'available-manual'} ${version} (dev only)`);
     return { ok: true };
   });
-  // DEV ONLY — `MD_DROP_PREVIEW=<path to a release body .md>` (see
-  // `npm run dev:drop`) feeds that file through the simulate path on boot, so a
-  // drop under authoring opens centred the moment the window is up, with no
-  // DevTools paste. The renderer pulls `update:current` on mount, so emitting
-  // before the window exists is fine. Same hard gate as `update:simulate`.
-  const previewPath = process.env.MD_DROP_PREVIEW;
-  if (!app.isPackaged && previewPath) {
-    try {
-      const notes = readFileSync(previewPath, 'utf8');
-      const m = notes.match(/what[’']?s\s+new\s+in\s+v?(\d+\.\d+\.\d+)/i) ?? notes.match(/\bv(\d+\.\d+\.\d+)\b/);
-      const version = m?.[1] ?? '9.9.9';
-      emit({ state: 'available-manual', version, notes, url: `https://github.com/${REPO}/releases/tag/v${version}`, downloadUrl: installerUrl(version, process.platform, process.arch) });
-      logLine(`SIMULATED available-manual ${version} from MD_DROP_PREVIEW=${previewPath} (dev only)`);
-    } catch (e) {
-      logLine(`MD_DROP_PREVIEW unreadable: ${errText(e)}`);
-    }
-  }
-  // First launch after the version moved: show THIS release's page. The stamp
-  // is the updater's own (analytics keeps a separate one that only exists when
-  // telemetry initialised). Skipped when a preview is being forced, and the
-  // fetch failing just means no page, never a broken boot.
-  if (!previewPath) {
-    try {
-      const stampFile = join(app.getPath('userData'), 'last-run-version');
-      let previous: string | null = null;
-      try { previous = readFileSync(stampFile, 'utf8').trim() || null; } catch { /* first run */ }
-      const current = app.getVersion();
-      // The stamp write stays UNCONDITIONAL on a version change (it already ran
-      // even when `previous` was null), which is what arms every install that
-      // boots this version even once. Its own try/catch so an unwritable
-      // userData cannot skip the decision below by throwing to the outer catch.
-      let stamped = false;
-      if (previous !== current) {
-        try {
-          mkdirSync(app.getPath('userData'), { recursive: true });
-          writeFileSync(stampFile, current + '\n', 'utf8');
-          stamped = true;
-        } catch (e) {
-          logLine(`last-run-version stamp failed: ${errText(e)}`);
-        }
+  // First launch after the version moved: fetch THIS release's notes for What's
+  // new (the just-updated state). The stamp is the updater's own. The fetch
+  // failing just means no notes, never a broken boot.
+  try {
+    const stampFile = join(app.getPath('userData'), 'last-run-version');
+    let previous: string | null = null;
+    try { previous = readFileSync(stampFile, 'utf8').trim() || null; } catch { /* first run */ }
+    const current = app.getVersion();
+    // The stamp write stays UNCONDITIONAL on a version change (it already ran
+    // even when `previous` was null), which is what arms every install that
+    // boots this version even once. Its own try/catch so an unwritable
+    // userData cannot skip the decision below by throwing to the outer catch.
+    let stamped = false;
+    if (previous !== current) {
+      try {
+        mkdirSync(app.getPath('userData'), { recursive: true });
+        writeFileSync(stampFile, current + '\n', 'utf8');
+        stamped = true;
+      } catch (e) {
+        logLine(`last-run-version stamp failed: ${errText(e)}`);
       }
-      // Gated on the stamp having LANDED, not merely been attempted: if the
-      // stamp cannot be written, `previous` stays null on every future launch,
-      // so firing here would reopen the drop on every single boot forever.
-      // Showing it zero times on an unwritable userData is the lesser failure.
-      if (stamped && shouldShowReleaseDrop(previous, current)) {
-        logLine(`first run of ${current} (previous ${previous ?? 'none'}); fetching its release page`);
-        fetchReleaseBody(current, (notes) => {
-          emit({ state: 'just-updated', version: current, notes });
-          logLine(`just-updated ${current} ${notes ? 'with' : 'without'} release notes`);
-        });
-      }
-    } catch (e) {
-      logLine(`post-update check failed: ${errText(e)}`);
     }
+    // Gated on the stamp having LANDED, not merely been attempted: if the
+    // stamp cannot be written, `previous` stays null on every future launch,
+    // so firing here would mark every single boot as just updated forever.
+    // Marking it zero times on an unwritable userData is the lesser failure.
+    if (stamped && shouldMarkJustUpdated(previous, current)) {
+      logLine(`first run of ${current} (previous ${previous ?? 'none'}); fetching its release page`);
+      fetchReleaseBody(current, (notes) => {
+        emit({ state: 'just-updated', version: current, notes });
+        logLine(`just-updated ${current} ${notes ? 'with' : 'without'} release notes`);
+      });
+    }
+  } catch (e) {
+    logLine(`post-update check failed: ${errText(e)}`);
   }
   ipcMain.handle('update:openRelease', (_evt, url: unknown) => {
     const href = typeof url === 'string' ? url : `https://github.com/${REPO}/releases/latest`;
     // Only ever open the project's releases page — this is not a generic opener.
     if (!href.startsWith(`https://github.com/${REPO}/`)) return { ok: false };
     // An asset URL means the badge's download click, not the notes link. It is
-    // the only positive trace the manual path leaves, and it has to be written
-    // by the build being REPLACED, so whichever later build reads it can only
-    // count installs that ran this one first. Nothing reads it yet —
-    // analytics.ts's update_applied.via does not look at this line — so for now
-    // it is here purely so there is something to pick up. Nothing else depends
-    // on it and openExternal has already been decided above.
+    // the only trace the manual path leaves in updater.log. Nothing depends on
+    // it and openExternal has already been decided above.
     const asset = /\/releases\/download\/v([0-9][^/]*)\//.exec(href);
     if (asset) logLine(`manual download opened: ${asset[1]}`);
     void shell.openExternal(href);

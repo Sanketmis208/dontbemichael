@@ -3,12 +3,12 @@ import { type SidebarTab } from '@/store/store';
 import { type AccentColorName } from '@/design/tokens';
 import { type IconName } from './Icon';
 import { PanelTabs } from '@/shell/PanelChrome';
-import { SHOW_GIT, SHOW_TRACES } from '@shared/buildFeatures';
+import { SHOW_GIT } from '@shared/buildFeatures';
 
 // v0.3.4: the files tab is gone — the per-agent IDE button (header) opens the
 // full Monaco editor + file tree, which superseded the read-only browser.
 const ALL_TABS: { key: SidebarTab; labelKey: string; icon: IconName }[] = [
-  // Owner-facing tabs first; the technical ones (terminal, git, traces) last
+  // Owner-facing tabs first; the technical ones (terminal, git) last
   // (owner, 2026-09-25).
   // Who this agent is: job, what to send them, key facts (docs/designs/agent-profile.md).
   { key: 'profile',  labelKey: 'sidebar.profile',  icon: 'info' },
@@ -19,11 +19,10 @@ const ALL_TABS: { key: SidebarTab; labelKey: string; icon: IconName }[] = [
   // What the agent has learned, as notes (docs/designs/memory-tab-readable.md).
   { key: 'memory',    labelKey: 'sidebar.memory',    icon: 'ledger' },
   { key: 'terminal', labelKey: 'sidebar.terminal', icon: 'terminal' },
-  { key: 'git',      labelKey: 'sidebar.git',      icon: 'code' },
-  { key: 'traces',   labelKey: 'sidebar.traces',   icon: 'web' }
+  { key: 'git',      labelKey: 'sidebar.git',      icon: 'code' }
 ];
-/** GIT and TRACES are hidden in this build (src/shared/buildFeatures.ts). */
-const TABS = ALL_TABS.filter((tab) => (tab.key !== 'git' || SHOW_GIT) && (tab.key !== 'traces' || SHOW_TRACES));
+/** GIT is hidden in this build (src/shared/buildFeatures.ts). */
+const TABS = ALL_TABS.filter((tab) => tab.key !== 'git' || SHOW_GIT);
 
 export interface SidebarTabsProps {
   current: SidebarTab;

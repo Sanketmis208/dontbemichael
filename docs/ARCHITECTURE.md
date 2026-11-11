@@ -184,8 +184,7 @@ src/
                              a restart
     modelCatalog.ts / hero.ts / fetchText.ts   the remote model catalog and the Settings hero card, fetched over https and
                              cached, never fatal; fetchText.ts is the one https fetcher they share
-    analytics.ts             product analytics (PostHog), anonymous, allowlisted and governed by TELEMETRY.md; off in this
-                             build (COLLECT_USAGE_STATS)
+    doNotTrack.ts            the DO_NOT_TRACK check that stops failure reports from sending
     failureReport.ts / failureSender.ts   automatic failure reports (docs/designs/auto-report-failures.md, TELEMETRY.md):
                              failures the developers can fix in code, folded by fingerprint into failures.jsonl in the
                              app's data folder, then filed as fixed fields to the private reports repo; on in this build
@@ -215,11 +214,10 @@ src/
                              undone (rules in shared/safeClear.ts)
     terminalAtFolder.ts      opens a terminal window at a folder, per platform; off in this build (SHOW_OPEN_TERMINAL)
     worktreeDeps.ts          links the base checkout's dependencies into an isolated worktree
-    realtime.ts / realtimeActions.ts / realtimeCompletionWatcher.ts / realtimeFloorWatcher.ts / realtimeCost.ts
-                             Realtime Michael, voice over OpenAI: the token mint, the voice action spine, the completion
-                             and floor watchers, and cost helpers. Off in this build (SHOW_VOICE)
-    freeflow.ts / groq.ts    Free Flow dictation through Groq Whisper (off in this build, SHOW_VOICE), and a Groq chat
-                             helper for the VDE editor's AI assist that nothing calls today
+    realtime.ts / realtimeActions.ts / realtimeCompletionWatcher.ts / realtimeFloorWatcher.ts
+                             Realtime Michael, voice over OpenAI: the token mint, the voice action spine, and the
+                             completion and floor watchers. Off in this build (SHOW_VOICE)
+    freeflow.ts              Free Flow dictation through Groq Whisper (off in this build, SHOW_VOICE)
   shared/                    code both processes use
     buildFeatures.ts         switches for surfaces hidden in this build (git, IDE, temp workers, org trigger, Skills)
     agentProvider.ts         engine presets; BUILD_ENGINES is what setup offers (Claude Code today)
@@ -370,7 +368,6 @@ src/
     OfficeFolderMissing,     launch screen shown only when the office folder is missing
     CliUpdateNotice,         "team upgrade ready" title-bar chip and corner note; its click runs closing time
                              with relaunch, "later" waits for a newer version (localStorage cth.cliUpdateLaterFor)
-    ToolWaterfall,           per-agent tool-span waterfall for the observability view
     TasksKanban,             dependency-aware kanban board (the Tasks view); the owner closes a card as Done,
                              never deletes it, and a Done card shows Michael's result (hiveTasks.ts holds the card
                              types and parser)

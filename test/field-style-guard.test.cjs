@@ -31,7 +31,7 @@ const FILE_EXCEPTIONS = [
   // The floor, and the voice overlays drawn on it.
   'scene/', 'realtime/',
   // The terminal and the code editor.
-  'ide/', 'components/CodeEditor.tsx'
+  'ide/'
 ];
 
 function tsxFiles(dir, out = []) {

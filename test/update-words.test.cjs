@@ -72,8 +72,8 @@ test('the update toasts and chips read their words from the locale', () => {
   const cli = read('src/renderer/src/components/CliUpdateNotice.tsx');
   assert.doesNotMatch(cli, /upgrade waiting|Team upgrade ready|Close office/);
   assert.match(cli, /t\('cliUpdate\.bodyPlural', \{ version: status\.installed, count: status\.behind \}\)/);
-  const toast = read('src/renderer/src/components/UpdateToast.tsx');
-  assert.doesNotMatch(toast, /Restart to update|Open releases|Star us on GitHub/);
+  const card = read('src/renderer/src/components/UpdateCard.tsx');
+  assert.doesNotMatch(card, /['">`]\s*(Restart to update|Open releases|Star us on GitHub)/);
   const badge = read('src/renderer/src/components/UpdateBadge.tsx');
   assert.match(badge, /const words = badgeWords\(status, __APP_VERSION__, t\);/);
   assert.doesNotMatch(badge, /is downloading in your browser|got it</);

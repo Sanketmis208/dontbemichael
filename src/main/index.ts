@@ -132,7 +132,7 @@ import { CASE_DRAFT_TIMEOUT_MS, CaseStudyService, caseInput, savePaths } from '.
 import { readSiteLogo } from './siteLogo';
 import type { CaseFont } from '../shared/caseStudy';
 import { CostLedgerStore } from './costLedger';
-import { analytics, dntSet, isRendererMessageSurface } from './analytics';
+import { dntSet } from './doNotTrack';
 import { createFailureReporter, FLUSH_MS } from './failureReport';
 import { breakerArm, crashContextFor, loopAgentContext, loopAgentDetail } from '../shared/failureReport';
 import { createFailureSender, SEND_EVERY_MS } from './failureSender';
@@ -141,7 +141,6 @@ import { createFailureSender, SEND_EVERY_MS } from './failureSender';
  *  release CI from FAILURE_REPORT_KEY, '' in every other build. */
 declare const __REPORT_KEY__: string;
 import { writeFileAtomic } from './atomicFile';
-import type { SpawnFailReason } from './analytics';
 import { IntegrationBroker } from './integrationBroker';
 import * as integrations from './integrations';
 import { MailService, handleMailRequest, saveMailbox, removeMailbox, setAgentCapabilities, setSendOnly, cannotStoreReason, classifyMailError, type AddMailboxInput } from './mail';
@@ -169,7 +168,7 @@ import { ControlRegistry } from './control';
 import { WorkerWakeWatchdog, type WorkerWakeFacts } from './workerWake';
 import { inboxNudgeText } from '../shared/hiveNudge';
 import { resolveGodName } from '../shared/godIdentity';
-import { COLLECT_USAGE_STATS, SHOW_DELIVERY_SWITCH, SHOW_VOICE, SHOW_SLACK, SHOW_MAILBOXES } from '../shared/buildFeatures';
+import { SHOW_DELIVERY_SWITCH, SHOW_VOICE, SHOW_SLACK, SHOW_MAILBOXES } from '../shared/buildFeatures';
 import { fetchHireManifest, readHireManifestFiles } from './hire';
 import { parseHireDeepLink, type HireManifest } from '../shared/hire';
 import { ClosingTimeController } from './closingTime';
@@ -453,7 +452,7 @@ ipcMain.handle('cliUpdate:current', () => lastCliUpdate);
  *  in this PTY; when it exits cleanly the exit handler re-runs the SAME spawn (with
  *  install disabled) so the freshly-installed CLI launches in the SAME pty/window —
  *  no user click. Cleared the moment it's consumed, so it can never loop installs. */
-const pendingInstallRelaunch = new Map<string, { opts: AgentSpawnOptions; owner: Electron.WebContents | null; bin: string; rung: string }>();
+const pendingInstallRelaunch = new Map<string, { opts: AgentSpawnOptions; owner: Electron.WebContents | null; bin: string }>();
 const hive = new HiveManager(
   () => readConfig().harnessHome,
   (channel, payload) => {
@@ -483,9 +482,8 @@ const telemetry = new TelemetryCollector({
   resolveSessionId: (agentId) => hive.lastSession(agentId),
   resolveCodexHome: (agentId) => hive.codexHome(agentId)
 });
-// Usage provider (Seam 1) — the INTEGRATION swap: Oscar's telemetry collector (#7)
-// IS the provider, replacing Lane A's interim StubUsageProvider. Same
-// getAgentUsage(agentId) pull seam, so the breaker + cost ledger consumers are
+// Usage provider (Seam 1): Oscar's telemetry collector (#7) IS the provider,
+// through the getAgentUsage(agentId) pull seam, so the breaker + cost ledger consumers are
 // untouched; telemetry has a transcript fallback built in, so it works before any
 // live OTel arrives.
 const usageProvider: UsageProvider = telemetry;
@@ -1713,9 +1711,6 @@ ptyManager.setExitHandler((id, exitCode, info) => {
   if (isEngineSetupPty(id)) {
     // The next sign in read starts after this, never joining an older one.
     claudeAuth.invalidate();
-    if (id === ENGINE_INSTALL_PTY) {
-      analytics.track('agent_install_finished', { provider: 'claude', rung: 'native', outcome: claudePathFast() ? 'agent_launched' : 'install_failed' });
-    }
     const changed = (): void => {
       try { liveWebContents()?.send('engineSetup:changed', { id, exitCode: exitCode ?? null }); } catch { /* window gone */ }
     };
@@ -1768,11 +1763,7 @@ ptyManager.setExitHandler((id, exitCode, info) => {
   const pending = pendingInstallRelaunch.get(id);
   if (pending) {
     pendingInstallRelaunch.delete(id);
-    // Activation funnel: did the auto-installer actually complete? A non-zero exit
-    // is the Linux-installer-cannot-finish-unattended signal that used to be silent.
-    const provider = pending.opts.provider ?? inferAgentProvider(pending.opts.command, undefined);
     if (installSucceeded(exitCode, () => ptyManager.isCommandAvailable(pending.bin))) {
-      analytics.track('agent_install_finished', { provider, rung: pending.rung, outcome: 'agent_launched' });
       // Re-arm the renderer's pooled terminal (clear the "process exited" line +
       // re-enable input) so the freshly-spawned CLI paints onto a clean, typeable
       // grid, then re-run the normal spawn — which now finds the installed binary.
@@ -1783,7 +1774,6 @@ ptyManager.setExitHandler((id, exitCode, info) => {
     }
     // Install failed (non-zero exit, or the CLI still can't be found); leave its
     // honest manual-fix message on screen.
-    analytics.track('agent_install_finished', { provider, rung: pending.rung, outcome: 'install_failed' });
   }
   teardownPty(id);
 });
@@ -3314,7 +3304,6 @@ async function startSlackServer(): Promise<{ ok: boolean; url?: string; error?: 
   // Begin watching the kanban for Slack-origin tasks that reach 'done', to post
   // their one summary reply in-thread. OUTBOUND-only; never touches ingestion.
   startSlackDoneObserver();
-  analytics.trackFeature('slack_trigger');
   return res;
 }
 
@@ -3700,7 +3689,6 @@ async function startWebhookServer(): Promise<{ ok: boolean; url?: string; error?
   // "bound fine, tunnel unavailable" (the security boundary is live and must stay
   // reachable/stoppable — dropping it there would leak an unstoppable listener).
   if (!res.ok && !server.listening()) { webhookServer = null; return res; }
-  analytics.trackFeature('webhook_trigger');
   if (res.url) lastWebhookUrl = res.url;
   startWebhookDoneObserver();
   return res;
@@ -3808,7 +3796,6 @@ async function handleHireLink(link: string): Promise<void> {
     return;
   }
   deliverHire(res.manifest);
-  analytics.trackFeature('hire_install');
 }
 
 // Register the protocol. In dev (electron .) Windows needs the explicit
@@ -3978,9 +3965,9 @@ function createWindow(): BrowserWindow {
 
   // Never opens a window; hands the URL to the OS browser instead.
   //
-  // Scheme-checked, because this is now reachable from AUTHOR-CONTROLLED markup:
-  // a release drop's iframe has `allow-popups`, so a target="_blank" link in a
-  // release body arrives here. http(s) only — an unguarded openExternal will
+  // Scheme-checked, because this is reachable from OUTSIDE markup: the email
+  // tab's iframe has `allow-popups`, so a target="_blank" link in an email
+  // arrives here. http(s) only — an unguarded openExternal will
   // happily launch file://, or a registered custom scheme, on the user's machine.
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//i.test(url)) shell.openExternal(url);
@@ -3998,7 +3985,7 @@ function createWindow(): BrowserWindow {
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
   });
 
-  // A frame inside the window (the email tab, a release drop) shows only its
+  // A frame inside the window (the email tab) shows only its
   // own srcdoc: a link, a form or a refresh in one never loads a page there
   // (docs/designs/original-email-view.md). Its links open as new windows,
   // which the handler above sends to the browser.
@@ -4255,16 +4242,6 @@ function findCodexHomeForSession(sessionId: string, siblingsRoot: string): strin
  *  ephemeral-worker watcher. */
 type AgentSpawnOptions = SpawnOptions & { hive?: AgentMeta; isolate?: boolean; resume?: boolean; requireResume?: boolean; resumeSessionId?: string; provider?: AgentProvider; noAutoInstall?: boolean };
 
-/** Map a `ptyManager.spawn` failure string to the closed `agent_spawn_failed.reason`
- *  enum (analytics.ts). The two known strings come from PtyManager.spawn; anything
- *  else is a generic `spawn_error`. The raw message never leaves the machine — only
- *  the enum value does, per TELEMETRY.md. */
-function spawnFailReason(error?: string): SpawnFailReason {
-  if (error?.startsWith('cwd does not exist')) return 'cwd_missing';
-  if (error?.includes('already exists')) return 'already_running';
-  return 'spawn_error';
-}
-
 ipcMain.handle('pty:spawn', async (evt, opts: AgentSpawnOptions) => {
   if (!opts || typeof opts.id !== 'string' || typeof opts.cwd !== 'string' || typeof opts.command !== 'string') {
     return { ok: false, error: 'invalid SpawnOptions' };
@@ -4316,11 +4293,6 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
   const claudeProvider = isClaudeProvider(provider);
   opts.provider = provider;
   if (opts.hive) opts.hive = { ...opts.hive, provider };
-  // Activation-funnel entry (v0.4.6): every spawn REQUEST, so (attempted − spawned)
-  // measures the fallout the whole rebuild exists to see. Gated on !noAutoInstall so
-  // the missing-CLI relaunch (the only re-entry, index.ts install-exit handler) does
-  // NOT double-count a single user attempt — it is the SAME attempt continuing.
-  if (!opts.noAutoInstall) analytics.track('agent_spawn_attempted', { provider });
   // ── Missing engine CLI → run its installer visibly (pre-spawn) ───────────────
   // Every engine but Claude, which is handled first in the block below. If the
   // agent's engine binary (codex/…) isn't installed, spawning it
@@ -4373,7 +4345,6 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
         { id: opts.id, cwd: opts.cwd, command: bin, cols: opts.cols, rows: opts.rows, shellScript: claudeMissingScript(process.platform, godName) },
         owner
       );
-      if (!opts.noAutoInstall) analytics.track('agent_spawn_failed', { provider, reason: 'cli_missing' });
       noticeEngineSetup(opts.id);
       syncKeepAwake();
       return res;
@@ -4413,20 +4384,7 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
       // and exits 0, and relaunching there would just respawn the still-missing
       // binary and die with the bare "process exited (code 1)" this whole path exists
       // to replace.
-      if (res.ok && rung.command) {
-        pendingInstallRelaunch.set(opts.id, { opts, owner, bin, rung: rung.kind });
-        // The auto-installer PTY is running; agent_install_finished on its exit says
-        // whether it actually produced an agent (rung is non-manual here by construction).
-        analytics.track('agent_install_started', { provider, rung: rung.kind });
-      } else if (res.ok) {
-        // Manual rung: the PTY only printed a hint (no installer to run, no relaunch
-        // armed), so no agent will start. This is the Mode 2 case that used to send
-        // NOTHING — an absent engine with no unattended install path.
-        analytics.track('agent_spawn_failed', { provider, reason: 'cli_missing' });
-      } else {
-        // The install PTY itself failed to spawn (cwd gone, id clash, throw).
-        analytics.track('agent_spawn_failed', { provider, reason: spawnFailReason(res.error) });
-      }
+      if (res.ok && rung.command) pendingInstallRelaunch.set(opts.id, { opts, owner, bin });
       syncKeepAwake();
       return res;
     }
@@ -4988,8 +4946,6 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
       void refreshCliUpdate();
     });
   }
-  if (res.ok) analytics.track('agent_spawned', { provider });
-  else analytics.track('agent_spawn_failed', { provider, reason: spawnFailReason(res.error) });
   // A team member whose terminal comes back mid-close is waited on again.
   try { if (res.ok && opts.hive?.id) closingTime.revive(opts.hive.id); } catch (e) { console.error('[closing-time] revive:', e); }
   syncKeepAwake(); // arm the power-save blocker while ≥1 agent PTY is alive (#18)
@@ -5053,25 +5009,6 @@ ipcMain.handle('pty:kill', (_evt, id: string, opts?: unknown) => {
   return res;
 });
 ipcMain.handle('pty:list', () => ptyManager.list());
-
-// ─── IPC: analytics (the ONE renderer-facing seam) ──────────────────────────
-/** Count one human-sent message (TELEMETRY.md → `message_sent`). A COUNT, and
- *  nothing else: this channel takes no text, no length and no id, so there is
- *  no shape in which message content could cross it.
- *
- *  This is the only analytics event the renderer can cause. It exists because
- *  two of the four send surfaces — a line typed into the agent's terminal, and
- *  the queue composer — are submits main cannot observe: the `pty:write` handler
- *  above fires on EVERY KEYSTROKE, so counting there would produce a keystroke
- *  meter, not a message count. `steer` and `hive` are counted at their own IPC
- *  handlers in this file and are rejected here (isRendererMessageSurface) so
- *  they can never be counted twice. The event name is fixed here, not passed
- *  in: the renderer chooses a surface, never an event. */
-ipcMain.handle('analytics:messageSent', (_evt, surface: unknown) => {
-  if (!isRendererMessageSurface(surface)) return { ok: false };
-  analytics.trackMessageSent(surface);
-  return { ok: true };
-});
 
 // Resolve a pasted Claude session id to the cwd it originally ran in, so the Add
 // Agent dialog can auto-fill the folder for a resume (#2 zero-step resume). Reads
@@ -5275,7 +5212,6 @@ ipcMain.handle('config:update', (_evt, patch: Partial<HarnessConfig>) => {
   // relaunch, so bootstrap here on the null → set transition. Gated on the
   // transition so ordinary config writes never re-enter it.
   const hiveWasEnabled = hive.enabled();
-  const wasOnboarded = readConfig().onboardingComplete;
   const modelBefore = readConfig().embeddingModel ?? 'minilm';
   const profileBefore = cleanCompanyProfile(readConfig().companyProfile);
   const next = writeConfig(patch);
@@ -5293,15 +5229,6 @@ ipcMain.handle('config:update', (_evt, patch: Partial<HarnessConfig>) => {
   // A new search language: the index was built with the other model, which
   // MemPalace refuses to search with, so it is built again (owner, 2026-10-19).
   if (patch && typeof patch === 'object' && 'embeddingModel' in patch && (next.embeddingModel ?? 'minilm') !== modelBefore) memory.modelChanged();
-  // Live opt-in/out from Settings (TELEMETRY.md); stays off while
-  // COLLECT_USAGE_STATS is false.
-  if (typeof patch?.telemetryEnabled === 'boolean') analytics.setEnabled(COLLECT_USAGE_STATS && patch.telemetryEnabled);
-  // Activation funnel (v0.4.6): onboarding just finished (false → true) — the top of
-  // the launch → first-agent funnel. `provider` is the engine chosen in the wizard.
-  // Fired here (main), not in the renderer, so it rides the same allowlist as the rest.
-  if (!wasOnboarded && next.onboardingComplete) {
-    analytics.track('onboarding_completed', { provider: next.godProvider ?? 'claude' });
-  }
   // Keep the hive's mirror of the spawn gate current. The queue itself reads
   // config per tick so it gates immediately; this is for the PROMPT, which is
   // built per spawn, so flipping the toggle reaches god the next time he starts.
@@ -6193,11 +6120,6 @@ ipcMain.handle('hive:send', (_evt, partial: Partial<HiveMessage>, from: unknown)
   const sender = typeof from === 'string' ? from : 'system';
   // A 'human' send from the window is the owner's own (ownerSaid trusts only these).
   const msg = hive.send(partial ?? {}, sender, undefined, sender === 'human');
-  // Count only what a PERSON sent. Every renderer surface that dispatches on a
-  // human's behalf passes 'human' (Command Center dispatch, thread replies, ASK
-  // ME answers); agent-to-agent traffic passes the agent id and would swamp the
-  // number. Counted AFTER the send so a rejected message is never counted.
-  if (sender === 'human') analytics.trackMessageSent('hive');
   return { ok: true, message: msg };
 });
 // Michael's open requests from the owner, by card (card-lifecycle.md): the
@@ -6796,8 +6718,6 @@ ipcMain.handle('engineSetup:install', (e): { ok: boolean; error?: string } => {
   const res = process.platform === 'win32'
     ? ptyManager.spawn({ id: ENGINE_INSTALL_PTY, cwd: homedir(), command: 'claude', cols: 100, rows: 12, shellScript: script }, e.sender)
     : ptyManager.spawn({ id: ENGINE_INSTALL_PTY, cwd: homedir(), command: '/bin/sh', args: ['-c', script], cols: 100, rows: 12 }, e.sender);
-  if (res.ok) analytics.track('agent_install_started', { provider: 'claude', rung: 'native' });
-  else analytics.track('agent_spawn_failed', { provider: 'claude', reason: spawnFailReason(res.error) });
   return res;
 });
 // Sign in: `claude auth login` opens the browser. A fresh run each time, so
@@ -7334,12 +7254,10 @@ ipcMain.handle('hive:agentDirectory', () => {
 });
 
 // ─── IPC: live telemetry (the OTel collector — the locked usage-provider seam) ─
-// The fleet grid + span waterfall (#7B) read these; Lane A's breaker (#6)
+// The fleet grid (#7B) reads these; Lane A's breaker (#6)
 // consumes getAgentUsage in-process via the provider, not over IPC.
 ipcMain.handle('telemetry:usage', (_evt, agentId: unknown) =>
   typeof agentId === 'string' ? telemetry.getAgentUsage(agentId) : null);
-ipcMain.handle('telemetry:spans', (_evt, agentId: unknown) =>
-  typeof agentId === 'string' ? telemetry.getSpans(agentId) : []);
 ipcMain.handle('telemetry:snapshot', () => telemetry.snapshot());
 
 // ─── IPC: circuit-breaker state (Lane A #6 policy → this lane's avatars/meter) ─
@@ -7381,10 +7299,6 @@ ipcMain.handle('control:gateTool', (_evt, agentId: unknown, tool: unknown, on: u
 ipcMain.handle('control:steer', (_evt, agentId: unknown, text: unknown) => {
   if (typeof agentId !== 'string' || typeof text !== 'string') return null;
   control.steer(agentId, text);
-  // A steer typed into the control strip is a human message. Counted HERE, at
-  // the IPC seam, and deliberately not inside control.steer(): closingTime and
-  // the voice action layer call that directly, and neither is a person typing.
-  analytics.trackMessageSent('steer');
   return control.snapshot(agentId);
 });
 ipcMain.handle('control:halt', (_evt, agentId: unknown) => {
@@ -8281,7 +8195,6 @@ ipcMain.handle('freeflow:transcribe', async (_evt, arg: unknown) => {
     model: cfg.freeflowModel || DEFAULT_GROQ_MODEL,
     language: typeof a.language === 'string' && a.language ? a.language : undefined
   });
-  if (out.ok) analytics.trackFeature('voice_dictation');
   return out;
 });
 
@@ -9368,16 +9281,6 @@ app.whenReady().then(() => {
   // the checked text, in the temp folder (hiddenClaude.ts isolateConfig).
   sweepIsolatedLeftovers();
 
-  // Anonymous product analytics (PostHog) — the full contract lives in
-  // TELEMETRY.md. Off entirely while COLLECT_USAGE_STATS (buildFeatures.ts) is
-  // false. Otherwise a no-op unless a build-time key was injected (official
-  // releases only), and gated on DO_NOT_TRACK + the telemetryEnabled config.
-  analytics.init({
-    stateDir: app.getPath('userData'),
-    appVersion: app.getVersion(),
-    enabled: COLLECT_USAGE_STATS && readConfig().telemetryEnabled !== false
-  });
-
   // Warm the model catalog cache before any picker opens. The renderer reads
   // the same cache over IPC on load; doing the network hop here means the file
   // is already fresh on disk by the time a modal is opened, and a failure is
@@ -9488,28 +9391,3 @@ app.on('window-all-closed', () => {
   }
 });
 
-// Final analytics flush (session_ended + drain the send queue), bounded so a
-// hung network can never wedge quit: preventDefault ONCE, race the flush
-// against a short timeout, then exit hard.
-//
-// finish MUST be app.exit(), not a re-entrant app.quit(): when the quit was
-// initiated while a window was still open (the "kill all & quit" confirm path
-// calls teardownAndQuit → app.quit() and the window closes DURING that quit),
-// Electron is left with its internal is-quitting state set after this
-// preventDefault, and the later app.quit() is silently a no-op — no before-quit,
-// no will-quit, no quit; the main process idles forever with zero windows. On
-// Windows that stranded the whole Electron process group (main + GPU + network
-// service) after every agents-running quit. By this point teardown has already
-// run and the flush has finished or timed out, so an unconditional exit is
-// exactly what's left to do.
-let analyticsFlushed = false;
-app.on('will-quit', (e) => {
-  if (analyticsFlushed) return;
-  analyticsFlushed = true;
-  e.preventDefault();
-  const finish = (): void => app.exit(0);
-  Promise.race([
-    analytics.endSession(),
-    new Promise<void>((r) => setTimeout(r, 1200))
-  ]).then(finish, finish);
-});

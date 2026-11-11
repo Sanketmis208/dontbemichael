@@ -23,7 +23,6 @@ import { OnboardingWizard } from '@/components/OnboardingWizard';
 import { OfficeFolderMissing } from '@/components/OfficeFolderMissing';
 import { ClosingTimeBar, type ClosingTimeState } from '@/components/ClosingTimeBar';
 import { CompletionToast } from '@/realtime/CompletionToast';
-import { UpdateToast } from '@/components/UpdateToast';
 import { setCloseAndReopen } from '@/components/CliUpdateNotice';
 import { CaseStudyEvents } from '@/components/pulse/CaseStudyEvents';
 import { SettingsModal, type Section as SettingsSection, type SettingsPlace } from '@/components/SettingsModal';
@@ -516,10 +515,9 @@ export function App() {
       width: '100vw', height: '100vh',
       overflow: 'hidden', background: 'var(--cth-bg)'
     }}>
-      {/* Toasts: voice completions, app updates, Claude Code updates. Each one
-          positions itself and renders null until it has something to say. */}
+      {/* Toasts: voice completions. Each one positions itself and renders null
+          until it has something to say. */}
       <CompletionToast />
-      <UpdateToast />
       <CaseStudyEvents />
 
       {/* Design v2 shell (branding/DESIGN.md 5.2): top bar, the stage with the

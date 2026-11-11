@@ -17,7 +17,7 @@ import { DEFAULT_ORG_TRIGGER, type OrgTriggerConfig, type WebhookTrigger } from 
 import { isCompactionCommand } from '@shared/providerAutomation';
 import { preferredAgentRole } from '@shared/agentRole';
 import { isInboxNudge } from '@shared/hiveNudge';
-import { SHOW_FOCUS_MODE, SHOW_GIT, SHOW_TRACES, SHOW_IDE, SHOW_ORG_TRIGGER, SHOW_VOICE } from '@shared/buildFeatures';
+import { SHOW_FOCUS_MODE, SHOW_GIT, SHOW_IDE, SHOW_ORG_TRIGGER, SHOW_VOICE } from '@shared/buildFeatures';
 import type { ScheduledMission } from '@shared/missions';
 import { refocusAfterRemoval, focusOnLoad, restoreFocus } from './focusMode';
 import { chooseRosterSource } from './rosterSource';
@@ -217,7 +217,7 @@ export interface QueuedMessage {
 // 'files' retired in v0.3.4 (the per-agent IDE button superseded it) — a
 // persisted 'files' selection falls back to 'terminal' on load. 'git' added in
 // v0.3.4: at-a-glance branch/status/log without opening the IDE.
-export type SidebarTab = 'profile' | 'capabilities' | 'terminal' | 'messages' | 'memory' | 'traces' | 'git';
+export type SidebarTab = 'profile' | 'capabilities' | 'terminal' | 'messages' | 'memory' | 'git';
 
 /** Lifecycle of the god agent ("Michael") bootstrap on launch.
  *  'booting' until his PTY is confirmed live, then 'ready' (or 'failed' if the
@@ -975,8 +975,8 @@ const initialSidebarTab: SidebarTab = (() => {
   try {
     const v = window.localStorage.getItem(LS_SIDEBAR_TAB);
     if (v === 'profile' || v === 'capabilities' || v === 'terminal' || v === 'messages' || v === 'memory') return v;
-    // A saved TRACES tab opens on Profile while this build hides traces.
-    if (v === 'traces') return SHOW_TRACES ? v : 'profile';
+    // A TRACES tab saved by an older build opens on Profile (the tab is gone).
+    if (v === 'traces') return 'profile';
     // Schedules is a section of Capabilities now (owner, 2026-09-26).
     if (v === 'schedules') return 'capabilities';
     // A saved GIT tab opens on the terminal while this build hides git.

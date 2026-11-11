@@ -22,7 +22,7 @@ import {
 import { SkillsTab } from './SkillsTab';
 import { clearLocalState, restoreLocalState, snapshotLocalState } from '@/store/localState';
 import { plainReasonKey } from '@/store/plainReason';
-import { ALLOW_TEMP_WORKERS, SHOW_ORG_TRIGGER, COLLECT_USAGE_STATS, SHOW_VOICE, SHOW_SLACK, SHOW_MAILBOXES, SHOW_MCP_DEFAULTS, SHOW_SIMPLE_MODE_SWITCH, SHOW_SKILLS, SHOW_ARABIC_TERMINAL_SWITCH, SHOW_LANGUAGE_PICKER } from '@shared/buildFeatures';
+import { ALLOW_TEMP_WORKERS, SHOW_ORG_TRIGGER, SHOW_VOICE, SHOW_SLACK, SHOW_MAILBOXES, SHOW_MCP_DEFAULTS, SHOW_SIMPLE_MODE_SWITCH, SHOW_SKILLS, SHOW_ARABIC_TERMINAL_SWITCH, SHOW_LANGUAGE_PICKER } from '@shared/buildFeatures';
 import { WebhookSchemaEditor } from './triggers/WebhookSchemaEditor';
 import { InfoTip } from './InfoTip';
 import { KnowledgeDocList } from './KnowledgeDocList';
@@ -579,16 +579,6 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
     const next = !autoCompactOn;
     setAutoCompactOn(next);
     setAutoCompactPending(next);
-  };
-
-  // ─── Anonymous usage stats (TELEMETRY.md). Rendered only while
-  // COLLECT_USAGE_STATS (buildFeatures.ts) is on; off in this build. ─
-  const [telemetryOn, setTelemetryOn] = useState<boolean>(config.telemetryEnabled !== false);
-  const toggleTelemetry = async () => {
-    const next = !telemetryOn;
-    setTelemetryOn(next);
-    try { stage({ telemetryEnabled: next }); }
-    catch { setTelemetryOn(!next); }
   };
 
   // --- Free Flow (voice dictation → message queue) ---
@@ -1365,26 +1355,6 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
                             {autoCompactOn ? t('common.on') : t('common.off')}
                           </PixelButton>
                         </div>
-                        {COLLECT_USAGE_STATS && (<>
-                          <div style={{ height: 10 }} />
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                              <span style={fieldLabel}>
-                                {t('settings.general.telemetry')}
-                              </span>
-                              <span style={hint}>
-                                {t('settings.general.telemetryDesc')}
-                              </span>
-                            </div>
-                            <PixelButton
-                              variant={telemetryOn ? 'primary' : 'secondary'}
-                              size="sm"
-                              onClick={toggleTelemetry}
-                            >
-                              {telemetryOn ? t('common.on') : t('common.off')}
-                            </PixelButton>
-                          </div>
-                        </>)}
                       </div>
 
                     </>

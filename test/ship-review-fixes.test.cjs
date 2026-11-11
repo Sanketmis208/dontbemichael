@@ -57,12 +57,11 @@ test('dark mode and focus: readable step numbers and force quit, focus rings on 
   assert.match(read('src/renderer/src/shell/BottomBar.tsx'), /if \(isComposingKey\(e\)\) return;\n\s*if \(e\.key === 'Enter' && !e\.shiftKey\)/, 'IME Enter never sends a half typed message');
 });
 
-test('top bar buttons speak the app language; the release notes backdrop needs a full click', () => {
-  // Value: protects=screen readers in Arabic and Chinese, and no dismiss on a drag; fails_when=English aria or mousedown dismiss return; why_new=core review; seam=none
+test('top bar buttons speak the app language', () => {
+  // Value: protects=screen readers in Arabic and Chinese; fails_when=English aria returns; why_new=core review; seam=none
   const top = read('src/renderer/src/shell/TopBar.tsx');
   assert.doesNotMatch(top, /aria="(Toggle dark mode|Settings|Toggle focus mode)"/);
   assert.match(top, /aria-label=\{label\}/);
-  assert.match(read('src/renderer/src/components/ReleaseDrop.tsx'), /\{\.\.\.backdrop\}/);
 });
 
 test('a paste attaches a screenshot or Finder files, and leaves text (even with an image) as text', () => {

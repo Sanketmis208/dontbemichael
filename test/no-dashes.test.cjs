@@ -95,8 +95,8 @@ const UI_CODE = [
   'src/renderer/src/markdown',
   'src/renderer/src/scene/office/cafeteriaLines.ts',
   'src/renderer/src/hooks/useRestoreTeam.ts',
-  ...['updateState', 'toolCatalog', 'releaseDrop', 'claudeCommands', 'codexCommands', 'hire', 'integrations',
-    'manifestFields', 'ossModels', 'imageTypes', 'triggers', 'agentDefinition', 'officePack', 'officeRoles',
+  ...['updateState', 'toolCatalog', 'claudeCommands', 'codexCommands', 'hire', 'integrations',
+    'manifestFields', 'imageTypes', 'triggers', 'agentDefinition', 'officePack', 'officeRoles',
     'teamPlan', 'businessProfile'].map((f) => `src/shared/${f}.ts`),
   ...['docText', 'docTextCli', 'agentFolders', 'skills', 'git', 'webhook', 'control', 'breaker', 'hooks',
     'cliInstall', 'realtime', 'harnessGuard', 'packs'].map((f) => `src/main/${f}.ts`)

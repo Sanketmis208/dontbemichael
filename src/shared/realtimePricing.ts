@@ -1,9 +1,8 @@
 /**
  * Realtime Michael — audio token pricing for the OpenAI gpt-realtime-2 voice loop
- * (card rt-9, cost-guard). Shared so BOTH the main cost module (src/main/
- * realtimeCost.ts) and the renderer cost store (src/renderer/src/realtime/
- * costStore.ts) price from one source. Pure + dependency-free (no electron, no
- * main-only imports) so it's safe to import from either process.
+ * (card rt-9, cost-guard), for the renderer cost store (src/renderer/src/
+ * realtime/costStore.ts). Pure + dependency-free (no electron, no main-only
+ * imports) so it's safe to import from either process.
  *
  * Pricing (locked plan / board): gpt-realtime-2 AUDIO tokens bill at $32 per 1M
  * input and $64 per 1M output. A voice turn is dominated by audio; text tokens

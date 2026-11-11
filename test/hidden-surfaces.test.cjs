@@ -20,11 +20,10 @@ test('this build hides git', () => {
   assert.equal(loadTs('src/shared/buildFeatures.ts').SHOW_GIT, false);
 });
 
-test('the agent sidebar drops the GIT and TRACES tabs; saved ones open elsewhere', () => {
-  assert.match(read('src/renderer/src/components/SidebarTabs.tsx'), /ALL_TABS\.filter\(\(tab\) => \(tab\.key !== 'git' \|\| SHOW_GIT\) && \(tab\.key !== 'traces' \|\| SHOW_TRACES\)\)/);
-  assert.equal(loadTs('src/shared/buildFeatures.ts').SHOW_TRACES, false);
-  assert.match(read('src/renderer/src/components/AgentDetailPanel.tsx'), /SHOW_TRACES && sidebarTab === 'traces'/);
-  assert.match(read('src/renderer/src/store/store.ts'), /if \(v === 'traces'\) return SHOW_TRACES \? v : 'profile';/);
+test('the agent sidebar drops the GIT tab and has no TRACES tab; saved ones open elsewhere', () => {
+  assert.match(read('src/renderer/src/components/SidebarTabs.tsx'), /ALL_TABS\.filter\(\(tab\) => tab\.key !== 'git' \|\| SHOW_GIT\)/);
+  assert.doesNotMatch(read('src/renderer/src/components/SidebarTabs.tsx'), /'traces'/);
+  assert.match(read('src/renderer/src/store/store.ts'), /if \(v === 'traces'\) return 'profile';/);
   assert.match(read('src/renderer/src/components/AgentDetailPanel.tsx'), /SHOW_GIT && sidebarTab === 'git'/);
   assert.match(read('src/renderer/src/store/store.ts'), /if \(v === 'git'\) return SHOW_GIT \? v : 'terminal';/);
 });
@@ -107,33 +106,6 @@ test('no clock-driven context upkeep is left in Settings or the Triggers tab', (
   assert.doesNotMatch(read('src/renderer/src/components/triggers/TriggersTab.tsx'), /ContextSection/);
   assert.doesNotMatch(read('src/renderer/src/components/SettingsModal.tsx'), /ContextSection/);
   assert.doesNotMatch(read('src/renderer/src/hooks/useHive.ts'), /onContextTrigger/);
-});
-
-/**
- * Anonymous usage stats are hidden until the owner decides whether to collect
- * anything (owner, 2026-09-24): no onboarding row, no Settings switch, and no
- * sending even from a build that carries a PostHog key. COLLECT_USAGE_STATS
- * brings all three back together.
- */
-test('this build collects no usage stats', () => {
-  assert.equal(loadTs('src/shared/buildFeatures.ts').COLLECT_USAGE_STATS, false);
-});
-
-test('the usage stats choice is hidden in onboarding and Settings', () => {
-  const wizard = read('src/renderer/src/components/OnboardingWizard.tsx');
-  const row = wizard.indexOf("label={t('onboarding.permissions.shareStats')}");
-  assert.ok(row > 0 && wizard.slice(row - 200, row).includes('{COLLECT_USAGE_STATS && ('), 'onboarding row is behind the switch');
-  assert.match(wizard, /\.\.\.\(COLLECT_USAGE_STATS \? \{ telemetryEnabled: shareStats \} : \{\}\)/);
-
-  const settings = read('src/renderer/src/components/SettingsModal.tsx');
-  const sw = settings.indexOf("{t('settings.general.telemetry')}");
-  assert.ok(sw > 0 && settings.slice(sw - 700, sw).includes('{COLLECT_USAGE_STATS && (<>'), 'Settings switch is behind the switch');
-});
-
-test('nothing is sent while usage stats are hidden, whatever the saved setting', () => {
-  const main = read('src/main/index.ts');
-  assert.match(main, /enabled: COLLECT_USAGE_STATS && readConfig\(\)\.telemetryEnabled !== false/);
-  assert.match(main, /analytics\.setEnabled\(COLLECT_USAGE_STATS && patch\.telemetryEnabled\)/);
 });
 
 /**
@@ -380,8 +352,6 @@ test("What's new opens a popover under its link with the notes of this version (
   }
   // Ink fill like the info tooltips: white on a white card was hard to read.
   assert.match(pop, /background: 'var\(--cth-ink\)', color: ON,/);
-  // The corner toast is for updates that arrive on their own again.
-  assert.doesNotMatch(read('src/renderer/src/components/UpdateToast.tsx'), /cth:show-release-notes|WhatsNewCard/);
   // Main answers for the running version from its GitHub release, in dev too.
   const upd = read('src/main/updater.ts');
   const reg = upd.indexOf("ipcMain.handle('update:releaseNotes'");

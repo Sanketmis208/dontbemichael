@@ -9,7 +9,7 @@
  * comes back on the next launch.
  *
  * `index.ts` imports electron, so it cannot be require()d here — this reads it as
- * source, the same approach test/update-applied.test.cjs uses for updater.ts.
+ * source, the same approach test/updater-log-lines.test.cjs uses for updater.ts.
  * The scan is deliberately TWO-SIDED: the user-facing handler must clear the
  * flag, and the lifecycle teardowns (changeHome / quit / reset) must not. Pinning
  * only the first half would let a "fix" that clears the flag on quit pass.

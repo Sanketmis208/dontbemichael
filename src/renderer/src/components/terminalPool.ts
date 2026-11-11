@@ -378,12 +378,7 @@ export function acquireTerminal(ptyId: string, theme?: ThemeMap, fontSize = 14):
     // automation-safe.
     // A PASTE is never a submit: the TUI drops its newlines into the input box
     // and waits for a real Enter. xterm rewrites pasted newlines to "\r", so
-    // without this a five-line paste would look like five submitted messages —
-    // and the Enter that actually sends it would then be a sixth. (TELEMETRY.md
-    // → message_sent; the paste's own Enter keystroke arrives as its own chunk
-    // and is counted there.)
-    const pasted = data.includes('\x1b[200~');
-    let submitted = false;
+    // without this a five-line paste would look like five submitted prompts.
     // Inside the paste markers a line break is pasted text. An Enter after the
     // closing marker in the same chunk (a paste and send) really submits, so it
     // is tracked by position, not for the whole chunk.
@@ -415,10 +410,7 @@ export function acquireTerminal(ptyId: string, theme?: ThemeMap, fontSize = 14):
           entry.automationBlocked = true;
           entry.automationBlockedAt = Date.now();
         }
-        if (t.length >= 2) {
-          entry.onPrompt?.(t);
-          submitted = true;
-        }
+        if (t.length >= 2) entry.onPrompt?.(t);
       } else if (ch === '\x7f' || ch === '\b') {
         entry.lineBuf = entry.lineBuf.slice(0, -1);
       } else if (ch === '\x1b') {
@@ -427,11 +419,6 @@ export function acquireTerminal(ptyId: string, theme?: ThemeMap, fontSize = 14):
         entry.lineBuf += ch;
       }
     }
-    // ONE message per input chunk, at the SUBMIT boundary — not per keystroke
-    // (that is what `pty:write` sees, and counting there would meter typing) and
-    // not per line inside a paste. This is the only place the renderer can cause
-    // an analytics event; it sends a surface name and nothing else.
-    if (submitted && !pasted) void window.cth.trackMessageSent('terminal');
     entry.inputDirty = entry.lineBuf.length > 0;
     // Re-stamped on every keystroke, so the staleness clock measures time since
     // the user last touched the draft — not since they started it.

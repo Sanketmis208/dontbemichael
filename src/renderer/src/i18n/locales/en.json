@@ -203,21 +203,11 @@
     "terminal": "Work",
     "git": "Git",
     "messages": "Messages",
-    "traces": "Traces",
     "memory": "Memory",
     "profile": "Profile",
     "capabilities": "Access",
     "resizeLabel": "Resize the side panel",
     "resizeTitle": "Drag to resize. Double click to reset."
-  },
-  "toolWaterfall": {
-    "fresh": "fresh {{tokens}}t",
-    "cache": "cache {{tokens}}t ({{pct}}%)",
-    "total": "{{tokens}}t total",
-    "noTelemetry": "no live telemetry yet. Spawn or respawn this agent to instrument it",
-    "empty": "No tool calls captured yet. Each tool the agent runs appears here with its real duration.",
-    "barOk": "{{tool}} · {{ms}}ms · ok",
-    "barFailed": "{{tool}} · {{ms}}ms · failed"
   },
   "agentDetail": {
     "open": "open",
@@ -303,8 +293,6 @@
       "maintenance": "Maintenance",
       "autoCompact": "Compact on a schedule",
       "autoCompactDesc": "Queue /compact for every agent on a schedule (hourly by default; set the interval in the Triggers tab). Off by default. Agents that run for a long time may overflow their context without it.",
-      "telemetry": "Anonymous usage stats",
-      "telemetryDesc": "A handful of anonymous events (app opened, agent spawned, feature used). Never prompts, code, paths, or agent output. Full list in TELEMETRY.md.",
       "language": "Language",
       "languageDesc": "Choose the language for the app interface. English is the default.",
       "dangerZone": "Danger zone",
@@ -810,8 +798,6 @@
       "notificationsDesc": "{{godName}} pings you when something needs you, even while you're away. Your system may ask permission the first time.",
       "openAtLogin": "Open at login",
       "openAtLoginDesc": "Relaunch the harness after a reboot so scheduled missions resume on their own. No prompt; applies immediately.",
-      "shareStats": "Share anonymous usage stats",
-      "shareStatsDesc": "A handful of anonymous events (app opened, agent spawned, feature used) that help improve the app. Never prompts, code, file paths, or agent output. Full list in TELEMETRY.md; change anytime in Settings.",
       "stayAwake": "Stay awake on power (manual)",
       "stayAwakeDescMac": "macOS only lets you set this one yourself. In Battery → Options, turn on \"Prevent automatic sleeping when the display is off\" (on power adapter) so timers keep firing with the display asleep. Without a setting that prevents sleep, the Mac still truly sleeps; work survives and catches up on wake.",
       "stayAwakeDescWindows": "Windows only lets you set this one yourself. In Settings → System → Power & battery → Screen, blank & sleep, set \"On battery power, put my device to sleep\" and \"When plugged in\" to Never (or increase them) so timers keep firing. Without a setting that prevents sleep, Windows still truly sleeps; work survives and catches up on wake.",
@@ -1792,8 +1778,6 @@
     "saved": "saved",
     "save": "save",
     "copyAbsolutePath": "Copy absolute path",
-    "openInIde": "Open in the IDE",
-    "saveFailed": "err",
     "loading": "loading…",
     "loadingEditor": "loading editor…",
     "nothingOpen": "nothing open",
@@ -2350,14 +2334,6 @@
     "confirmForce": "Quit without waiting? Unsaved work is lost.",
     "keepClosing": "Keep closing",
     "tryAgain": "Try again"
-  },
-  "releaseDrop": {
-    "loading": "One sec…",
-    "title": "What's new",
-    "dialogLabel": "What's new in version {{version}}",
-    "frameTitle": "What's new in {{version}}",
-    "close": "Close release notes",
-    "closeTip": "Close (Esc)"
   },
   "connectors": {
     "title": "Claude connectors",

@@ -109,10 +109,8 @@ test('every app data file the main process names is erased by a reset or kept on
   }
   assert.ok(names.size >= 10, 'the scan finds the app data files');
   // Files reached through a helper or a variable, which the scan can't see.
-  for (const n of ['pastes', 'updater.log', 'last-run-version', 'telemetry-install-id', 'telemetry-last-version']) names.add(n);
+  for (const n of ['pastes', 'updater.log', 'last-run-version']) names.add(n);
   assert.match(fs.readFileSync(path.join(dir, 'pastes.ts'), 'utf8'), /return join\(userData, 'pastes'\);/);
-  assert.match(fs.readFileSync(path.join(dir, 'analytics.ts'), 'utf8'), /join\(stateDir, 'telemetry-install-id'\)/);
-  assert.match(fs.readFileSync(path.join(dir, 'analytics.ts'), 'utf8'), /const VERSION_STAMP_FILE = 'telemetry-last-version';/);
   for (const n of names) assert.ok(APP_DATA_ENTRIES.includes(n) || APP_DATA_KEPT.includes(n), `${n} is neither erased nor kept`);
 });
 

@@ -132,12 +132,13 @@ export function isNewer(candidate: string, current: string): boolean {
 }
 
 /**
- * Should the "what's new" release drop open on this launch?
+ * Is this launch the first run of a new version, so main marks it
+ * 'just-updated' and What's new can show this release's notes?
  *
  * `previous` is the `last-run-version` stamp (null when the file does not
  * exist), `current` is the running version.
  *
- * The drop used to require a stamp to already be present, which meant it fired
+ * The check used to require a stamp to already be present, which meant it fired
  * for almost nobody: the stamp AND its reader shipped in the same release, so
  * no earlier install had the file, `previous` read null on the upgrade INTO
  * that release, and a genuinely fresh install had nothing either.
@@ -156,7 +157,7 @@ export function isNewer(candidate: string, current: string): boolean {
  * the Claude CLI and model version checks, which still read `isNewer`. The
  * badge and pending state order releases with `isNewerRelease` instead.
  */
-export function shouldShowReleaseDrop(previous: string | null, current: string): boolean {
+export function shouldMarkJustUpdated(previous: string | null, current: string): boolean {
   if (previous === current) return false;
   if (previous === null) return true;
   return !isNewer(previous, current);

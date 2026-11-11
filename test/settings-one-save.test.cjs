@@ -42,7 +42,7 @@ test('toggles stage their change instead of writing it', () => {
   // The specific toggles that used to persist the instant you clicked them.
   // semanticMemory left with its switch: search by meaning runs whenever
   // MemPalace is installed (owner, 2026-10-19).
-  for (const key of ['strongKeepalive', 'autoMode', 'orchestratorMaySpawn', 'telemetryEnabled']) {
+  for (const key of ['strongKeepalive', 'autoMode', 'orchestratorMaySpawn']) {
     // autoUpdate left with its switch: every installed build checks (owner, 2026-10-02).
     const re = new RegExp(`stage\\(\\{ ${key}:`);
     assert.match(MODAL, re, `${key} is not staged`);

@@ -11,12 +11,11 @@ import { disposeTerminal } from './terminalPool';
 import { SidebarTabs } from './SidebarTabs';
 import { ThreadsPanel } from './ThreadsPanel';
 import { ProfileTab } from './ProfileTab';
-import { ToolWaterfall } from './ToolWaterfall';
 import { AgentControlStrip } from './AgentControlStrip';
 import { ClearedBanner } from './ClearedBanner';
 import { EditAgentModal } from './EditAgentModal';
 import { GitTab } from './GitTab';
-import { SHOW_TRACES, SHOW_FOCUS_MODE, SHOW_GIT, SHOW_IDE, SHOW_CLOSE_AGENT, SHOW_OPEN_TERMINAL } from '@shared/buildFeatures';
+import { SHOW_FOCUS_MODE, SHOW_GIT, SHOW_IDE, SHOW_CLOSE_AGENT, SHOW_OPEN_TERMINAL } from '@shared/buildFeatures';
 import { Icon } from './Icon';
 import { useStore, type Agent } from '@/store/store';
 import { releaseBindingsOf } from '@/shell/releaseBindings';
@@ -217,10 +216,6 @@ export function AgentDetailPanel({ agent }: AgentDetailPanelProps) {
 
         {sidebarTab === 'memory' && (
           <MemoryTab key={agent.id} godId={agent.id} ownOnly />
-        )}
-
-        {SHOW_TRACES && sidebarTab === 'traces' && (
-          <ToolWaterfall agentId={agent.id} />
         )}
       </div>
 

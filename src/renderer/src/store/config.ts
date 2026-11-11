@@ -158,10 +158,6 @@ export interface HarnessConfig {
   strongKeepalive?: boolean;
   /** @deprecated Ignored since 2026-10-02: updates are always checked. */
   autoUpdate?: boolean;
-  /** Anonymous product analytics (see TELEMETRY.md). Ignored while
-   *  COLLECT_USAGE_STATS (buildFeatures.ts) is false, as it is in this build.
-   *  Mirrors the main-process field (src/main/config.ts). */
-  telemetryEnabled?: boolean;
   slackEnabled?: boolean;
   slackSigningSecret?: string;
   slackBotToken?: string;

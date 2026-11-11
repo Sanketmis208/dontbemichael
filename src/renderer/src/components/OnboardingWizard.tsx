@@ -29,7 +29,6 @@ import {
 import { missingBusinessFields, type BusinessField } from '@shared/businessProfile';
 import { useResolvedGodName } from '@/hooks/useResolvedGodName';
 import { teamPlanFromRecord, type OfficeRecord } from '@shared/officeRecord';
-import { COLLECT_USAGE_STATS } from '@shared/buildFeatures';
 import { fieldLabel, groupName, requiredMark } from './fieldText';
 
 export interface OnboardingWizardProps {
@@ -261,9 +260,6 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
 
   const [home, setHome] = useState<string>('');
   const [autoMode, setAutoMode] = useState<boolean>(true);
-  // Anonymous usage stats (TELEMETRY.md). Shown and saved only while
-  // COLLECT_USAGE_STATS (buildFeatures.ts) is on; off in this build.
-  const [shareStats, setShareStats] = useState<boolean>(true);
   const [godProvider, setGodProvider] = useState<AgentProvider>('claude');
   const [godModel, setGodModel] = useState<string | undefined>(
     providerPreset('claude').recommendedOrchestratorModel
@@ -475,9 +471,7 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
         autoMode,
         godProvider,
         godModel,
-        ...teamDefaultsFromMichael(config, godProvider, godModel),
-        // Only written when the choice was shown (buildFeatures.ts).
-        ...(COLLECT_USAGE_STATS ? { telemetryEnabled: shareStats } : {})
+        ...teamDefaultsFromMichael(config, godProvider, godModel)
       });
       setBusy(false);
       onComplete(next);
@@ -1120,18 +1114,6 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
                     tint="var(--cth-sky-light)"
                     edge="var(--cth-sky)"
                     onChange={toggleOpenAtLogin}
-                  />
-                )}
-
-                {COLLECT_USAGE_STATS && (
-                  <ToggleRow
-                    icon="info"
-                    label={t('onboarding.permissions.shareStats')}
-                    desc={t('onboarding.permissions.shareStatsDesc')}
-                    on={shareStats}
-                    tint="var(--cth-lemon-light)"
-                    edge="var(--cth-lemon)"
-                    onChange={() => setShareStats(!shareStats)}
                   />
                 )}
 

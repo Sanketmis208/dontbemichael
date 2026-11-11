@@ -356,10 +356,6 @@ export interface HarnessConfig {
   strongKeepalive?: boolean;
   /** @deprecated Ignored since 2026-10-02: updates are always checked. */
   autoUpdate?: boolean;
-  /** Anonymous product analytics (see TELEMETRY.md). Ignored while
-   *  COLLECT_USAGE_STATS (buildFeatures.ts) is false, as it is in this build.
-   *  Mirrors main + renderer HarnessConfig. */
-  telemetryEnabled?: boolean;
   slackEnabled?: boolean;
   slackSigningSecret?: string;
   slackBotToken?: string;
@@ -651,15 +647,6 @@ export interface PreservedWorktreeSnapshot {
 
 const api = {
   version: __APP_VERSION__,
-
-  // ─── Analytics ───────────────────────────────────────────────────────────
-  /** Count ONE human-sent message (TELEMETRY.md → `message_sent`). Carries a
-   *  surface name and nothing else — no text, no length, no agent id — and main
-   *  accepts only 'terminal' and 'composer' here (steer and hive are counted in
-   *  main, at their own handlers). Never awaited by callers and never allowed to
-   *  throw: a telemetry hiccup must not break sending a message. */
-  trackMessageSent: (surface: 'terminal' | 'composer'): Promise<void> =>
-    ipcRenderer.invoke('analytics:messageSent', surface).then(() => undefined, () => undefined),
 
   // ─── Office Packs ────────────────────────────────────────────────────────
   /** The business types onboarding offers, each with its core agents already
@@ -1428,9 +1415,6 @@ const api = {
   /** Live cumulative usage for an agent (OTel-preferred, transcript fallback). */
   telemetryUsage: (agentId: string): Promise<AgentUsageSample | null> =>
     ipcRenderer.invoke('telemetry:usage', agentId),
-  /** Recent tool spans for an agent's waterfall (#7B.2). */
-  telemetrySpans: (agentId: string): Promise<ToolSpan[]> =>
-    ipcRenderer.invoke('telemetry:spans', agentId),
   /** Cold-start backfill of all agents' usage + recent spans. */
   telemetrySnapshot: (): Promise<TelemetrySnapshot> =>
     ipcRenderer.invoke('telemetry:snapshot'),
@@ -2031,19 +2015,15 @@ const api = {
   arch: process.arch as string,
   /** The OS version (e.g. 10.0.26100 on Windows 11), for a prefilled problem report. */
   osVersion: (typeof process.getSystemVersion === 'function' ? process.getSystemVersion() : '') as string,
-  /** DEV ONLY — fabricate an update status so the toast can be inspected without
+  /** DEV ONLY — fabricate an update status so the update card can be inspected without
    *  cutting a release. Refused (`{ok:false}`) in a packaged build; see the
    *  handler in updater.ts. Call it from the devtools console:
    *    await window.cth.updateSimulate()                       // Michael's Download card on Ask me
-   *    await window.cth.updateSimulate({ state: 'downloaded' }) // Michael's Restart card on Ask me
-   *    await window.cth.updateSimulate({ drop: true })          // the centered release page
-   *    await window.cth.updateSimulate({ notes: '<!-- drop -->…' }) // your own drop */
+   *    await window.cth.updateSimulate({ state: 'downloaded' }) // Michael's Restart card on Ask me */
   updateSimulate: (opts?: {
     state?: 'downloaded' | 'available-manual';
     version?: string;
     notes?: string;
-    /** Preview the centered release page using the default drop template. */
-    drop?: boolean;
   }): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('update:simulate', opts)
 };
 

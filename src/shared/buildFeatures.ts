@@ -8,11 +8,6 @@
  *  control, and a diff view reads as something broken (owner, 2026-09-23). */
 export const SHOW_GIT = false;
 
-/** Traces: the per agent tool call trace tab. A developer view; in the 380 px
- *  person panel it also pushed the tab row past the edge ("Trac", review
- *  2026-10-01). DESIGN.md 7.11 keeps it behind a flag. */
-export const SHOW_TRACES = false;
-
 /** Developer tools on Settings → Prerequisites: the git and Node.js rows, and
  *  every agent engine this build doesn't offer (BUILD_ENGINES). Owners only need
  *  Claude Code, uv and MemPalace; the rest read as problems ("NOT SET UP") that
@@ -45,16 +40,9 @@ export const ALLOW_TEMP_WORKERS = false;
  *  longer surfaces the History tab (owner, 2026-09-24). */
 export const SHOW_ORG_TRIGGER = false;
 
-/** Anonymous usage stats (TELEMETRY.md): the "Share anonymous usage stats" row
- *  in onboarding, the switch in Settings → General, and sending itself. Off
- *  until the owner decides whether to collect anything at all. While off,
- *  nothing is sent even if a release is built with a PostHog key, so the app
- *  never sends without having shown the choice (owner, 2026-09-24). */
-export const COLLECT_USAGE_STATS = false;
-
 /** Automatic failure reports (docs/designs/auto-report-failures.md): failures
  *  the repo owners can fix in code are filed to GitHub, always on with no
- *  switch (owner D14) and separate from usage stats (owner, eng D1);
+ *  switch (owner D14) and separate from any usage stats (owner, eng D1);
  *  DO_NOT_TRACK still stops sending. Off turns off detection, the local file
  *  and sending in a release (R9); revoking the key stops sending at once. */
 export const AUTO_FAILURE_REPORTS = true;

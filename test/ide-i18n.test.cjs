@@ -11,7 +11,6 @@ const path = require('node:path');
 
 const read = (p) => fs.readFileSync(path.join(__dirname, '..', p), 'utf8');
 const FILES = [
-  'src/renderer/src/components/CodeEditor.tsx',
   'src/renderer/src/ide/ImagePreview.tsx',
   'src/renderer/src/ide/MonacoDiff.tsx',
   'src/renderer/src/ide/MonacoEditor.tsx',
@@ -29,7 +28,7 @@ test('the editor and IDE views have no English tooltips, labels or loaders writt
 });
 
 test('every new string is in each language', () => {
-  const keys = ['copyAbsolutePath', 'openInIde', 'saveFailed', 'loading', 'loadingEditor', 'nothingOpen', 'nothingOpenHint'];
+  const keys = ['copyAbsolutePath', 'loading', 'loadingEditor', 'nothingOpen', 'nothingOpenHint'];
   for (const locale of ['en', 'zh-CN', 'ar']) {
     const ide = JSON.parse(read(`src/renderer/src/i18n/locales/${locale}.json`)).idePanel;
     for (const k of keys) assert.ok(ide[k], `${locale} idePanel.${k}`);
