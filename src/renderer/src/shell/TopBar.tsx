@@ -357,7 +357,8 @@ export function NeedsYouButton() {
   // The column shows the count already: the pill steps out of the top bar and
   // the buttons beside it close the gap (needs-you-pill-hides.md, D1 and D2).
   // The screen reader line stays (E1).
-  const hidden = useStore((s) => pillHidden(s.rightColumn, s.floorView));
+  const nothingWaits = state === 'quiet' && reports === 0;
+  const hidden = useStore((s) => pillHidden(s.rightColumn, s.floorView, nothingWaits));
   // Hiding and coming back ease (global.css, .cth-pill-slot): the pill's width
   // (a grid column from 0fr to 1fr, so its real width, whatever its text) and
   // the row's 8 px gap move together, so the buttons beside it glide. Going

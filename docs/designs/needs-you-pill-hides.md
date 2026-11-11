@@ -200,3 +200,10 @@ Approval readiness: PASS (M, D1, D2 answered by the owner, 2026-11-05; E1 to E3 
 - **VERDICT:** CEO CLEARED. Eng review not run.
 
 NO UNRESOLVED DECISIONS
+
+## Revision (owner, 2026-11-11)
+
+With nothing waiting (no ask and no report), the quiet "Nothing needs you" pill
+shows on the office only. On Tasks, Pulse, Who talks to whom or a file it steps
+out of the top bar with the same easing (`pillHidden`'s third argument). Any ask
+or report brings it back at once, on every tab.
