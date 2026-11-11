@@ -65,6 +65,19 @@ test('Not now hides a tip for a week and the next one shows meanwhile', () => {
   assert.equal(T.pickAllClearTip({ ...input, snoozed, now: NOW + T.TIP_SNOOZE_MS }).kind, 'save', 'back after a week');
 });
 
+test('with no tip, what the team did today, in Pulse order and only what happened', () => {
+  // Value: protects=the space is rarely empty: today's work shows when no tip qualifies, and only kinds that happened (owner, 2026-11-11); fails_when=empty kinds show, the order drifts from Pulse, or a missing snapshot throws; why_new=owner 2026-11-11; seam=pure; no_claim=Pulse's own counting
+  const recap = T.todayRecap([
+    { kind: 'check', total: 12, by: [], sub: 4 },
+    { kind: 'sent', total: 0, by: [] },
+    { kind: 'email', total: 14, by: [] },
+    { kind: 'task', total: 3, by: [] }
+  ]);
+  assert.deepEqual(recap.map((o) => [o.kind, o.total]), [['email', 14], ['task', 3], ['check', 12]]);
+  assert.deepEqual(T.todayRecap([]), []);
+  assert.deepEqual(T.todayRecap(null), []);
+});
+
 test('the answer line shows the choice without "Picked:"', () => {
   // Value: protects=the summary reads as the owner's choice, not the record format; fails_when=the prefix shows or other answers are changed; why_new=new summary; seam=pure; no_claim=none beyond protects
   assert.equal(T.answerShort('Picked: Yes, both were us'), 'Yes, both were us');
@@ -83,10 +96,13 @@ test('All clear shows one answer line and the tip card, not a stack of answer ca
   assert.match(card, /pickAllClearTip\(/);
   assert.match(card, /new CustomEvent\('cth:open-settings', \{ detail: \{ section: 'Connections' \} \}\)/);
   assert.match(card, /snoozeTip\(/);
+  assert.match(card, /window\.cth\.pulseSnapshot\('today', false\)/, 'one snapshot feeds the tip and the recap');
+  assert.match(card, /if \(!tip\) \{[\s\S]{0,300}const lines = todayRecap\(outcomes\);\s*if \(!lines\.length\) return null;/, 'the recap only when no tip');
+  assert.match(card, /t\(`pulse\.outcome\.\$\{o\.kind\}`, \{ sub: o\.sub \?\? 0 \}\)/, 'the words Pulse uses for each kind');
   assert.ok(!/useNeedsYou|count/.test(card.slice(card.indexOf('export function AllClearTipCard'))), 'never counted in Needs you');
   for (const loc of ['en', 'ar', 'zh-CN']) {
     const d = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`));
-    for (const k of ['save', 'idea', 'saveTitle', 'every', 'useModel', 'connectorTitle', 'connectorBody', 'openConnections']) {
+    for (const k of ['save', 'idea', 'saveTitle', 'every', 'useModel', 'connectorTitle', 'connectorBody', 'openConnections', 'today', 'recapTitle', 'openPulse']) {
       assert.ok(typeof d.allClearTip?.[k] === 'string' && d.allClearTip[k], `${loc} allClearTip.${k}`);
       assert.ok(!/[–—]|\s-\s/.test(d.allClearTip[k]), `${loc} allClearTip.${k}: no dashes`);
     }

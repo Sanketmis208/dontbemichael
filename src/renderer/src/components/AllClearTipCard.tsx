@@ -1,7 +1,8 @@
 /**
  * Needs you after the last answer (owner, 2026-11-10; shared/allClearTip.ts):
  * the answers given this time as one quiet line, and one tip from Michael
- * drawn from this office (a Pulse saving, or a connector nobody uses). It
+ * drawn from this office (a Pulse saving, or a connector nobody uses), else
+ * what the team did today, from Pulse's own counts. It
  * lives in the column, so it goes when the column closes, another tab opens
  * or the office restarts, and it is never counted in Needs you.
  *
@@ -13,7 +14,8 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Advice } from '@shared/teamAdvice';
-import { pickAllClearTip, snoozeTip, answerShort, type AllClearTip } from '@shared/allClearTip';
+import { pickAllClearTip, snoozeTip, answerShort, todayRecap, type AllClearTip } from '@shared/allClearTip';
+import type { Outcome } from '@shared/teamPerformance';
 import { connectorGranted, connectorOn, isEmailCalendarKey, isMailConnectorKey, isQuickBooksKey } from '@shared/claudeConnectors';
 import { MICHAEL_ID } from '@shared/askMeRouting';
 import { useStore } from '@/store/store';
@@ -69,15 +71,22 @@ export function AllClearTipCard({ godName }: { godName: string }) {
   const updateAgent = useStore((s) => s.updateAgent);
   const { missions } = useMissions();
   const [advice, setAdvice] = useState<Advice[] | null>(null);
+  const [outcomes, setOutcomes] = useState<Outcome[] | null>(null);
   const [snoozed, setSnoozed] = useState<Record<string, number>>(readSnoozed);
   const [done, setDone] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let alive = true;
-    void window.cth.pulseSnapshot('this-week', false)
-      .then((v) => { if (alive) setAdvice(v?.available ? v.advice ?? [] : []); })
-      .catch(() => { if (alive) setAdvice([]); });
+    // Today's snapshot: its suggestions span 14 days whatever the period, and
+    // its outcomes are today's work for the recap.
+    void window.cth.pulseSnapshot('today', false)
+      .then((v) => {
+        if (!alive) return;
+        setAdvice(v?.available ? v.advice ?? [] : []);
+        setOutcomes(v?.available ? v.snapshot?.outcomes ?? [] : []);
+      })
+      .catch(() => { if (alive) { setAdvice([]); setOutcomes([]); } });
     return () => { alive = false; };
   }, []);
 
@@ -94,7 +103,29 @@ export function AllClearTipCard({ godName }: { godName: string }) {
   }, [advice, config, agents, snoozed]);
 
   if (done) return <div role="status" style={{ padding: '0 2px', fontSize: 12, lineHeight: '18px', color: 'var(--cth-ink-3)' }}>{done}</div>;
-  if (!tip) return null;
+  if (!tip) {
+    // Nothing worth doing: what the team did today, so the space is rarely
+    // empty (owner, 2026-11-11). Nothing done yet either: no card.
+    const lines = todayRecap(outcomes);
+    if (!lines.length) return null;
+    return (
+      <section aria-label={t('allClearTip.recapTitle')} style={card}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={chip}><AgentAvatar id={MICHAEL_ID} name={godName} size={16} />{godName}</span>
+          <span style={{ ...tag, ...todayTag }}>{t('allClearTip.today')}</span>
+        </div>
+        <div style={{ marginTop: 10, fontSize: 13.5, fontWeight: 600, lineHeight: '19px', letterSpacing: '-0.01em', color: 'var(--cth-ink)' }}>{t('allClearTip.recapTitle')}</div>
+        <ul style={{ margin: '6px 0 0', padding: 0, listStyle: 'none', fontSize: 12.5, lineHeight: '20px', color: 'var(--cth-ink-2)' }}>
+          {lines.map((o) => (
+            <li key={o.kind}><span style={{ fontWeight: 600, color: 'var(--cth-ink)' }}>{o.total}</span> {t(`pulse.outcome.${o.kind}`, { sub: o.sub ?? 0 })}</li>
+          ))}
+        </ul>
+        <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
+          <PixelButton variant="secondary" size="sm" onClick={() => useStore.getState().setFloorView('pulse')}>{t('allClearTip.openPulse')}</PixelButton>
+        </div>
+      </section>
+    );
+  }
 
   const nameOf = (id: string): string => agents.find((a) => a.id === id)?.name ?? id;
   const notNow = (): void => { const next = snoozeTip(snoozed, tip.id, Date.now()); writeSnoozed(next); setSnoozed(next); };
@@ -170,6 +201,7 @@ const chip: CSSProperties = {
 const tag: CSSProperties = { fontSize: 10.5, fontWeight: 600, padding: '1px 7px', borderRadius: 'var(--cth-r-pill)' };
 const saveTag: CSSProperties = { background: 'var(--cth-green-soft)', color: 'var(--cth-green-text)' };
 const ideaTag: CSSProperties = { background: 'var(--cth-indigo-soft)', color: 'var(--cth-indigo-text)' };
+const todayTag: CSSProperties = { background: 'var(--cth-neutral-soft)', color: 'var(--cth-ink-2)' };
 const linkButton: CSSProperties = {
   padding: 0, border: 'none', background: 'transparent', cursor: 'pointer',
   fontFamily: 'var(--cth-font-ui)', fontSize: 12, fontWeight: 500, color: 'var(--cth-indigo-text)'

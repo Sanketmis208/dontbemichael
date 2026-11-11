@@ -3209,7 +3209,10 @@
     "useModel": "Use {{model}}",
     "connectorTitle": "{{name}} is on, but nobody uses it",
     "connectorBody": "No one on the team has access yet. Give a member access in their Access tab, or switch it off.",
-    "openConnections": "Open Connections"
+    "openConnections": "Open Connections",
+    "today": "Today",
+    "recapTitle": "What the team did today",
+    "openPulse": "Open Pulse"
   },
   "degradedNotice": {
     "title": "{{name}} started with something missing"

@@ -104,8 +104,10 @@ https://claude.ai/artifact/HbTomdPsAGtzCemotorLi6
   first the Pulse saving one click can apply that saves the most a week, else a
   connector the owner switched on that no member may use (it opens Settings,
   Connections; who gets access stays the owner's choice). Not now hides a tip
-  for a week. No tip worth offering, no card. The tip goes with the column and
-  is never counted in Needs you.
+  for a week. No tip worth offering: what the team did today, from Pulse's
+  Today counts in its own words, with Open Pulse (owner, 2026-11-11: a snoozed
+  tip left the space empty). Nothing done today either: no card. The card goes
+  with the column and is never counted in Needs you.
 - **D9, resize motion.** Opening or closing the column animates the column
   width and the stage `bleed` together, ease-out, 240 ms, so the office eases to
   its new size. Under `prefers-reduced-motion` both snap. Check the stage holds

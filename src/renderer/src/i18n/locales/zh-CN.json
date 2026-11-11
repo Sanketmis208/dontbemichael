@@ -3209,7 +3209,10 @@
     "useModel": "改用 {{model}}",
     "connectorTitle": "{{name}} 已开启，但没有人使用",
     "connectorBody": "团队里还没有人有权限。可在成员的访问标签中授予权限，或将其关闭。",
-    "openConnections": "打开连接"
+    "openConnections": "打开连接",
+    "today": "今天",
+    "recapTitle": "团队今天完成的工作",
+    "openPulse": "打开脉搏"
   },
   "degradedNotice": {
     "title": "{{name}} 启动时缺了一些东西"

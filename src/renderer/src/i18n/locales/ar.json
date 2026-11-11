@@ -3209,7 +3209,10 @@
     "useModel": "استخدم {{model}}",
     "connectorTitle": "{{name}} مفعّل، لكن لا أحد يستخدمه",
     "connectorBody": "لا أحد في الفريق لديه صلاحية بعد. امنح عضوًا الصلاحية من تبويب الوصول الخاص به، أو أوقفه.",
-    "openConnections": "فتح الاتصالات"
+    "openConnections": "فتح الاتصالات",
+    "today": "اليوم",
+    "recapTitle": "ما أنجزه الفريق اليوم",
+    "openPulse": "فتح النبض"
   },
   "degradedNotice": {
     "title": "بدأ {{name}} وينقصه شيء"

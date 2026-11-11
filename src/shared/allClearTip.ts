@@ -6,7 +6,9 @@
  *   1. A way to save, from Pulse: the suggestion that saves the most a week
  *      and that one click can apply (a schedule interval or a model).
  *   2. A connector the owner switched on that no member may use yet.
- *   Nothing worth offering: no card.
+ *   Nothing worth offering: what the team did today (todayRecap), from
+ *   Pulse's own counts, so the space is rarely empty (owner, 2026-11-11).
+ *   Nothing done today either: no card.
  *
  * Not now hides a tip for TIP_SNOOZE_MS. It is not counted in Needs you and
  * goes with the column (it closes, another tab opens, the office restarts).
@@ -14,6 +16,7 @@
  * No electron or react imports: the renderer calls it, tests load it.
  */
 import type { Advice } from './teamAdvice';
+import type { Outcome, WorkKind } from './teamPerformance';
 
 export const TIP_SNOOZE_MS = 7 * 86_400_000;
 /** A saving smaller than this a week is not worth the owner's attention here. */
@@ -67,4 +70,14 @@ export function snoozeTip(snoozed: Readonly<Record<string, number>>, id: string,
  *  the "Picked: " the answer record starts with. */
 export function answerShort(a: string): string {
   return a.replace(/^\s*Picked:\s*/i, '').trim();
+}
+
+/** Pulse's order for the kinds of work. */
+const RECAP_ORDER: readonly WorkKind[] = ['email', 'sent', 'task', 'check'];
+
+/** Today's work for the recap: each kind the team did any of, in Pulse's
+ *  order; empty when nothing was done yet. */
+export function todayRecap(outcomes: readonly Outcome[] | null | undefined): Outcome[] {
+  const by = new Map((outcomes ?? []).map((o) => [o.kind, o]));
+  return RECAP_ORDER.map((k) => by.get(k)).filter((o): o is Outcome => !!o && o.total > 0);
 }
