@@ -4,7 +4,6 @@ import type { TFunction } from 'i18next';
 import { PixelButton } from '../PixelButton';
 import { useStore } from '@/store/store';
 import type { TriggerHistoryEntry } from '@shared/triggers';
-import { useRtl } from '@/i18n/useDirection';
 import { fieldLabel } from '../fieldText';
 
 /**
@@ -206,7 +205,6 @@ function MessageBlock({
   onToggle: () => void;
 }) {
   const { t } = useTranslation();
-  const rtl = useRtl();
   const body = msg.body ?? '';
   const { text, clipped } = useMemo(() => clampBody(body), [body]);
   return (
@@ -215,7 +213,7 @@ function MessageBlock({
         <span style={tinyCaps}>{label}</span>
         <span style={{ ...tinyCaps, flexShrink: 0 }}>{relTime(Date.now() - msg.at, t)}</span>
       </div>
-      <div style={bodyBox} dir={rtl ? 'auto' : undefined}>{body.trim() ? (expanded ? body : text) : t('triggerHistory.emptyMessage')}</div>
+      <div style={bodyBox}>{body.trim() ? (expanded ? body : text) : t('triggerHistory.emptyMessage')}</div>
       {clipped && (
         <button type="button" onClick={onToggle} style={linkButton}>
           {expanded ? t('triggerHistory.showLess') : t('triggerHistory.showAll', { count: body.length })}

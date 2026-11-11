@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MarkdownPreview } from '@/markdown/MarkdownPreview';
 import { useResolvedGodName } from '@/hooks/useResolvedGodName';
-import { useRtl } from '@/i18n/useDirection';
 import { expiryState, procedurePointer, type MemoryEntry, type MemoryView } from '@shared/memoryIndex';
 import { localDay } from '@shared/messageView';
 import { groupName } from './fieldText';
@@ -90,9 +89,8 @@ function Row({ children }: { children: React.ReactNode }) {
 }
 
 function EntryText({ children }: { children: React.ReactNode }) {
-  const rtl = useRtl();
   return (
-    <div dir={rtl ? 'auto' : undefined} style={{ fontSize: 14, lineHeight: '20px', color: 'var(--cth-ink-900)', wordBreak: 'break-word' }}>
+    <div style={{ fontSize: 14, lineHeight: '20px', color: 'var(--cth-ink-900)', wordBreak: 'break-word' }}>
       {children}
     </div>
   );
@@ -132,7 +130,6 @@ function EntryRow({ agentId, entry }: { agentId: string; entry: MemoryEntry }) {
 /** A procedure's name that opens to its steps, read on first open. */
 function Procedure({ agentId, name, slug }: { agentId: string; name: string; slug: string }) {
   const { t } = useTranslation();
-  const rtl = useRtl();
   const [open, setOpen] = useState(false);
   const [steps, setSteps] = useState<string | null | undefined>(undefined); // undefined: not read yet
 
@@ -154,12 +151,12 @@ function Procedure({ agentId, name, slug }: { agentId: string; name: string; slu
         onClick={() => setOpen((o) => !o)}
         style={{
           display: 'flex', gap: 6, alignItems: 'baseline', width: '100%', padding: 0, border: 'none', background: 'transparent',
-          cursor: 'pointer', textAlign: rtl ? 'right' : 'left', fontFamily: 'var(--cth-font-ui)', fontSize: 14, lineHeight: '20px',
+          cursor: 'pointer', textAlign: 'left', fontFamily: 'var(--cth-font-ui)', fontSize: 14, lineHeight: '20px',
           color: 'var(--cth-ink-900)'
         }}
       >
-        <span aria-hidden style={{ width: 10, flexShrink: 0, color: 'var(--cth-ink-500)' }}>{open ? '▾' : (rtl ? '◂' : '▸')}</span>
-        <span dir={rtl ? 'auto' : undefined} style={{ wordBreak: 'break-word' }}>{name}</span>
+        <span aria-hidden style={{ width: 10, flexShrink: 0, color: 'var(--cth-ink-500)' }}>{open ? '▾' : '▸'}</span>
+        <span style={{ wordBreak: 'break-word' }}>{name}</span>
       </button>
       {open && (
         <div style={{ margin: '4px 0 0 16px', fontSize: 14, lineHeight: '20px', color: 'var(--cth-ink-700)' }}>

@@ -18,7 +18,7 @@ test('the hire preview says the named servers are not turned on, and points nowh
   const modal = read('src/renderer/src/components/AddAgentModal.tsx');
   assert.match(modal, /tr\('addAgent\.mcpNotStarted'\)/);
   assert.ok(!/addAgent\.mcp(Safe|Consent|EnableInSettings)/.test(modal), 'the old enabled and Settings lines are gone');
-  for (const loc of ['en', 'ar', 'zh-CN']) {
+  for (const loc of ['en']) {
     const add = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).addAgent;
     assert.ok(typeof add.mcpNotStarted === 'string' && add.mcpNotStarted, `${loc} addAgent.mcpNotStarted`);
     assert.ok(!/[–—→]|\s-\s/.test(add.mcpNotStarted), `${loc}: no dashes or arrows`);

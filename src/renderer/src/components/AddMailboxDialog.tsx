@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } f
 import { useTranslation } from 'react-i18next';
 import { PixelButton } from './PixelButton';
 import { Disclosure, Toggle } from './triggers/ui';
-import { useRtl } from '@/i18n/useDirection';
 import { Field, Panel, hint } from './fieldText';
 import {
   GOOGLE_APP_PASSWORDS_URL, GOOGLE_TWO_STEP_URL, IMAPS_PORT, PROVIDER_ORDER, PROVIDER_PRESETS, SMTPS_PORT, SUBMISSION_PORT,
@@ -79,10 +78,9 @@ export function AddMailboxDialog({ fix, onClose, onSaved }: {
 
   // Arrow keys move and choose within the service tiles (DESIGN.md 7.10a);
   // left and right follow reading direction.
-  const rtl = useRtl();
   const onProviderKey = (e: KeyboardEvent<HTMLDivElement>): void => {
-    const fwd = rtl ? 'ArrowLeft' : 'ArrowRight';
-    const back = rtl ? 'ArrowRight' : 'ArrowLeft';
+    const fwd = 'ArrowRight';
+    const back = 'ArrowLeft';
     const step = e.key === fwd || e.key === 'ArrowDown' ? 1 : e.key === back || e.key === 'ArrowUp' ? -1 : 0;
     if (!step) return;
     e.preventDefault();

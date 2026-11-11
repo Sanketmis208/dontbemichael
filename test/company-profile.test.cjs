@@ -77,7 +77,7 @@ test('setup asks for it in two steps, and Settings has a page with a pointer to 
   assert.match(settings, /onOpenKnowledge=\{\(\) => setActiveSection\('Memory & Knowledge'\)\}/);
   const en = JSON.parse(read('src/renderer/src/i18n/locales/en.json'));
   assert.match(en.companyProfile.knowledgeBody, /Product and price lists, your ideal customers, how you sell/);
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const d = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`));
     assert.deepEqual(Object.keys(d.companyProfile).sort(), Object.keys(en.companyProfile).sort(), loc);
     assert.doesNotMatch(JSON.stringify(d.companyProfile), /[–—]/, loc);

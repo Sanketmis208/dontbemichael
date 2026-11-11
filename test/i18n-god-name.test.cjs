@@ -1,13 +1,13 @@
 'use strict';
 
-// PR #205 shipped en/zh-CN locales in which the orchestrator is always called
+// PR #205 shipped locales in which the orchestrator is always called
 // "Michael". The user can rename it, and this codebase has already fixed that
 // exact revert three times in the spawn path. It also replaced several
 // per-agent runtime names with the literal "Michael", so the UI named the wrong
 // agent — including a confirmation dialog for a destructive restart.
 //
-// These tests hold both fixes, plus the founder's rule that nothing changes for
-// an existing user until they pick a language.
+// These tests hold both fixes, plus the rule that the app starts in English,
+// never in the OS locale.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -17,7 +17,7 @@ const path = require('node:path');
 const root = path.join(__dirname, '..');
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 const locale = (l) => JSON.parse(read(`src/renderer/src/i18n/locales/${l}.json`));
-const LOCALES = ['en', 'zh-CN'];
+const LOCALES = ['en'];
 
 function flatten(obj, pre = '', out = {}) {
   for (const [k, v] of Object.entries(obj)) {
@@ -74,31 +74,12 @@ test('every per-agent string has a call site that actually passes a name', () =>
   }
 });
 
-test('en and zh-CN carry exactly the same keys', () => {
-  const en = Object.keys(flatten(locale('en'))).sort();
-  const zh = Object.keys(flatten(locale('zh-CN'))).sort();
-  assert.deepEqual(zh, en);
-});
-
-test('every {{placeholder}} in en has the same placeholders in zh-CN', () => {
-  // A translation that drops an interpolation renders a literal gap.
-  const en = flatten(locale('en'));
-  const zh = flatten(locale('zh-CN'));
-  const vars = (v) => [...new Set((text(v).match(/\{\{(\w+)\}\}/g) || []))].sort();
-  const drift = Object.keys(en)
-    .filter((k) => JSON.stringify(vars(en[k])) !== JSON.stringify(vars(zh[k])))
-    .map((k) => `${k}: en=${vars(en[k])} zh=${vars(zh[k])}`);
-  assert.deepEqual(drift, [], `placeholder drift:\n  ${drift.join('\n  ')}`);
-});
-
 // --- the language default ---------------------------------------------------
 
-test('with nothing saved the app starts in English, never the OS locale', () => {
+test('the app starts in English, never the OS locale', () => {
   const src = read('src/renderer/src/i18n/index.ts');
-  const fn = src.slice(src.indexOf('function detectLanguage'));
-  const body = fn.slice(0, fn.indexOf('\n}'));
-  assert.doesNotMatch(body, /navigator/, 'detectLanguage reads the OS locale again');
-  assert.match(body, /return 'en';/, 'detectLanguage does not fall back to English');
+  assert.doesNotMatch(src, /navigator/, 'the OS locale is read again');
+  assert.match(src, /lng: 'en',/, 'the app does not start in English');
 });
 
 test('godName reaches i18next as a default variable, so no call site must pass it', () => {

@@ -7,7 +7,6 @@ import { FileText } from './FileChip';
 import { InfoTip } from './InfoTip';
 import { askedAgo } from './askHeadline';
 import { useStore } from '@/store/store';
-import { useRtl } from '@/i18n/useDirection';
 import { isComposingKey } from '@shared/imeGuard';
 import { FOUNDATION_QUESTIONS, capFor, draftPending, isLater, isListQuestion, joinListLines, jobsAsking, listLines, type FoundationId, type FoundationsView, type SeenItem } from '@shared/foundations';
 import { refreshNeedsYou } from '@/shell/useNeedsYou';
@@ -77,7 +76,6 @@ export function FoundationCard({ id, rowKey, taskId, q, askedAt, raiserId, raise
   onSaved?: (how: 'saved' | 'michael' | 'failed', list?: 'whole' | 'soFar') => void;
 }) {
   const { t, i18n } = useTranslation();
-  const rtl = useRtl();
   const hintId = useId();
   const sectionRef = useRef<HTMLElement>(null);
   const saveRef = useRef<HTMLDivElement>(null);
@@ -307,7 +305,7 @@ export function FoundationCard({ id, rowKey, taskId, q, askedAt, raiserId, raise
         </span>
       </div>
       {/* The evidence first (D2): Michael's bold line on what the work did without it. */}
-      <div dir={rtl ? 'auto' : undefined} className="cth-askme-q" style={{ margin: '10px 0 10px', fontSize: 12.5, lineHeight: '18px', color: 'var(--cth-ink)' }}>
+      <div className="cth-askme-q" style={{ margin: '10px 0 10px', fontSize: 12.5, lineHeight: '18px', color: 'var(--cth-ink)' }}>
         <FileText source={q} who={{ raisedBy: raiserId }} />
       </div>
       {/* A visible label, and the hint as its description (D12). */}
@@ -319,7 +317,6 @@ export function FoundationCard({ id, rowKey, taskId, q, askedAt, raiserId, raise
         id={`${hintId}-box`}
         aria-describedby={hintId}
         className="cth-input"
-        dir={rtl ? 'auto' : undefined}
         value={draft}
         // Held while a save runs: words typed during a file check would be
         // neither saved nor kept (ship review, 2026-10-23). A list waits for its record.

@@ -88,7 +88,7 @@ test('Ask me shows each one as Michael\'s report, never in the coral count', () 
   assert.match(ask, /degraded\.map\(\(n\) => \(\s*<DegradedNoticeCard/);
   assert.match(ask, /window\.cth\.degradedDismiss\?\.\(notice\.agentId\)/);
   assert.match(ask, /t\('askMe\.report'\)[\s\S]{0,600}t\('askMe\.gotIt'\)/);
-  for (const loc of ['en', 'ar', 'zh-CN']) {
+  for (const loc of ['en']) {
     const title = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).degradedNotice?.title;
     assert.ok(typeof title === 'string' && title.includes('{{name}}'), `${loc} degradedNotice.title`);
     assert.ok(!/[–—]|\s-\s/.test(title), `${loc}: no dashes`);

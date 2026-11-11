@@ -65,7 +65,7 @@ test('the group: a heading with the count and an info icon, rows with when, focu
   assert.match(src, /status === 'ready' && jobs\.length === 0 \? t\('scheduledJobs\.addOnAccess'\) : t\('scheduledJobs\.changeOnAccess'\)/);
   assert.match(src, /if \(agentId === RESEARCH_ID\) return null;/, 'Research holds no schedules');
   assert.match(src, /flexWrap: 'wrap'/, 'the when line drops under a long name (SJ7)');
-  for (const loc of ['en', 'ar', 'zh-CN']) {
+  for (const loc of ['en']) {
     const sj = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).scheduledJobs;
     for (const k of ['title', 'info', 'infoOffice', 'changeOnAccess', 'addOnAccess', 'changeOnOffice', 'none', 'loadError', 'tryAgain', 'paused', 'noFocus']) {
       assert.ok(sj[k], `${loc} ${k}`);

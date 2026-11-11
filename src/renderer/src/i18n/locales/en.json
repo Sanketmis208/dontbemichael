@@ -260,8 +260,6 @@
       "maintenance": "Maintenance",
       "autoCompact": "Compact on a schedule",
       "autoCompactDesc": "Queue /compact for every agent on a schedule (hourly by default; set the interval in the Triggers tab). Off by default. Agents that run for a long time may overflow their context without it.",
-      "language": "Language",
-      "languageDesc": "Choose the language for the app interface. English is the default.",
       "dangerZone": "Danger zone",
       "dangerDesc": "Reset memory: every member starts over and the office stays. Reset & start over: the office is erased and setup opens again. Your team's folders and your Claude sign in stay.",
       "resetMemory": "Reset memory",

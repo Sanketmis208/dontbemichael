@@ -51,20 +51,6 @@ test('in English the manual steps are the ones manualInstallSteps gives', () => 
   }
 });
 
-test('in Chinese and Arabic every chip state and step is translated', () => {
-  for (const name of ['zh-CN', 'ar']) {
-    const t = tFor(locale(name));
-    for (const status of STATES) {
-      const words = badgeWords(status, V, t);
-      assert.notEqual(words.title, describeUpdate(status, V).title, `${name} ${JSON.stringify(status)}`);
-      assert.doesNotMatch(`${words.label} ${words.title}`, /\{\{|undefined/);
-    }
-    for (const platform of ['darwin', 'win32', 'linux']) {
-      for (const step of installSteps(platform, t).steps) assert.doesNotMatch(step, /\{\{|Quit this app/, `${name} ${platform}`);
-    }
-  }
-});
-
 test('the update toasts and chips read their words from the locale', () => {
   // Value: protects=no English is left hard-coded in the update surfaces; fails_when=a string goes back into the component; why_new=the components need React to render; seam=source pin
   // The team upgrade is Michael's card on Ask me now, with no top bar chip

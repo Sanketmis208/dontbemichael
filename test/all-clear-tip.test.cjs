@@ -100,7 +100,7 @@ test('All clear shows one answer line and the tip card, not a stack of answer ca
   assert.match(card, /if \(!tip\) \{[\s\S]{0,300}const lines = todayRecap\(outcomes\);\s*if \(!lines\.length\) return null;/, 'the recap only when no tip');
   assert.match(card, /t\(`pulse\.outcome\.\$\{o\.kind\}`, \{ sub: o\.sub \?\? 0 \}\)/, 'the words Pulse uses for each kind');
   assert.ok(!/useNeedsYou|count/.test(card.slice(card.indexOf('export function AllClearTipCard'))), 'never counted in Needs you');
-  for (const loc of ['en', 'ar', 'zh-CN']) {
+  for (const loc of ['en']) {
     const d = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`));
     for (const k of ['save', 'idea', 'saveTitle', 'every', 'useModel', 'connectorTitle', 'connectorBody', 'openConnections', 'today', 'recapTitle', 'openPulse']) {
       assert.ok(typeof d.allClearTip?.[k] === 'string' && d.allClearTip[k], `${loc} allClearTip.${k}`);

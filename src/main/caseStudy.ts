@@ -3,8 +3,8 @@
  * facts, drafts the words, reads the logo, makes the PDF and sends it as the
  * owner's own action. Main builds the page and the PDF itself and fixes the
  * recipient (outside voice O4). The owner can't change the page
- * (case-study-tab.md, D2 and D3): the screen hands over only its language and
- * the chosen mailbox, and main prints its own draft.
+ * (case-study-tab.md, D2 and D3): the screen hands over only the chosen
+ * mailbox, and main prints its own draft.
  *
  *   screen ─ caseStudy:open  ─► open()   ─► facts + fonts + mailboxes
  *          ─ caseStudy:draft ─► draft()  ─► one hidden model call, a second
@@ -18,7 +18,7 @@
  */
 import {
   CASE_STUDY_TO, caseStudyEmail, caseWhen, draftPrompt, fontFaceCss, hasWork, heroPalette, memberFigure, mergeDrafts, missingParts, pageHtml, parseDraft, startingEdits,
-  type CaseDraft, type CaseDraftResult, type CaseFont, type CasePrep, type CaseInput, type CaseLang, type CaseLogo, type CaseMember, type CaseOpen, type CasePeriod,
+  type CaseDraft, type CaseDraftResult, type CaseFont, type CasePrep, type CaseInput, type CaseLogo, type CaseMember, type CaseOpen, type CasePeriod,
   type CaseSendOutcome, type CaseStudyFacts, type HeroPalette, type Paper
 } from '../shared/caseStudy';
 import { dayKey, type DayRange, type PulseSnapshot } from '../shared/teamPerformance';
@@ -28,7 +28,6 @@ import { MailError } from './mail';
 import type { LogoResult } from './siteLogo';
 
 export const CASE_PERIODS: readonly CasePeriod[] = ['last-30', 'this-month'];
-export const CASE_LANGS: readonly CaseLang[] = ['en', 'ar', 'zh-CN'];
 /** The screen's draft gives up after this long (eng C4). */
 export const CASE_DRAFT_TIMEOUT_MS = 60_000;
 /** A picked logo file is read up to this size. */
@@ -91,14 +90,11 @@ export function savePaths(picked: string, exists: (path: string) => boolean, now
   return { pdf: picked, html: `${base} ${now()}.html` };
 }
 
-/** The screen's input from IPC, or null when it isn't one. Only the language
- *  is the screen's: the owner can't change the case study (case-study-tab.md,
- *  D3), so it is always the last 30 days with the business name shown,
- *  whatever the screen sends. */
+/** The screen's input from IPC, or null when it isn't one. The owner can't
+ *  change the case study (case-study-tab.md, D3), so it is always the last 30
+ *  days with the business name shown, whatever the screen sends. */
 export function caseInput(v: unknown): CaseInput | null {
-  const r = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
-  const lang = (CASE_LANGS as readonly unknown[]).includes(r.lang) ? r.lang as CaseLang : null;
-  return lang ? { lang, period: 'last-30', showName: true } : null;
+  return v && typeof v === 'object' ? { period: 'last-30', showName: true } : null;
 }
 
 /** The period's local days: the last 30 up to today, or this month so far. */
@@ -112,8 +108,8 @@ export function caseRange(period: CasePeriod, now: number): DayRange {
 const toDataUrl = (png: Buffer): string => `data:image/png;base64,${png.toString('base64')}`;
 
 export class CaseStudyService {
-  /** At most one case study is prepared at a time; a new office, period,
-   *  language or name choice starts over. */
+  /** At most one case study is prepared at a time; a new office, period or
+   *  name choice starts over. */
   private prep: { key: string; office: string | null; input: CaseInput; state: 'preparing' | 'ready'; draft: CaseDraft | null; logo: CaseLogo | null; hasWork: boolean; waiting?: boolean } | null = null;
   /** The draft of the last case study sent, for a Save from the same screen after Send. */
   private sent: { key: string; draft: CaseDraft | null } | null = null;
@@ -140,7 +136,7 @@ export class CaseStudyService {
     for (const m of this.d.missions()) {
       if (!m.to || !m.label?.trim() || m.enabled === false || (m.kind ?? 'dispatch') !== 'dispatch') continue;
       const owner = (m.to === 'god' || m.to === 'broadcast') && godId ? godId : m.to;
-      jobs.set(owner, [...(jobs.get(owner) ?? []), { label: m.label.trim(), when: caseWhen({ intervalMs: m.intervalMs ?? 0, weekly: m.weekly, times: m.times }, input.lang) }]);
+      jobs.set(owner, [...(jobs.get(owner) ?? []), { label: m.label.trim(), when: caseWhen({ intervalMs: m.intervalMs ?? 0, weekly: m.weekly, times: m.times }) }]);
     }
     const members: CaseMember[] = team.map((a) => {
       const { role, roleDescription } = splitAgentRole(a.role);
@@ -154,7 +150,6 @@ export class CaseStudyService {
     const kept = input.showName ? this.d.readLogo() : null;
     const ran = s.running ?? { ms: 0, awayMs: 0 };
     return {
-      lang: input.lang,
       paper: this.d.paper(),
       showName: input.showName,
       businessName: cfg.businessName,
@@ -242,7 +237,7 @@ export class CaseStudyService {
   }
 
   private keyOf(input: CaseInput): string {
-    return JSON.stringify([this.d.office(), input.lang, input.period, input.showName]);
+    return JSON.stringify([this.d.office(), input.period, input.showName]);
   }
 
   /** The draft main holds for this case study, if any (prepared or retried). */

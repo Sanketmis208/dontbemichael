@@ -926,7 +926,7 @@ test('nobody else takes the Research agent\'s name, and its name reaches it unle
 
 test('every locale names the Research agent by its current name, never a fixed one', () => {
   // Value: protects=the owner reads the name they chose in every language; fails_when=a locale hardcodes Pete again or drops the name; why_new=owner ship 2 D17; seam=none
-  for (const loc of ['en', 'ar', 'zh-CN']) {
+  for (const loc of ['en']) {
     const raw = fs.readFileSync(path.join(__dirname, '..', `src/renderer/src/i18n/locales/${loc}.json`), 'utf8');
     assert.doesNotMatch(raw, /Pete/, loc);
     const d = JSON.parse(raw);

@@ -19,7 +19,7 @@ import {
 } from '@shared/triggers';
 import { clearLocalState, restoreLocalState, snapshotLocalState } from '@/store/localState';
 import { plainReasonKey } from '@/store/plainReason';
-import { SHOW_MAILBOXES, SHOW_SIMPLE_MODE_SWITCH, SHOW_LANGUAGE_PICKER } from '@shared/buildFeatures';
+import { SHOW_MAILBOXES, SHOW_SIMPLE_MODE_SWITCH } from '@shared/buildFeatures';
 import { WebhookSchemaEditor } from './triggers/WebhookSchemaEditor';
 import { InfoTip } from './InfoTip';
 import { KnowledgeDocList } from './KnowledgeDocList';
@@ -32,7 +32,6 @@ import { ClaudeSignInSettings } from './ClaudeSignInSettings';
 import { Icon } from './Icon';
 import { IntegrationsRegistry } from './IntegrationsRegistry';
 import { AiEnginesSettings } from './AiEnginesSettings';
-import { LANGUAGES, setLanguage } from '@/i18n';
 
 export interface SettingsModalProps {
   config: HarnessConfig;
@@ -149,7 +148,7 @@ const NAV_SECTION_KEYS: Record<Section, string> = {
 };
 
 export function SettingsModal({ config, onClose, initialSection, place }: SettingsModalProps) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const dialogRef = useRef<HTMLDivElement | null>(null);
   // Esc and the focus trap (DESIGN.md 7.23). The close it runs is set below,
   // once requestClose exists, so unsaved changes still ask first.
@@ -987,36 +986,6 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
                           )}
                         </div>
                       </div>
-
-                      {/* Language: hidden in this build (SHOW_LANGUAGE_PICKER); the
-                          saved language, or English, stays. */}
-                      {SHOW_LANGUAGE_PICKER && (<>
-
-                      {/* Language — app UI language (i18n) */}
-                      <div style={group}>
-                        <h3 style={groupName}>
-                          {t('settings.general.language')}
-                        </h3>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            <span style={fieldLabel}>{t('settings.general.language')}</span>
-                            <span style={hint}>
-                              {t('settings.general.languageDesc')}
-                            </span>
-                          </div>
-                          <select
-                            value={i18n.language}
-                            onChange={(e) => setLanguage(e.target.value)}
-                            className="cth-input" style={fieldInputStyle}
-                            aria-label={t('settings.general.language')}
-                          >
-                            {LANGUAGES.map((l) => (
-                              <option key={l.code} value={l.code}>{l.label}</option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                      </>)}
 
 
                       {/* Desktop notifications toggle */}

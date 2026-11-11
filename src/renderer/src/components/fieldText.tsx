@@ -1,6 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { plainParts } from '@shared/workStyleText';
-import { useRtl } from '@/i18n/useDirection';
 import { InfoTip } from './InfoTip';
 
 /**
@@ -121,18 +120,17 @@ export function jobPartsFold(plain: string): boolean {
  * shows as one block, cut at four lines.
  */
 export function JobParts({ plain, wide = false, folded = false }: { plain: string; wide?: boolean; folded?: boolean }) {
-  const rtl = useRtl();
   const parts = plainParts(plain);
   const body = readBody(wide);
   if (parts.length <= 1 && !parts[0]?.label) {
     const text = parts[0]?.text ?? '';
-    return <div dir={rtl ? 'auto' : undefined} style={{ ...body, whiteSpace: 'pre-wrap', ...(folded && jobPartsFold(plain) ? clamp : {}) }}>{text}</div>;
+    return <div style={{ ...body, whiteSpace: 'pre-wrap', ...(folded && jobPartsFold(plain) ? clamp : {}) }}>{text}</div>;
   }
   const shown = folded ? parts.slice(0, 1) : parts;
   return (
     <div data-job-parts style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {shown.map((p, i) => (
-        <div key={i} dir={rtl ? 'auto' : undefined} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {p.label && <span style={partLabel}>{p.label}</span>}
           {p.text && <span style={{ ...body, whiteSpace: 'pre-wrap' }}>{p.text}</span>}
         </div>

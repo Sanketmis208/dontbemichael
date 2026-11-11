@@ -166,7 +166,7 @@ test('the notice card offers Don\'t show me these, from the app page only', () =
   const main = read('src/main/index.ts');
   assert.match(main, /ipcMain\.handle\('hive:skipNotice', \(evt, taskId: unknown, index: unknown\) => \(\{\n  ok: fromAppPage\(evt\) && typeof taskId === 'string'/);
   assert.match(read('src/preload/index.ts'), /skipNotice: \(taskId: string, index: number\): Promise<\{ ok: boolean \}> => ipcRenderer\.invoke\('hive:skipNotice', taskId, index\)/);
-  for (const loc of ['en', 'ar', 'zh-CN']) {
+  for (const loc of ['en']) {
     const v = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).askMe.skipNotice;
     assert.ok(v, loc);
     assert.doesNotMatch(v, /[–—]/, loc);

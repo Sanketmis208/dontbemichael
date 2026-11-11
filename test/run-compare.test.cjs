@@ -135,14 +135,9 @@ test('the jobs list offers Went wrong on Claude members\' finished runs and says
   assert.match(src, /\{!claude && <InfoTip text=\{t\('runCompare\.claudeOnly'\)\}/);
 });
 
-test('the strings exist in every language, name Michael by godName, and have no dashes', () => {
-  // Value: protects=the owner reads every line in their language; fails_when=a key is missing or a dash slips in; why_new=new strings; seam=none
-  const en = JSON.parse(read('src/renderer/src/i18n/locales/en.json')).runCompare;
-  for (const loc of ['ar', 'zh-CN']) {
-    const d = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).runCompare;
-    assert.deepEqual(Object.keys(d).sort(), Object.keys(en).sort(), loc);
-  }
-  for (const loc of ['en', 'ar', 'zh-CN']) {
+test('the strings name Michael by godName, and have no dashes', () => {
+  // Value: protects=the owner reads every line with Michael's real name; fails_when=a dash or a literal Michael slips in; why_new=new strings; seam=none
+  for (const loc of ['en']) {
     for (const v of Object.values(JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).runCompare)) {
       assert.doesNotMatch(v, /[–—]| - /, `${loc}: ${v}`);
       assert.doesNotMatch(v, /Michael/, 'by godName');

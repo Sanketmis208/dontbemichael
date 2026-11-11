@@ -2,7 +2,6 @@ import { useRef, type CSSProperties, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AskOption, AskPart, PartAnswer } from '@shared/askMeRouting';
 import { isComposingKey } from '@shared/imeGuard';
-import { useRtl } from '@/i18n/useDirection';
 import { GrowingTextarea } from './GrowingTextarea';
 import { FileText } from './FileChip';
 
@@ -81,7 +80,6 @@ export function PartLines({ parts, answers, onChange, onSend, who }: {
   who: Who;
 }) {
   const { t } = useTranslation();
-  const rtl = useRtl();
   const set = (i: number, next: PartAnswer) => {
     const all = parts.map((_, j) => answers[j]);
     all[i] = next;
@@ -120,7 +118,6 @@ export function PartLines({ parts, answers, onChange, onSend, who }: {
                 a one line field left no room for more than a line). */}
             <GrowingTextarea
               className="cth-input"
-              dir={rtl ? 'auto' : undefined}
               value={a.text ?? ''}
               onChange={(e) => set(i, { ...a, text: e.target.value })}
               onKeyDown={(e) => { if (isComposingKey(e)) return; if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); onSend(); } }}

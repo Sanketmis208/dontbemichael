@@ -37,7 +37,7 @@ test('the board has a Waiting column between Doing and Blocked, and each card sa
   // Yellow (owner, 2026-10-03).
   assert.match(kanban, /key: 'waiting', labelKey: 'kanban\.colWaiting', accent: 'var\(--cth-amber\)',\s+soft: 'var\(--cth-amber-soft\)',\s+text: 'var\(--cth-amber-text\)'/);
   assert.match(kanban, /task\.waitingOn \? t\('kanban\.waitingOn', \{ who: task\.waitingOn \}\) : t\('kanban\.waitingOnUnknown'\)/);
-  for (const loc of ['en', 'ar', 'zh-CN']) {
+  for (const loc of ['en']) {
     const k = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).kanban;
     for (const key of ['colWaiting', 'waitingOn', 'waitingOnUnknown', 'waitingOnTitle']) assert.ok(k[key], `${loc} ${key}`);
     assert.match(k.waitingOn, /\{\{who\}\}/, loc);

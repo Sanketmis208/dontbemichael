@@ -87,8 +87,8 @@ test('the card names the slowest, and tells slow from silent without a false ala
 });
 
 test('every word is there in every language, with no dashes', () => {
-  // Value: protects=Chinese and Arabic offices get the new card; fails_when=a key or placeholder is missing, or a dash slips in; why_new=owner 2026-10-30; seam=none; no_claim=translation quality
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  // Value: protects=the new card has its words; fails_when=a key or placeholder is missing, or a dash slips in; why_new=owner 2026-10-30; seam=none; no_claim=translation quality
+  for (const loc of ['en']) {
     const l = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`));
     const o = l.office.opening;
     for (const k of ['time', 'slowest', 'longer', 'quiet']) {

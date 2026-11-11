@@ -38,7 +38,7 @@ test('the row is under See full context, not on the Ask me card', () => {
   const ask = read('src/renderer/src/components/AskMeTab.tsx');
   assert.ok(!/SourceRow/.test(ask), 'no sources row on the Ask me card');
   assert.match(read('src/renderer/src/components/TasksKanban.tsx'), /<SourceRow entry=\{e\} who=\{\{ raisedBy: e\.raisedBy, assignee: qaAssignee \}\} margin="8px 0 0" \/>/);
-  for (const loc of ['en', 'ar', 'zh-CN']) {
+  for (const loc of ['en']) {
     const d = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).askMe;
     for (const k of ['sources', 'lookedIn', 'sourceOpens']) assert.ok(typeof d[k] === 'string' && d[k], `${loc} askMe.${k}`);
     assert.match(d.lookedIn, /\{\{places\}\}/);

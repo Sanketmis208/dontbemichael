@@ -58,7 +58,7 @@ test('dark mode and focus: readable step numbers and force quit, focus rings on 
 });
 
 test('top bar buttons speak the app language', () => {
-  // Value: protects=screen readers in Arabic and Chinese; fails_when=English aria returns; why_new=core review; seam=none
+  // Value: protects=screen reader labels come from the language file; fails_when=a literal aria label returns; why_new=core review; seam=none
   const top = read('src/renderer/src/shell/TopBar.tsx');
   assert.doesNotMatch(top, /aria="(Toggle dark mode|Settings|Toggle focus mode)"/);
   assert.match(top, /aria-label=\{label\}/);
@@ -105,7 +105,7 @@ test('Settings fields are the v2 input, with its focus ring', () => {
   const modal = read('src/renderer/src/components/SettingsModal.tsx');
   const uses = (modal.match(/style=\{\{?\s*(\.\.\.)?fieldInputStyle/g) ?? []).length;
   const ringed = (modal.match(/className="cth-input"\s+style=\{\{?\s*(\.\.\.)?fieldInputStyle/g) ?? []).length;
-  assert.ok(uses >= 11, 'every Settings field uses the shared style');
+  assert.ok(uses >= 10, 'every Settings field uses the shared style');
   assert.equal(ringed, uses, 'every Settings field carries the cth-input class');
   assert.doesNotMatch(modal, /cth-paper-100[^\n]*\n[^\n]*border: 'none',\n\s*boxShadow: 'inset 0 0 0 1px var\(--cth-ink-100\)'/);
 });

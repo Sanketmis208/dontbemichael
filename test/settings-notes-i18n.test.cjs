@@ -2,7 +2,7 @@
 
 // The short notes beside Slack, webhooks and the organisation key in Settings
 // (saved, listening, stopped, could not save...) and the home folder change
-// error were English only, in an app that ships Arabic and Chinese.
+// error were written in the code instead of the language file.
 // Structural checks: the renderer has no DOM test harness here.
 
 const test = require('node:test');
@@ -21,7 +21,7 @@ test('Settings sets no note or error from English written in the code', () => {
 
 test('the notes are in each language', () => {
   const keys = ['noteSaved', 'noteSaveFailed', 'noteDeleted'];
-  for (const locale of ['en', 'zh-CN', 'ar']) {
+  for (const locale of ['en']) {
     const s = JSON.parse(read(`src/renderer/src/i18n/locales/${locale}.json`)).settings;
     for (const k of keys) assert.ok(s.connections[k], `${locale} settings.connections.${k}`);
     assert.ok(s.changeHome.couldNotChange, `${locale} settings.changeHome.couldNotChange`);

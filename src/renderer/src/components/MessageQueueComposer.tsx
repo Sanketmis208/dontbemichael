@@ -9,7 +9,6 @@ import type { TerminalAutomationBlock } from './terminalAutomation';
 import { useTerminalFontSize } from './terminalFontSize';
 import { isComposingKey } from '@shared/imeGuard';
 import { sendToMichael } from '@/shell/ownerSend';
-import { useRtl } from '@/i18n/useDirection';
 
 const EMPTY_QUEUE: QueuedMessage[] = [];
 
@@ -32,7 +31,6 @@ export interface MessageQueueComposerProps {
  */
 export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
   const { t } = useTranslation();
-  const rtl = useRtl();
   const queue = useStore((s) => s.messageQueues[agent.id]) ?? EMPTY_QUEUE;
   const enqueueMessage = useStore((s) => s.enqueueMessage);
   const removeQueuedMessage = useStore((s) => s.removeQueuedMessage);
@@ -324,7 +322,6 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {godFailed && <div role="alert" style={{ fontSize: 11, color: 'var(--cth-ink-2)' }}>{t('dock.notSentNow')}</div>}
         <textarea
-          dir={rtl ? 'auto' : undefined}
           className="cth-input"
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -427,7 +424,6 @@ function QueuedMessageRow(
   }
 ) {
   const { t } = useTranslation();
-  const rtl = useRtl();
   const [expanded, setExpanded] = useState(false);
   const [clipped, setClipped] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -463,7 +459,6 @@ function QueuedMessageRow(
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
         <div
           ref={bodyRef}
-          dir={rtl ? 'auto' : undefined}
           title={expanded ? undefined : message.text}
           style={{
             fontSize: 12, lineHeight: '18px',

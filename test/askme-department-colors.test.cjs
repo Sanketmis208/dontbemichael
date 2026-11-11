@@ -176,9 +176,9 @@ test('hidden list cards stay mounted and draw nothing, whatever their own layout
 });
 
 test('the new words exist in every language, with no dashes', () => {
-  // Value: protects=copy in en, ar and zh-CN and the no dashes rule; fails_when=a key is missing or a dash slips in; why_new=new copy; seam=none; no_claim=translation quality
+  // Value: protects=the new copy and the no dashes rule; fails_when=a key is missing or a dash slips in; why_new=new copy; seam=none; no_claim=translation quality
   const keys = ['deptFilter', 'showing', 'showAll', 'showingEvery', 'deptNew', 'personDept', 'areaQuestion', 'areaQuestionFrom'];
-  for (const loc of ['en', 'ar', 'zh-CN']) {
+  for (const loc of ['en']) {
     const askMe = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).askMe;
     for (const k of keys) {
       assert.equal(typeof askMe[k], 'string', `${loc}.${k}`);

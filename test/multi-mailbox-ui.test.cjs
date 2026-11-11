@@ -62,7 +62,7 @@ test('Email is a list of the mailboxes a member uses; watching starts on Send on
   assert.equal((cap.match(/<Toggle /g) || []).length, 1, 'the connector row switch only');
   assert.doesNotMatch(cap, /action=\{<Toggle on=\{email\.enabled\}/);
   assert.doesNotMatch(cap, /PROVIDER_PRESETS/, 'no service name under the address');
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const c = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).capabilities;
     for (const k of ['emailSummary', 'emailSummaryNone', 'emailNone', 'removeMailbox', 'inbox', 'inboxWatches', 'inboxSendOnly', 'inboxNobody', 'sendingFrom', 'addMailboxUse', 'addReadsDesc', 'removeWatchedSure', 'addWatch', 'addWatchTaken', 'addWatchMoves', 'addSendOnly', 'addSendOnlyNobody', 'addSendOnlyTaken', 'addIt', 'cancelAdd']) {
       assert.equal(typeof c[k], 'string', `${loc}: capabilities.${k}`);
@@ -210,7 +210,7 @@ test('many mailboxes fold into one header line (owner, 2026-10-01)', () => {
   // Explanations live behind info icons, not paragraphs.
   assert.match(mb, /<InfoTip label=\{t\('mailboxes\.title'\)\} text=\{`\$\{t\('mailboxes\.intro'\)\}\$\{mailboxes\.length \? '' : ` \$\{t\('mailboxes\.empty'\)\}`\} \$\{t\('mailboxes\.onlyHere'\)\}`\} \/>/);
   assert.doesNotMatch(mb, /<div style=\{hint\}>\{t\('mailboxes\.intro'\)\}<\/div>/);
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const m = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).mailboxes;
     for (const k of ['summaryOne', 'summaryCount', 'summaryNone', 'onlyHere']) assert.ok(m[k], `${loc} ${k}`);
     assert.equal(m.claudeAccessDesc, undefined, `${loc}: the Claude account row is gone`);

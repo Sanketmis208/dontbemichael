@@ -11,7 +11,6 @@ import { NeedsYouRail, RAIL_W } from '@/shell/NeedsYouRail';
 import { MemoryGraphPanel } from '@/components/MemoryGraphPanel';
 import { useHive } from '@/hooks/useHive';
 import { useGodNameSync } from '@/i18n/useGodNameSync';
-import { useDirectionSync } from '@/i18n/useDirection';
 import { useCopyLinkLabelSync } from '@/i18n/useCopyLinkLabelSync';
 import { AgentDetailPanel } from '@/components/AgentDetailPanel';
 import { AddAgentModal } from '@/components/AddAgentModal';
@@ -51,8 +50,6 @@ declare const __APP_VERSION__: string;
 export function App() {
   // Point every {{godName}} string at the orchestrator's real, renameable name.
   useGodNameSync();
-  // Mirror the document only for a user who has picked an RTL app language.
-  useDirectionSync();
   // Give main the right-click "Copy link address" label in the app language.
   useCopyLinkLabelSync();
   const agent = useStore(selectedAgent);

@@ -233,7 +233,7 @@ test('the dock and its count follow the design', () => {
   const main = read('src/main/index.ts');
   assert.match(main, /n\.on\('click', \(\) => \{/);
   assert.match(main, /if \(inFront \|\| !hive\.ownerNotify\(msg\.in_reply_to, msg\.id\)\) return;/);
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const l = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`));
     for (const k of ['label', 'open', 'empty', 'example1', 'example2', 'nudge', 'askAgain', 'notes', 'countNew', 'countWaiting']) assert.ok(l.dock[k], `${loc} dock.${k}`);
     for (const k of ['sent', 'finishing', 'has-it', 'waitingOn', 'late', 'waiting-for-you', 'answered', 'couldnt-finish', 'withdrawn', 'not-sent']) assert.ok(l.dock.status[k], `${loc} dock.status.${k}`);
@@ -347,7 +347,7 @@ test('Couldn\'t finish without a reason reads "No reason given", and the dock sl
   const css = fs.readFileSync(path.join(__dirname, '..', 'src/renderer/src/design/global.css'), 'utf8');
   assert.match(css, /\.cth-dock \{ animation: cth-dock-in 180ms ease-out; \}/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\n  \.cth-dock \{ animation: none; \}\n\}/);
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const d = JSON.parse(fs.readFileSync(path.join(__dirname, '..', `src/renderer/src/i18n/locales/${loc}.json`), 'utf8')).dock;
     assert.equal(typeof d.noReason, 'string', loc);
     assert.doesNotMatch(d.noReason, /[–—]| - /, `${loc} noReason has no dash`);
@@ -461,7 +461,7 @@ test('a long reply folds by height, and tables sit in a labelled box that scroll
   assert.match(css, /\.cth-md-preview \.cth-md-table:focus-visible \{ outline: 2px solid var\(--cth-indigo\)/);
   assert.match(css, /\.cth-dock-reply \.cth-md-card td\.cth-md-num \{\n  font-family: var\(--cth-font-mono\); font-size: 12px; font-variant-numeric: tabular-nums;/);
   assert.doesNotMatch(css, /\.cth-md-preview table \{[^}]*overflow-x/, 'the box scrolls, not the table');
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const label = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).markdown.table;
     assert.equal(typeof label, 'string', loc);
     assert.doesNotMatch(label, /[–—]| - /, `${loc} markdown.table has no dash`);

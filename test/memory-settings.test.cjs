@@ -50,7 +50,7 @@ test('a new search language rebuilds the index, and running members get the comm
   const main = read('src/main/index.ts');
   assert.match(main, /'embeddingModel' in patch && \(next\.embeddingModel \?\? 'minilm'\) !== modelBefore\) memory\.modelChanged\(\);/);
   assert.match(main, /\{ bin, palace, model: memory\.model\(\) \}/);
-  for (const lang of ['en', 'ar', 'zh-CN']) {
+  for (const lang of ['en']) {
     const m = JSON.parse(read(`src/renderer/src/i18n/locales/${lang}.json`)).settings.memory;
     for (const text of [m.kg, m.kgTitle, m.kgDesc, ...Object.values(m.meaning)]) assert.doesNotMatch(text, /[\u2013\u2014]| - /, `${lang}: ${text}`);
   }

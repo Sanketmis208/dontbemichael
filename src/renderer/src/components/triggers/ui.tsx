@@ -1,6 +1,5 @@
 import { useId, useState, type CSSProperties, type ReactNode, type Ref } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useRtl } from '@/i18n/useDirection';
 import { fieldLabel, groupName, hint, panelStyle } from '../fieldText';
 import { MAX_INTERVAL_MS } from '@shared/missions';
 import {
@@ -205,11 +204,10 @@ export function Scroll({ children }: { children: ReactNode }) {
  *  2026-09-26: a row with no sign could not be found). Readable size and dark
  *  ink; points toward the text in right-to-left. */
 export function Disclosure({ open }: { open: boolean }) {
-  const rtl = useRtl();
   return (
     <span aria-hidden="true" style={{ flexShrink: 0, width: 16, height: 20, display: 'inline-grid', placeItems: 'center', color: 'var(--cth-ink-3)' }}>
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"
-        style={{ transform: `rotate(${open ? 0 : rtl ? 90 : -90}deg)`, transition: 'transform var(--cth-dur-fast) var(--cth-ease)' }}>
+        style={{ transform: `rotate(${open ? 0 : -90}deg)`, transition: 'transform var(--cth-dur-fast) var(--cth-ease)' }}>
         <path d="M6 9l6 6 6-6" />
       </svg>
     </span>

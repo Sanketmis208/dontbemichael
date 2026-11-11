@@ -38,8 +38,6 @@ import { EmailChip } from './EmailChip';
 import { placeUrlTransform } from './placeUrl';
 import { PostBox } from './PostBox';
 import { isPostLang } from '@/components/fileTabCopy';
-import { rehypeAutoDir } from './rehypeAutoDir';
-import { useRtl } from '@/i18n/useDirection';
 
 /** How the rendered markdown sits in its host.
  *  - `document` (default): a page — its own type scale, 72ch measure, page padding.
@@ -63,12 +61,6 @@ const CARD_PLACE_PLUGINS = [remarkGfm, remarkSettingsLinks, remarkSoftBreaks];
 const DOC_FILE_PLACE_PLUGINS = [remarkGfm, remarkFileChips, remarkSettingsLinks];
 const CARD_FILE_PLACE_PLUGINS = [remarkGfm, remarkFileChips, remarkSettingsLinks, remarkSoftBreaks];
 
-
-/** Per-block `dir="auto"`, for an RTL app language only — see the note at the
- *  `useRtl()` call site below. Frozen module constants so the prop identity is
- *  stable and react-markdown does not re-run the pipeline on every render. */
-const AUTO_DIR_PLUGINS = [rehypeAutoDir];
-const NO_PLUGINS: never[] = [];
 
 export interface MarkdownPreviewProps {
   source: string;
@@ -107,22 +99,12 @@ export const MarkdownPreview = memo(function MarkdownPreview({
     const last = basePlugins[basePlugins.length - 1];
     return last === remarkSoftBreaks ? [...basePlugins.slice(0, -1), folders, last] : [...basePlugins, folders];
   }, [basePlugins, folderTeam]) as Options['remarkPlugins'];
-  // Per-block direction, gated on the APP LANGUAGE rather than on the text.
-  //
-  // The plugin stamps `dir="auto"`, which resolves from each block's first
-  // strong character — so ungated it fires for an English user the moment an
-  // agent quotes a line of Arabic, and mirrors a block of their UI over
-  // something they never turned on. Keying it to the chosen language instead
-  // means an English user's markdown renders through exactly the pipeline it
-  // rendered through before this existed, whatever the agent writes into it.
-  const rtl = useRtl();
   const { t } = useTranslation();
   return (
     <div className={card ? 'cth-md-preview cth-md-card' : 'cth-md-preview'}>
       <ReactMarkdown
         remarkPlugins={remarkPlugins}
         urlTransform={placeUrlTransform}
-        rehypePlugins={rtl ? AUTO_DIR_PLUGINS : NO_PLUGINS}
         components={{
           ...(fileChip ? {
             'cth-file': ({ node }: { node?: { properties?: Record<string, unknown> } }) => fileChip(String(node?.properties?.dataPath ?? ''))

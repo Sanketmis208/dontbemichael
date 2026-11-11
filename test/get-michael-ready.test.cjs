@@ -90,7 +90,7 @@ test('a failed first status read shows a retry instead of an endless checking sp
   const ready = read('src/renderer/src/components/GetMichaelReady.tsx');
   assert.match(ready, /if \(mine === reads\.current\) setStatusFailed\(true\);/, 'the current read records its own failure');
   assert.match(ready, /case 'checkFailed': return \([\s\S]*?t\('engineSetup\.checkFailed'\)[\s\S]*?setStatusFailed\(false\); void read\(\)/, 'the failed state explains itself and retries the same read');
-  for (const l of ['en', 'zh-CN', 'ar']) {
+  for (const l of ['en']) {
     assert.ok(JSON.parse(read(`src/renderer/src/i18n/locales/${l}.json`)).engineSetup.checkFailed, `${l}: check failure copy exists`);
   }
 });
@@ -238,7 +238,7 @@ test('main, the bridge and the step agree on the setup channels, terminal names 
   assert.ok(union, 'the useApiKey verdict type can be read');
   const codes = [...union[1].matchAll(/'([a-z]+)'/g)].map((m) => m[1]).sort();
   assert.match(ready, /t\(`engineSetup\.keyError\.\$\{res\.error \?\? 'unreachable'\}`\)/);
-  for (const l of ['en', 'zh-CN', 'ar']) {
+  for (const l of ['en']) {
     const strings = JSON.parse(read(`src/renderer/src/i18n/locales/${l}.json`)).engineSetup.keyError;
     assert.deepEqual(Object.keys(strings).sort(), codes, `${l}: one string per key error main can return`);
   }

@@ -55,13 +55,14 @@ function deps(over = {}) {
   };
   return { svc: new CaseStudyService(d), calls };
 }
-const input = { lang: 'en', period: 'last-30', showName: true };
+const input = { period: 'last-30', showName: true };
 
 test('the screen input is checked, and the last 30 days end today', () => {
-  // Value: protects=the owner can't change the case study (case-study-tab.md, D3): only its language comes from the screen; fails_when=a period or a hidden name sent by the screen reaches main; why_new=owner 2026-11-04; seam=none
-  assert.equal(caseInput({ lang: 'fr', period: 'last-30' }), null);
-  assert.deepEqual(caseInput({ lang: 'ar', period: 'this-month', showName: false }), { lang: 'ar', period: 'last-30', showName: true }, 'always the last 30 days with the name shown');
-  assert.deepEqual(caseInput({ lang: 'en' }), { lang: 'en', period: 'last-30', showName: true });
+  // Value: protects=the owner can't change the case study (case-study-tab.md, D3): nothing about the page comes from the screen; fails_when=a period or a hidden name sent by the screen reaches main; why_new=owner 2026-11-04; seam=none
+  assert.equal(caseInput(null), null);
+  assert.equal(caseInput('last-30'), null);
+  assert.deepEqual(caseInput({ period: 'this-month', showName: false }), { period: 'last-30', showName: true }, 'always the last 30 days with the name shown');
+  assert.deepEqual(caseInput({}), { period: 'last-30', showName: true });
   const r = caseRange('last-30', NOW);
   assert.equal(r.to, '2026-11-03');
   assert.equal(r.from, '2026-10-05');

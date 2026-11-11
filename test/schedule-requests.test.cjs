@@ -123,7 +123,7 @@ test('new schedule strings exist in every language', () => {
     agentDetail: ['killConfirmSchedules', 'killConfirmSchedulesPlural'],
     capabilities: ['schedules', 'schedulesBlurb', 'schedulesOn', 'schedulesNone', 'emailBlurb', 'emailNone', 'pickMailbox', 'addMailbox']
   };
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const d = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`));
     for (const [sec, ks] of Object.entries(keys)) for (const k of ks) assert.ok(d[sec]?.[k], `${loc} ${sec}.${k}`);
     assert.equal(d.schedulesSection.goesTo, undefined, `${loc}: GOES TO is gone`);

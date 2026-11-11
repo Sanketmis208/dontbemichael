@@ -41,7 +41,6 @@ import {
 import { BUILD_ENGINES, canReceiveInbox } from '@shared/agentProvider';
 import { isComposingKey } from '@shared/imeGuard';
 import { fmtTokens } from '@shared/tokenFormat';
-import { useRtl } from '@/i18n/useDirection';
 import { SilentPanelLine } from './SilentEngine';
 import { fieldLabel, groupName, hint } from './fieldText';
 
@@ -284,7 +283,6 @@ function Bare({ children }: { children: React.ReactNode }) {
 function FloorTab({ seed, embedded = false }: { seed: { text: string; seq: number }; embedded?: boolean }) {
   const Wrap = embedded ? Bare : Scroll;
   const { t } = useTranslation();
-  const rtl = useRtl();
   const agents = useStore((s) => s.agents);
   const godName = agents.find((a) => a.isGod)?.name ?? t('common.orchestrator');
   const select = useStore((s) => s.select);
@@ -593,7 +591,6 @@ function FloorTab({ seed, embedded = false }: { seed: { text: string; seq: numbe
           </Select>
         </div>
         <textarea
-          dir={rtl ? 'auto' : undefined}
           value={dispatchText}
           onChange={(e) => setDispatchText(e.target.value)}
           rows={2}
@@ -1331,7 +1328,6 @@ function Muted({ children }: { children: React.ReactNode }) {
 /** `fill`: grow into the space its flex parent has left, instead of stopping at
  *  200px. The memory file uses it; search results keep the cap. */
 function Pre({ children, fill = false }: { children: React.ReactNode; fill?: boolean }) {
-  const rtl = useRtl();
   return (
     <pre style={{
       borderRadius: 'var(--cth-r-md)',
@@ -1340,7 +1336,7 @@ function Pre({ children, fill = false }: { children: React.ReactNode; fill?: boo
       background: 'var(--cth-paper-100)', boxShadow: 'inset 0 0 0 1px var(--cth-line-2)',
       fontFamily: 'var(--cth-font-mono)', fontSize: 12, lineHeight: '16px',
       color: 'var(--cth-ink-900)', whiteSpace: 'pre-wrap', wordBreak: 'break-word'
-    }} dir={rtl ? 'auto' : undefined}>{children}</pre>
+    }}>{children}</pre>
   );
 }
 

@@ -13,7 +13,7 @@ const cs = loadTs('src/shared/caseStudy.ts');
 
 function facts(over = {}) {
   return {
-    lang: 'en', paper: 'letter', showName: true,
+    paper: 'letter', showName: true,
     businessName: 'Harbor Bakery', website: 'https://harborbakery.example', businessType: 'Bakery', city: 'Austin',
     industry: 'Food', hours: 'Mon to Sat', offer: 'Bread and pastries for walk in customers and cafes',
     ceoName: 'Dana Reyes',
@@ -32,12 +32,8 @@ const edits = (f, over = {}) => ({ ...cs.startingEdits(f, { headlines: {}, team:
 const page = (f, e) => cs.pageHtml(f, e ?? edits(f), { fontCss: '' });
 
 test('numbers in any script, and quantity words, count as numbers', () => {
-  for (const t of ['saved 10 hours', 'twelve cafes', 'dozens of orders', 'half the inbox', '٣ طلبات']) assert.equal(cs.hasNumber(t, 'en'), true, t);
-  assert.equal(cs.hasNumber('sorts the morning inbox', 'en'), false);
-  assert.equal(cs.hasNumber('أكثر من مئة طلب', 'ar'), true);
-  assert.equal(cs.hasNumber('يرد على الرسائل', 'ar'), false);
-  assert.equal(cs.hasNumber('处理了三个小时', 'zh-CN'), true);
-  assert.equal(cs.hasNumber('一起整理邮件', 'zh-CN'), false, 'a numeral inside an ordinary word is not a number');
+  for (const t of ['saved 10 hours', 'twelve cafes', 'dozens of orders', 'half the inbox', '٣ طلبات']) assert.equal(cs.hasNumber(t), true, t);
+  assert.equal(cs.hasNumber('sorts the morning inbox'), false);
 });
 
 test('headline choices and the band come from nonzero figures; spend is always on the page', () => {
@@ -184,18 +180,18 @@ test('the web page goes narrow on a phone; the PDF copy is the same page zoomed 
   assert.doesNotMatch(print, /@media/, 'print never takes the phone layout');
 });
 
-test("a job's times read in the page's language", () => {
-  assert.equal(cs.caseWhen({ intervalMs: 0, weekly: { days: [1, 2, 3, 4, 5], minute: 480 } }, 'en'), 'Weekdays at 08:00');
-  assert.equal(cs.caseWhen({ intervalMs: 7_200_000 }, 'en'), 'Every 2h');
-  assert.equal(cs.caseWhen({ intervalMs: 0, times: [{ kind: 'at', days: [0, 1, 2, 3, 4, 5, 6], minute: 420 }] }, 'zh-CN'), '每天 07:00');
-  assert.match(cs.caseWhen({ intervalMs: 0, weekly: { days: [1], minute: 540 } }, 'ar'), /الاثنين الساعة 09:00/);
+test("a job's times read in words", () => {
+  assert.equal(cs.caseWhen({ intervalMs: 0, weekly: { days: [1, 2, 3, 4, 5], minute: 480 } }), 'Weekdays at 08:00');
+  assert.equal(cs.caseWhen({ intervalMs: 7_200_000 }), 'Every 2h');
+  assert.equal(cs.caseWhen({ intervalMs: 0, times: [{ kind: 'at', days: [0, 1, 2, 3, 4, 5, 6], minute: 420 }] }), 'Every day at 07:00');
 });
 
-test('Arabic mirrors the page; no away time names the strip by hours worked', () => {
-  const f = facts({ lang: 'ar', figures: { ...facts().figures, awayMs: 0 } });
+test('the page is English, left to right; no away time names the strip by hours worked', () => {
+  // Value: protects=the strip's name when the owner was never away, and the English page; fails_when=the legend shows with no away time or the page loses lang en; why_new=the app is English only (owner, 2026-11-11); seam=none; no_claim=layout (case-study-pdf.electron)
+  const f = facts({ figures: { ...facts().figures, awayMs: 0 } });
   const html = page(f, edits(f));
-  assert.match(html, /<html lang="ar" dir="rtl">/);
-  assert.match(html, /ساعات عمل المكتب/);
+  assert.match(html, /<html lang="en" dir="ltr">/);
+  assert.match(html, /Hours the office worked/);
   assert.doesNotMatch(html, /class="legend"/);
 });
 
@@ -223,9 +219,9 @@ test('the hero keeps white text at 4.5:1 and its tint keeps labels readable', ()
   assert.deepEqual(cs.heroPalette(null), cs.INK_PALETTE);
 });
 
-test('the email to us is in the app language and carries the take down promise (D10, D11)', () => {
+test('the email to us carries the take down promise (D10, D11)', () => {
   assert.match(cs.caseStudyEmail(facts()).body, /will take it down if I ask/);
-  assert.match(cs.caseStudyEmail(facts({ lang: 'zh-CN' })).subject, /^客户案例/);
+  assert.equal(cs.caseStudyEmail(facts()).subject, 'Case study: Harbor Bakery');
   assert.equal(cs.CASE_STUDY_TO, 'hello@dontbemichael.com');
 });
 
@@ -236,15 +232,12 @@ test("the subtitle and the closing must name Don't Be Michael; every built in he
   assert.equal(d.why, undefined);
   assert.ok(cs.missingParts(d, f).includes('subtitle'));
   assert.equal(cs.parseDraft(JSON.stringify({ subtitle: 'Runs on Don\u2019t Be Michael' }), f).subtitle, 'Runs on Don\u2019t Be Michael', 'a curly apostrophe counts');
-  for (const lang of ['en', 'ar', 'zh-CN']) {
-    const fl = facts({ lang });
-    for (const k of cs.HEADLINE_FIGURES) {
-      const h = cs.builtInHeadline(fl, k);
-      assert.equal(cs.hasNumber(h.before + ' ' + h.after, lang), false, `${lang} ${k}`);
-      assert.match(h.before, /Don't Be Michael/);
-    }
-    assert.match(cs.builtInSubtitle(fl), /Don't Be Michael/);
-    assert.match(cs.builtInWhy(fl), /Don't Be Michael/);
+  for (const k of cs.HEADLINE_FIGURES) {
+    const h = cs.builtInHeadline(f, k);
+    assert.equal(cs.hasNumber(h.before + ' ' + h.after), false, k);
+    assert.match(h.before, /Don't Be Michael/);
   }
+  assert.match(cs.builtInSubtitle(f), /Don't Be Michael/);
+  assert.match(cs.builtInWhy(f), /Don't Be Michael/);
   assert.match(page(f), /Don't Be Michael case study|Don&#39;t Be Michael case study/, 'the label above the headline names the product');
 });

@@ -41,7 +41,7 @@ test('the label the renderer sends becomes one short line, else the default', ()
 
 test('every language has the label, and main and the app are wired to it', () => {
   // Value: protects=the label is translated and reaches main; fails_when=a locale misses the key or the menu or sync is unhooked; why_new=new key and IPC; seam=source pin like the neighbouring tests, no IPC harness; no_claim=runtime menu display
-  for (const lng of ['en', 'zh-CN', 'ar']) {
+  for (const lng of ['en']) {
     const label = JSON.parse(read(`src/renderer/src/i18n/locales/${lng}.json`)).markdown.copyLinkAddress;
     assert.ok(typeof label === 'string' && label.trim(), lng);
   }

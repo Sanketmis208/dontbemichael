@@ -54,7 +54,7 @@ test('Agents & Models and Autonomy & Budgets are one Agents tab (owner, 2026-10-
   assert.ok(at("t('settings.agentsModels.defaultModel')") < at("t('settings.autonomy.autonomy')"));
   assert.ok(at("t('settings.autonomy.autonomy')") < at("t('settings.autonomy.breaker')"));
   assert.ok(at("t('settings.autonomy.breaker')") < at("t('settings.agentsModels.maxTurns')"));
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const nav = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', `src/renderer/src/i18n/locales/${loc}.json`), 'utf8')).settings.nav;
     assert.ok(nav.agents, `${loc}: Agents label`);
     assert.equal(nav.autonomyBudgets, undefined, `${loc}: no second tab label`);

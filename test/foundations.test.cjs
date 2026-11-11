@@ -422,12 +422,11 @@ test('what the owner taught a member through Michael waits for his check, then f
   assert.match(o.w.handle('ryan', { question: 'brand', answer: 'Blue' }), /needs its source[\s\S]*"taught"/, 'the refusal names the new source');
 });
 
-test('the money question asks for every place money moves, in every language', () => {
+test('the money question asks for every place money moves', () => {
   // Value: protects=the question asks for the whole map of money, so one line about the books no longer reads as a full answer; fails_when=it goes back to asking only where money is recorded; why_new=Oscar answered the old wording with one line on 2 Nov.
   assert.match(F.FOUNDATION_QUESTIONS.money.text, /^Every place money comes in and goes out .*banks, cards, payment services, investments.*where each is recorded$/);
   assert.equal(JSON.parse(read('src/renderer/src/i18n/locales/en.json')).foundations.q.money, F.FOUNDATION_QUESTIONS.money.text);
   assert.equal(JSON.parse(read('src/renderer/src/i18n/locales/en.json')).foundations.short.money, F.FOUNDATION_QUESTIONS.money.short);
-  for (const loc of ['zh-CN', 'ar']) assert.doesNotMatch(read(`src/renderer/src/i18n/locales/${loc}.json`), /收支记录在哪里|أين يسجل المال الداخل والخارج/);
 });
 
 test('members check their empty questions before each report, send only whole answers, and the weekly check collects what they hold', () => {
@@ -503,7 +502,7 @@ test('Pulse: the strip in Recommendations, the count under the role, the detail 
   assert.match(v, /<FoundationsBox f=\{f\} \/>/);
   const p = read('src/main/pulse.ts');
   assert.match(p, /kind = 'foundation'/, 'from harness.db');
-  for (const lang of ['en', 'ar', 'zh-CN']) {
+  for (const lang of ['en']) {
     const l = JSON.parse(read(`src/renderer/src/i18n/locales/${lang}.json`));
     assert.equal(Object.keys(l.foundations.q).length, Object.keys(F.FOUNDATION_QUESTIONS).length, lang);
     assert.ok(l.pulse.foundations.count && l.foundations.card.save, lang);
@@ -874,7 +873,7 @@ test('the card adds a file: pick or drop, read and checked first, card next, doc
   assert.match(save, /fileAnswerLine\(text, added\.docId, added\.name\)[\s\S]{0,400}Add my answer to the company foundations/, 'Michael gets the exact line with the id (Codex 3)');
   assert.match(card, /saveFileAnswer\(id, picked, text, window\.cth, onAnswer/);
   for (const k of ['fileMisfit', 'fileUnreadable', 'filePictureType', 'fileMissing', 'fileUnchecked', 'checking', 'addFile', 'removeFile']) assert.match(card, new RegExp(`foundations\\.card\\.${k}`), k);
-  for (const loc of ['en', 'ar', 'zh-CN']) {
+  for (const loc of ['en']) {
     const c = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).foundations.card;
     for (const k of ['addFile', 'removeFile', 'checking', 'fileMisfit', 'fileUnreadable', 'fileUnchecked', 'filePictureType', 'fileMissing']) assert.ok(c[k], `${loc} ${k}`);
     assert.doesNotMatch(c.hint, /name the file|指定文件|اذكر اسم/, `${loc}: the hint no longer asks for a file name`);
@@ -1161,7 +1160,7 @@ test('the rules: members send list items with their file and skip not ours; Mich
   assert.match(main, /reportsFor: \(id, since\) => foundationReports\(id, since\)/);
   assert.match(main, /e\.act !== 'done' && e\.act !== 'inform'/);
   assert.match(main, /ipcMain\.handle\('foundations:seen'/);
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const c = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).foundations.card;
     for (const k of ['saveWhole', 'saveSoFar', 'stillAll', 'seenAdd', 'seenNotOurs', 'seenLater', 'listHint', 'listHintUndecided', 'seenInfo', 'savedWhole', 'savedSoFar']) assert.ok(c[k], `${loc} ${k}`);
     assert.doesNotMatch(JSON.stringify(c), /[–—]/, `${loc}: no dashes`);

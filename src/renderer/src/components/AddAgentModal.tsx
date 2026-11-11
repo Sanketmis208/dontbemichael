@@ -60,7 +60,6 @@ import { roleLabel, plainFallback } from '@shared/workStyleText';
 import { jobFingerprint, type JobChangeEntry } from '@shared/jobChange';
 import { JobChangeReview, type ReviseOk, type ReviseRun } from './JobChangeReview';
 import { Field, JobParts, Panel, fieldLabel, jobPartsFold, readBody } from './fieldText';
-import { useRtl } from '@/i18n/useDirection';
 import { useResolvedGodName } from '@/hooks/useResolvedGodName';
 import { SHOW_IMPORT_HIRE, SHOW_ENGINE_PICKER, SHOW_MAILBOXES } from '@shared/buildFeatures';
 import { seedStarterJobs } from '@/shell/seedStarterJobs';
@@ -134,7 +133,6 @@ export interface AddAgentModalProps {
 
 export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModalProps) {
   const { t: tr } = useTranslation();
-  const rtl = useRtl();
   const godName = useResolvedGodName();
   const addAgent = useStore(s => s.addAgent);
   const updateAgent = useStore(s => s.updateAgent);
@@ -1036,7 +1034,7 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
                   {/* The job on its soft panel, as in Edit agent (app-style-rollout.md T1). */}
                   <Panel>
                   <ReadRow label={tr('jobChange.handles', { name: hireWho })} info={tr('addAgent.roleHelp', { godName, name: hireWho })}>
-                    <div dir={rtl ? 'auto' : undefined} style={readBody(false)}>{routing}</div>
+                    <div style={readBody(false)}>{routing}</div>
                   </ReadRow>
                   <ReadRow label={tr('jobChange.howWorks', { name: hireWho })} info={tr('jobChange.howWorksInfo', { name: hireWho })}>
                     <JobParts plain={plain} folded={!plainAll} />

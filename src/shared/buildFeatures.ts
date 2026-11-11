@@ -58,11 +58,6 @@ export const SHOW_OFFICE_THEME = false;
  *  when it was on, and nothing changes for an office that never set it. */
 export const SHOW_SIMPLE_MODE_SWITCH = false;
 
-/** The Language section in Settings → General. Hidden (owner, 2026-10-02).
- *  The app keeps a language saved earlier, else English (i18n/index.ts never
- *  reads the OS locale); with this off there is no other picker in the app. */
-export const SHOW_LANGUAGE_PICKER = false;
-
 /** Mailboxes: the Mailboxes block in Settings → Connections, the Email
  *  section on an agent's Capabilities tab, the mailbox option in the hire
  *  wizard, and the mailbox posts and tags on the office floor. While off, no

@@ -643,7 +643,7 @@ export function EditAgentModal({ agent, onClose, engineOpen: openEngine = false,
           stay in the column keyed "job", so React keeps them, and their run,
           when the panel goes wide or back. Wide (WD2): two columns, who they
           are, their timers and engine at 300 to 360 px, the whole job beside
-          them at most 720 px across; in Arabic the grid mirrors with the page.
+          them at most 720 px across.
           One column (DR4, H2): name and role, the job with what should change
           under it, then the scheduled jobs and the engine. Each group sits on
           its own soft panel, field labels only (mockup 2B; edit-agent-hierarchy.md

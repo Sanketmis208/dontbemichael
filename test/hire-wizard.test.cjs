@@ -51,9 +51,9 @@ test('Finalize explains the folder and the model behind info icons; the job is o
   assert.doesNotMatch(setup, /jobChange\.|workStyle/, 'Finalize keeps folder and model only (DR12)');
   assert.match(modal, /return <Field label=\{p\.label\} info=\{p\.info\}>\{p\.children\}<\/Field>;/, 'the shared Field puts info behind its icon');
   assert.match(modal, /info=\{tr\('addAgent\.roleHelp'/, 'the role screen too');
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const w = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).addAgent.wizard;
-    assert.equal(w.step.setup, { en: 'Finalize', 'zh-CN': '完成', ar: 'إنهاء' }[loc]);
+    assert.equal(w.step.setup, 'Finalize');
   }
   assert.equal(JSON.parse(read('src/renderer/src/i18n/locales/en.json')).addAgent.wizard.stepHint.role, 'Name, job, overlap check');
   const role = modal.slice(modal.indexOf("{step === 'role' && ("), modal.indexOf("{step === 'setup' && ("));
@@ -91,7 +91,7 @@ test('main checks with Haiku and no tools, and falls back to the rules', () => {
 
 test('every wizard string exists in all three languages, without dashes', () => {
   const keys = [...new Set([...modal.matchAll(/'addAgent\.wizard\.([a-zA-Z.]+)'/g)].map((m) => m[1]))];
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const w = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).addAgent.wizard;
     for (const k of keys) {
       const v = k.split('.').reduce((o, p) => o?.[p], w);
@@ -122,7 +122,7 @@ test('the other businesses\' list leaves out this business\'s own card for the j
 });
 
 test('the role screen asks what the new hire will do, and shows what they handle (owner, 2026-09-27)', () => {
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const a = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).addAgent;
     assert.doesNotMatch(JSON.stringify(a), /what to send|What to send/, `${loc}: no "what to send" left`);
   }
@@ -162,7 +162,7 @@ test('Next asks for an applied job before any check', () => {
   const gate = modal.slice(modal.indexOf('const roleReady = async'), modal.indexOf('const goTo = async'));
   assert.match(gate, /if \(!instructions\.trim\(\) \|\| !routing\.trim\(\)\) \{ setError\(tr\('jobChange\.errJobFirst', \{ name: name\.trim\(\) \}\)\); return false; \}/);
   assert.ok(gate.indexOf('!instructions.trim()') < gate.indexOf('runCheck()'), 'asked before the check');
-  for (const loc of ['en', 'ar', 'zh-CN']) {
+  for (const loc of ['en']) {
     assert.match(JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).jobChange.errJobFirst, /\{\{name\}\}/, loc);
   }
 });
@@ -198,7 +198,7 @@ test('a hire can be bound to one connection, and starts with only that connector
   assert.match(submit, /if \(!res\?\.ok\) \{[\s\S]*?setError\(tr\('capabilities\.saveFailed'\)\); return;/, 'a failed grant stops the hire');
   assert.match(submit, /: window\.cth\.connectorsSetGrant\(id, binding\.connectorKey, false\)\)\.catch/, 'a failed spawn takes it back');
   assert.match(modal, /disabled=\{p\.bindConnectors\.length === 0\} title=\{p\.bindConnectors\.length === 0 \? t\('addAgent\.wizard\.noConnection'\) : undefined\}/);
-  for (const loc of ['en', 'ar', 'zh-CN']) {
+  for (const loc of ['en']) {
     const w = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).addAgent.wizard;
     for (const k of ['bindConnection', 'pickConnection', 'connectionScope', 'connectionScopeLabel', 'noConnection', 'boundConnection', 'boundConnectionReadOnly', 'connectionOff', 'connectionSignIn']) assert.ok(w[k], `${loc} ${k}`);
     assert.doesNotMatch(JSON.stringify(w), /[–—]/, loc);
@@ -284,7 +284,7 @@ test('people on the team are greyed with Clone, and a clone goes to a free perso
   assert.match(modal, /onClick=\{\(\) => cloneFrom\(c\.name\)\}/);
   assert.match(modal, /setJobKey\(`team:\$\{mate\.id\}`\);/, 'the clone starts on the teammate\'s job');
   assert.match(modal, /if \(match && !onTeam\.has\(match\)\)/, 'typing a teammate\'s name never picks their tile');
-  for (const loc of ['en', 'ar', 'zh-CN']) {
+  for (const loc of ['en']) {
     const w = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).addAgent.wizard;
     for (const k of ['clone', 'cloneAria', 'onTeam', 'onTeamShort', 'cloning']) assert.ok(w[k], `${loc} ${k}`);
   }
@@ -367,7 +367,7 @@ test('who came back with released lines: a returning hire, not a new one, read f
   const modal = r('src/renderer/src/components/AddAgentModal.tsx');
   assert.match(modal, /checkSeq\.current\+\+; stopCheckRun\(\); setChecking\(false\); prefetchSig\.current = '';/, 'going back ends a check for the job left behind');
   assert.match(modal, /title=\{cloneCharacter\(c\.name, onTeam, castGroups\) \? undefined : tr\('addAgent\.wizard\.cloneNoneFree'\)\}/);
-  for (const loc of ['en', 'ar', 'zh-CN']) assert.ok(JSON.parse(r(`src/renderer/src/i18n/locales/${loc}.json`)).addAgent.wizard.cloneNoneFree, loc);
+  for (const loc of ['en']) assert.ok(JSON.parse(r(`src/renderer/src/i18n/locales/${loc}.json`)).addAgent.wizard.cloneNoneFree, loc);
 });
 
 test('a returning hire keeps its released lines until the registry has them back', () => {

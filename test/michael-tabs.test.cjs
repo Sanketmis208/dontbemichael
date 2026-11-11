@@ -91,7 +91,7 @@ test('Michael\'s panel has no Tasks tab; a request for it opens the floor\'s Tas
 
 test("Michael's schedule tab is the office schedule; his own jobs are on Capabilities (owner, 2026-09-26)", () => {
   assert.match(src, /\{ key: 'triggers', labelKey: 'commandCenter\.tabs\.officeSchedule', icon: 'clock' \}/);
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const d = JSON.parse(fs.readFileSync(require('node:path').resolve(__dirname, `../src/renderer/src/i18n/locales/${loc}.json`), 'utf8'));
     assert.equal(d.commandCenter.tabs.triggers, undefined, `${loc}: the old label is gone`);
   }

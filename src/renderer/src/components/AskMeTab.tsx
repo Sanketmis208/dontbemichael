@@ -14,7 +14,6 @@ import { compareByNewestAsk } from './askMeOrder';
 import { answerMessages, askAsText, isAnswered, isReport, isWithdrawn, labeledAnswer, openAskIndexes, openReportIndexes, partAnswerText, raiserOf, readAskShape, type AskShape } from '@shared/askMeRouting';
 import { noticeKindOf } from '@shared/noticeCards';
 import { isComposingKey } from '@shared/imeGuard';
-import { useRtl } from '@/i18n/useDirection';
 import { ScheduleRequestCards } from './ScheduleRequestCards';
 import { WorkStyleUpdateCards } from './WorkStyleUpdateCards';
 import { MailProposalCards } from './MailProposalCards';
@@ -87,7 +86,6 @@ function withoutDetail<T extends object>(e: T): T {
 
 export function AskMeTab() {
   const { t: translate, i18n } = useTranslation();
-  const rtl = useRtl();
   const godName = useResolvedGodName();
   const agents = useStore((s) => s.agents);
   const restorable = useStore((s) => s.restorableAgents);
@@ -528,7 +526,7 @@ export function AskMeTab() {
                 </div>
                 {/* Folded: the ask itself, in a line or two. */}
                 {!expanded && (
-                  <div dir={rtl ? 'auto' : undefined} style={{
+                  <div style={{
                     marginTop: 7, fontSize: 12.5, lineHeight: '18px', color: 'var(--cth-ink-2)',
                     display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
                   }}>{askHeadline(open.q)}</div>
@@ -553,7 +551,7 @@ export function AskMeTab() {
             </div>
             {expanded && <>
             {/* The question, as markdown: Michael writes lists, emphasis and code. */}
-            <div dir={rtl ? 'auto' : undefined} className="cth-askme-q" style={{ margin: '10px 0 12px', fontSize: 12.5, lineHeight: '18px', color: 'var(--cth-ink)' }}>
+            <div className="cth-askme-q" style={{ margin: '10px 0 12px', fontSize: 12.5, lineHeight: '18px', color: 'var(--cth-ink)' }}>
               {/* Files the question names are chips that open them (docs/designs/open-file-tab.md). */}
               <FileText source={open.q} who={{ raisedBy: open.raisedBy, assignee: typeof t.assignee === 'string' ? t.assignee : undefined }} />
             </div>
@@ -583,11 +581,10 @@ export function AskMeTab() {
                 question stays above the box, whole, while the owner types
                 (owner D2, ask-me-answer-box.md). */}
             {pickedNote && (
-              <div dir={rtl ? 'auto' : undefined} data-askme-note style={{ margin: '0 0 6px', fontSize: 12, lineHeight: '18px', color: 'var(--cth-ink-2)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{pickedNote}</div>
+              <div data-askme-note style={{ margin: '0 0 6px', fontSize: 12, lineHeight: '18px', color: 'var(--cth-ink-2)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{pickedNote}</div>
             )}
             <GrowingTextarea
               className="cth-input"
-              dir={rtl ? 'auto' : undefined}
               value={draft}
               onChange={(e) => setAnswerDraft(row.key, e.target.value)}
               onFocus={() => setOpenId(row.key)}
@@ -619,7 +616,6 @@ export function AskMeTab() {
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6 }}>
               <GrowingTextarea
                 className="cth-input"
-                dir={rtl ? 'auto' : undefined}
                 value={draft}
                 onChange={(e) => setAnswerDraft(row.key, e.target.value)}
                 // Typing pins this card open, so a newer ask arriving never folds it mid answer.

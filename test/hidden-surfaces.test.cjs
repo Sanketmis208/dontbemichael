@@ -191,7 +191,7 @@ test('Add Agent hides import hire and its AI prompt; the button says hire (owner
   assert.match(fs.readFileSync(path.resolve(__dirname, '..', 'src/shared/buildFeatures.ts'), 'utf8'), /export const SHOW_IMPORT_HIRE = false;/);
   assert.match(src, /\{SHOW_IMPORT_HIRE && <div style=\{\{/, 'the explainer and generate with AI are gated');
   assert.match(src, /\{SHOW_IMPORT_HIRE && \(\s*<PixelButton[\s\S]*?onClick=\{importHire\}/, 'the import hire button is gated');
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const d = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', `src/renderer/src/i18n/locales/${loc}.json`), 'utf8'));
     assert.doesNotMatch(d.addAgent.spawn, /spawn|生成|إنشاء/i, `${loc}: the button hires`);
   }
@@ -212,7 +212,7 @@ test('Add Agent groups the characters by their job in the show (owner, 2026-09-2
   assert.ok(CAST_GROUPS.every((g) => g.members.length >= 2), 'no group is a lone tile');
   assert.match(src, /flexWrap: 'wrap', columnGap: 20/, 'groups sit side by side and wrap');
   assert.match(src, /tr\(`addAgent\.castRole\.\$\{c\.name\}`\)/, 'each tile names its job');
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const d = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', `src/renderer/src/i18n/locales/${loc}.json`), 'utf8'));
     for (const g of CAST_GROUPS) assert.ok(d.addAgent.castGroup?.[g.key], `${loc}: ${g.key} has a heading`);
     for (const n of grouped) assert.ok(d.addAgent.castRole?.[n], `${loc}: ${n} names its own job`);
@@ -266,7 +266,7 @@ test("What's new opens a popover under its link with the notes of this version (
   assert.match(pop, /document\.addEventListener\('mousedown', onDown\)/, 'a click outside closes it');
   assert.match(pop, /t\('whatsNewPopover\.failed'\)/, 'a failure says so');
   assert.match(pop, /onClick=\{\(\) => void window\.cth\.openExternal\(changelog\)\}>\{t\('whatsNewPopover\.fullChangelog'\)\}<\/button>/);
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const w = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).whatsNewPopover;
     for (const k of ['title', 'titleVersion', 'loading', 'failed', 'fullChangelog', 'releasePage', 'close']) assert.ok(w[k], `${loc} whatsNewPopover.${k}`);
   }
@@ -285,16 +285,12 @@ test('Settings, General hides Explain things simply; the Arabic terminal switch 
   const modal = read('src/renderer/src/components/SettingsModal.tsx');
   assert.match(modal, /\{SHOW_SIMPLE_MODE_SWITCH && \(\s*<div[^>]*>\s*<div[^>]*>\s*<span[^>]*>\{t\('settings\.general\.simpleMode'\)\}/);
   assert.doesNotMatch(modal, /arabicTerminal/);
-  // Arabic shaping still follows the language, and a saved choice still applies.
-  assert.match(read('src/renderer/src/terminal/arabicSetting.ts'), /return override \?\? languageDefault\(\);/);
 });
 
-test('Settings, General hides the Language section (owner, 2026-10-02)', () => {
-  assert.equal(loadTs('src/shared/buildFeatures.ts').SHOW_LANGUAGE_PICKER, false);
+test('Settings, General has no Language section: the app is English only (owner, 2026-11-11)', () => {
+  assert.equal(loadTs('src/shared/buildFeatures.ts').SHOW_LANGUAGE_PICKER, undefined);
   const modal = read('src/renderer/src/components/SettingsModal.tsx');
-  assert.match(modal, /\{SHOW_LANGUAGE_PICKER && \(<>\s*\{\/\* Language — app UI language \(i18n\) \*\/\}/);
-  // The saved choice, else English: never the OS locale.
-  assert.match(read('src/renderer/src/i18n/index.ts'), /return 'en';\s*\}/);
+  assert.doesNotMatch(modal, /SHOW_LANGUAGE_PICKER|setLanguage|settings\.general\.language/);
 });
 
 test('the Danger zone is a loud red card with a filled reset button (owner, 2026-10-02)', () => {
@@ -320,7 +316,7 @@ test('the update line only promises automatic checks when they run (owner, 2026-
   const ui = read('src/renderer/src/components/UpdatesSection.tsx');
   assert.match(ui, /if \(packaged === false\) return \{ headline: t\('updatesSection\.onVersion', \{ v \}\), detail: t\('updatesSection\.devDetail'\), button: null \};/);
   assert.match(ui, /detail: t\('updatesSection\.idleDetail'\),/);
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const u = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).updatesSection;
     assert.ok(u.devDetail, loc);
   }

@@ -24,7 +24,6 @@ import { normalizeWeekly } from './weeklySchedule';
 /** Where case studies go (D9). Main fixes the recipient; nothing else can set it. */
 export const CASE_STUDY_TO = 'hello@dontbemichael.com';
 
-export type CaseLang = 'en' | 'ar' | 'zh-CN';
 export type Paper = 'letter' | 'a4';
 
 /** The figures a headline or the band can be built from. */
@@ -43,8 +42,7 @@ export interface CaseMember {
   roleDescription?: string;
   /** Names of the member's scheduled jobs, for the draft. */
   jobs: string[];
-  /** The member's running jobs and when they run, in the page's language,
-   *  for the team chart (D28). */
+  /** The member's running jobs and when they run, for the team chart (D28). */
   schedules?: Array<{ label: string; when: string }>;
   /** What the member is connected to ("Email", "QuickBooks"), by the Access
    *  tab's own rules (agentAccessSummary); never an address (D28). */
@@ -68,7 +66,6 @@ export interface CaseFigures {
 export interface HeroPalette { hero: string; tint: string; line: string; away: string; /** The headline's number (D23). */ highlight: string }
 
 export interface CaseStudyFacts {
-  lang: CaseLang;
   paper: Paper;
   /** D8: off hides the name, logo and website and shows the type and city. */
   showName: boolean;
@@ -119,11 +116,7 @@ export interface CaseDraft {
 // ---------------------------------------------------------------- the screen's calls
 
 export type CasePeriod = 'last-30' | 'this-month';
-/** The page's language from the app's (i18n) language code. */
-export function caseLangOf(code: string): CaseLang {
-  return code.startsWith('zh') ? 'zh-CN' : code.startsWith('ar') ? 'ar' : 'en';
-}
-export interface CaseInput { lang: CaseLang; period: CasePeriod; showName: boolean }
+export interface CaseInput { period: CasePeriod; showName: boolean }
 export interface CaseSender { id: string; address: string; canSend: boolean; reason?: string }
 /** A bundled face as bytes: the PDF window loads it as @font-face; the screen's
  *  preview adds it with FontFace, which the renderer's font-src 'self' allows. */
@@ -169,34 +162,23 @@ export const SITE_URL = 'https://dontbemichael.com';
 /** At most this many jobs on a member's card. */
 export const CARD_JOBS = 3;
 
-/** Length caps per language (eng pass): Chinese and Arabic set wider per
- *  character. The caps keep each part short enough to read at a glance. */
-export const CAPS: Record<CaseLang, { subtitle: number; about: number; quote: number; teamLine: number; why: number; headlineWords: number }> = {
-  en: { subtitle: 140, about: 320, quote: 180, teamLine: 105, why: 200, headlineWords: 80 },
-  ar: { subtitle: 125, about: 290, quote: 160, teamLine: 95, why: 180, headlineWords: 72 },
-  'zh-CN': { subtitle: 70, about: 160, quote: 90, teamLine: 50, why: 100, headlineWords: 40 }
-};
+/** Length caps (eng pass): they keep each part short enough to read at a glance. */
+export const CAPS = { subtitle: 140, about: 320, quote: 180, teamLine: 105, why: 200, headlineWords: 80 };
 
 // ---------------------------------------------------------------- numbers (D4)
 
 const DIGITS = /[0-9٠-٩۰-۹０-９]/;
 const EN_WORDS = /\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundreds?|thousands?|millions?|billions?|dozens?|half|halves|quarters?|double|twice|triple|percent)\b/i;
-const AR_WORDS = /(واحد|اثنان|اثنين|ثلاث|أربع|خمس|ست|سبع|ثمان|تسع|عشر|مئة|مائة|مئات|ألف|آلاف|مليون|نصف|ربع|ضعف|دزينة|بالمئة|بالمائة)/;
-// A Chinese numeral is common inside ordinary words (一起, 一直), so only a
-// numeral before a counting word, or a large unit, counts as a number.
-const ZH_WORDS = /([零一二两三四五六七八九十百千万亿]+[个名位家次小时天周年月倍成%％])|[百千万亿]|倍|一半|半数/;
 
-/** A digit in any script, or a number word in the page's language. Quantity
- *  words count ("dozens", "half"): they are claims too (eng pass, EP-O5). */
-export function hasNumber(text: string, lang: CaseLang): boolean {
+/** A digit in any script, or an English number word. Quantity words count
+ *  ("dozens", "half"): they are claims too (eng pass, EP-O5). */
+export function hasNumber(text: string): boolean {
   if (DIGITS.test(text)) return true;
-  if (lang === 'ar') return AR_WORDS.test(text);
-  if (lang === 'zh-CN') return ZH_WORDS.test(text);
   return EN_WORDS.test(text);
 }
 
 const groupFmt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
-/** Numbers stay Latin digits in every language, as in the app. */
+/** Numbers in Latin digits, as in the app. */
 export function fmtCount(n: number): string { return groupFmt.format(Math.round(n)); }
 export function fmtUsd(n: number): string {
   const v = Math.max(0, n);
@@ -351,97 +333,39 @@ interface Words {
 }
 
 const DAY_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const DAY_AR = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-const DAY_ZH = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
-const WORDS: Record<CaseLang, Words> = {
-  en: {
-    caseStudy: `${APP_NAME} case study`, before: 'Before', theTeam: 'The team they built', away: 'While the owner was away', worked: 'Hours the office worked',
-    result: 'The result', awayLegend: 'while the owner was away', aroundLegend: 'with the owner around',
-    ofHours: (a, b) => `<b>${a}</b> of <b>${b}</b> hours`,
-    source: (f, t) => `Counted by the app, ${f} to ${t}. Spend is everything the team cost in that period.`,
-    made: "Made with Don't Be Michael", version: 'version', more: (n) => `and ${n} more`,
-    band: { email: 'emails organized', task: 'tasks finished', away: 'hours of work while the owner was away', sent: 'emails sent', check: 'scheduled checks' },
-    spend: (d) => `for the whole team, all ${d} days`,
-    member: { email: 'emails', sent: 'sent', task: 'tasks', check: 'checks', routed: 'routed' },
-    typeIn: (t, c) => (t && c ? `${t} in ${c}` : t || c), aBusiness: 'A small business', theOwner: 'The owner', ownerOf: (b) => `The owner, ${b}`,
-    headline: {
-      email: (w) => ({ before: `The ${APP_NAME} team at ${w} handled`, after: 'emails' }),
-      task: (w) => ({ before: `The ${APP_NAME} team at ${w} finished`, after: 'tasks' }),
-      away: (w) => ({ before: `The ${APP_NAME} team at ${w} worked`, after: 'hours while the owner was away' }),
-      sent: (w) => ({ before: `The ${APP_NAME} team at ${w} sent`, after: 'emails' }),
-      check: (w) => ({ before: `The ${APP_NAME} team at ${w} ran`, after: 'scheduled checks' })
-    },
-    subtitle: (w) => `${w} runs its office with ${APP_NAME}.`,
-    whyText: `With ${APP_NAME}, a small business gets an office team that keeps the work moving.`,
-    stripLabel: (a, b, f, t) => `Hours the office worked each day, ${f} to ${t}; ${a} of ${b} hours while the owner was away`,
-    locked: "from Pulse, can't be edited",
-    stories: 'Customer stories', cta: 'Build your team', platforms: 'Free to start, on Mac and Windows', closeTitle: (w) => `Run your office like ${w}.`,
-    industry: 'Industry', location: 'Location', aiTeam: `${APP_NAME} team`, members: (n) => (n === 1 ? '1 member' : `${n} members`), period: 'Period',
-    connected: 'Connected', span: (f, t) => `${f} to ${t}`, runsTheOffice: 'Runs the office and checks every job is finished',
-    when: { day: (d) => DAY_EN[d], everyDay: 'Every day', weekdays: 'Weekdays', weekends: 'Weekends', list: (i) => i.join(', '),
-      and: (i) => (i.length > 1 ? `${i.slice(0, -1).join(', ')} and ${i[i.length - 1]}` : i[0]), at: (d, t) => `${d} at ${t}`, every: (n) => `Every ${n}`, span: (f, t) => `${f} to ${t}` }
+const WORDS: Words = {
+  caseStudy: `${APP_NAME} case study`, before: 'Before', theTeam: 'The team they built', away: 'While the owner was away', worked: 'Hours the office worked',
+  result: 'The result', awayLegend: 'while the owner was away', aroundLegend: 'with the owner around',
+  ofHours: (a, b) => `<b>${a}</b> of <b>${b}</b> hours`,
+  source: (f, t) => `Counted by the app, ${f} to ${t}. Spend is everything the team cost in that period.`,
+  made: "Made with Don't Be Michael", version: 'version', more: (n) => `and ${n} more`,
+  band: { email: 'emails organized', task: 'tasks finished', away: 'hours of work while the owner was away', sent: 'emails sent', check: 'scheduled checks' },
+  spend: (d) => `for the whole team, all ${d} days`,
+  member: { email: 'emails', sent: 'sent', task: 'tasks', check: 'checks', routed: 'routed' },
+  typeIn: (t, c) => (t && c ? `${t} in ${c}` : t || c), aBusiness: 'A small business', theOwner: 'The owner', ownerOf: (b) => `The owner, ${b}`,
+  headline: {
+    email: (w) => ({ before: `The ${APP_NAME} team at ${w} handled`, after: 'emails' }),
+    task: (w) => ({ before: `The ${APP_NAME} team at ${w} finished`, after: 'tasks' }),
+    away: (w) => ({ before: `The ${APP_NAME} team at ${w} worked`, after: 'hours while the owner was away' }),
+    sent: (w) => ({ before: `The ${APP_NAME} team at ${w} sent`, after: 'emails' }),
+    check: (w) => ({ before: `The ${APP_NAME} team at ${w} ran`, after: 'scheduled checks' })
   },
-  ar: {
-    caseStudy: `دراسة حالة من ${APP_NAME}`, before: 'قبل', theTeam: 'الفريق الذي بنوه', away: 'أثناء غياب المالك', worked: 'ساعات عمل المكتب',
-    result: 'النتيجة', awayLegend: 'أثناء غياب المالك', aroundLegend: 'بحضور المالك',
-    ofHours: (a, b) => `<b>${a}</b> من <b>${b}</b> ساعة`,
-    source: (f, t) => `أحصاها التطبيق من ${f} إلى ${t}. الإنفاق هو كل ما كلّفه الفريق في تلك الفترة.`,
-    made: 'صُنع باستخدام Don\'t Be Michael', version: 'الإصدار', more: (n) => `و${n} آخرون`,
-    band: { email: 'رسالة منظّمة', task: 'مهمة منجزة', away: 'ساعة عمل أثناء غياب المالك', sent: 'رسالة مرسلة', check: 'فحص مجدول' },
-    spend: (d) => `للفريق كله، طوال ${d} يومًا`,
-    member: { email: 'رسالة', sent: 'مرسلة', task: 'مهمة', check: 'فحص', routed: 'طلب موجّه' },
-    typeIn: (t, c) => (t && c ? `${t} في ${c}` : t || c), aBusiness: 'نشاط تجاري صغير', theOwner: 'المالك', ownerOf: (b) => `المالك، ${b}`,
-    headline: {
-      email: (w) => ({ before: `تولّى فريق ${APP_NAME} لدى ${w}`, after: 'رسالة' }),
-      task: (w) => ({ before: `أنجز فريق ${APP_NAME} لدى ${w}`, after: 'مهمة' }),
-      away: (w) => ({ before: `عمل فريق ${APP_NAME} لدى ${w}`, after: 'ساعة أثناء غياب المالك' }),
-      sent: (w) => ({ before: `أرسل فريق ${APP_NAME} لدى ${w}`, after: 'رسالة' }),
-      check: (w) => ({ before: `أجرى فريق ${APP_NAME} لدى ${w}`, after: 'فحصًا مجدولًا' })
-    },
-    subtitle: (w) => `${w} يدير مكتبه مع ${APP_NAME}.`,
-    whyText: `مع ${APP_NAME} يحصل النشاط الصغير على فريق مكتب يُبقي العمل يسير.`,
-    stripLabel: (a, b, f, t) => `ساعات عمل المكتب كل يوم من ${f} إلى ${t}؛ ${a} من ${b} ساعة أثناء غياب المالك`,
-    locked: 'من Pulse، لا يمكن تعديله',
-    stories: 'قصص العملاء', cta: 'ابنِ فريقك', platforms: 'ابدأ مجانًا، على Mac وWindows', closeTitle: (w) => `أدر مكتبك مثل ${w}.`,
-    industry: 'المجال', location: 'الموقع', aiTeam: `فريق ${APP_NAME}`, members: (n) => `${n} أعضاء`, period: 'الفترة',
-    connected: 'متصل بـ', span: (f, t) => `من ${f} إلى ${t}`, runsTheOffice: 'يدير المكتب ويتأكد من إنجاز كل مهمة',
-    when: { day: (d) => DAY_AR[d], everyDay: 'كل يوم', weekdays: 'أيام العمل', weekends: 'عطلة الأسبوع', list: (i) => i.join('، '),
-      and: (i) => (i.length > 1 ? `${i.slice(0, -1).join('، ')} و${i[i.length - 1]}` : i[0]), at: (d, t) => `${d} الساعة ${t}`, every: (n) => `كل ${n}`, span: (f, t) => `من ${f} إلى ${t}` }
-  },
-  'zh-CN': {
-    caseStudy: `${APP_NAME} 客户案例`, before: '之前', theTeam: '他们组建的团队', away: '老板不在时', worked: '办公室工作时长',
-    result: '成果', awayLegend: '老板不在时', aroundLegend: '老板在场时',
-    ofHours: (a, b) => `<b>${b}</b> 小时中有 <b>${a}</b> 小时`,
-    source: (f, t) => `由应用统计，${f} 至 ${t}。花费为团队在此期间的全部成本。`,
-    made: '使用 Don\'t Be Michael 制作', version: '版本', more: (n) => `另有 ${n} 位`,
-    band: { email: '封邮件已整理', task: '项任务已完成', away: '小时在老板不在时工作', sent: '封邮件已发送', check: '次定时检查' },
-    spend: (d) => `整个团队，${d} 天合计`,
-    member: { email: '封邮件', sent: '封已发', task: '项任务', check: '次检查', routed: '项已分派' },
-    typeIn: (t, c) => (t && c ? `${c}的${t}` : t || c), aBusiness: '一家小企业', theOwner: '老板', ownerOf: (b) => `${b} 老板`,
-    headline: {
-      email: (w) => ({ before: `${w}的 ${APP_NAME} 团队处理了`, after: '封邮件' }),
-      task: (w) => ({ before: `${w}的 ${APP_NAME} 团队完成了`, after: '项任务' }),
-      away: (w) => ({ before: `老板不在时，${w}的 ${APP_NAME} 团队工作了`, after: '小时' }),
-      sent: (w) => ({ before: `${w}的 ${APP_NAME} 团队发送了`, after: '封邮件' }),
-      check: (w) => ({ before: `${w}的 ${APP_NAME} 团队运行了`, after: '次定时检查' })
-    },
-    subtitle: (w) => `${w}用 ${APP_NAME} 打理办公室。`,
-    whyText: `有了 ${APP_NAME}，小企业就有了让工作顺畅运转的办公室团队。`,
-    stripLabel: (a, b, f, t) => `${f} 至 ${t} 每天的办公室工作时长；${b} 小时中有 ${a} 小时在老板不在时`,
-    locked: '来自 Pulse，不可编辑',
-    stories: '客户案例', cta: '组建你的团队', platforms: '免费开始，支持 Mac 和 Windows', closeTitle: (w) => `像${w}一样打理你的办公室。`,
-    industry: '行业', location: '地点', aiTeam: `${APP_NAME} 团队`, members: (n) => `${n} 位成员`, period: '时间段',
-    connected: '已连接', span: (f, t) => `${f} 至 ${t}`, runsTheOffice: '打理办公室，确保每项工作完成',
-    when: { day: (d) => DAY_ZH[d], everyDay: '每天', weekdays: '工作日', weekends: '周末', list: (i) => i.join('、'),
-      and: (i) => (i.length > 1 ? `${i.slice(0, -1).join('、')}和${i[i.length - 1]}` : i[0]), at: (d, t) => `${d} ${t}`, every: (n) => `每 ${n}`, span: (f, t) => `${f} 至 ${t}` }
-  }
+  subtitle: (w) => `${w} runs its office with ${APP_NAME}.`,
+  whyText: `With ${APP_NAME}, a small business gets an office team that keeps the work moving.`,
+  stripLabel: (a, b, f, t) => `Hours the office worked each day, ${f} to ${t}; ${a} of ${b} hours while the owner was away`,
+  locked: "from Pulse, can't be edited",
+  stories: 'Customer stories', cta: 'Build your team', platforms: 'Free to start, on Mac and Windows', closeTitle: (w) => `Run your office like ${w}.`,
+  industry: 'Industry', location: 'Location', aiTeam: `${APP_NAME} team`, members: (n) => (n === 1 ? '1 member' : `${n} members`), period: 'Period',
+  connected: 'Connected', span: (f, t) => `${f} to ${t}`, runsTheOffice: 'Runs the office and checks every job is finished',
+  when: { day: (d) => DAY_EN[d], everyDay: 'Every day', weekdays: 'Weekdays', weekends: 'Weekends', list: (i) => i.join(', '),
+    and: (i) => (i.length > 1 ? `${i.slice(0, -1).join(', ')} and ${i[i.length - 1]}` : i[0]), at: (d, t) => `${d} at ${t}`, every: (n) => `Every ${n}`, span: (f, t) => `${f} to ${t}` }
 };
 
-/** A job's times in the page's language (D28): its times lines, else its
- *  weekly days and time, else its interval, as the Schedules list reads them. */
-export function caseWhen(m: { intervalMs: number; weekly?: unknown; times?: unknown }, lang: CaseLang): string {
-  const w = WORDS[lang].when;
+/** A job's times (D28): its times lines, else its weekly days and time, else
+ *  its interval, as the Schedules list reads them. */
+export function caseWhen(m: { intervalMs: number; weekly?: unknown; times?: unknown }): string {
+  const w = WORDS.when;
   const times = normalizeTimes(m.times);
   if (times) return formatTimes(times, w);
   const weekly = normalizeWeekly(m.weekly);
@@ -452,8 +376,8 @@ export function caseWhen(m: { intervalMs: number; weekly?: unknown; times?: unkn
 }
 
 /** Who the page is about: the name, or the type and city with D8 off. */
-export function subjectOf(facts: Pick<CaseStudyFacts, 'lang' | 'showName' | 'businessName' | 'businessType' | 'city'>): string {
-  const w = WORDS[facts.lang];
+export function subjectOf(facts: Pick<CaseStudyFacts, 'showName' | 'businessName' | 'businessType' | 'city'>): string {
+  const w = WORDS;
   if (facts.showName && facts.businessName?.trim()) return facts.businessName.trim();
   return w.typeIn(facts.businessType?.trim() ?? '', facts.city?.trim() ?? '') || w.aBusiness;
 }
@@ -461,21 +385,21 @@ export function subjectOf(facts: Pick<CaseStudyFacts, 'lang' | 'showName' | 'bus
 /** The built in headline words for a figure, used when the draft gives none
  *  or gives one that breaks the one number rule. */
 export function builtInHeadline(facts: CaseStudyFacts, k: HeadlineFigure): { before: string; after: string } {
-  // Inside a sentence an English type reads "a bakery in Austin".
+  // Inside a sentence a type reads "a bakery in Austin".
   const named = facts.showName && !!facts.businessName?.trim();
-  const who = facts.lang === 'en' && !named ? lowerFirst(subjectOf(facts), true) : subjectOf(facts);
-  return WORDS[facts.lang].headline[k](who);
+  const who = !named ? lowerFirst(subjectOf(facts), true) : subjectOf(facts);
+  return WORDS.headline[k](who);
 }
 
 /** The built in subtitle and closing, both naming the product (D25). */
 export function builtInSubtitle(facts: CaseStudyFacts): string {
   const named = facts.showName && !!facts.businessName?.trim();
-  const who = facts.lang === 'en' && !named ? lowerFirst(subjectOf(facts), true) : subjectOf(facts);
-  const text = WORDS[facts.lang].subtitle(who);
+  const who = !named ? lowerFirst(subjectOf(facts), true) : subjectOf(facts);
+  const text = WORDS.subtitle(who);
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 export function builtInWhy(facts: CaseStudyFacts): string {
-  return WORDS[facts.lang].whyText;
+  return WORDS.whyText;
 }
 
 /** The product's name in a drafted part (any apostrophe). */
@@ -490,7 +414,7 @@ function lowerFirst(s: string, article: boolean): string {
 
 /** The quote's signature (D6, D8). */
 export function quoteSignature(facts: CaseStudyFacts): string {
-  const w = WORDS[facts.lang];
+  const w = WORDS;
   if (!facts.showName || !facts.businessName?.trim()) return w.theOwner;
   return facts.ceoName?.trim() ? `${facts.ceoName.trim()}, ${facts.businessName.trim()}` : w.ownerOf(facts.businessName.trim());
 }
@@ -505,12 +429,10 @@ export function namesBusiness(text: string, facts: Pick<CaseStudyFacts, 'busines
 
 // ---------------------------------------------------------------- the draft (D5, D13, D16)
 
-const LANG_NAME: Record<CaseLang, string> = { en: 'English', ar: 'Arabic', 'zh-CN': 'Simplified Chinese' };
-
 /** The draft prompt, from CaseStudyFacts only. The name and website are in it
  *  only with D8 on; the CEO's name never is. */
 export function draftPrompt(facts: CaseStudyFacts): string {
-  const c = CAPS[facts.lang];
+  const c = CAPS;
   const lines: string[] = [];
   const add = (label: string, v: string | undefined) => { if (v && v.trim()) lines.push(`${label}: ${v.trim()}`); };
   if (facts.showName) { add('Business name', facts.businessName); add('Website', facts.website); }
@@ -531,7 +453,7 @@ export function draftPrompt(facts: CaseStudyFacts): string {
   const figs = headlineChoices(facts.figures);
   return [
     `You write short parts of a customer story page about a small business whose office runs on ${APP_NAME}, an app where an AI team led by Michael does the office work: email, books, orders, scheduling. The case study is published by ${APP_NAME}. A person will read and edit every word before anything is sent.`,
-    `Write in ${LANG_NAME[facts.lang]}.`,
+    'Write in English.',
     'Rules:',
     '- Use only the facts below. Name no customer, no supplier and no person.',
     '- Write no numbers at all: no digits, no number words, no amounts such as "dozens" or "half". The app adds the measured numbers itself.',
@@ -556,10 +478,10 @@ export function draftPrompt(facts: CaseStudyFacts): string {
 const oneLine = (s: string): string => s.replace(/\s+/g, ' ').trim();
 
 /** A drafted part: one line, capped, and refused when it holds a number (D4). */
-function part(v: unknown, max: number, lang: CaseLang): string | undefined {
+function part(v: unknown, max: number): string | undefined {
   if (typeof v !== 'string') return undefined;
   const t = oneLine(v);
-  if (!t || hasNumber(t, lang)) return undefined;
+  if (!t || hasNumber(t)) return undefined;
   return cutText(t, max);
 }
 
@@ -575,11 +497,11 @@ export function parseDraft(reply: string, facts: CaseStudyFacts): CaseDraft {
   let j: Record<string, unknown>;
   try { j = JSON.parse(reply.slice(a, b + 1)) as Record<string, unknown>; } catch { return out; }
   if (!j || typeof j !== 'object') return out;
-  const c = CAPS[facts.lang];
+  const c = CAPS;
   // The subtitle and the closing must name the product (D25).
-  const subtitle = part(j.subtitle, c.subtitle, facts.lang); if (subtitle && namesProduct(subtitle)) out.subtitle = subtitle;
-  const about = part(j.about, c.about, facts.lang); if (about) out.about = about;
-  const why = part(j.why, c.why, facts.lang); if (why && namesProduct(why)) out.why = why;
+  const subtitle = part(j.subtitle, c.subtitle); if (subtitle && namesProduct(subtitle)) out.subtitle = subtitle;
+  const about = part(j.about, c.about); if (about) out.about = about;
+  const why = part(j.why, c.why); if (why && namesProduct(why)) out.why = why;
   const hl = j.headlines && typeof j.headlines === 'object' ? j.headlines as Record<string, unknown> : {};
   for (const k of headlineChoices(facts.figures)) {
     const v = hl[k];
@@ -587,12 +509,12 @@ export function parseDraft(reply: string, facts: CaseStudyFacts): CaseDraft {
     const pieces = oneLine(v).split('{n}');
     if (pieces.length !== 2) continue;
     const [before, after] = pieces.map((p) => p.trim());
-    if (hasNumber(before, facts.lang) || hasNumber(after, facts.lang) || (before + after).length > c.headlineWords || !(before || after)) continue;
+    if (hasNumber(before) || hasNumber(after) || (before + after).length > c.headlineWords || !(before || after)) continue;
     out.headlines[k] = { before, after };
   }
   const team = j.team && typeof j.team === 'object' ? j.team as Record<string, unknown> : {};
   for (const m of facts.members.slice(0, TEAM_ROWS)) {
-    const line = part(team[m.id], c.teamLine, facts.lang);
+    const line = part(team[m.id], c.teamLine);
     if (line) out.team[m.id] = line;
   }
   return out;
@@ -628,7 +550,7 @@ export function startingEdits(facts: CaseStudyFacts, draft: CaseDraft, figure?: 
   const k = figure && choices.includes(figure) ? figure : choices[0];
   const team: Record<string, string> = {};
   for (const m of facts.members.slice(0, TEAM_ROWS)) {
-    const t = draft.team[m.id] ?? (m.roleDescription ? cutText(oneLine(m.roleDescription), CAPS[facts.lang].teamLine) : '');
+    const t = draft.team[m.id] ?? (m.roleDescription ? cutText(oneLine(m.roleDescription), CAPS.teamLine) : '');
     team[m.id] = t;
   }
   return {
@@ -650,11 +572,11 @@ const PAPER: Record<Paper, { w: number; css: string }> = {
   a4: { w: 794, css: 'A4' }
 };
 
-/** The long date of a YYYY-MM-DD day, in the page's language. */
-export function dayLabel(day: string, lang: CaseLang, year = false): string {
+/** The long date of a YYYY-MM-DD day. */
+export function dayLabel(day: string, year = false): string {
   const [y, m, d] = day.split('-').map(Number);
   const dt = new Date(y, (m || 1) - 1, d || 1);
-  return new Intl.DateTimeFormat(lang === 'zh-CN' ? 'zh-CN' : lang === 'ar' ? 'ar' : 'en-US', { month: 'short', day: 'numeric', ...(year ? { year: 'numeric' } : {}), numberingSystem: 'latn' }).format(dt);
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', ...(year ? { year: 'numeric' } : {}), numberingSystem: 'latn' }).format(dt);
 }
 
 function initials(s: string): string {
@@ -684,22 +606,20 @@ export interface PageOptions {
  * filled from the figures, between its words (D16).
  */
 export function pageHtml(facts: CaseStudyFacts, edits: CaseStudyEdits, opts: PageOptions): string {
-  const w = WORDS[facts.lang];
+  const w = WORDS;
   const f = facts.figures;
   const pal = facts.showName && facts.palette ? facts.palette : INK_PALETTE;
-  const rtl = facts.lang === 'ar';
   const print = opts.mode === 'print';
   const paper = PAPER[facts.paper];
-  const from = dayLabel(facts.range.from, facts.lang);
-  const to = dayLabel(facts.range.to, facts.lang, true);
+  const from = dayLabel(facts.range.from);
+  const to = dayLabel(facts.range.to, true);
   const who = subjectOf(facts);
-  const zh = facts.lang === 'zh-CN';
-  // Inside a sentence an English type reads "a bakery in Austin".
-  const closeWho = facts.lang === 'en' && !(facts.showName && facts.businessName?.trim()) ? lowerFirst(who, true) : who;
+  // Inside a sentence a type reads "a bakery in Austin".
+  const closeWho = !(facts.showName && facts.businessName?.trim()) ? lowerFirst(who, true) : who;
 
   const head = edits.headline;
   const headLen = head ? [...`${head.before} ${head.after}`].length : 0;
-  const headSize = headLen > (zh ? 34 : 72) ? ' longer' : headLen > (zh ? 26 : 56) ? ' long' : '';
+  const headSize = headLen > 72 ? ' longer' : headLen > 56 ? ' long' : '';
   const headline = head
     ? `<h1 class="headline${headSize}"><span>${esc(head.before)}</span> <span class="lock" aria-label="${esc(`${fmtCount(figureValue(f, head.figure))}, ${w.locked}`)}">${fmtCount(figureValue(f, head.figure))}</span> <span>${esc(head.after)}</span></h1>`
     : '';
@@ -757,7 +677,7 @@ export function pageHtml(facts: CaseStudyFacts, edits: CaseStudyEdits, opts: Pag
       <div class="big">${awayH > 0 ? w.ofHours(fmtCount(awayH), fmtCount(ranH)) : `<b>${fmtCount(ranH)}</b>`}</div>
       <div class="big-l">${esc(awayH > 0 ? w.away : w.worked)}</div>
       <div class="strip" role="img" aria-label="${esc(w.stripLabel(fmtCount(awayH), fmtCount(ranH), from, to))}">${bars}</div>
-      <div class="strip-x"><span>${esc(from)}</span><span>${esc(dayLabel(facts.range.to, facts.lang))}</span></div>
+      <div class="strip-x"><span>${esc(from)}</span><span>${esc(dayLabel(facts.range.to))}</span></div>
       ${awayH > 0 ? `<div class="legend"><span><i class="k-aw"></i>${esc(w.awayLegend)}</span><span><i class="k-run"></i>${esc(w.aroundLegend)}</span></div>` : ''}
     </div>` : '';
 
@@ -785,7 +705,7 @@ export function pageHtml(facts: CaseStudyFacts, edits: CaseStudyEdits, opts: Pag
  nav .crumb{display:none}
 }`;
 
-  return `<!doctype html><html lang="${facts.lang}" dir="${rtl ? 'rtl' : 'ltr'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(`${who} · ${w.caseStudy}`)}</title><style>
+  return `<!doctype html><html lang="en" dir="ltr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(`${who} · ${w.caseStudy}`)}</title><style>
 ${opts.fontCss}
 ${print ? `@page{size:${paper.css};margin:${CONTINUED_MARGIN_IN}in 0}
 @page :first{margin:0}` : ''}
@@ -907,21 +827,9 @@ ${result}
 </article></body></html>`;
 }
 
-/** The email that carries the page, in the app's language only (D10, D11). */
+/** The email that carries the page (D10, D11). */
 export function caseStudyEmail(facts: CaseStudyFacts): { subject: string; body: string } {
   const who = subjectOf(facts);
-  if (facts.lang === 'ar') {
-    return {
-      subject: `دراسة حالة: ${who}`,
-      body: `مرفق دراسة حالة ${who} المعدّة باستخدام Don't Be Michael: صفحة الويب للنشر (case-study.html) ونسخة PDF.\n\nيجوز لـ Don't Be Michael نشر هذه الدراسة على موقعه، وسيحذفها إذا طلبت ذلك. يكفي الرد على هذه الرسالة لطلب الحذف.`
-    };
-  }
-  if (facts.lang === 'zh-CN') {
-    return {
-      subject: `客户案例：${who}`,
-      body: `附件是 ${who} 使用 Don't Be Michael 制作的客户案例：用于发布的网页 (case-study.html) 和一份 PDF 副本。\n\nDon't Be Michael 可以在其网站上发布此案例，并会在我要求时将其删除。回复此邮件要求删除即可。`
-    };
-  }
   return {
     subject: `Case study: ${who}`,
     body: `Attached is the case study for ${who}, made with Don't Be Michael: the web page to publish (case-study.html) and a PDF copy.\n\nDon't Be Michael may publish this on its website, and will take it down if I ask. A reply to this email asking for removal is enough.`

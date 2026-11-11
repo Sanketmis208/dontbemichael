@@ -5,7 +5,6 @@ import { PixelButton } from './PixelButton';
 import { InfoTip } from './InfoTip';
 import { Disclosure } from './triggers/ui';
 import { useResolvedGodName } from '@/hooks/useResolvedGodName';
-import { useRtl } from '@/i18n/useDirection';
 import { JobParts, fieldLabel, hint } from './fieldText';
 import { Spinner } from './GetMichaelReady';
 import { homeRows, type HomeChoice } from '@shared/jobChange';
@@ -127,7 +126,6 @@ const SUMMARY_SHOWN = 6;
  */
 export function JobChangeReview(p: JobChangeReviewProps) {
   const { t, i18n } = useTranslation();
-  const rtl = useRtl();
   const [typed, setTyped] = useState(p.initialTyped ?? '');
   const [extras, setExtras] = useState<string[]>([]);
   // How the owner says the work splits (design D3: asked in the overlap card).
@@ -323,7 +321,6 @@ export function JobChangeReview(p: JobChangeReviewProps) {
           aria-label={title}
           rows={3}
           className="cth-input"
-          dir={rtl ? 'auto' : undefined}
           style={{ width: '100%', minHeight: 74, padding: '7px 10px', background: 'var(--cth-card)', border: 'none', outline: 'none', borderRadius: 'var(--cth-r-md)', boxSizing: 'border-box', fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '19px', color: 'var(--cth-ink)', resize: 'vertical' }}
         />
         <div style={{ ...rowEnd, justifyContent: 'space-between' }}>
@@ -375,7 +372,6 @@ export function JobChangeReview(p: JobChangeReviewProps) {
             aria-label={p.box.label}
             rows={3}
             className="cth-input"
-            dir={rtl ? 'auto' : undefined}
             style={{ width: '100%', minHeight: 74, padding: '7px 10px', background: 'var(--cth-card)', border: 'none', outline: 'none', boxSizing: 'border-box', fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '19px', color: 'var(--cth-ink)', resize: 'vertical' }}
           />
         )}
@@ -632,7 +628,6 @@ function Clash({ q, who, heading, onCancel, onAnswer }: {
   q: Question; who: string; heading: React.RefObject<HTMLDivElement>; onCancel: () => void; onAnswer: (answer: string) => void;
 }) {
   const { t } = useTranslation();
-  const rtl = useRtl();
   const [pick, setPick] = useState<number | undefined>(undefined);
   const [own, setOwn] = useState('');
   const rows = [...q.choices.map((c) => c.label), t('jobChange.somethingElse')];
@@ -668,7 +663,7 @@ function Clash({ q, who, heading, onCancel, onAnswer }: {
         })}
       </div>
       {pick === ownAt && (
-        <input value={own} onChange={(e) => setOwn(e.target.value)} autoFocus dir={rtl ? 'auto' : undefined}
+        <input value={own} onChange={(e) => setOwn(e.target.value)} autoFocus
           onKeyDown={(e) => { if (!isComposingKey(e) && e.key === 'Enter') { e.preventDefault(); send(); } }}
           placeholder={t('jobChange.somethingElsePlaceholder', { name: who })} aria-label={t('jobChange.somethingElse')}
           className="cth-input" style={{ width: '100%', minHeight: 34, padding: '7px 10px', background: 'var(--cth-card)', border: 'none', outline: 'none', boxSizing: 'border-box', fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink)' }} />

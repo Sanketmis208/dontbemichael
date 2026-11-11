@@ -34,7 +34,6 @@ import { AgentAvatar } from '../AgentAvatar';
 import { InfoTip } from '../InfoTip';
 import { PixelButton } from '../PixelButton';
 import { RunSuggestions } from './RunSuggestions';
-import { caseLangOf } from '@shared/caseStudy';
 import { Icon, type IconName } from '../Icon';
 import { useDialog } from '@/shell/useDialog';
 import { godNameNow } from '@/i18n';
@@ -279,7 +278,7 @@ export function PulseView() {
     if (casePrep === 'ready') { setCaseOpen(true); return; }
     if (casePrep === 'preparing') return;
     setCasePrep('preparing');
-    const p = await window.cth.caseStudyPrepare({ lang: caseLangOf(i18n.language), period: 'last-30', showName: true }).catch(() => null);
+    const p = await window.cth.caseStudyPrepare({ period: 'last-30', showName: true }).catch(() => null);
     if (!p) { setCasePrep('idle'); return; }
     setCasePrep(p.state);
     if (p.state === 'ready') setCaseOpen(true);

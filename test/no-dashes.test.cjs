@@ -7,7 +7,7 @@
  * and dashes read as machine-written. Rephrase with a comma, colon, period or
  * parentheses; never swap the character blindly.
  *
- * Covered: every UI string in all three languages, every shipped Office Pack,
+ * Covered: every UI string, every shipped Office Pack,
  * the text built in code that the owner reads (an agent's card and standing
  * goal), and the user-facing code (components, the IDE and markdown views,
  * floor speech, update and setup copy, error reasons shown in the app).
@@ -60,7 +60,7 @@ test('no shipped Office Pack puts a dash in anything the owner reads', () => {
   }
 });
 
-for (const locale of ['en', 'zh-CN', 'ar']) {
+for (const locale of ['en']) {
   test(`no UI string in the whole app has a dash (${locale})`, () => {
     const d = JSON.parse(fs.readFileSync(path.join(root, `src/renderer/src/i18n/locales/${locale}.json`), 'utf8'));
     let checked = 0;
