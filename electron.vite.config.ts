@@ -18,16 +18,14 @@ const defineMain = {
 
 // Copy raw .cjs main-process sidecars into out/main after the main bundle is
 // written. electron-vite/rollup neither bundles nor copies require()'d .cjs
-// sidecars, so without this the boot-time `require('./slack-trigger.cjs')` is
-// missing from out/main — which crashed the packaged app (#66) AND `npm run
-// dev` (#67). A writeBundle hook runs after the main build in BOTH dev and
+// sidecars, so without this a runtime `require('./kg-core.cjs')` finds
+// nothing in out/main (a missing sidecar crashed the packaged app, #66, and
+// `npm run dev`, #67). A writeBundle hook runs after the main build in BOTH dev and
 // build, so the sidecar is emitted from a single place for every path.
 function copyMainSidecars() {
   const ASSETS: Array<[string, string]> = [
-    ['src/main/slack-trigger.cjs', 'out/main/slack-trigger.cjs'],
     // Knowledge Graph core: required by knowledge.ts at runtime (pure-JS, no
-    // native deps), so it must be emitted next to the main bundle like the
-    // Slack sidecar above.
+    // native deps), so it must be emitted next to the main bundle.
     ['src/main/kg-core.cjs', 'out/main/kg-core.cjs'],
     // The case study page's faces (src/main/caseStudy.ts): main reads them for
     // the screen's preview and the PDF, so both draw the same fonts.

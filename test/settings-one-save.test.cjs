@@ -219,7 +219,7 @@ test('every Settings section is a named group on the soft panel, with no small c
   assert.doesNotMatch(MODAL, /sectionHead|sectionRule/, 'the old head and rule are retired');
   assert.doesNotMatch(MODAL, /fontSize: 10, fontWeight: 600|textTransform: 'uppercase'/, 'no small caps');
   assert.doesNotMatch(MODAL, /\{\{ height: (1|2), background: 'var\(--cth-(line|ink-300)\)'/, 'no hairlines between sections');
-  assert.ok((MODAL.match(/<h3 style=\{groupName\}>/g) ?? []).length >= 11, 'each section names itself');
+  assert.ok((MODAL.match(/<h3 style=\{groupName\}>/g) ?? []).length >= 9, 'each section names itself');
   for (const f of ['MailboxesSettings', 'ClaudeConnectorsSettings', 'IntegrationsRegistry', 'ResearchPrivacySettings', 'SetupPanel', 'SettingsHeroCard']) {
     const src = fs.readFileSync(path.join(__dirname, '..', `src/renderer/src/components/${f}.tsx`), 'utf8');
     assert.match(src, /panelStyle/, `${f} sits on the soft panel`);
@@ -227,10 +227,6 @@ test('every Settings section is a named group on the soft panel, with no small c
   }
 });
 
-test('no integration was removed from Connections', () => {
-  // The founder was explicit: nothing is deleted from this tab.
-  for (const key of ['settings.connections.slack', 'settings.connections.webhooks']) {
-    assert.ok(MODAL.includes(key), `${key} vanished from the Connections tab`);
-  }
-  assert.match(MODAL, /slackStart|slackStop/, 'the Slack lifecycle controls are gone');
+test('webhooks stay in Connections', () => {
+  assert.ok(MODAL.includes('settings.connections.webhooks'), 'webhooks vanished from the Connections tab');
 });

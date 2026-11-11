@@ -73,7 +73,7 @@ test('setup asks for it in two steps, and Settings has a page with a pointer to 
   assert.match(wizard, /return s === 'business' \? 'details'\n    : s === 'details' \? 'team'/);
   assert.match(wizard, /companyProfile: cleanCompanyProfile\(profile\),/);
   const settings = read('src/renderer/src/components/SettingsModal.tsx');
-  assert.match(settings, /const NAV_SECTIONS: Section\[\] = \['General', 'Company profile',/);
+  assert.match(settings, /const VISIBLE_SECTIONS: Section\[\] = \['General', 'Company profile',/);
   assert.match(settings, /onOpenKnowledge=\{\(\) => setActiveSection\('Memory & Knowledge'\)\}/);
   const en = JSON.parse(read('src/renderer/src/i18n/locales/en.json'));
   assert.match(en.companyProfile.knowledgeBody, /Product and price lists, your ideal customers, how you sell/);

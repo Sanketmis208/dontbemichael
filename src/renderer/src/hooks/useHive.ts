@@ -35,7 +35,6 @@ import { ENGINE_READY_EVENT } from '@/shell/useNeedsYou';
 import { seedStarterJobs } from '@/shell/seedStarterJobs';
 import { PromptSubmits, confirmSubmit } from '../../../shared/submitConfirm';
 import { isTerminalPrompt } from '../../../shared/hookEvents';
-import { cutText } from '@shared/cutText';
 
 const GOD_ID = 'god';
 const GOD_PTY = `pty-${GOD_ID}`;
@@ -1194,39 +1193,6 @@ export function useHive(config: HarnessConfig | null): void {
       }
     };
 
-    // Promote a genuine Slack-origin work item to a stamped kanban card the first
-    // time it's dispatched to the office. The card carries slack:{channel,thread_ts}
-    // (origin thread) so the main-process done-observer can post its one summary
-    // reply in-thread once the card later reaches 'done'. ADDITIVE + idempotent +
-    // best-effort: a failure here never affects the dispatch that already happened,
-    // and only dispatched work items land here (slash commands/acks never do).
-    type SlackTaskCard = Parameters<typeof window.cth.hiveAddTask>[0];
-    const ensureSlackCard = async (m: QueuedMessage): Promise<void> => {
-      const slack = m.slack;
-      if (!slack) return;
-      try {
-        const raw = await window.cth.hiveTasks();
-        const existing: SlackTaskCard[] =
-          raw && typeof raw === 'object' && Array.isArray((raw as { tasks?: unknown }).tasks)
-            ? (raw as { tasks: SlackTaskCard[] }).tasks
-            : [];
-        const id = `slack-${slack.thread_ts}-${m.id}`;
-        if (existing.some((t) => t.id === id)) return; // already promoted — no dup
-        const title = cutText(m.text, 80);
-        const card: SlackTaskCard = {
-          id,
-          title,
-          description: m.text,
-          status: 'todo',
-          dependsOn: [],
-          priority: 1,
-          createdAt: new Date().toISOString(),
-          slack
-        };
-        await window.cth.hiveAddTask(card);
-      } catch { /* best-effort: card promotion must never sink dispatch */ }
-    };
-
     const flush = () => {
       const { agents, messageQueues } = useStore.getState();
       const byId = (id: string) => agents.find((a) => a.id === id);
@@ -1237,9 +1203,7 @@ export function useHive(config: HarnessConfig | null): void {
         // the one inside dispatch would have changed nothing.
         if (!a.ptyId || !canDeliverToAgent(a.status, ptyQuietMs(a.ptyId, now), QUIESCE_IDLE_MS)) continue;
         if (!messageQueues[a.id]?.length) continue;
-                void dispatch(a.id, a).then(({ sent, message }) => {
-          if (sent && message?.slack) void ensureSlackCard(message);
-        });
+        void dispatch(a.id, a);
       }
     };
 
@@ -1254,41 +1218,6 @@ export function useHive(config: HarnessConfig | null): void {
     const iv = setInterval(flush, 3000);
     schedule();
     return () => { unsub(); if (debounce) clearTimeout(debounce); clearInterval(iv); };
-  }, [config?.onboardingComplete]);
-
-  // 5) Pipe inbound Slack messages into Michael's queue. The main-process Slack
-  //    webhook server pushes each verified message here via IPC; enqueueing to
-  //    GOD_ID lands it in Michael's queue exactly as if the user had typed it
-  //    into the composer — effect #4 above then drains it to his PTY.
-  //    We immediately ack in the triggering thread and stash the thread coords
-  //    so the office can post its summary back later.
-  useEffect(() => {
-    if (!config?.onboardingComplete) return;
-    return window.cth.onSlackMessage((msg) => {
-      const hasFiles = Array.isArray(msg.files) && msg.files.length > 0;
-      if (!msg?.text?.trim() && !hasFiles) return;
-      let text = msg.text.trim();
-      // Append local file paths so the agent (Claude Code) can Read them directly.
-      if (hasFiles) {
-        const fileLines = msg.files!.map((f) => `- ${f.path} (${f.name})`).join('\n');
-        text = text ? `${text}\n\nAttached files:\n${fileLines}` : `Attached files:\n${fileLines}`;
-      }
-      const slack = { channel: msg.channel, thread_ts: msg.thread_ts };
-      // `text` (raw user request + any attachment lines) drives the human-facing
-      // kanban card title/description. The autonomy preamble — supplied verbatim
-      // by main, the authoritative source — is prepended ONLY to god's working
-      // instruction (what gets typed into his PTY), so the board stays readable
-      // while every Slack-origin god-session runs under the autonomy policy. When
-      // main sends no preamble (older build), god just gets the raw text.
-      const instruction = msg.autonomyPreamble ? `${msg.autonomyPreamble}${text}` : undefined;
-      useStore.getState().enqueueMessage(GOD_ID, text, { slack, instruction });
-      // Immediate "queued" acknowledgement in the originating Slack thread.
-      void window.cth.slackReply({
-        channel: msg.channel,
-        thread_ts: msg.thread_ts,
-        text: ':hourglass_flowing_sand: *Received.* Your request has been queued. The team is on it and will reply here when done.'
-      });
-    });
   }, [config?.onboardingComplete]);
 
   // 5b) Pipe hive tasks addressed to non-Claude agents (e.g. Codex) into their

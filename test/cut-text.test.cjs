@@ -46,7 +46,6 @@ test('owner facing cuts go through cutText', () => {
   assert.match(main, /ownerToastOpening\(cutText\(text, 120\)/);
   assert.match(main, /const title = cutText\(full, 80\);/);
   assert.match(main, /entry\.title \?\? cutText\(entry\.body, 80\)/);
-  assert.match(read('src/renderer/src/hooks/useHive.ts'), /const title = cutText\(m\.text, 80\);/);
   assert.match(read('src/renderer/src/scene/studio/StudioArt.tsx'), /return cutText\(name, 12\)/);
 });
 

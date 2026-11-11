@@ -42,21 +42,16 @@ test('Michael\'s panel opens on Profile', () => {
 });
 
 /**
- * Skills moved from Michael's panel to Settings (owner, 2026-09-23). A tab on
- * Michael read as "Michael's skills", but they are the whole team's: a catalog
- * install lands in ~/.claude/skills, which every Claude Code session on the Mac
- * reads, and bundled skills are copied into every agent at spawn.
+ * There is no Skills page (owner, 2026-11-02 hid it; removed 2026-11-11), but
+ * bundled skills are still copied into every agent at spawn.
  */
-test('Michael\'s panel has no Skills tab; the Settings section is hidden, not gone', () => {
+test('Michael\'s panel and Settings have no Skills page', () => {
   assert.doesNotMatch(src, /'skills'|SkillsTab/);
   const settings = fs.readFileSync(path.resolve(__dirname, '../src/renderer/src/components/SettingsModal.tsx'), 'utf8');
-  assert.match(settings, /const NAV_SECTIONS: Section\[\] = \[[^\]]*'Skills'/);
-  assert.match(settings, /SHOW_SKILLS && activeSection === 'Skills'[\s\S]{0,900}<SkillsTab \/>/, 'no agent passed: the list covers every team folder');
+  assert.doesNotMatch(settings, /'Skills'|SkillsTab/);
 });
 
-test('the Settings copy is true: skills install where every agent reads them', () => {
-  const skills = fs.readFileSync(path.resolve(__dirname, '../src/main/skills.ts'), 'utf8');
-  assert.match(skills, /const root = join\(homedir\(\), '\.claude', 'skills'\);/, 'catalog installs are machine wide');
+test('bundled skills go to every agent at spawn', () => {
   const hive = fs.readFileSync(path.resolve(__dirname, '../src/main/hive.ts'), 'utf8');
   assert.match(hive, /if \(opts\.skillsDir\) this\.copyBundledSkills\(opts\.skillsDir, join\(dir, '\.claude', 'skills'\), meta\.id === RESEARCH_ID\);/, 'bundled skills go to every agent; the web skill to Research alone (ship 2 D13)');
 });

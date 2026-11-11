@@ -58,22 +58,10 @@ export const SHOW_OFFICE_THEME = false;
  *  when it was on, and nothing changes for an office that never set it. */
 export const SHOW_SIMPLE_MODE_SWITCH = false;
 
-/** "Arabic / RTL text in terminals" in Settings → General. Hidden (owner,
- *  2026-10-02). The terminal shaping still follows the app language, and a
- *  choice saved earlier still applies. */
-export const SHOW_ARABIC_TERMINAL_SWITCH = false;
-
 /** The Language section in Settings → General. Hidden (owner, 2026-10-02).
  *  The app keeps a language saved earlier, else English (i18n/index.ts never
  *  reads the OS locale); with this off there is no other picker in the app. */
 export const SHOW_LANGUAGE_PICKER = false;
-
-/** Slack: the Slack block in Settings → Connections (switch, signing secret,
- *  bot token, channel, port, posting, Start and Stop, setup steps). Hidden
- *  (owner, 2026-09-26). While hidden the Slack listener never starts, even
- *  with a connection saved earlier, so nothing runs that the owner cannot see
- *  or stop. Webhooks are separate and unchanged. */
-export const SHOW_SLACK = false;
 
 /** Mailboxes: the Mailboxes block in Settings → Connections, the Email
  *  section on an agent's Capabilities tab, the mailbox option in the hire
@@ -86,12 +74,6 @@ export const SHOW_MAILBOXES = true;
  *  "generate one with AI…" prompt. Hidden (owner, 2026-09-27); adding a team
  *  member is the form alone. The import code stays for when it comes back. */
 export const SHOW_IMPORT_HIRE = false;
-
-/** Settings → Skills: the installed list and the catalog. Business owners have
- *  no known use for it from the app (owner, 2026-11-02). Bundled and installed
- *  skills keep working for every member. To bring it back, also add `skills`
- *  to PLACE_SECTIONS (settingsPlaces.ts). */
-export const SHOW_SKILLS = false;
 
 /** The hire wizard's engine chips and raw command line: developer options. A
  *  business owner picks only Best or Fast (hire redesign D3, owner 2026-09-27);

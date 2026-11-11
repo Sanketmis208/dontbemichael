@@ -91,21 +91,12 @@ test('the default follows the app language, and still never sniffs the OS locale
     'an explicit choice must still win over the language default');
 });
 
-test('the override is three-valued, so a deliberate choice survives a language switch', () => {
-  // Two-valued would make this a derived flag with no escape hatch: an English
-  // user who needs Arabic terminals for their colleagues' logs could not keep
-  // it on, and an Arabic user could not get the GPU renderer's speed back.
+test('a choice an older build saved still wins, and unset follows the language', () => {
   const src = read('src/renderer/src/terminal/arabicSetting.ts');
   assert.match(src, /type Override = boolean \| null/,
     'unset must be distinguishable from an explicit false');
-  assert.match(src, /removeItem\(KEY\)/,
-    'there must be a way back to following the language');
-  // setArabicTerminalEnabled always WRITES, including when the new value
-  // happens to equal today's language default — otherwise the choice would
-  // evaporate the moment the language moved.
-  const setter = src.slice(src.indexOf('export function setArabicTerminalEnabled'));
-  assert.match(setter.slice(0, 300), /setItem\(KEY/,
-    'an explicit choice must be persisted unconditionally');
+  assert.match(src, /if \(stored === '1'\) return true;\s*if \(stored === '0'\) return false;/);
+  assert.doesNotMatch(src, /setItem\(KEY|removeItem\(KEY/, 'nothing in the app writes the override now');
 });
 
 test('nothing Arabic is wired into a terminal unless the setting says so', () => {
@@ -128,21 +119,6 @@ test('nothing Arabic is wired into a terminal unless the setting says so', () =>
     assert.ok(guard > 0 && i - guard < 900,
       'a call to enableArabicRendering is not behind the enabled check');
   }
-});
-
-test('turning it off is a real undo, not a terminal rebuild', () => {
-  // A terminal's scrollback lives only in xterm's buffer and the pty will not
-  // resend it, so recreating one to apply a setting would silently eat the
-  // user's history. Every step of enableArabicRendering has to be reversible.
-  const src = read('src/renderer/src/components/terminalPool.ts');
-  const off = src.slice(src.indexOf('function disableArabicRendering'));
-  const body = off.slice(0, off.indexOf('\n}\n'));
-  assert.match(body, /deregisterCharacterJoiner/, 'the joiner is never removed');
-  assert.match(body, /classList\.remove\('cth-bidi'\)/, 'the bidi class is never removed');
-  assert.match(body, /detachSpacing\(\)/, 'the spacing observer is never detached');
-  const sweep = src.slice(src.indexOf('export function notifyArabicTerminalChangeAll'));
-  assert.doesNotMatch(sweep.slice(0, sweep.indexOf('\n}\n')), /\bterm\.dispose\b|acquireTerminal/,
-    'the live switch must not dispose or recreate a terminal');
 });
 
 test('the bidi CSS is scoped, so it cannot reach a terminal that never opted in', () => {

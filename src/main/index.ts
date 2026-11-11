@@ -8,14 +8,13 @@ import { readCodexContext } from './codexUsage';
 import { execFile, spawn } from 'node:child_process';
 import {
   rmSync, existsSync, readFileSync, readdirSync, statSync, writeFileSync,
-  unlinkSync, mkdirSync, renameSync, createWriteStream, copyFileSync, lstatSync,
+  unlinkSync, mkdirSync, renameSync, copyFileSync, lstatSync,
   readlinkSync, symlinkSync, realpathSync, chmodSync, watch as watchFs
 } from 'node:fs';
 import { promises as fsPromises } from 'node:fs';
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import { join, resolve, sep, basename, dirname, isAbsolute } from 'node:path';
 import { homedir, tmpdir, constants as osConstants } from 'node:os';
-import { request as httpsRequest } from 'node:https';
 import { PtyManager, type ProcessLaunch, type SpawnOptions } from './pty';
 import { resolveCommand as resolveCliCommand, userShellPath, userShellDoNotTrack } from './shellEnv';
 import { buildPtyEnv } from './ptyEnv';
@@ -100,7 +99,6 @@ import { readClaudePlan } from './claudeAccount';
 import { planPrice, PLAN_LABELS, PLAN_PRICES } from '../shared/claudePlan';
 import { claudeProjectsRoot, projectDir, projectDirs, readAgentUsage, readContextTokens, seedSessionTranscript, resolveSessionCwd } from './transcript';
 import { listIssues } from './github';
-import { SlackWebhookServer, SlackReplyServer, postSlackReply, type SlackEventFile } from './slack';
 import {
   WebhookServer,
   type WebhookDispatch, type WebhookEndpointRef, type WebhookInbound, type WebhookTaskStatus
@@ -156,7 +154,7 @@ import { ControlRegistry } from './control';
 import { WorkerWakeWatchdog, type WorkerWakeFacts } from './workerWake';
 import { inboxNudgeText } from '../shared/hiveNudge';
 import { resolveGodName } from '../shared/godIdentity';
-import { SHOW_DELIVERY_SWITCH, SHOW_SLACK, SHOW_MAILBOXES } from '../shared/buildFeatures';
+import { SHOW_DELIVERY_SWITCH, SHOW_MAILBOXES } from '../shared/buildFeatures';
 import { fetchHireManifest, readHireManifestFiles } from './hire';
 import { parseHireDeepLink, type HireManifest } from '../shared/hire';
 import { ClosingTimeController } from './closingTime';
@@ -176,7 +174,6 @@ import {
 import { buildMissingCliScript, chooseInstallRung, installSucceeded } from './cliInstall';
 import { detectNodeVersion, nodeIsUsable, resolveNodeInstaller } from './nodeInstall';
 import { toolCatalog, type ToolStatus } from '../shared/toolCatalog';
-import { listLocalSkills, loadCatalog, installSkill, uninstallSkill, type LocalSkill } from './skills';
 import { loadHero } from './hero';
 import { loadModelCatalog } from './modelCatalog';
 import { exitLine, type StoppedMember } from '../shared/agentExit';
@@ -1068,7 +1065,7 @@ hive.logObserver = (e) => {
 };
 hive.tasksObserver = (tasks) => pulseTelemetry.tasks(tasks as never);
 /** The PRIMARY window — the one running the hive/god orchestration and the sink
- *  for process-global timer events (missions, breaker, Slack ingestion). It is
+ *  for process-global timer events (missions, breaker). It is
  *  the most-recently-focused live window, so global events follow the user.
  *  Additional "floor" windows are tracked in `allWindows` below. */
 let mainWindow: BrowserWindow | null = null;
@@ -1333,8 +1330,9 @@ const integrationBroker = new IntegrationBroker({
   mail: SHOW_MAILBOXES ? (agentId, op, body) => handleMailRequest(mailService, { memberFolder: attachmentFolder, documentText: attachmentText, getConfig: () => readConfig(), audit: (event) => { try { hive.appendLog(event); } catch { /* best-effort */ } }, organized: (moved) => hive.recordOrganized(moved), proposals: mailApprovals, fitCheck: standingFit, present: memberPresent, log: (line) => console.log(line), tellMichael: (subject, text) => { if (hive.enabled()) hive.send({ to: hiveGodId(), act: 'inform', subject, body: text }, 'mail'); } }, agentId, op, body) : undefined
 });
 
-/** Absolute path to the bundled md-mail MCP server (same resolution as the
- *  Slack helper below). */
+/** Absolute path to the bundled md-mail MCP server. Packaged: under
+ *  `process.resourcesPath` (electron-builder extraResources); dev: the repo's
+ *  `resources/` dir. */
 function mdMailScriptPath(): string {
   return app.isPackaged ? join(process.resourcesPath, 'md-mail-mcp.cjs') : join(app.getAppPath(), 'resources', 'md-mail-mcp.cjs');
 }
@@ -2717,69 +2715,8 @@ function liveWebContents(): Electron.WebContents | null {
   return null;
 }
 
-// ─── Slack webhook server (Slack message → Michael's queue) ──────────────────
-/** The running Slack ingestion server, or null when disabled/stopped. */
-let slackServer: SlackWebhookServer | null = null;
-/** The loopback-only reply endpoint (lets the bundled helper post back to Slack
- *  without ever seeing the bot token). Lifecycle is tied to `slackServer`. */
-let slackReplyServer: SlackReplyServer | null = null;
-/** Last public tunnel URL handed out — persisted so Settings can re-show the
- *  Request URL after a reopen (Slack reuses it until the server is stopped). */
-let lastSlackUrl: string | undefined;
-
-/** AUTONOMOUS REQUEST PROTOCOL — built PER MESSAGE (not a static const) so it can
- *  embed the request's concrete `channel`, `thread_ts`, and the resolved helper
- *  path. Prepended (server-side, authoritatively) to the working instruction god
- *  reads for any Slack-origin request: there is no interactive human at the
- *  keyboard, so god must route fast, delegate WITH the exact reply command (so the
- *  worker posts its real result back into THIS thread itself), stay autonomous,
- *  and only block on enumerated high-severity actions. Prepended to god's PROMPT
- *  only — the human-facing kanban card TITLE stays the user's raw text (the
- *  renderer keeps them split). Trailing space is intentional so the user's message
- *  reads naturally after it. */
-function buildAutonomousRequestProtocol(channel: string, threadTs: string, helperPath: string): string {
-  // Slack reply rules ride the Slack request itself, not every agent's startup
-  // instructions (owner cleanup, 2026-09-25). Plain, no spawning or git.
-  return `[Slack request: nobody is watching the office live, so handle it this way.]
-1. Route it straight to the one team member whose role fits, from the roster. When the request names someone ("ask Pam"), send it to them.
-2. Tell them to do the work and post the result to this Slack thread themselves when done, with exactly: "${hive.nodeCommand()}" "${helperPath}" --channel ${channel} --thread ${threadTs} --text "<the result>". Use that Node path as it is; plain "node" is often missing.
-3. No questions in the office. Only spending money, anything public, or deleting something they did not create needs the owner first.
-4. The Slack reply is the real answer in Slack formatting: a short *bold* headline, then the outcome, specifics and links. Never just "done".
-5. They then tell you (Michael) what they did.
-6. If a decision is needed, post the question with numbered options to the thread with the same command, and record {q, options, askedAt, thread_ts ${threadTs}} so the reply in the thread finds its way back.
-The request starts now: `;
-}
-
-// ─── Slack done-notifier (Slack-origin task → done → one summary reply) ───────
-/** Polls the shared kanban (hive/tasks.json) for Slack-origin tasks that reach
- *  'done' and posts ONE summary reply into the originating thread. Lifecycle is
- *  tied to `slackServer`. OUTBOUND-only: it never touches inbound queue/lanes. */
-let slackDoneTimer: ReturnType<typeof setInterval> | null = null;
-/** Re-entrancy guard so a slow post can't overlap the next tick. */
-let slackDonePolling = false;
-/** Task ids already notified — exactly-once across re-reads AND restarts. Lazily
- *  loaded from / persisted to `slackDoneNotifiedPath()`. */
-let slackDoneNotified: Set<string> | null = null;
-/** Ids already 'done' when the observer started — baselined (never notified) so a
- *  summary only ever fires on a live …→done transition, not on pre-existing dones. */
-let slackDoneBaseline: Set<string> | null = null;
-/** thread_ts values an agent has ALREADY answered directly via the loopback
- *  `/reply` endpoint. The done-summary poller skips these — the agent's own
- *  substantive reply already landed in-thread, so the poller is a fallback, not a
- *  duplicator (this is what stops the bare/duplicate `:white_check_mark:` posts). */
-const directlyRepliedThreads = new Set<string>();
-
-/** Absolute path to the bundled `md-slack-reply.cjs` helper. Packaged: under
- *  `process.resourcesPath` (electron-builder extraResources). Dev: the repo's
- *  `resources/` dir, resolved from the app path. */
-function slackReplyScriptPath(): string {
-  return app.isPackaged
-    ? join(process.resourcesPath, 'md-slack-reply.cjs')
-    : join(app.getAppPath(), 'resources', 'md-slack-reply.cjs');
-}
-
 /** W3 — the bundled read-only `skills/` source dir copied into each agent's
- *  `.claude/skills/` at spawn. Same packaged/dev resolution as the helpers above.
+ *  `.claude/skills/` at spawn. Same packaged/dev resolution as mdMailScriptPath().
  *  Tolerated-missing until lp-manifest (Kevin) populates it (the hive copy is a
  *  no-op on an absent dir). */
 function skillsResourceDir(): string {
@@ -2869,322 +2806,6 @@ function businessFolderLayout(businessFolder: string): FolderLayout {
     if (!a.isGod && !a.isAssistant && a.cwd) folders.push(a.cwd);
   }
   return folderLayoutFor(businessFolder, folders, cfg.harnessHome ? expandTilde(cfg.harnessHome) : undefined);
-}
-
-/** Where the helper discovers `{ port, token }` for the loopback endpoint. Kept
- *  under userData (NOT the git repo, NOT mined into MemPalace). */
-function slackReplyConfigPath(): string {
-  return join(app.getPath('userData'), 'slack-reply.json');
-}
-
-/** Ledger of task ids whose done-summary has already been posted. Ids ONLY — no
- *  secret ever lands here. Under userData (out of the repo, out of MemPalace). */
-function slackDoneNotifiedPath(): string {
-  return join(app.getPath('userData'), 'slack-done-notified.json');
-}
-
-/** Directory where downloaded Slack attachments are saved (out of repo, out of MemPalace). */
-function slackFilesDir(): string {
-  return join(app.getPath('userData'), 'slack-files');
-}
-
-/** Per-file download size cap — reject files larger than 10 MB before writing. */
-const SLACK_FILE_MAX_BYTES = 10 * 1024 * 1024;
-
-/** Sanitize a Slack filename: keep only the basename, replace non-safe chars,
- *  prefix with a random hex tag to prevent collisions and path-traversal attacks. */
-function sanitizeSlackFilename(name: string | undefined, tag: string): string {
-  const safe = (typeof name === 'string' && name)
-    ? basename(name).replace(/[^\w.\-]/g, '_').replace(/^\.+/, '_').slice(0, 200) || 'file'
-    : 'file';
-  return `${tag}-${safe}`;
-}
-
-/**
- * Download a single Slack private file into slackFilesDir() using the bot token.
- * Returns the local path on success, null on any failure (size limit, network, etc.).
- * The bot token is used only in the Authorization header and is NEVER logged.
- */
-function downloadSlackFile(
-  file: SlackEventFile,
-  botToken: string,
-  destDir: string
-): Promise<{ path: string; name: string; mimetype: string } | null> {
-  return new Promise((resolve) => {
-    const tag = randomBytes(4).toString('hex');
-    const filename = sanitizeSlackFilename(file.name, tag);
-    const destPath = join(destDir, filename);
-    const name = file.name ?? filename;
-    const mimetype = file.mimetype ?? 'application/octet-stream';
-
-    try {
-      mkdirSync(destDir, { recursive: true });
-    } catch {
-      resolve(null);
-      return;
-    }
-
-    let urlObj: URL;
-    try {
-      urlObj = new URL(file.url_private);
-    } catch {
-      resolve(null);
-      return;
-    }
-    if (urlObj.protocol !== 'https:') { resolve(null); return; }
-
-    const req = httpsRequest(
-      { hostname: urlObj.hostname, path: urlObj.pathname + urlObj.search, method: 'GET',
-        headers: { authorization: `Bearer ${botToken}` } },
-      (res) => {
-        if (res.statusCode && res.statusCode >= 400) {
-          res.resume(); // drain response body
-          resolve(null);
-          return;
-        }
-        let written = 0;
-        let aborted = false;
-        const stream = createWriteStream(destPath);
-        res.on('data', (chunk: Buffer) => {
-          if (aborted) return;
-          written += chunk.length;
-          if (written > SLACK_FILE_MAX_BYTES) {
-            aborted = true;
-            stream.destroy();
-            try { unlinkSync(destPath); } catch { /* best-effort cleanup */ }
-            res.destroy();
-            resolve(null);
-            return;
-          }
-          stream.write(chunk);
-        });
-        res.on('end', () => {
-          if (aborted) return;
-          stream.end(() => resolve({ path: destPath, name, mimetype }));
-        });
-        res.on('error', () => { stream.destroy(); resolve(null); });
-        stream.on('error', () => { res.destroy(); resolve(null); });
-      }
-    );
-    req.on('error', () => resolve(null));
-    req.end();
-  });
-}
-
-/**
- * Download all raw Slack files (up to cap) and return the local-path file list.
- * Failures are silently dropped — a partial list is still useful to the agent.
- */
-async function downloadSlackFiles(
-  rawFiles: SlackEventFile[],
-  botToken: string | undefined
-): Promise<{ path: string; name: string; mimetype: string }[]> {
-  if (!rawFiles.length || !botToken) return [];
-  const destDir = slackFilesDir();
-  const results = await Promise.all(
-    rawFiles.map((f) => downloadSlackFile(f, botToken, destDir))
-  );
-  return results.filter((r): r is { path: string; name: string; mimetype: string } => r !== null);
-}
-
-function loadSlackDoneNotified(): Set<string> {
-  try {
-    const arr = JSON.parse(readFileSync(slackDoneNotifiedPath(), 'utf8'));
-    if (Array.isArray(arr)) return new Set(arr.filter((x): x is string => typeof x === 'string'));
-  } catch { /* missing/corrupt → start empty */ }
-  return new Set();
-}
-
-function persistSlackDoneNotified(set: Set<string>): void {
-  try { writeFileSync(slackDoneNotifiedPath(), JSON.stringify([...set])); }
-  catch (e) { console.error('[slack] could not persist done-notify ledger:', e); }
-}
-
-/** Slack `chat.postMessage` errors that are permanent for this config — retrying
- *  can never make them succeed, so a failed post with one of these is recorded
- *  (not retried) to avoid flooding the log every 5s. Anything else is treated as
- *  transient and left to retry. */
-const TERMINAL_SLACK_ERRORS = new Set<string>([
-  'missing_scope', 'invalid_auth', 'not_authed', 'account_inactive',
-  'token_revoked', 'token_expired', 'no_permission', 'channel_not_found',
-  'not_in_channel', 'is_archived', 'restricted_action', 'org_login_required',
-]);
-
-/** The single in-thread summary for a finished task. Sourced from the task's
- *  result/description (falling back to the title), trimmed Slack-friendly. */
-function slackDoneSummary(task: HiveTask): string {
-  const body = (task.result ?? task.description ?? '').trim();
-  const head = `:white_check_mark: *${task.title}*`;
-  const text = body ? `${head}\n\n${body}` : head;
-  return text.length > 2800 ? `${text.slice(0, 2799)}…` : text;
-}
-
-/** One observation pass over the kanban. Posts a summary for any Slack-origin
- *  task that has newly reached 'done'. Best-effort and self-guarding — it must
- *  never throw into the timer, and the bot token never leaves this function. */
-async function pollSlackDoneTasks(): Promise<void> {
-  if (slackDonePolling) return;
-  const botToken = readConfig().slackBotToken;
-  if (!botToken) return; // can't post without the token — nothing to do
-  let tasks: HiveTask[];
-  try {
-    const ledger = hive.tasks() as { tasks?: HiveTask[] };
-    tasks = Array.isArray(ledger?.tasks) ? ledger.tasks : [];
-  } catch { return; } // unreadable/missing tasks.json → skip this tick
-
-  const notified = slackDoneNotified ?? (slackDoneNotified = loadSlackDoneNotified());
-
-  // First tick seeds the baseline (ids already done) and posts nothing — so we
-  // only ever fire on a transition observed live this session.
-  if (slackDoneBaseline === null) {
-    slackDoneBaseline = new Set(tasks.filter((t) => t.status === 'done').map((t) => t.id));
-    return;
-  }
-  const baseline = slackDoneBaseline;
-
-  slackDonePolling = true;
-  try {
-    for (const t of tasks) {
-      if (t.status !== 'done') continue;
-      if (baseline.has(t.id) || notified.has(t.id)) continue; // already handled
-      const slack = t.slack;
-      if (!slack || !slack.channel || !slack.thread_ts) continue; // non-Slack-origin → leave alone
-      // FALLBACK-ONLY: if the agent already posted a DIRECT reply into this thread
-      // (loopback /reply), the human has its substantive answer — don't double-post.
-      if (directlyRepliedThreads.has(slack.thread_ts)) { notified.add(t.id); persistSlackDoneNotified(notified); continue; }
-      // Never post a bare `:white_check_mark: *title*` with no substance: if the card
-      // carries neither a result nor a description, there is nothing meaningful to
-      // deliver — skip it (still under the FALLBACK contract).
-      if (!(t.result ?? t.description ?? '').trim()) { notified.add(t.id); persistSlackDoneNotified(notified); continue; }
-      const res = await postSlackReply({
-        botToken, channel: slack.channel, thread_ts: slack.thread_ts, text: slackDoneSummary(t)
-      });
-      if (res.ok) {
-        notified.add(t.id);
-        persistSlackDoneNotified(notified); // mark-on-success → exactly one delivered reply
-      } else if (res.error && TERMINAL_SLACK_ERRORS.has(res.error)) {
-        // A permanent config/auth error (e.g. the bot token lacks `chat:write`)
-        // will NEVER succeed — record the id so we stop hammering every tick, and
-        // log the reason once. Never log the token or message body.
-        notified.add(t.id);
-        persistSlackDoneNotified(notified);
-        console.error('[slack] done-summary post for task', t.id,
-          '— giving up (terminal error:', res.error + '). Fix the Slack bot scope/permissions; later tasks post once resolved.');
-      } else {
-        // Transient (network / rate-limit / unknown) → leave unmarked so a later
-        // tick retries. Log the id + error only; never the token or message body.
-        console.error('[slack] done-summary post failed for task', t.id, '-', res.error, '(will retry)');
-      }
-    }
-  } finally {
-    slackDonePolling = false;
-  }
-}
-
-/** Begin watching the kanban for Slack-origin done-transitions (idempotent). */
-function startSlackDoneObserver(): void {
-  if (slackDoneTimer) return;
-  slackDoneNotified = loadSlackDoneNotified();
-  slackDoneBaseline = null; // re-seed on the first tick of this session
-  slackDoneTimer = setInterval(() => { void pollSlackDoneTasks(); }, 5000);
-}
-
-/** Stop watching the kanban. Safe to call when not running. */
-function stopSlackDoneObserver(): void {
-  if (slackDoneTimer) { clearInterval(slackDoneTimer); slackDoneTimer = null; }
-  slackDoneBaseline = null;
-}
-
-/** Build a SlackWebhookServer from the current config and start it, replacing
- *  any running instance, and return the start result (incl. the public tunnel
- *  URL the user pastes into Slack). No-op + error result when the integration is
- *  disabled or the signing secret is unset. */
-async function startSlackServer(): Promise<{ ok: boolean; url?: string; error?: string }> {
-  // Hidden in this build (buildFeatures.ts): no listener the owner can't see or stop.
-  if (!SHOW_SLACK) return { ok: false, error: 'Slack is not available in this build' };
-  const cfg = readConfig();
-  if (!cfg.slackEnabled || !cfg.slackSigningSecret) {
-    return { ok: false, error: 'slack disabled or missing signing secret' };
-  }
-  slackServer?.stop();
-  slackServer = new SlackWebhookServer({
-    port: cfg.slackPort && cfg.slackPort > 0 ? cfg.slackPort : 3847,
-    signingSecret: cfg.slackSigningSecret,
-    channelId: cfg.slackChannelId,
-    // Fires from the HTTP server's event loop (not the IPC thread); route through
-    // liveWebContents() so a message arriving during window teardown can't throw.
-    // Downloads any file attachments (bot token stays in main; local paths go to IPC).
-    onMessage: async (m) => {
-      const localFiles = await downloadSlackFiles(
-        m._rawFiles ?? [],
-        readConfig().slackBotToken
-      );
-      // `text` stays the user's RAW Slack text → drives the readable kanban card
-      // title. `autonomyPreamble` is the authoritative policy block the renderer
-      // prepends ONLY to god's working instruction (his PTY prompt), keeping the
-      // card title human-facing-clean. Built PER MESSAGE so the AUTONOMOUS REQUEST
-      // PROTOCOL carries THIS request's concrete channel, thread_ts, and the
-      // resolved helper path — god hands the worker an exact reply command.
-      // Server-side so it applies to every session.
-      const ipcMsg: { text: string; channel: string; ts: string; thread_ts: string; autonomyPreamble: string; files?: typeof localFiles } = {
-        text: m.text, channel: m.channel, ts: m.ts, thread_ts: m.thread_ts,
-        autonomyPreamble: buildAutonomousRequestProtocol(m.channel, m.thread_ts, slackReplyScriptPath())
-      };
-      if (localFiles.length > 0) ipcMsg.files = localFiles;
-      try { liveWebContents()?.send('slack:incomingMessage', ipcMsg); }
-      catch { /* window torn down */ }
-    }
-  });
-  const res = await slackServer.start();
-  // ok:false means the port is not bound (never bound, or closed again after the
-  // tunnel failed) → drop the instance.
-  if (!res.ok) { slackServer = null; return res; }
-  if (res.url) lastSlackUrl = res.url;
-  // Bring up the loopback reply endpoint (token-gated, never tunneled) and drop
-  // the discovery file for the bundled helper. Best-effort: reply path being
-  // unavailable must not sink ingestion.
-  await startSlackReplyServer();
-  // Begin watching the kanban for Slack-origin tasks that reach 'done', to post
-  // their one summary reply in-thread. OUTBOUND-only; never touches ingestion.
-  startSlackDoneObserver();
-  return res;
-}
-
-/** Start the loopback reply endpoint and write its `{ port, token }` to userData
- *  so `md-slack-reply.cjs` can reach it. The bot token is read lazily from config
- *  at reply time and never written to this file. */
-async function startSlackReplyServer(): Promise<void> {
-  slackReplyServer?.stop();
-  const token = randomBytes(24).toString('hex');
-  slackReplyServer = new SlackReplyServer({
-    token,
-    getBotToken: () => readConfig().slackBotToken,
-    // An agent posted a DIRECT substantive reply into this thread → record it so the
-    // done-summary poller skips it (the poller is a fallback, not a duplicator).
-    onReplied: (thread_ts) => { directlyRepliedThreads.add(thread_ts); }
-  });
-  const r = await slackReplyServer.start();
-  if (!r.ok || r.port === undefined) {
-    console.error('[slack] reply endpoint failed to start:', r.error);
-    slackReplyServer = null;
-    return;
-  }
-  try {
-    writeFileSync(slackReplyConfigPath(), JSON.stringify({ port: r.port, token }), { mode: 0o600 });
-  } catch (e) {
-    console.error('[slack] could not write reply config:', e);
-  }
-}
-
-/** Stop and forget the Slack server (+ reply endpoint). Best-effort; safe to call
- *  when not running. The last tunnel URL is retained so Settings keeps showing it. */
-function stopSlackServer(): void {
-  try { slackServer?.stop(); } catch (e) { console.error('[slack] stop failed:', e); }
-  slackServer = null;
-  try { slackReplyServer?.stop(); } catch (e) { console.error('[slack] reply stop failed:', e); }
-  slackReplyServer = null;
-  stopSlackDoneObserver();
-  try { if (existsSync(slackReplyConfigPath())) unlinkSync(slackReplyConfigPath()); } catch { /* noop */ }
 }
 
 // ─── Generic inbound webhook + status API (multi-endpoint) ───────────────────
@@ -3300,7 +2921,7 @@ function dispatchWebhookWork(arg: {
       ...(arg.tokenHash ? { webhook: { tokenHash: arg.tokenHash } } : {})
     };
     // addTask appends against the latest on-disk ledger and is idempotent by task
-    // id, so a concurrent card writer (Slack, god, another webhook) can't
+    // id, so a concurrent card writer (god, another webhook) can't
     // have its card lost to our stale whole-ledger overwrite. (writeTasks(...existing)
     // recreated exactly that race.) A fresh taskId never collides, so false here
     // means the board did not parse and nothing was written: the caller has no card.
@@ -3432,11 +3053,11 @@ function lookupWebhookStatus(token: string): WebhookTaskStatus | null {
 }
 
 // ─── Webhook done-observer (the OUTBOUND half of the trigger ledger) ─────────
-// Mirrors `pollSlackDoneTasks`: watch the kanban for webhook-origin cards that
+// Watch the kanban for webhook-origin cards that
 // reach 'done' and write the reply side of the conversation, tagged with the
 // inbound row's correlationId so the UI can pair request ↔ response.
 //
-// Unlike the Slack poller there is no "baseline" of already-done ids: the LEDGER
+// There is no "baseline" of already-done ids: the LEDGER
 // is the record of what we've already paired, so a card that finished while the
 // app was closed still gets its outbound row on the next boot, and re-seeding
 // from the ledger makes a duplicate impossible.
@@ -5108,7 +4729,6 @@ ipcMain.handle('config:changeHome', async (_evt, payload: unknown) => {
   try { mailService.closeAll(); } catch (e) { console.error('[changeHome] mail.closeAll:', e); }
   try { hive.stopRouter(); } catch (e) { console.error('[changeHome] stopRouter:', e); }
   try { hookServer.stop(); } catch (e) { console.error('[changeHome] hookServer.stop:', e); }
-  try { stopSlackServer(); } catch (e) { console.error('[changeHome] slack.stop:', e); }
   try { stopWebhookServer(); } catch (e) { console.error('[changeHome] webhook.stop:', e); }
   try { memory.stop(); } catch (e) { console.error('[changeHome] memory.stop:', e); }
   try { memoryTidy.stop(); } catch (e) { console.error('[changeHome] memoryTidy.stop:', e); }
@@ -5120,8 +4740,6 @@ ipcMain.handle('config:changeHome', async (_evt, payload: unknown) => {
       // Copy failed: recover IN PLACE against the unchanged old home (config never
       // repointed) so the user loses nothing, and surface the error — no relaunch.
       bootstrapHiveServices();
-      const cfg = readConfig();
-      if (cfg.slackEnabled && cfg.slackSigningSecret) void startSlackServer();
       reconcileWebhookServer();
       return { ok: false, error: `Could not copy data: ${e instanceof Error ? e.message : String(e)}` };
     }
@@ -5880,14 +5498,6 @@ ipcMain.handle('hive:firstTask', (_evt, payload: unknown) => {
   hive.send({ to: MICHAEL_ID, act: 'request', subject: first.card.title, body: first.body, conversation: cardConversation(first.card.id), requires_reply: true }, 'human');
   return { ok: true, sent: true };
 });
-ipcMain.handle('hive:addTask', (_evt, task: unknown) => {
-  if (!task || typeof task !== 'object' || Array.isArray(task)
-    || typeof (task as { id?: unknown }).id !== 'string') {
-    return { ok: false, error: 'invalid task' };
-  }
-  if (!hive.enabled()) return { ok: false, error: 'hive disabled (no harnessHome)' };
-  return { ok: hive.addTask(task as HiveTask) };
-});
 /** The digest an answer is recorded by: its question and answer, word for word. */
 function answerDigest(q: string, a: string): string {
   return createHash('sha256').update(`${q}\u0000${a}`).digest('hex').slice(0, 32);
@@ -6111,22 +5721,6 @@ const MODEL_CATALOG_CACHE = () => join(app.getPath('userData'), 'model-catalog.j
 ipcMain.handle('models:catalog', async (_evt, force: unknown) =>
   loadModelCatalog(MODEL_CATALOG_CACHE(), { force: force === true }));
 
-// ─── IPC: skills (installed locally, and the browsable catalog) ─────────────
-/** Skills the CLIs on this machine can already use. Scans the registered repos
- *  plus the agent's own cwd, so a project-scoped skill shows up where it applies. */
-ipcMain.handle('skills:local', (_evt, cwd: unknown): LocalSkill[] => {
-  const cfg = readConfig();
-  const cwds = [
-    ...(typeof cwd === 'string' && cwd ? [cwd] : []),
-    ...(cfg.registeredRepos ?? [])
-  ];
-  try {
-    return listLocalSkills({ cwds, bundledDir: skillsResourceDir() });
-  } catch (e) {
-    console.error('[skills] local scan failed:', e);
-    return [];
-  }
-});
 /** The business types onboarding offers, each with its core agents merged in.
  *  A pack that fails to load is reported rather than thrown: onboarding's first
  *  screen is this list, and one bad file must not leave an owner with an empty
@@ -6318,42 +5912,6 @@ ipcMain.handle('folders:ensure', (_evt, paths: unknown) => {
     ? paths.filter((x): x is string => typeof x === 'string').slice(0, 50)
     : [];
   return list.map((p) => ensureFolder(expandTilde(p)));
-});
-
-/** The skills catalog, parsed from its README and cached in userData.
- *  `force` is the explicit refresh button; everything else is served from a
- *  day-old cache so opening the tab never waits on the network. */
-ipcMain.handle('skills:catalog', async (_evt, force: unknown) => {
-  const cachePath = join(app.getPath('userData'), 'skill-catalog.json');
-  return loadCatalog(cachePath, { force: force === true });
-});
-
-/** Install one catalog skill into ~/.claude/skills. Structured refusals, never a
- *  throw: the UI distinguishes "not installable" from "install failed". */
-ipcMain.handle('skills:install', async (_evt, url: unknown, name: unknown) => {
-  if (typeof url !== 'string' || typeof name !== 'string') {
-    return { ok: false as const, error: 'bad request' };
-  }
-  return installSkill(url, name);
-});
-/** Delete an installed skill. The guard rails live in uninstallSkill — it refuses
- *  any path it cannot prove is a skill folder inside a skills root. */
-ipcMain.handle('skills:uninstall', (_evt, path: unknown) => {
-  if (typeof path !== 'string') return { ok: false as const, error: 'bad request' };
-  const cfg = readConfig();
-  return uninstallSkill(path, { cwds: cfg.registeredRepos ?? [] });
-});
-/** Reveal a skill on disk. `openExternal` is deliberately https-only, so a
- *  file:// URL cannot (and should not) be smuggled through it. */
-ipcMain.handle('skills:reveal', (_evt, path: unknown) => {
-  if (typeof path !== 'string' || !path.trim()) return { ok: false, error: 'bad request' };
-  const skillRoots = [join(homedir(), '.claude', 'skills'), join(homedir(), '.config', 'opencode')];
-  const target = resolve(path);
-  const inRoot = skillRoots.some((r) => target.startsWith(resolve(r) + sep))
-    || (readConfig().registeredRepos ?? []).some((c) => target.startsWith(resolve(c) + sep));
-  if (!inRoot) return { ok: false, error: 'outside a managed skills directory' };
-  shell.showItemInFolder(target);
-  return { ok: true };
 });
 
 // ─── IPC: Get Michael ready (engineSetup.ts) ────────────────────────────────
@@ -6613,7 +6171,7 @@ async function ingestSequentially(paths: string[], tags?: string[]) {
 
 // ─── IPC: composer attachments (images + arbitrary files, attached by PATH) ──
 // The message queue pipes raw text into a Claude CLI PTY, so attachments travel
-// as a file PATH the agent reads with its Read tool (same convention as Slack).
+// as a file PATH the agent reads with its Read tool.
 // Picker offers an Images group + All Files.
 ipcMain.handle('dialog:attachFiles', async (evt) => {
   const win = BrowserWindow.fromWebContents(evt.sender);
@@ -6676,7 +6234,6 @@ function teardownAndQuit(): void {
   try { hive.stopRouter(); } catch (e) { console.error('[quit] stopRouter:', e); }
   try { hookServer.stop(); } catch (e) { console.error('[quit] hookServer.stop:', e); }
   try { telemetry.stop(); } catch (e) { console.error('[quit] telemetry.stop:', e); }
-  try { stopSlackServer(); } catch (e) { console.error('[quit] slack.stop:', e); }
   try { stopWebhookServer(); } catch (e) { console.error('[quit] webhook.stop:', e); }
   try { memory.stop(); } catch (e) { console.error('[quit] memory.stop:', e); }
   try { memoryTidy.stop(); } catch (e) { console.error('[quit] memoryTidy.stop:', e); }
@@ -6761,7 +6318,6 @@ function stopForReset(tag: string, opts: { keepPersist?: boolean } = {}): void {
   step('stopRouter', () => hive.stopRouter());
   step('hookServer.stop', () => hookServer.stop());
   step('telemetry.stop', () => telemetry.stop());
-  step('slack.stop', () => stopSlackServer());
   step('memory.stop', () => memory.stop());
   step('memoryTidy.stop', () => memoryTidy.stop());
   if (!opts.keepPersist) step('persist.close', () => persist.close());
@@ -7518,78 +7074,6 @@ ipcMain.handle('app:setLoginItem', (_evt, enabled: unknown) => {
   return app.getLoginItemSettings().openAtLogin;
 });
 
-// ─── IPC: Slack integration ─────────────────────────────────────────────────
-ipcMain.handle('slack:start', () => startSlackServer());
-/** Stop must survive a restart. Boot re-arms from `slackEnabled`, so stopping
- *  without clearing it silently brought the server back on the next launch —
- *  the user pressed Stop and Slack was live again.
- *
- *  Persist BEFORE tearing down. If the write throws (read-only volume, ENOSPC)
- *  the server is still up and the UI stays truthful; the other order leaves a
- *  dead server that still reads as Connected with the flag set, which is this
- *  same bug again with no error to show for it.
- *
- *  Only this handler clears the flag. changeHome / quit / reset call
- *  `stopSlackServer()` directly and must not: they are lifecycle, not a user
- *  turning the integration off. (Start persists the flag from the renderer, in
- *  `SettingsModal.startSlack`, not here.) */
-ipcMain.handle('slack:stop', () => {
-  writeConfig({ slackEnabled: false });
-  stopSlackServer();
-  return { ok: true };
-});
-/** Current connection state + last Request URL — lets Settings hydrate the
- *  "Connected" badge and re-show the persisted tunnel URL on reopen. */
-ipcMain.handle('slack:status', () => ({ running: slackServer != null, url: lastSlackUrl }));
-/** Absolute path to the bundled reply helper, for the prompt the office worker
- *  runs to post its summary back in-thread. No secret crosses this boundary. */
-ipcMain.handle('slack:replyScriptPath', () => slackReplyScriptPath());
-/** Renderer's immediate "queued" ack into the triggering Slack thread. The bot
- *  token stays in main — only channel/thread/text cross IPC. */
-ipcMain.handle('slack:reply', (_evt, arg: unknown) => {
-  const p = (arg ?? {}) as { channel?: unknown; thread_ts?: unknown; text?: unknown };
-  const cfg = readConfig();
-  // CLAUSE-3 (human: "stop posting into Slack by default"): this is the ONLY
-  // app-INITIATED proactive Slack post (the renderer's "queued" ack). It is
-  // OFF unless the user opts in via Settings → Slack. The Slack-ORIGIN done-reply
-  // round-trip (done-poller) and an agent's own direct /reply are NOT routed
-  // through here, so they are unaffected and always stay on.
-  if (!cfg.slackProactivePosting) return { ok: false, error: 'app-initiated Slack posting disabled (enable in Settings → Slack)' };
-  const botToken = cfg.slackBotToken;
-  if (!botToken) return { ok: false, error: 'no bot token' };
-  if (typeof p.channel !== 'string' || typeof p.thread_ts !== 'string' || typeof p.text !== 'string') {
-    return { ok: false, error: 'channel, thread_ts, text required' };
-  }
-  // CLAUSE-1 (fix-slack-integration): an app-initiated send must target an
-  // EXPLICIT thread — reject a blank/whitespace channel or thread rather than
-  // letting it fall through to an implicit destination (the channel root).
-  if (!p.channel.trim() || !p.thread_ts.trim()) {
-    return { ok: false, error: 'explicit channel + thread_ts required' };
-  }
-  return postSlackReply({ botToken, channel: p.channel, thread_ts: p.thread_ts, text: p.text });
-});
-ipcMain.handle('slack:setConfig', (_evt, patch: unknown) => {
-  const p = (patch ?? {}) as {
-    signingSecret?: unknown; botToken?: unknown; channelId?: unknown; port?: unknown; enabled?: unknown;
-    proactivePosting?: unknown;
-  };
-  const next: Partial<HarnessConfig> = {};
-  // Trim string fields; an emptied field clears back to undefined.
-  if (typeof p.signingSecret === 'string') next.slackSigningSecret = p.signingSecret.trim() || undefined;
-  if (typeof p.botToken === 'string') next.slackBotToken = p.botToken.trim() || undefined;
-  if (typeof p.channelId === 'string') next.slackChannelId = p.channelId.trim() || undefined;
-  if (typeof p.port === 'number' && Number.isFinite(p.port)) next.slackPort = p.port;
-  if (typeof p.enabled === 'boolean') next.slackEnabled = p.enabled;
-  if (typeof p.proactivePosting === 'boolean') next.slackProactivePosting = p.proactivePosting;
-  writeConfig(next);
-  // Reconcile the running server: disabling (or clearing the secret) stops it. We
-  // deliberately do NOT auto-(re)start here — the user presses Start in Settings
-  // to fetch the fresh (ephemeral) tunnel URL.
-  const cfg = readConfig();
-  if (!cfg.slackEnabled || !cfg.slackSigningSecret) stopSlackServer();
-  return { ok: true };
-});
-
 // ─── IPC: Triggers — context (auto-compact / auto-clear) ────────────────────
 ipcMain.handle('triggers:getContext', () => readConfig().contextTrigger ?? DEFAULT_CONTEXT_TRIGGER);
 ipcMain.handle('triggers:setContext', (_evt, arg: unknown) => {
@@ -8230,11 +7714,6 @@ app.whenReady().then(() => {
   const startupHireLink = process.argv.find((a) => a.startsWith(`${APP_URL_SCHEME}://`));
   if (startupHireLink) void handleHireLink(startupHireLink);
 
-  // Hand every spawned agent the path to the Slack reply discovery file via the
-  // inherited env (pty merges process.env). The path is stable whether or not the
-  // server is running; the FILE only exists while it is, so the helper degrades
-  // to "endpoint not running" cleanly. NO secret is in the env — only the path.
-  process.env.MD_SLACK_REPLY_CONFIG = slackReplyConfigPath();
   // Open the durable store first — createWindow() reads the saved window bounds.
   // Guarded: a DB failure (e.g. a bad native build) must degrade to defaults,
   // never block app startup.
@@ -8273,20 +7752,9 @@ app.whenReady().then(() => {
   // developer tools, which are not for an office owner (owner, 2026-10-03).
   installAppMenu();
   createWindow();
-  // Auto-start the Slack webhook server when configured. Best-effort: a tunnel
-  // failure (offline) is logged, not fatal. The tunnel URL is ephemeral and
-  // changes per restart, so the user re-pastes it via Settings → Start.
-  const slackCfg = readConfig();
-  // Slack and webhooks hand work to the hive, so they wait for the office too.
-  if (homeReady && slackCfg.slackEnabled && slackCfg.slackSigningSecret) {
-    void startSlackServer().then((r) => {
-      if (!r.ok) console.error('[slack] auto-start failed:', r.error);
-      else console.log('[slack] webhook listening', r.url ? `(tunnel: ${r.url})` : '(no tunnel)');
-    });
-  }
   // Auto-start the generic webhook only for endpoints the user has explicitly
   // enabled (each with its own secret) — never a default-on public surface.
-  // Opt-in, like Slack; an install with no enabled endpoint opens no tunnel.
+  // Opt-in; an install with no enabled endpoint opens no tunnel.
   if (homeReady && enabledWebhookEndpoints().length > 0) {
     void startWebhookServer().then((r) => {
       if (!r.ok) console.error('[webhook] auto-start failed:', r.error);

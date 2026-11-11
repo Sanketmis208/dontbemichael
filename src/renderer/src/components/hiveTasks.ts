@@ -113,7 +113,7 @@ export function parseTasks(raw: unknown): HiveTask[] {
         ? t.id
         : stableId(`${typeof t.title === 'string' ? t.title : ''}|${typeof t.createdAt === 'string' ? t.createdAt : ''}|${i}`),
       title: typeof t.title === 'string' ? t.title : '(untitled)',
-      // The app writes "description" (a Slack or webhook request). Agents' old
+      // The app writes "description" (a webhook request). Agents' old
       // running "notes" are left in the file but not read: an agent's activity
       // lives in its conversation and the office log (owner, 2026-10-11).
       description: typeof t.description === 'string' ? t.description : undefined,

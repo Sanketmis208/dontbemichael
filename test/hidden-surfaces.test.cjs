@@ -137,7 +137,6 @@ test('voice is gone everywhere', () => {
     'src/main/realtime.ts', 'src/main/realtimeActions.ts', 'src/main/freeflow.ts'
   ]) assert.ok(!fs.existsSync(path.resolve(__dirname, '..', f)), `${f} is gone`);
   const settings = read('src/renderer/src/components/SettingsModal.tsx');
-  assert.match(settings, /const VISIBLE_SECTIONS: Section\[\] = NAV_SECTIONS\.filter\(\(s\) => s !== 'Skills' \|\| SHOW_SKILLS\);/);
   assert.match(settings, /\{VISIBLE_SECTIONS\.map\(\(section\) => \{/);
   assert.doesNotMatch(settings, /'Voice'/);
   const main = read('src/main/index.ts');
@@ -147,12 +146,11 @@ test('voice is gone everywhere', () => {
   assert.doesNotMatch(read('src/preload/index.ts'), /realtime|freeflow/i);
 });
 
-test('this build hides Skills in Settings, and agents keep their skills', () => {
-  // Value: protects=the owner's hide; fails_when=the tab or its body comes back ungated, or spawn stops copying skills; why_new=owners have no known use for it (2026-11-02); seam=none; no_claim=the rendered modal
-  assert.equal(loadTs('src/shared/buildFeatures.ts').SHOW_SKILLS, false);
-  const settings = read('src/renderer/src/components/SettingsModal.tsx');
-  assert.match(settings, /\{SHOW_SKILLS && activeSection === 'Skills' && \(/);
-  assert.equal((settings.match(/<SkillsTab \/>/g) ?? []).length, 1, 'no second way in');
+test('the Skills page is gone, and agents keep their skills', () => {
+  // Value: protects=spawn still copies bundled skills after the page went; fails_when=the page comes back or spawn stops copying skills; why_new=owners have no known use for it (2026-11-02, removed 2026-11-11); seam=none
+  assert.equal(loadTs('src/shared/buildFeatures.ts').SHOW_SKILLS, undefined);
+  for (const f of ['src/main/skills.ts', 'src/renderer/src/components/SkillsTab.tsx']) assert.ok(!fs.existsSync(path.resolve(__dirname, '..', f)), `${f} is gone`);
+  assert.doesNotMatch(read('src/preload/index.ts'), /'skills:/);
   assert.match(read('src/main/hive.ts'), /if \(opts\.skillsDir\) this\.copyBundledSkills\(/);
 });
 
@@ -169,17 +167,13 @@ test('there is no automatic updates switch: every installed build checks (owner,
   assert.doesNotMatch(settings, /autoUpdate/);
 });
 
-test('this build hides Slack, and a Slack connection saved earlier does not start', () => {
-  assert.equal(loadTs('src/shared/buildFeatures.ts').SHOW_SLACK, false);
-  const settings = read('src/renderer/src/components/SettingsModal.tsx');
-  const open = settings.indexOf('{SHOW_SLACK && (<>');
-  const close = settings.indexOf('</>)}', open);
-  assert.ok(open > 0 && close > open, 'Slack block wrapped in SHOW_SLACK');
-  const block = settings.slice(open, close);
-  for (const piece of ["t('settings.connections.slack')", 'startSlack', 'SLACK_CONNECT_STEPS', "t('settings.connections.slackHint')"]) {
-    assert.ok(block.includes(piece), `${piece} is inside the hidden block`);
-  }
-  assert.match(read('src/main/index.ts'), /async function startSlackServer\(\)[\s\S]{0,200}?\n  if \(!SHOW_SLACK\) return \{ ok: false/);
+test('Slack is gone: no listener, no reply helper, no Settings block', () => {
+  assert.equal(loadTs('src/shared/buildFeatures.ts').SHOW_SLACK, undefined);
+  for (const f of ['src/main/slack.ts', 'src/main/slack-trigger.cjs', 'resources/md-slack-reply.cjs']) assert.ok(!fs.existsSync(path.resolve(__dirname, '..', f)), `${f} is gone`);
+  assert.doesNotMatch(read('src/main/index.ts'), /startSlackServer|'slack:/);
+  assert.doesNotMatch(read('src/preload/index.ts'), /'slack:/);
+  assert.doesNotMatch(read('src/renderer/src/components/SettingsModal.tsx'), /SLACK_CONNECT_STEPS|startSlack/);
+  assert.doesNotMatch(read('electron-builder.yml'), /md-slack-reply/);
 });
 
 test('the Default MCP servers section is gone, and no agent gets a server map Claude Code never read', () => {
@@ -284,14 +278,14 @@ test("What's new opens a popover under its link with the notes of this version (
   assert.ok(reg > 0 && reg < upd.indexOf('if (!app.isPackaged) return;'), 'registered before the packaged-only block');
 });
 
-test('Settings, General hides Explain things simply and Arabic / RTL text in terminals (owner, 2026-10-02)', () => {
+test('Settings, General hides Explain things simply; the Arabic terminal switch is gone (owner, 2026-10-02)', () => {
   const flags = loadTs('src/shared/buildFeatures.ts');
   assert.equal(flags.SHOW_SIMPLE_MODE_SWITCH, false);
-  assert.equal(flags.SHOW_ARABIC_TERMINAL_SWITCH, false);
+  assert.equal(flags.SHOW_ARABIC_TERMINAL_SWITCH, undefined);
   const modal = read('src/renderer/src/components/SettingsModal.tsx');
   assert.match(modal, /\{SHOW_SIMPLE_MODE_SWITCH && \(\s*<div[^>]*>\s*<div[^>]*>\s*<span[^>]*>\{t\('settings\.general\.simpleMode'\)\}/);
-  assert.match(modal, /\{SHOW_ARABIC_TERMINAL_SWITCH && \(\s*<div[^>]*>\s*<div[^>]*>\s*<span[^>]*>\s*\{t\('settings\.general\.arabicTerminal'\)\}/);
-  // The settings still work while hidden: Arabic shaping follows the language.
+  assert.doesNotMatch(modal, /arabicTerminal/);
+  // Arabic shaping still follows the language, and a saved choice still applies.
   assert.match(read('src/renderer/src/terminal/arabicSetting.ts'), /return override \?\? languageDefault\(\);/);
 });
 

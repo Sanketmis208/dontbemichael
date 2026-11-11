@@ -248,13 +248,8 @@ export interface HiveTask {
    *  proceed with the human's input (status goes blocked); the harness UI
    *  fills in {a}. The full history stays on the card forever. */
   humanQA?: HumanQA[];
-  /** Outcome summary, surfaced by the Slack done-notifier when this card reaches
-   *  'done'. Optional; the notifier falls back to description/title. */
+  /** Outcome summary: the card's result when it reaches 'done'. Optional. */
   result?: string;
-  /** Set when this task originated from a Slack message — the thread the
-   *  done-summary reply is posted back into. Consumed OUTBOUND only; populating
-   *  it is the inbound/kanban side's job and does not affect routing. */
-  slack?: { channel: string; thread_ts: string };
   /** Set when this task originated from a generic webhook POST. Stores the SHA-256
    *  of the capability token (never the raw token — that's returned to the caller
    *  once and never persisted), so a GET status lookup can match by hashing the
@@ -1456,7 +1451,7 @@ export class HiveManager {
       HIVE_HOOK_SEAL: this.mintHookToken(meta.id)
     };
     // The bundled-node launcher, so an agent can run the hive's .cjs helpers (KG
-    // CLI, Slack reply helper) even when `node` is not on its PATH. Invoking the
+    // CLI) even when `node` is not on its PATH. Invoking the
     // Electron binary directly would open a second app window, so this must stay
     // the wrapper path and never process.execPath.
     //
@@ -2488,9 +2483,6 @@ export class HiveManager {
       ].filter(Boolean).join('\n');
     }
     const guardrailsLine = 'Guardrails: a circuit breaker watches the floor: a "Circuit breaker: steer/constrain" message means you are looping or overspending, so STOP repeating, summarize what you tried, and follow it. Be token-frugal (a floor-wide or per-agent token budget can pause you). The shared plan has two parts: board.md (freeform; god is the sole scribe) and tasks.json (structured kanban: todo, doing, waiting, blocked, done).' + (meta.isGod ? ' You alone write tasks.json; team members file what they need in the triage folder of the hive, which you work oldest first.' : ' Only god writes tasks.json: never change a card yourself, file what your work needs as one new file in the triage folder of the hive, and tell god what changed.');
-    const slackLine = meta.isGod
-      ? 'SLACK REPLIES: When composing a Slack reply (or writing the `result` field of a Slack-origin kanban card), you MUST: (1) directly address what the user asked — never a bare "done"; (2) include the relevant specifics, outcome, and details; (3) format for Slack mrkdwn — open with a short *bold* headline, use bullet points for multiple items, wrap code/paths in `backtick` blocks, keep it concise (no walls of text). When finishing a Slack-origin task, always write a complete, user-facing, well-formatted `result` on the kanban card — the system posts it verbatim to Slack as the done reply.'
-      : `SLACK REPLIES: If god dispatches you a task that came from Slack, it will include an exact \`"${hiveNode}" "<helper>" --channel … --thread … --text "…"\` reply command — when you finish, run it VERBATIM to post your result back to that thread yourself. The reply must be SUBSTANTIVE Slack mrkdwn (a short *bold* headline + the actual outcome/specifics/links), NEVER a bare "done".`;
     return [
       `You are "${meta.name}" (${meta.id}), an autonomous agent in a collaborating hive of AI agents.`,
       `Your private workspace is ${dir}. The shared hive is ${root}. Full protocol: ${inRoot('PROTOCOL.md')}.`,
@@ -2509,7 +2501,6 @@ export class HiveManager {
       godLine,
       meta.isGod ? NO_FIT_LINE : '',
       runtimeLine,
-      slackLine,
       ctxLine,
       `Env vars available to you: AGENT_ID, AGENT_NAME, HIVE_ROOT, AGENT_DIR.`
     ].filter(Boolean).join('\n');
@@ -4123,8 +4114,8 @@ export class HiveManager {
    *
    *  MERGES by card id instead of clobbering. Callers hold PARTIAL models of a
    *  card — the renderer's kanban parser knows nine fields, the god writes as
-   *  many as the work needs (`result`, the verbatim Slack reply posted back to
-   *  the user; `repo`; `scope`; `origin`; `commit`; …). A wholesale write meant
+   *  many as the work needs (`result`, the outcome shown on the
+   *  done card; `repo`; `scope`; `origin`; `commit`; …). A wholesale write meant
    *  one small edit through the UI deleted every unmodelled field on EVERY card
    *  on the board. Now an unmentioned field keeps its on-disk value.
    *
@@ -4166,7 +4157,7 @@ export class HiveManager {
 
   /** Append one card against the latest on-disk ledger. Renderer callers must
    *  use this instead of re-writing a collection they read before another
-   *  source (webhook, Slack, god) added work. Idempotent by task id.
+   *  source (webhook, god) added work. Idempotent by task id.
    *  False when the card is there already or the board does not parse. */
   addTask(task: HiveTask): boolean {
     const ledger = this.readLedger();
@@ -4180,7 +4171,7 @@ export class HiveManager {
   }
 
   /** Patch one card against the latest on-disk ledger, preserving unrelated
-   *  cards and fields (notably webhook.tokenHash and Slack thread metadata).
+   *  cards and fields (notably webhook.tokenHash).
    *  The app closing a card (a mailbox fixed) withdraws its
    *  open questions, so none is left on Ask me for good. */
   patchTask(id: string, patch: Partial<Omit<HiveTask, 'id'>>): boolean {

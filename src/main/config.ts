@@ -467,22 +467,6 @@ export interface HarnessConfig {
   providerBaseUrls?: Partial<Record<AgentProvider, string>>;
   /** Per-CLI-provider default model slug, used to pre-fill the model picker. */
   providerDefaultModels?: Partial<Record<AgentProvider, string>>;
-  /** Master toggle for the Slack → Michael's-queue integration. */
-  slackEnabled?: boolean;
-  /** Slack app signing secret (Basic Information → Signing Secret). Never logged. */
-  slackSigningSecret?: string;
-  /** Bot token (xoxb-…) — only needed if the bot ever replies; optional for now. */
-  slackBotToken?: string;
-  /** Restrict ingestion to one channel id; empty/undefined = any channel. */
-  slackChannelId?: string;
-  /** Local HTTP port the webhook server binds to (default 3847). */
-  slackPort?: number;
-  /** Opt-in: allow APP-INITIATED proactive posting into Slack (e.g. the
-   *  renderer's "queued" acknowledgement). DEFAULT OFF per the human directive
-   *  "stop posting into Slack by default". This does NOT gate the Slack-ORIGIN
-   *  done-reply round-trip (a user @-mention → task → result posted back to that
-   *  thread) or an agent's own direct in-thread reply — those always stay on. */
-  slackProactivePosting?: boolean;
 
   // ─── Generic inbound webhook + status API (LEGACY, single-endpoint) ─────────
   // Superseded by `webhookTriggers`, which allows many endpoints over one server
@@ -537,12 +521,6 @@ const DEFAULTS: HarnessConfig = {
   strongKeepalive: false,
   tvShowOffices: false,
   officeTheme: 'office',
-  slackEnabled: false,
-  slackSigningSecret: undefined,
-  slackBotToken: undefined,
-  slackChannelId: undefined,
-  slackPort: undefined,
-  slackProactivePosting: false,
   webhookEnabled: false,
   webhookSecret: undefined,
   webhookPort: undefined,
@@ -696,7 +674,7 @@ function normalizeStoredHomes(cfg: HarnessConfig): HarnessConfig {
 
 /** Announces every saved setting, so a screen showing one can update.
  *
- *  Settings, Slack and notifications each save by their own route, and
+ *  Settings and notifications each save by their own route, and
  *  all of them end up writing the file below — so one subscription here covers
  *  every setting rather than the ones anybody remembered to wire up. */
 type ConfigWriteListener = (next: HarnessConfig) => void;

@@ -116,8 +116,8 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
       });
       return;
     }
-    // Prepend an "Attached files:" block using the same path-based convention as
-    // the Slack inbound path (useHive.ts) so agents Read the files directly.
+    // Prepend an "Attached files:" block of local paths so agents Read the files
+    // directly.
     const body = attachments.length
       ? (text.trim()
           ? `${text}\n\nAttached files:\n`

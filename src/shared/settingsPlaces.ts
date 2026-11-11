@@ -10,8 +10,7 @@
  * place that is not here (or is hidden in this build) is never a button.
  */
 
-/** Settings sections an agent may name. Skills is left out: it is hidden in
- *  this build (SHOW_SKILLS), so its words stay words. */
+/** Settings sections an agent may name. */
 export const PLACE_SECTIONS = {
   'general': 'General',
   'company-profile': 'Company profile',

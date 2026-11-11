@@ -105,7 +105,7 @@ test('renderer task actions never send a whole stale ledger back to main', () =>
   assert.match(sources[0], /hivePatchTask\s*\(/);
   assert.match(sources[1], /hiveMoveTask\s*\(/);
   assert.match(sources[2], /hiveCloseTask\s*\(/);
-  assert.match(sources[3], /hiveAddTask\s*\(/);
+  assert.doesNotMatch(preload, /'hive:addTask'/, 'the renderer has no raw card append');
 });
 
 test('webhook dispatch appends via atomic addTask, not a stale whole-ledger rewrite', () => {

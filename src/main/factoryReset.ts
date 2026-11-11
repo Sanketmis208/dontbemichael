@@ -94,8 +94,8 @@ export const APP_DATA_ENTRIES = [
   'opened-attachments',
   'trigger-history.json',
   'owner-dock-keys.json',
-  'slack-reply.json',
-  'slack-done-notified.json',
+  // Slack's files, which an older build may have left.
+  'slack-reply.json',  'slack-done-notified.json',
   'slack-files',
   'pastes',
   ...CHECK_FOLDERS

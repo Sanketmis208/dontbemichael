@@ -55,16 +55,13 @@ files:
   - "!**/*.{md,map,ts,tsx}"
   - "!**/{.eslintrc,.prettierrc,tsconfig*.json,electron.vite.config.*}"
 
-# Ship the standalone Slack reply helper as a plain file under the app's
-# resources dir (process.resourcesPath). It runs under `node`, NOT inside the
-# asar, so the office worker can invoke `node <resources>/md-slack-reply.cjs`.
+# Plain files under the app's resources dir (process.resourcesPath), outside
+# the asar, so agents can run them with the bundled node.
 extraResources:
   # MIT requires the copyright and permission notice in every copy, including
   # the packaged app, so LICENSE ships in Contents/Resources.
   - from: LICENSE
     to: LICENSE
-  - from: resources/md-slack-reply.cjs
-    to: md-slack-reply.cjs
   # md-mail: the MCP server team members use for mail (docs/designs/multi-mailbox.md).
   # Claude Code starts it with the bundled node, outside the asar.
   - from: resources/md-mail-mcp.cjs

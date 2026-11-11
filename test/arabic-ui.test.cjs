@@ -208,7 +208,6 @@ test('no Arabic string is left as its English source', () => {
   // path the user types, or a pure format string — translating any of them
   // would make the UI wrong, not more Arabic.
   const SAME_ON_PURPOSE = new Set([
-    'settings.connections.slack',            // product name
     'onboarding.providerBlurb.claude',       // "Claude Code — Anthropic": two product names
     'onboarding.providerBlurb.codex',
     'onboarding.providerBlurb.antigravity',
@@ -268,20 +267,4 @@ test('inline markup and array shapes are preserved', () => {
   for (const p of ['office.errand.smoke', 'office.suckUp', 'office.gossip', 'office.cheer']) {
     assert.equal(count(ar, p).length, count(en, p).length, `${p} changed length`);
   }
-});
-
-test('the terminal setting still explains its performance cost, in every locale', () => {
-  // The founder's amendment moved this setting's default onto the language but
-  // explicitly kept the control, because ON swaps the renderer and costs speed.
-  // Losing that explanation would be a real regression.
-  for (const [code, l] of [['en', en], ['zh-CN', zh], ['ar', ar]]) {
-    const g = l.settings.general;
-    assert.ok(g.arabicTerminalDesc, `${code} lost arabicTerminalDesc`);
-    assert.ok(g.arabicTerminalDesc.length > 80,
-      `${code}'s description is too short to still explain the tradeoff`);
-    assert.ok(g.arabicTerminalFollowsLanguage,
-      `${code} never says the value is coming from the language`);
-  }
-  // en names the two renderers explicitly; that is the substance of the note.
-  assert.match(en.settings.general.arabicTerminalDesc, /GPU/);
 });

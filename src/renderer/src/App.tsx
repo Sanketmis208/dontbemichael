@@ -13,7 +13,6 @@ import { useHive } from '@/hooks/useHive';
 import { useGodNameSync } from '@/i18n/useGodNameSync';
 import { useDirectionSync } from '@/i18n/useDirection';
 import { useCopyLinkLabelSync } from '@/i18n/useCopyLinkLabelSync';
-import { useArabicTerminalSync } from '@/terminal/useArabicTerminalSync';
 import { AgentDetailPanel } from '@/components/AgentDetailPanel';
 import { AddAgentModal } from '@/components/AddAgentModal';
 import { MichaelBooting } from '@/components/MichaelBooting';
@@ -56,8 +55,6 @@ export function App() {
   useDirectionSync();
   // Give main the right-click "Copy link address" label in the app language.
   useCopyLinkLabelSync();
-  // Let terminals that are ALREADY open follow a language switch too.
-  useArabicTerminalSync();
   const agent = useStore(selectedAgent);
   const agents = useStore(s => s.agents);
   const agentCount = agents.length;

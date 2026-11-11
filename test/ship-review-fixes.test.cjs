@@ -103,9 +103,9 @@ test('Closing time in the clock menu quits like Cmd-Q', () => {
 test('Settings fields are the v2 input, with its focus ring', () => {
   // Value: protects=Settings inputs match setup and the hire wizard and show focus; fails_when=a field drops the cth-input class or the old cream fill comes back; why_new=review pass 3; seam=none
   const modal = read('src/renderer/src/components/SettingsModal.tsx');
-  const uses = (modal.match(/style=\{\{?\s*(\.\.\.)?slackInputStyle/g) ?? []).length;
-  const ringed = (modal.match(/className="cth-input"\s+style=\{\{?\s*(\.\.\.)?slackInputStyle/g) ?? []).length;
-  assert.ok(uses >= 16, 'every Settings field uses the shared style');
+  const uses = (modal.match(/style=\{\{?\s*(\.\.\.)?fieldInputStyle/g) ?? []).length;
+  const ringed = (modal.match(/className="cth-input"\s+style=\{\{?\s*(\.\.\.)?fieldInputStyle/g) ?? []).length;
+  assert.ok(uses >= 11, 'every Settings field uses the shared style');
   assert.equal(ringed, uses, 'every Settings field carries the cth-input class');
   assert.doesNotMatch(modal, /cth-paper-100[^\n]*\n[^\n]*border: 'none',\n\s*boxShadow: 'inset 0 0 0 1px var\(--cth-ink-100\)'/);
 });

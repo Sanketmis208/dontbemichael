@@ -2,7 +2,7 @@
  * Non-destructive edits to the task ledger (`hive/tasks.json`).
  *
  * The ledger is a HAND-WRITTEN file: the god appends whatever fields a card
- * needs — `result` (the verbatim Slack reply posted back to the user), `repo`,
+ * needs — `result` (the outcome, shown on the done card), `repo`,
  * `scope`, `origin`, `deliverable`, `commit`, `blockedOn`, `notes` — none of
  * which the renderer's display model knows about. Several UI surfaces write the
  * ledger back after a small edit (answer a question, move a card, dismiss one),

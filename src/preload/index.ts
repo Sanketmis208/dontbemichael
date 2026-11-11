@@ -39,8 +39,6 @@ import type { ModelCatalog } from '../shared/modelCatalogPayload';
 export type { ModelCatalog, CatalogModel } from '../shared/modelCatalogPayload';
 import type { HookEvent } from '../shared/hookEvents';
 export type { HookEvent } from '../shared/hookEvents';
-import type { LocalSkill, CatalogSkill } from '../main/skills';
-export type { LocalSkill, CatalogSkill } from '../main/skills';
 import type { OfficePack, PackOrigin } from '../shared/officePack';
 export type { OfficePack, PackOrigin } from '../shared/officePack';
 import type {
@@ -157,10 +155,8 @@ export interface HiveTask {
   /** First-class human feedback: god appends {q}, the harness UI fills {a};
    *  the full history stays on the card. */
   humanQA?: HumanQA[];
-  /** Outcome summary used for the Slack done-notification. */
+  /** Outcome summary: the card's result when it is done. */
   result?: string;
-  /** Origin thread for a Slack-sourced task (drives the done-summary reply). */
-  slack?: { channel: string; thread_ts: string };
   /** SHA-256 of the capability token for a generic-webhook-sourced task (drives
    *  the GET status lookup; the raw token is never persisted). */
   webhook?: { tokenHash: string };
@@ -316,12 +312,6 @@ export interface HarnessConfig {
   strongKeepalive?: boolean;
   /** @deprecated Ignored since 2026-10-02: updates are always checked. */
   autoUpdate?: boolean;
-  slackEnabled?: boolean;
-  slackSigningSecret?: string;
-  slackBotToken?: string;
-  slackChannelId?: string;
-  slackPort?: number;
-  slackProactivePosting?: boolean;
   webhookEnabled?: boolean;
   webhookSecret?: string;
   webhookPort?: number;
@@ -980,23 +970,6 @@ const api = {
   modelCatalog: (force?: boolean): Promise<{
     catalog: ModelCatalog | null; fetchedAt: number; stale: boolean;
   }> => ipcRenderer.invoke('models:catalog', force),
-  /** Skills already installed for the coding agents on this machine. */
-  skillsLocal: (cwd?: string): Promise<LocalSkill[]> => ipcRenderer.invoke('skills:local', cwd),
-  /** The browsable skills catalog (cached; `force` re-fetches). */
-  skillsCatalog: (force?: boolean): Promise<{
-    skills: CatalogSkill[]; fetchedAt: number; stale: boolean; error?: string;
-  }> => ipcRenderer.invoke('skills:catalog', force),
-  /** Install a catalog skill into ~/.claude/skills. `unsupported` distinguishes
-   *  "there is no downloadable source" from "the download failed". */
-  skillsInstall: (url: string, name: string): Promise<
-    { ok: true; path: string } | { ok: false; error: string; unsupported?: boolean }
-  > => ipcRenderer.invoke('skills:install', url, name),
-  /** Delete an installed skill. Main refuses any path outside a skills root. */
-  skillsUninstall: (path: string): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke('skills:uninstall', path),
-  /** Show a skill's folder in the OS file manager. */
-  skillsReveal: (path: string): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke('skills:reveal', path),
   memoryWakeUp: (wing?: string): Promise<{ ok: boolean; output: string; error?: string }> =>
     ipcRenderer.invoke('hive:memoryWakeUp', wing),
   mineNow: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('hive:mineNow'),
@@ -1246,9 +1219,6 @@ const api = {
     ipcRenderer.invoke('control:snapshot', agentId),
 
   // ─── Task kanban (hive/tasks.json) ───────────────────────────────────────
-  /** Atomically append one card against the latest main-process ledger. */
-  hiveAddTask: (task: HiveTask): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke('hive:addTask', task),
   /** Record the owner's Ask me answer to question `index` on one card, merged
    *  against the card on disk. `landed`: it was added to that question, still
    *  open there. */
@@ -1473,40 +1443,6 @@ const api = {
    *  archives it automatically via pty:kill; this is the explicit primitive. */
   hiveSetArchived: (id: string, archived: boolean): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('hive:setArchived', id, archived),
-
-  // ─── Slack integration (Slack message → Michael's queue) ─────────────────────
-  /** Register a listener for inbound Slack messages; returns an unsubscribe fn.
-   *  The message carries the thread coordinates needed to reply in-thread. */
-  onSlackMessage: (cb: (msg: { text: string; channel: string; ts: string; thread_ts: string; autonomyPreamble?: string; files?: { path: string; name: string; mimetype: string }[] }) => void): (() => void) => {
-    const listener = (_e: IpcRendererEvent, msg: { text: string; channel: string; ts: string; thread_ts: string; autonomyPreamble?: string; files?: { path: string; name: string; mimetype: string }[] }) => cb(msg);
-    ipcRenderer.on('slack:incomingMessage', listener);
-    return () => ipcRenderer.removeListener('slack:incomingMessage', listener);
-  },
-  /** Start the Slack webhook server; returns the public tunnel URL to paste into
-   *  the Slack app's Event Subscriptions → Request URL. */
-  slackStart: (): Promise<{ ok: boolean; url?: string; error?: string }> =>
-    ipcRenderer.invoke('slack:start'),
-  /** Stop the Slack webhook server + tunnel. */
-  slackStop: (): Promise<{ ok: boolean }> =>
-    ipcRenderer.invoke('slack:stop'),
-  /** Current connection state + last Request URL (so Settings can hydrate the
-   *  "Connected" badge and re-show the persisted tunnel URL on reopen). */
-  slackStatus: (): Promise<{ running: boolean; url?: string }> =>
-    ipcRenderer.invoke('slack:status'),
-  /** Post a reply into a Slack thread (the bot token stays in main). Used for the
-   *  renderer's immediate "queued" ack. */
-  slackReply: (m: { channel: string; thread_ts: string; text: string }): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke('slack:reply', m),
-  /** Absolute path to the bundled reply helper, for the office worker's
-   *  end-of-run "post your summary back to Slack" instruction. */
-  slackReplyScriptPath: (): Promise<string> =>
-    ipcRenderer.invoke('slack:replyScriptPath'),
-  /** Persist Slack settings (and stop the server if disabled / secret cleared). */
-  slackSetConfig: (patch: {
-    signingSecret?: string; botToken?: string; channelId?: string; port?: number; enabled?: boolean;
-    proactivePosting?: boolean;
-  }): Promise<{ ok: boolean }> =>
-    ipcRenderer.invoke('slack:setConfig', patch),
 
   // ─── Generic webhook + status API (POST → work, GET → status) ────────────────
   /** Start the generic webhook server; returns the public endpoint URL callers

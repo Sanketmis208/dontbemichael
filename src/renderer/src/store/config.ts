@@ -151,14 +151,6 @@ export interface HarnessConfig {
   strongKeepalive?: boolean;
   /** @deprecated Ignored since 2026-10-02: updates are always checked. */
   autoUpdate?: boolean;
-  slackEnabled?: boolean;
-  slackSigningSecret?: string;
-  slackBotToken?: string;
-  slackChannelId?: string;
-  slackPort?: number;
-  /** Opt-in app-initiated proactive Slack posting (default OFF). Mirrors
-   *  src/main/config.ts; the Slack-origin done-reply round-trip is never gated. */
-  slackProactivePosting?: boolean;
   costCapUsd?: number;
   /** Hard total-token ceiling across active agents (the user-facing budget). */
   costCapTokens?: number;

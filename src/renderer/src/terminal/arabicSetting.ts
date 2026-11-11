@@ -1,14 +1,14 @@
 import i18n, { isRtlLanguage } from '@/i18n';
 
 /**
- * The renderer switch for RTL-script terminal support: ON keeps xterm on its
+ * The renderer setting for RTL-script terminal support: ON keeps xterm on its
  * DOM renderer, registers the Arabic character joiner, and lets the bidi CSS
  * in design/global.css do its work — together these render Arabic (and other
  * RTL scripts' neutral runs) shaped and correctly ordered, which the WebGL
  * cell painter structurally cannot (xterm.js has no bidi: xtermjs/xterm.js#701).
  * OFF leases the WebGL renderer: faster, and exactly the previous behavior.
  *
- * THE LANGUAGE SETS THE DEFAULT; THE TOGGLE IS AN OVERRIDE.
+ * THE LANGUAGE SETS THE DEFAULT; A SAVED CHOICE OVERRIDES IT.
  *
  * This shipped in 59d721ed as a manual switch, defaulting off for everyone,
  * because at the time Arabic could not be selected as a UI language at all — a
@@ -23,8 +23,8 @@ import i18n, { isRtlLanguage } from '@/i18n';
  *     has a genuine reason to switch this on without changing their UI language.
  *   - An ARABIC user may want the GPU renderer's speed back. It is their machine.
  * So the state is THREE-valued, not two: unset (follow the language), forced on,
- * forced off. An explicit choice outlives a language switch in both directions —
- * a user who deliberately turned this on does not lose it by moving off Arabic.
+ * forced off. The Settings switch that set it is gone; a choice an older build
+ * saved still applies.
  *
  * What it deliberately does NOT do is sniff the OS locale, which is the same
  * auto-detect the language picker refuses: `navigator.languages` is not a
@@ -58,23 +58,4 @@ function languageDefault(): boolean {
 /** Hot path — called on terminal attach and on every renderer lease. */
 export function isArabicTerminalEnabled(): boolean {
   return override ?? languageDefault();
-}
-
-/** True when the value above is coming from the language, not a stored choice.
- *  Settings uses this to say so rather than presenting a default as a decision. */
-export function isArabicTerminalFollowingLanguage(): boolean {
-  return override === null;
-}
-
-/** Record an explicit choice. Always writes — an override that happens to agree
- *  with the language today must still survive a switch away from it tomorrow. */
-export function setArabicTerminalEnabled(next: boolean): void {
-  override = next;
-  try { window.localStorage.setItem(KEY, next ? '1' : '0'); } catch { /* private mode */ }
-}
-
-/** Drop the override and go back to following the app language. */
-export function clearArabicTerminalOverride(): void {
-  override = null;
-  try { window.localStorage.removeItem(KEY); } catch { /* private mode */ }
 }

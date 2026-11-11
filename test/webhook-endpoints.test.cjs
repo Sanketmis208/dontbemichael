@@ -307,7 +307,6 @@ test('the webhook server answers this computer only, and the security policy nam
   const fs = require('node:fs');
   const path = require('node:path');
   const read = (p) => fs.readFileSync(path.resolve(__dirname, '..', p), 'utf8');
-  assert.match(read('src/main/slack.ts'), /server\.listen\(this\.port, '127\.0\.0\.1', \(\) => \{/);
   const policy = read('SECURITY.md');
   for (const listener of ['hook server', 'integration broker', 'telemetry receiver', 'webhook server']) {
     assert.match(policy, new RegExp(`\\*\\*The ${listener}\\*\\*`), `SECURITY.md names the ${listener}`);

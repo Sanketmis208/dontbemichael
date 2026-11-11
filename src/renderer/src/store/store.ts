@@ -177,12 +177,10 @@ export interface QueuedMessage {
   text: string;
   /** epoch ms the message was queued — drives ordering and the "queued 2m ago" hint */
   ts: number;
-  /** Slack-originated: thread coordinates so the office can reply in-thread. */
-  slack?: { channel: string; thread_ts: string };
   /** Optional override for the text actually typed into the agent's PTY. When set,
    *  the drain submits THIS instead of `text`, while UI/card surfaces keep using
-   *  `text`. Used by Slack-origin work to carry the autonomy preamble to god's
-   *  prompt without polluting the human-readable kanban card title (= raw `text`). */
+   *  `text`. Used to carry a work order to god's prompt without changing the
+   *  human-readable text (= raw `text`). */
   instruction?: string;
   /** An owner question from the dock (michael-replies.md, R6): typed means
    *  Michael has it; the drain reports delivery and a drop by this id. */
@@ -448,7 +446,7 @@ interface State {
   /** Park a message for an agent. Returns nothing; the flush loop delivers it.
    *  `meta.instruction`, when set, is what gets typed into the PTY instead of
    *  `text` (UI/card surfaces still show `text`). */
-    enqueueMessage: (agentId: string, text: string, meta?: { slack?: { channel: string; thread_ts: string }; instruction?: string; precondition?: QueuedMessage['precondition']; compactUsed?: number; ownerRequestId?: string }) => void;
+    enqueueMessage: (agentId: string, text: string, meta?: { instruction?: string; precondition?: QueuedMessage['precondition']; compactUsed?: number; ownerRequestId?: string }) => void;
   /** Drop a single queued message (user removed it, or it was just delivered). */
   removeQueuedMessage: (agentId: string, messageId: string) => void;
   /** The conversation dock above the composer (michael-replies.md): open,
@@ -1336,7 +1334,7 @@ export const useStore = create<State>((set, get) => ({
       // operator's real backlog behind them.
       //
       // The invariant lives HERE rather than at the call sites because there are
-      // several — the context trigger, god dispatching a work order, Slack, the
+      // several — the context trigger, god dispatching a work order, the
       // composer — and each one that grew its own check could still be bypassed
       // by the next path someone adds. The context trigger's own check stays as
       // cheap defence in depth, but this is the one that cannot be routed around.
@@ -1358,7 +1356,6 @@ export const useStore = create<State>((set, get) => ({
       }
             const msg: QueuedMessage = {
         id: newQueuedId(), text: trimmed, ts: Date.now(),
-        ...(meta?.slack ? { slack: meta.slack } : {}),
         ...(meta?.instruction ? { instruction: meta.instruction } : {}),
         ...(meta?.precondition ? { precondition: meta.precondition } : {}),
         ...(meta?.compactUsed !== undefined ? { compactUsed: meta.compactUsed } : {}),

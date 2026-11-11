@@ -97,7 +97,7 @@ const UI_CODE = [
   ...['updateState', 'toolCatalog', 'claudeCommands', 'codexCommands', 'hire', 'integrations',
     'manifestFields', 'imageTypes', 'triggers', 'agentDefinition', 'officePack', 'officeRoles',
     'teamPlan', 'businessProfile'].map((f) => `src/shared/${f}.ts`),
-  ...['docText', 'docTextCli', 'agentFolders', 'skills', 'git', 'webhook', 'control', 'breaker', 'hooks',
+  ...['docText', 'docTextCli', 'agentFolders', 'git', 'webhook', 'control', 'breaker', 'hooks',
     'cliInstall', 'harnessGuard', 'packs'].map((f) => `src/main/${f}.ts`)
 ];
 
