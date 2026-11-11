@@ -3,8 +3,9 @@
 /**
  * Prompts the owner types to a team member are not recorded (owner,
  * 2026-11-11). The app used to save every one to the command_history table,
- * and nothing ever read it back. The table stays, empty, because shipped
- * database migrations are never edited.
+ * and nothing ever read it back. Migration 7 drops the table with the prompts
+ * an older build saved; the database test (command-history-deleted) runs it
+ * against a real file. Migration 1 that made it stays as shipped.
  */
 const test = require('node:test');
 const assert = require('node:assert/strict');

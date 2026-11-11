@@ -3,9 +3,8 @@
  *
  * Phase A scope (the rest of the renderer state stays in localStorage for now):
  *   - kv:               scalar app state. Today: the main window's bounds.
- *   - command_history:  created by migration 1 and no longer written (owner,
- *                       2026-11-11: nothing read it). Kept so shipped
- *                       migrations stay unedited.
+ *   - command_history:  made by migration 1, dropped by migration 7 (owner,
+ *                       2026-11-11: the typed prompts it held were never read).
  *
  * Lives in the Electron MAIN process (better-sqlite3 is native + synchronous);
  * the renderer reaches it over IPC. The DB file sits next to config.json under
@@ -185,6 +184,19 @@ const MIGRATIONS: Array<(db: Database.Database) => void> = [
       );
       CREATE INDEX IF NOT EXISTS idx_on_pending ON owner_notes(office, agent_id, id) WHERE filed_at IS NULL;
     `);
+  },
+  // → user_version 7: the prompts the owner typed to team members are no
+  // longer recorded and nothing read them (owner, 2026-11-11), so the ones an
+  // older build saved are deleted. secure_delete zeroes the freed pages, so the
+  // text does not linger in the file's free space.
+  (db) => {
+    const was = db.pragma('secure_delete', { simple: true });
+    db.pragma('secure_delete = ON');
+    try {
+      db.exec('DROP INDEX IF EXISTS idx_ch_agent_ts; DROP TABLE IF EXISTS command_history;');
+    } finally {
+      db.pragma(`secure_delete = ${was ? 'ON' : 'OFF'}`);
+    }
   }
 ];
 
