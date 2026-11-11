@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useStore, selectedAgent, ROSTER_BOOT_HOME, ACTION_CLOCKING_IN } from '@/store/store';
 import { rosterNeedsReload } from '@/store/rosterSource';
-import { startMockLoop, stopMockLoop } from '@/store/mockEvents';
 import type { HarnessConfig } from '@/store/config';
 import { DEFAULT_ORG_TRIGGER } from '@shared/triggers';
 import { StudioStage } from '@/scene/studio/StudioStage';
@@ -284,24 +283,6 @@ export function App() {
   useEffect(() => {
     for (const a of agents) if (a.ptyId) acquireTerminal(a.ptyId);
   }, [agents]);
-
-  // Synthetic demo loop — CAGED (#5B). It must never animate alongside a live
-  // hive (it would fire fake envelope handoffs and step seeded agents). Run it
-  // only as an explicit showcase (VITE_CTH_DEMO=1 in dev) or on a genuinely
-  // empty floor, and stop it the instant the first real PTY agent appears
-  // (Michael always spawns, so in normal operation it effectively never runs).
-  useEffect(() => {
-    if (!config?.onboardingComplete) return;
-    const DEMO = import.meta.env.DEV && import.meta.env.VITE_CTH_DEMO === '1';
-    const evaluate = () => {
-      const hasLive = useStore.getState().agents.some((a) => a.ptyId);
-      if (DEMO || !hasLive) startMockLoop();
-      else stopMockLoop();
-    };
-    evaluate();
-    const unsub = useStore.subscribe(evaluate);
-    return () => { unsub(); stopMockLoop(); };
-  }, [config?.onboardingComplete]);
 
   // Reconcile restored agents against the PTYs still alive in the main process.
   // After a renderer reload (e.g. the laptop slept and Vite reloaded the page),
