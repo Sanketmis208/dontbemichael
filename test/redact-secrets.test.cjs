@@ -1,19 +1,15 @@
 'use strict';
 
 /*
- * Unit tests for the voice read-layer's MESSAGE-CONTENT + RECENT-ACTIVITY path
- * (card enable-voice-agent-acces-cnzlfs).
+ * Unit tests for redactSecrets() in src/main/hive.ts: the main-side privacy
+ * gate every message subject and body passes before the Messages tab
+ * (`hive:history`) reads it; hooks.ts uses it too. hive.ts is TypeScript and not importable
+ * from a plain .cjs test, so the redaction battery below is a
+ * CHARACTER-IDENTICAL copy (minus TS type annotations). KEEP IN LOCKSTEP: if
+ * you change redactSecrets in hive.ts, mirror the change here; these tests are
+ * what PROVE a secret-shaped value is stripped.
  *
- * The logic under test lives in src/main/hive.ts — redactSecrets() (the
- * main-side privacy gate) and voiceMessages() (dedup + sort + slice over an
- * agent's inbox/outbox). hive.ts is TypeScript and these are not importable from
- * a plain .cjs test, so the redaction battery and the selection core below are a
- * CHARACTER-IDENTICAL copy (minus TS type annotations). Same convention as
- * test/realtime-findcard.test.cjs. KEEP IN LOCKSTEP: if you change redactSecrets
- * or voiceMessages in hive.ts, mirror the change here — these tests are what
- * PROVE a secret-shaped value is stripped and that retrieval behaves.
- *
- * Run: node test/voice-messages.test.cjs   (exit 0 = all pass)
+ * Run: node test/redact-secrets.test.cjs   (exit 0 = all pass)
  */
 
 const assert = require('assert');
@@ -48,45 +44,7 @@ function redactSecrets(text) {
   return s;
 }
 
-// ── selection core — MIRROR of src/main/hive.ts voiceMessages() inner logic ──
-// `tagged` is the folder-traversal order: [{ msg, owner, direction, archived }].
-function toVoice(m, owner, direction, archived) {
-  return {
-    id: m.id, conversation: m.conversation, from: m.from, to: m.to, act: m.act,
-    subject: redactSecrets(m.subject), body: redactSecrets(m.body),
-    requires_reply: !!m.requires_reply, direction, owner, archived, created_at: m.created_at
-  };
-}
-function selectMessages(tagged, opts = {}) {
-  const wantId = typeof opts.id === 'string' ? opts.id.trim() : '';
-  const seen = new Set();
-  const out = [];
-  for (const t of tagged) {
-    const m = t.msg;
-    if (!m || typeof m.id !== 'string' || seen.has(m.id)) continue;
-    seen.add(m.id);
-    if (wantId && m.id !== wantId) continue;
-    out.push(toVoice(m, t.owner, t.direction, t.archived));
-  }
-  out.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
-  if (wantId) return out.slice(0, 1);
-  const lim = typeof opts.limit === 'number' && isFinite(opts.limit)
-    ? Math.max(1, Math.min(40, Math.round(opts.limit)))
-    : 12;
-  return out.slice(0, lim);
-}
-
-// ── recent-activity selection — MIRROR of hive.ts logTail() + tools.ts ───────
-// logTail returns the last n log lines (oldest→newest); get_activity reverses
-// for newest-first. Activity is METADATA-ONLY by design (no message bodies).
-function logTailSelect(lines, n) {
-  return lines.slice(-n);
-}
-function activityNewestFirst(lines, n) {
-  return lines.slice(-n).reverse();
-}
-
-// ── harness (mirrors test/realtime-findcard.test.cjs) ────────────────────────
+// ── harness ──────────────────────────────────────────────────────────────────
 let failures = 0;
 function test(name, fn) {
   try {
@@ -98,81 +56,7 @@ function test(name, fn) {
   }
 }
 
-// ── fixtures ─────────────────────────────────────────────────────────────────
-const mk = (over) => ({
-  id: 'm1', conversation: 'c1', in_reply_to: null, from: 'kevin', to: 'god',
-  act: 'inform', subject: 'status', body: 'all green', hops: 0,
-  requires_reply: false, needs_human: false, created_at: '2026-06-27T09:00:00.000Z',
-  ...over
-});
-
-console.log('voice read-layer: recent-activity + message-content + redaction');
-
-// ===== RECENT ACTIVITY (metadata-only) =======================================
-const LOG = [
-  { ts: 1, kind: 'spawn', agentId: 'meredith' },
-  { ts: 2, kind: 'message', from: 'kevin', agentId: 'kevin' },
-  { ts: 3, kind: 'tasks', count: 12 },
-  { ts: 4, kind: 'archive', agentId: 'creed' },
-  { ts: 5, kind: 'voice_action', actor: 'michael-voice' }
-];
-
-test('activity: last-N selection returns the N most recent', () => {
-  const sel = logTailSelect(LOG, 3);
-  assert.strictEqual(sel.length, 3);
-  assert.deepStrictEqual(sel.map((e) => e.kind), ['tasks', 'archive', 'voice_action']);
-});
-test('activity: newest-first ordering', () => {
-  const sel = activityNewestFirst(LOG, 3);
-  assert.deepStrictEqual(sel.map((e) => e.kind), ['voice_action', 'archive', 'tasks']);
-});
-test('activity: log entries carry NO message body (metadata-only source)', () => {
-  for (const e of LOG) assert.ok(!('body' in e), 'activity log must not expose message bodies');
-});
-
-// ===== MESSAGE RETRIEVAL =====================================================
-const A = mk({ id: 'a', from: 'kevin', to: 'god', subject: 'done', body: 'shipped', created_at: '2026-06-27T08:00:00.000Z' });
-const B = mk({ id: 'b', from: 'god', to: 'kevin', subject: 'next', body: 'pick up card x', created_at: '2026-06-27T09:30:00.000Z' });
-const C = mk({ id: 'c', from: 'pam', to: 'god', subject: 'review', body: 'looks good', created_at: '2026-06-27T07:00:00.000Z' });
-
-// A delivered message lives in BOTH the sender's outbox/.sent AND the recipient's
-// inbox/.done — the traversal sees it twice. Dedup must collapse to one.
-const TAGGED = [
-  { msg: B, owner: 'kevin', direction: 'inbox', archived: false },
-  { msg: A, owner: 'kevin', direction: 'outbox', archived: true },
-  { msg: A, owner: 'god', direction: 'inbox', archived: true },   // duplicate of A
-  { msg: C, owner: 'god', direction: 'inbox', archived: true }
-];
-
-test('retrieval: by id returns exactly that one message', () => {
-  const r = selectMessages(TAGGED, { id: 'a' });
-  assert.strictEqual(r.length, 1);
-  assert.strictEqual(r[0].id, 'a');
-  assert.strictEqual(r[0].body, 'shipped');
-});
-test('retrieval: missing id returns empty', () => {
-  assert.strictEqual(selectMessages(TAGGED, { id: 'zzz' }).length, 0);
-});
-test('recent: dedups a message seen in two mailboxes', () => {
-  const r = selectMessages(TAGGED, {});
-  assert.strictEqual(r.length, 3, 'A appears once despite two copies');
-  assert.strictEqual(new Set(r.map((m) => m.id)).size, 3);
-});
-test('recent: sorted newest-first by created_at', () => {
-  const r = selectMessages(TAGGED, {});
-  assert.deepStrictEqual(r.map((m) => m.id), ['b', 'a', 'c']);
-});
-test('recent: limit caps the list', () => {
-  const r = selectMessages(TAGGED, { limit: 2 });
-  assert.strictEqual(r.length, 2);
-  assert.deepStrictEqual(r.map((m) => m.id), ['b', 'a']);
-});
-test('shape: carries direction + owner + archived for briefing context', () => {
-  const r = selectMessages(TAGGED, { id: 'a' });
-  assert.strictEqual(r[0].owner, 'kevin');
-  assert.strictEqual(r[0].direction, 'outbox');
-  assert.strictEqual(r[0].archived, true);
-});
+console.log('redactSecrets: the main-side privacy gate');
 
 // ===== REDACTION (the security crux) =========================================
 const SECRETS = [

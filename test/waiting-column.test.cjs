@@ -88,12 +88,8 @@ test('a waiting card is nobody\'s work right now: not Doing on the floor, not bu
   assert.match(read('src/main/hive.ts'), /t\?\.assignee === id && t\.status === 'doing'\)\?\.title/);
 });
 
-test('only Michael sets Waiting: not from Task detail, the IPC or voice', () => {
+test('only Michael sets Waiting: not from Task detail or the IPC', () => {
   assert.match(read('src/main/index.ts'), /!\['todo', 'doing', 'done'\]\.includes\(status as string\)/);
-  const voice = read('src/main/realtimeActions.ts');
-  assert.match(voice, /const valid = \['todo', 'doing', 'waiting', 'blocked', 'done'\];/);
-  assert.match(voice, /if \(status === 'waiting'\) \{[\s\S]*?Waiting names who the card waits on, so only \$\{godName\} sets it\./);
-  assert.match(read('src/renderer/src/realtime/tools.ts'), /\$\{by\('waiting'\)\.length\} waiting on someone/);
 });
 
 test('the owner cannot set Waiting, and moving a card out of Waiting drops who it waited on', () => {

@@ -185,9 +185,9 @@ export class HookServer {
   /** agentId → the latest context-window accounting from the statusLine shim
    *  (current tokens + the REAL window size — 200k vs 1M, which nothing else
    *  exposes). The renderer already gets this pushed live on `hive:contextUpdate`;
-   *  we also retain the last value here so a main-side read (the voice read-layer's
-   *  get_agent_detail / list_agents) can report "how full is each agent's context"
-   *  without depending on a renderer round-trip. */
+   *  we also retain the last value here so a main-side read (Michael's roster
+   *  context) can report "how full is each agent's context" without depending on
+   *  a renderer round-trip. */
   private contextById = new Map<string, { tokens: number; limit: number; ts: number }>();
   /** The goal last delivered to each agent's current session. Goals are durable
    *  roster state, so repeating an unchanged multi-kilobyte briefing on every
@@ -546,7 +546,7 @@ export class HookServer {
       const cw = p.context_window;
       if (agentId && cw && typeof cw.total_input_tokens === 'number'
         && typeof cw.context_window_size === 'number' && cw.context_window_size > 0) {
-        // Retain for main-side reads (voice get_agent_detail / list_agents) …
+        // Retain for main-side reads (Michael's roster context) …
         this.contextById.set(agentId, {
           tokens: cw.total_input_tokens,
           limit: cw.context_window_size,

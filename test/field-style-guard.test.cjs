@@ -28,8 +28,8 @@ const FILE_EXCEPTIONS = [
   'components/FoundationCard.tsx', 'components/MailProposalCards.tsx', 'components/AskMeDepartmentRow.tsx',
   // Chat.
   'components/ThreadsPanel.tsx', 'components/MessageQueueComposer.tsx',
-  // The floor, and the voice overlays drawn on it.
-  'scene/', 'realtime/'
+  // The floor.
+  'scene/'
 ];
 
 function tsxFiles(dir, out = []) {

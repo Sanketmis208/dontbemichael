@@ -32,9 +32,3 @@ test("Michael's engine picker and the model picker list this build's engines, pl
   assert.match(cc, /canReceiveInbox\(p\.id\)\s*&& \(BUILD_ENGINES\.includes\(p\.id\) \|\| p\.id === agentProvider \|\| p\.id === engineProvider\)/);
   assert.doesNotMatch(cc, /AGENT_PROVIDER_PRESETS\.filter\(\(p\) => canReceiveInbox\(p\.id\)\)\.map/, 'no unfiltered engine list left');
 });
-
-test('voice hiring refuses an engine this build does not offer', () => {
-  const rt = read('src/main/realtimeActions.ts');
-  assert.match(rt, /if \(!BUILD_ENGINES\.includes\(provider as AgentProvider\)\) \{\s*return \{ ok: false, spoken:/);
-  assert.match(read('src/renderer/src/realtime/actions.ts'), /provider: \{ type: 'string', description: 'Engine: claude\. It is the only engine this version offers\.' \}/);
-});

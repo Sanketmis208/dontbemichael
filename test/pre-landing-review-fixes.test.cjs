@@ -124,13 +124,11 @@ test('taking the new job description keeps a binding whose scope holds a period 
   assert.doesNotMatch(offer.description, /Only the owner@sunrise\.(?!com)/, 'never cut at the first period');
 });
 
-test('the review fixes hold in the renderer and voice paths', () => {
-  // Value: protects=older schedule instructions are not lost on save, voice "done" with a result is finished work, and a quiet poll re-renders nothing; fails_when=any of these go back; why_new=red team, performance and security reviews; seam=source pins, no DOM harness
+test('the review fixes hold in the renderer paths', () => {
+  // Value: protects=older schedule instructions are not lost on save, and a quiet poll re-renders nothing; fails_when=any of these go back; why_new=red team, performance and security reviews; seam=source pins, no DOM harness
   const list = read('src/renderer/src/components/triggers/ScheduleList.tsx');
   assert.match(list, /const focusChanged = !heartbeat && \(focusTouched \|\| !!mission\.focus\) &&/, 'the offered older text is not a change by itself');
   assert.match(list, /const keepBody = !nextFocus \|\| \/\\n\/\.test\(legacyBody\) \|\| cleanFocus\(legacyBody\) !== \(legacyBody \|\| undefined\);/, 'a longer or multi-line prompt is kept');
-  const voice = read('src/main/realtimeActions.ts');
-  assert.match(voice, /if \(status === 'done' && patch\.result\) \{\n\s*if \(!deps\.hivePatchTask\(card\.id, \{ status: 'done' \}\)\)/);
   const feed = read('src/renderer/src/shell/useNeedsYou.ts');
   assert.match(feed, /if \(!changed\) return;/);
   assert.match(read('src/main/mail.ts'), /c\.search\(\{ uid: uids\.join\(','\) \}, \{ uid: true \}\)/, 'only the asked ids are searched');

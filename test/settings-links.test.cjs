@@ -45,7 +45,7 @@ test('a dbm: link names only our own places; anything else is words', () => {
   for (const href of ['dbm:settings/research-privacy', 'dbm:settings/connections/claude-connectors', 'dbm:settings/connections/mailboxes/add', 'dbm:member/oscar/access/email'])
     assert.equal(placeHref(parsePlace(href)), href, 'round trip');
   assert.equal(placeWords({ kind: 'settings', section: 'Connections', group: 'mailboxes' }), 'Settings, Connections, Mailboxes');
-  assert.ok(!Object.values(PLACE_SECTIONS).includes('Voice'), 'Voice is hidden in this build');
+  assert.ok(!Object.values(PLACE_SECTIONS).includes('Voice'), 'there is no Voice section');
   assert.ok(!Object.values(PLACE_SECTIONS).includes('Skills'), 'Skills is hidden in this build');
 });
 

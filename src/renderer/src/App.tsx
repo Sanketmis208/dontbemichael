@@ -22,7 +22,6 @@ import { TeamClockingIn } from '@/components/TeamClockingIn';
 import { OnboardingWizard } from '@/components/OnboardingWizard';
 import { OfficeFolderMissing } from '@/components/OfficeFolderMissing';
 import { ClosingTimeBar, type ClosingTimeState } from '@/components/ClosingTimeBar';
-import { CompletionToast } from '@/realtime/CompletionToast';
 import { setCloseAndReopen } from '@/components/CliUpdateNotice';
 import { CaseStudyEvents } from '@/components/pulse/CaseStudyEvents';
 import { SettingsModal, type Section as SettingsSection, type SettingsPlace } from '@/components/SettingsModal';
@@ -32,7 +31,6 @@ import { PixelButton } from '@/components/PixelButton';
 import { SidebarSplitter } from '@/components/SidebarSplitter';
 import { acquireTerminal } from '@/components/terminalPool';
 import { TaskDetailOverlay } from '@/components/TaskDetailOverlay';
-import { useHoldOptionToTalk } from '@/freeflow/holdOption';
 import { useTranslation } from 'react-i18next';
 import { TopBar, NeedsYouStrip } from '@/shell/TopBar';
 import { setDialogsSuspended } from '@/shell/useDialog';
@@ -121,13 +119,6 @@ export function App() {
     window.cth.getConfig().then(c => {
       if (cancelled) return;
       setConfig(c);
-      // Mirror the Free Flow flag into the store so the composer mic button shows
-      // only when enabled (Settings keeps this in sync on save).
-      useStore.getState().setFreeflowEnabled(!!c.freeflowEnabled);
-      // Mirror boolean key-presence ONLY (never the key value) so the composer can
-      // show the voice button disabled-with-tooltip when Free Flow is on but no
-      // Groq key is set (Settings keeps this in sync on save).
-      useStore.getState().setHasGroqKey(!!c.groqApiKey);
       // Mirror the triggers so Settings → Connections and the Command Center's
       // Triggers tab read one list, not two copies that drift — whichever surface
       // saves calls these same setters and the other repaints. No extra IPC: main
@@ -139,19 +130,8 @@ export function App() {
       useStore.getState().setWebhookTriggers(withTriggers.webhookTriggers ?? []);
       useStore.getState().setOrgTrigger(withTriggers.orgTrigger ?? DEFAULT_ORG_TRIGGER);
     });
-    // Mirror BYOK OpenAI key presence (boolean only; the key never leaves main) so the
-    // Realtime Michael voice toggle can gate on it. Lives in the secret broker, not
-    // config — so fetch it rather than derive from c.
-    window.cth.realtimeHasOpenAiKey().then(has => {
-      if (!cancelled) useStore.getState().setHasOpenAiKey(has);
-    });
     return () => { cancelled = true; };
   }, []);
-
-  // Free Flow entry point B — hold-Option (⌥) to talk. In-renderer push-to-talk
-  // for whichever agent the user is viewing; gated on the flag, terminal-safe
-  // (solo-hold threshold, aborts on any other key). See freeflow/holdOption.ts.
-  useHoldOptionToTalk();
 
   // Config subscription — the copy loaded above would otherwise go stale the
   // moment anything saves a setting.
@@ -495,9 +475,6 @@ export function App() {
       width: '100vw', height: '100vh',
       overflow: 'hidden', background: 'var(--cth-bg)'
     }}>
-      {/* Toasts: voice completions. Each one positions itself and renders null
-          until it has something to say. */}
-      <CompletionToast />
       <CaseStudyEvents />
 
       {/* Design v2 shell (branding/DESIGN.md 5.2): top bar, the stage with the

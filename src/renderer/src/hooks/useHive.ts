@@ -38,7 +38,7 @@ import { isTerminalPrompt } from '../../../shared/hookEvents';
 import { cutText } from '@shared/cutText';
 
 const GOD_ID = 'god';
-/** Accent palette for MAIN-spawned (voice-hired) agents — picked deterministically
+/** Accent palette for MAIN-spawned agents (temporary workers) — picked deterministically
  *  from the agent id so the same agent always gets the same colour. Mirrors the
  *  AddAgentModal palette. */
 const SPAWN_ACCENTS = ['coral', 'mint', 'sky', 'lemon', 'lilac', 'peach'] as const;
@@ -1308,9 +1308,9 @@ export function useHive(config: HarnessConfig | null): void {
     });
   }, [config?.onboardingComplete]);
 
-  // 5b) MAIN-initiated roster changes (rt-5 voice spawn/kill). The renderer store is
-  //     only mutated by renderer-initiated hires (AddAgentModal); a voice hire/kill
-  //     runs in MAIN (spawnAgentCore / teardownPty, owner=null) and would otherwise
+  // 5b) MAIN-initiated roster changes (temporary workers starting and ending). The
+  //     renderer store is only mutated by renderer-initiated hires (AddAgentModal);
+  //     a worker spawn/teardown runs in MAIN (spawnAgentCore / teardownPty, owner=null) and would otherwise
   //     be invisible on the floor. Main broadcasts; we build/archive the card here.
   useEffect(() => {
     if (!config?.onboardingComplete) return;
@@ -1361,20 +1361,6 @@ export function useHive(config: HarnessConfig | null): void {
       if (e?.id) useStore.getState().archiveAgent(e.id);
     });
     return () => { offSpawn?.(); offArchive?.(); };
-  }, [config?.onboardingComplete]);
-
-  // 5c) v0.3.4 voice bridge: main stages queue insertions (clear_context) and
-  //     pushes them here, so delivery rides EVERY existing gate — idle-only,
-  //     boot grace, draft/picker safety, auto-delivery pause. Main owns the
-  //     confirm policy; this is just the enqueue.
-  useEffect(() => {
-    if (!config?.onboardingComplete) return;
-    return window.cth.onRealtimeEnqueue?.((evt) => {
-      if (!evt?.agentId || typeof evt.text !== 'string' || !evt.text.trim()) return;
-      const { agents, enqueueMessage } = useStore.getState();
-      if (!agents.some((a) => a.id === evt.agentId)) return;
-      enqueueMessage(evt.agentId, evt.text.trim());
-    });
   }, [config?.onboardingComplete]);
 
   // 6) Context upkeep has no clock-driven path here any more: compaction is

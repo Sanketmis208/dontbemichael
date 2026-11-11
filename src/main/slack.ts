@@ -383,7 +383,7 @@ export function postSlackReply(opts: {
     // CLAUSE-1 guard (fix-slack-integration): refuse any send that lacks an
     // EXPLICIT channel + thread target. A blank/whitespace thread_ts would post
     // to the channel root — an implicit destination the caller never named — so
-    // every app/voice-initiated send must pass the thread it was explicitly given.
+    // every app-initiated send must pass the thread it was explicitly given.
     // The Slack-origin done-reply poller and the loopback /reply endpoint always
     // pass concrete values, so this never fires for them (no behaviour change).
     if (!opts.channel?.trim() || !opts.thread_ts?.trim()) {

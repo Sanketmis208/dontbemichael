@@ -746,7 +746,7 @@ export function autoModeFlagForProvider(provider: AgentProvider): string {
  *  flag into the command STRING before a GUI hire ever reaches the shared spawn
  *  core (buildSpawnCommand → tokenizeCommand), so `args` for a GUI spawn already
  *  contains it by the time it gets here — this is a no-op for that path. A
- *  main-only spawn (an ephemeral worker, a voice hire) never passes through that
+ *  main-only spawn (an ephemeral worker) never passes through that
  *  renderer step, so without this it got neither the flag nor any equivalent,
  *  leaving it in an ask-first posture no one could ever answer. */
 export function argsWithAutoModeFlag(args: string[], autoMode: boolean, provider: AgentProvider): string[] {

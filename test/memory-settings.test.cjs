@@ -38,14 +38,12 @@ test('Company knowledge and search by meaning have no switches: the document too
   assert.match(main, /\(\) => \(\{ enabled: true, model: readConfig\(\)\.embeddingModel \?\? 'minilm' \}\)/);
   assert.match(main, /knowledgeGraph: knowledge\.hasDocuments\(\),/);
   assert.match(read('src/main/knowledge.ts'), /if \(!this\.hasDocuments\(\)\) return \{ active: false \};/);
-  assert.doesNotMatch(read('src/main/realtimeActions.ts'), /semanticMemory/, 'voice cannot turn it off either');
 });
 
 test('Michael\'s Memory tab searches the team\'s notes by exact words only', () => {
   const panel = read('src/renderer/src/components/CommandCenterPanel.tsx');
   assert.doesNotMatch(panel, /searchMemory|memoryNotes\.byMeaning|role="radiogroup" aria-label=\{t\('memoryNotes\.searchTitle'\)\}/);
   assert.match(panel, /window\.cth\.textSearch\(q\)/);
-  assert.doesNotMatch(read('src/renderer/src/realtime/tools.ts'), /window\.cth\.searchMemory/, 'the voice tool reads notes by exact words too');
 });
 
 test('a new search language rebuilds the index, and running members get the command for it', () => {

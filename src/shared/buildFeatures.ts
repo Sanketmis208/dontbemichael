@@ -60,17 +60,6 @@ export const SHOW_OPEN_TERMINAL = false;
  *  release them. */
 export const SHOW_DELIVERY_SWITCH = false;
 
-/** Hiring by voice: voice Michael's spawn_agent tool, the hiring lines in his
- *  instructions, and the main process accepting a spawn request from him. Off
- *  for now (owner, 2026-09-24); the rest of voice Michael is unchanged. */
-export const ALLOW_VOICE_HIRE = false;
-
-/** Voice, entirely: talking to Michael (the Talk toggle on his card) and
- *  dictation (the mic in the message box and hold Option in a
- *  terminal), plus the Voice tab in Settings. Main also refuses to start a
- *  voice session or transcribe audio while this is off (owner, 2026-09-24). */
-export const SHOW_VOICE = false;
-
 /** Office Theme in Settings → General: the switch that turns on TV show
  *  office maps and the map picker. Hidden (owner, 2026-09-26). While it is
  *  hidden the floor always shows the office, so a theme picked earlier cannot

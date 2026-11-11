@@ -214,10 +214,6 @@ src/
                              undone (rules in shared/safeClear.ts)
     terminalAtFolder.ts      opens a terminal window at a folder, per platform; off in this build (SHOW_OPEN_TERMINAL)
     worktreeDeps.ts          links the base checkout's dependencies into an isolated worktree
-    realtime.ts / realtimeActions.ts / realtimeCompletionWatcher.ts / realtimeFloorWatcher.ts
-                             Realtime Michael, voice over OpenAI: the token mint, the voice action spine, and the
-                             completion and floor watchers. Off in this build (SHOW_VOICE)
-    freeflow.ts              Free Flow dictation through Groq Whisper (off in this build, SHOW_VOICE)
   shared/                    code both processes use
     buildFeatures.ts         switches for surfaces hidden in this build (git, IDE, temp workers, org trigger, Skills)
     agentProvider.ts         engine presets; BUILD_ENGINES is what setup offers (Claude Code today)

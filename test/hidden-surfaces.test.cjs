@@ -127,39 +127,27 @@ test('the delivery switch is hidden, and a saved pause cannot strand messages', 
 });
 
 /**
- * Hiring by voice is off (owner, 2026-09-24): voice Michael is not given the
- * spawn_agent tool, his instructions say he can't hire, and main refuses a
- * spawn request that arrives anyway.
+ * Voice is gone (owner, 2026-09-24 hid it; removed 2026-11-11): no Talk
+ * toggle, no dictation mic or hold Option, no Voice tab, no voice IPC, and the
+ * window never grants the microphone.
  */
-test('voice Michael cannot hire', () => {
-  assert.equal(loadTs('src/shared/buildFeatures.ts').ALLOW_VOICE_HIRE, false);
-  const actions = read('src/renderer/src/realtime/actions.ts');
-  const at = actions.indexOf("name: 'spawn_agent'");
-  assert.ok(at > 0 && actions.slice(at - 120, at).includes('...(ALLOW_VOICE_HIRE ? ['), 'tool offered only when allowed');
-  const session = read('src/renderer/src/realtime/session.ts');
-  assert.match(session, /\$\{ALLOW_VOICE_HIRE \? 'hire a new agent, ' : ''\}/);
-  assert.match(session, /You cannot hire new team members by voice in this version/);
-  assert.match(read('src/main/realtimeActions.ts'), /if \(verb === 'spawn'\) \{[\s\S]{0,200}if \(!ALLOW_VOICE_HIRE\) \{\s*return \{ ok: false, spoken:/);
-});
-
-/**
- * Voice is off entirely (owner, 2026-09-24): no Talk toggle, no dictation mic
- * or hold Option, no Voice tab, and main refuses to start a voice session or
- * transcribe audio.
- */
-test('voice is off everywhere', () => {
-  assert.equal(loadTs('src/shared/buildFeatures.ts').SHOW_VOICE, false);
-  for (const f of fs.readdirSync(path.resolve(__dirname, '../src/renderer/src/components')).filter((n) => n.endsWith('.tsx'))) {
-    const src = read(`src/renderer/src/components/${f}`);
-    assert.doesNotMatch(src.replace(/\{SHOW_VOICE && <RealtimeMichaelToggle \/>\}/g, ''), /<RealtimeMichaelToggle \/>/, `${f}: no ungated toggle`);
-  }
-  assert.match(read('src/renderer/src/store/store.ts'), /setFreeflowEnabled: \(on\) => set\(\{ freeflowEnabled: SHOW_VOICE && on \}\)/);
+test('voice is gone everywhere', () => {
+  const features = loadTs('src/shared/buildFeatures.ts');
+  assert.equal(features.SHOW_VOICE, undefined);
+  assert.equal(features.ALLOW_VOICE_HIRE, undefined);
+  for (const f of [
+    'src/renderer/src/components/RealtimeMichaelToggle.tsx', 'src/renderer/src/realtime', 'src/renderer/src/freeflow',
+    'src/main/realtime.ts', 'src/main/realtimeActions.ts', 'src/main/freeflow.ts'
+  ]) assert.ok(!fs.existsSync(path.resolve(__dirname, '..', f)), `${f} is gone`);
   const settings = read('src/renderer/src/components/SettingsModal.tsx');
-  assert.match(settings, /const VISIBLE_SECTIONS: Section\[\] = NAV_SECTIONS\.filter\(\(s\) => \(s !== 'Voice' \|\| SHOW_VOICE\) && \(s !== 'Skills' \|\| SHOW_SKILLS\)\);/);
+  assert.match(settings, /const VISIBLE_SECTIONS: Section\[\] = NAV_SECTIONS\.filter\(\(s\) => s !== 'Skills' \|\| SHOW_SKILLS\);/);
   assert.match(settings, /\{VISIBLE_SECTIONS\.map\(\(section\) => \{/);
-  assert.match(settings, /activeSection === 'Voice' && SHOW_VOICE && \(/);
-  assert.match(read('src/main/realtime.ts'), /if \(!SHOW_VOICE\) return \{ ok: false, error: 'Voice is off in this version\.', code: 'disabled' \};/);
-  assert.match(read('src/main/index.ts'), /ipcMain\.handle\('freeflow:transcribe'[\s\S]{0,200}if \(!SHOW_VOICE\) return \{ ok: false/);
+  assert.doesNotMatch(settings, /'Voice'/);
+  const main = read('src/main/index.ts');
+  assert.doesNotMatch(main, /ipcMain\.handle\('(realtime|freeflow):/);
+  assert.match(main, /ses\.setPermissionRequestHandler\(\(_wc, permission, callback\) => \{\s*callback\(permission !== 'media'\);/);
+  assert.match(main, /ses\.setPermissionCheckHandler\(\(_wc, permission\) => permission !== 'media'\);/);
+  assert.doesNotMatch(read('src/preload/index.ts'), /realtime|freeflow/i);
 });
 
 test('this build hides Skills in Settings, and agents keep their skills', () => {
@@ -342,8 +330,7 @@ test('the update line only promises automatic checks when they run (owner, 2026-
   assert.match(upd, /const CHECK_INTERVAL_MS = 6 \* 60 \* 60 \* 1000;/, 'the 6 hours the line names');
   assert.match(upd, /const tick = \(\): void => \{ void runCheck\(\); \};/, 'always check (owner, 2026-10-02)');
   assert.doesNotMatch(upd, /autoUpdateEnabled|readConfig\(\)\.autoUpdate/);
-  assert.doesNotMatch(read('src/main/realtimeActions.ts'), /^\s*autoUpdate: \{/m, 'voice cannot set a setting that does nothing');
-  assert.match(read('src/main/index.ts'), /return \{ version: app\.getVersion\(\), changelog: top, packaged: app\.isPackaged \};/);
+  assert.match(read('src/main/index.ts'), /ipcMain\.handle\('app:info', \(\) => \(\{ version: app\.getVersion\(\), packaged: app\.isPackaged \}\)\);/);
   const ui = read('src/renderer/src/components/UpdatesSection.tsx');
   assert.match(ui, /if \(packaged === false\) return \{ headline: t\('updatesSection\.onVersion', \{ v \}\), detail: t\('updatesSection\.devDetail'\), button: null \};/);
   assert.match(ui, /detail: t\('updatesSection\.idleDetail'\),/);

@@ -15,8 +15,7 @@ test('the fallback name for Michael is translated', () => {
     'src/renderer/src/components/CommandCenterPanel.tsx',
     'src/renderer/src/components/SettingsModal.tsx',
     'src/renderer/src/components/WorkersTab.tsx',
-    'src/renderer/src/components/triggers/TriggerHistoryTab.tsx',
-    'src/renderer/src/realtime/DevicePicker.tsx'
+    'src/renderer/src/components/triggers/TriggerHistoryTab.tsx'
   ]) {
     const src = read(f);
     assert.doesNotMatch(src, /'the orchestrator'/, f);

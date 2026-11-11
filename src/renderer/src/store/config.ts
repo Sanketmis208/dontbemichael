@@ -163,16 +163,9 @@ export interface HarnessConfig {
   slackBotToken?: string;
   slackChannelId?: string;
   slackPort?: number;
-  /** Opt-in app/voice-initiated proactive Slack posting (default OFF). Mirrors
+  /** Opt-in app-initiated proactive Slack posting (default OFF). Mirrors
    *  src/main/config.ts; the Slack-origin done-reply round-trip is never gated. */
   slackProactivePosting?: boolean;
-  /** Free Flow voice dictation (mirrors src/main/config.ts). */
-  freeflowEnabled?: boolean;
-  groqApiKey?: string;
-  freeflowModel?: string;
-  /** Realtime voice idle auto-disconnect (ms); default 180000 (3 min), 0 = never.
-   *  Tuned in Settings → Realtime Michael; the cost cap stays the runaway guard. */
-  realtimeIdleDisconnectMs?: number;
   costCapUsd?: number;
   /** Hard total-token ceiling across active agents (the user-facing budget). */
   costCapTokens?: number;

@@ -18,7 +18,7 @@ const en = JSON.parse(read('src/renderer/src/i18n/locales/en.json'));
 test('one Settings section, after Connections, with Research first', () => {
   // Value: protects=the switch and what it may be sent read as one decision; fails_when=the section moves or splits; why_new=design review D3; seam=source
   const modal = read('src/renderer/src/components/SettingsModal.tsx');
-  assert.match(modal, /'Connections', 'Research & privacy', 'Voice'/);
+  assert.match(modal, /'Connections', 'Research & privacy', 'Memory & Knowledge'/);
   assert.equal(en.settings.nav.research, 'Research & privacy');
   assert.ok(ui.indexOf("t('research.title')") < ui.indexOf("t('research.sendTitle'"));
   assert.match(modal, /classes=\{pending\.dataClasses \?\? config\.dataClasses\}/, 'classes are staged for the footer Save');

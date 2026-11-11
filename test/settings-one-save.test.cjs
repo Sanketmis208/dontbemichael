@@ -202,20 +202,13 @@ test('finishing a save keeps a newer profile edit dirty and ready to save', asyn
   assert.equal(app.state.closed, 0);
 });
 
-// --- the two deliberate exceptions ------------------------------------------
+// --- the deliberate exception -----------------------------------------------
 
 test('API keys still save immediately: there is no staged value to hold', () => {
   // The broker is write-only — nothing can read a key back to diff it — so a
   // key cannot participate in a staged form.
   const engines = read('src/renderer/src/components/AiEnginesSettings.tsx');
   assert.match(engines, /saveKey\(/, 'the per-provider key save was removed');
-  assert.match(MODAL, /saveOpenAiVoiceKey/, 'the voice key save was folded into saveAll');
-});
-
-test('Free Flow still saves immediately: it arms a global hotkey', () => {
-  // Staging it would leave main's hotkey and the checkbox disagreeing until
-  // someone pressed Save.
-  assert.match(MODAL, /window\.cth\.freeflowSetConfig\(/, 'freeflow no longer persists on its own');
 });
 
 // --- A2: Connections tidying -------------------------------------------------

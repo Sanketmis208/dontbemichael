@@ -505,38 +505,12 @@ export interface HarnessConfig {
   slackChannelId?: string;
   /** Local HTTP port the webhook server binds to (default 3847). */
   slackPort?: number;
-  /** Opt-in: allow APP/VOICE-INITIATED proactive posting into Slack (e.g. the
+  /** Opt-in: allow APP-INITIATED proactive posting into Slack (e.g. the
    *  renderer's "queued" acknowledgement). DEFAULT OFF per the human directive
    *  "stop posting into Slack by default". This does NOT gate the Slack-ORIGIN
    *  done-reply round-trip (a user @-mention → task → result posted back to that
    *  thread) or an agent's own direct in-thread reply — those always stay on. */
   slackProactivePosting?: boolean;
-
-  // ─── Free Flow (voice dictation → message queue) ───────────────────────────
-  /** Master toggle for Free Flow push-to-talk dictation. Default OFF: with it off
-   *  the composer shows no mic button, no getUserMedia runs, and no Groq call is
-   *  ever made (zero behavior change). */
-  freeflowEnabled?: boolean;
-  /** User-pasted Groq API key (the user supplies their own free key). Used ONLY in
-   *  the main process for the Groq STT call; NEVER logged, and never crosses IPC
-   *  for the request. Treated like `slackBotToken`. */
-  groqApiKey?: string;
-  /** Groq Whisper model id. Default 'whisper-large-v3-turbo' (fast, multilingual). */
-  freeflowModel?: string;
-
-  // ─── Realtime Michael (premium speech-to-speech voice orchestrator) ─────────
-  /** True ONLY while a Realtime Michael voice session is live: the renderer
-   *  session flips this on at start() (before getUserMedia) and off at stop().
-   *  The main-process mic permission gate reads it so the Electron media
-   *  permission is open EXACTLY while the voice loop holds the mic — never just
-   *  because an OpenAI key exists (that key is shared with the CLI engines).
-   *  Default off; absence ⇒ mic denied, mirroring `freeflowEnabled`. */
-  realtimeVoiceEnabled?: boolean;
-  /** How long (ms) a realtime voice session may sit with no voice activity before
-   *  it auto-disconnects (the rt-9 idle guard). Default 180000 (3 min). 0 = never
-   *  auto-disconnect on idle — the spend cap remains the runaway guard. The user
-   *  tunes this in Settings → Realtime Michael. */
-  realtimeIdleDisconnectMs?: number;
 
   // ─── Generic inbound webhook + status API (LEGACY, single-endpoint) ─────────
   // Superseded by `webhookTriggers`, which allows many endpoints over one server
@@ -607,11 +581,6 @@ const DEFAULTS: HarnessConfig = {
   slackChannelId: undefined,
   slackPort: undefined,
   slackProactivePosting: false,
-  freeflowEnabled: true,
-  groqApiKey: undefined,
-  freeflowModel: 'whisper-large-v3-turbo',
-  realtimeVoiceEnabled: false,
-  realtimeIdleDisconnectMs: 180_000,
   webhookEnabled: false,
   webhookSecret: undefined,
   webhookPort: undefined,
@@ -767,7 +736,7 @@ function normalizeStoredHomes(cfg: HarnessConfig): HarnessConfig {
 
 /** Announces every saved setting, so a screen showing one can update.
  *
- *  Settings, Slack, voice and notifications each save by their own route, and
+ *  Settings, Slack and notifications each save by their own route, and
  *  all of them end up writing the file below — so one subscription here covers
  *  every setting rather than the ones anybody remembered to wire up. */
 type ConfigWriteListener = (next: HarnessConfig) => void;

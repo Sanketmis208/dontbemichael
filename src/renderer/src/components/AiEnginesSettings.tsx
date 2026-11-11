@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import type { HarnessConfig, AgentProvider } from '@/store/config';
 import { PixelButton } from './PixelButton';
 import { ProviderLogo } from './ProviderLogo';
-import { useStore } from '@/store/store';
 import { fieldLabel, groupName, hint, panelStyle } from './fieldText';
 
 /**
@@ -53,11 +52,6 @@ const group: CSSProperties = { ...panelStyle, gap: 10 };
 
 export function AiEnginesSettings({ config }: { config: HarnessConfig }) {
   const { t } = useTranslation();
-  // Keep the global "OpenAI key present" signal (boolean only) live so the Talk
-  // button's missing-key warning clears the instant the user saves their OpenAI key
-  // here — without it the gate only refreshes on next app start. apikey:openai is
-  // the same key the Realtime mint reads; saving/clearing it flips the gate.
-  const setHasOpenAiKey = useStore((s) => s.setHasOpenAiKey);
   // Which backends already have a key stored (boolean only — never the value).
   const [hasKey, setHasKey] = useState<Record<string, boolean>>({});
   const [draftKey, setDraftKey] = useState<Record<string, string>>({});
@@ -92,8 +86,6 @@ export function AiEnginesSettings({ config }: { config: HarnessConfig }) {
         setHasKey((s) => ({ ...s, [backend]: true }));
         setDraftKey((s) => ({ ...s, [backend]: '' }));
         setNote((s) => ({ ...s, [backend]: t('aiEngines.saved') }));
-        // OpenAI key gates Talk — mirror presence to the store so the warning clears now.
-        if (backend === 'openai') setHasOpenAiKey(true);
       } else setNote((s) => ({ ...s, [backend]: r.error ?? t('aiEngines.failed') }));
     } catch (e) { setNote((s) => ({ ...s, [backend]: e instanceof Error ? e.message : String(e) })); }
   };
@@ -104,8 +96,6 @@ export function AiEnginesSettings({ config }: { config: HarnessConfig }) {
       if (!r.ok) { setNote((s) => ({ ...s, [backend]: r.error ?? t('aiEngines.failed') })); return; }
       setHasKey((s) => ({ ...s, [backend]: false }));
       setNote((s) => ({ ...s, [backend]: t('aiEngines.cleared') }));
-      // OpenAI key gates Talk — clearing it disables Talk; reflect that immediately.
-      if (backend === 'openai') setHasOpenAiKey(false);
     } catch (e) { setNote((s) => ({ ...s, [backend]: e instanceof Error ? e.message : String(e) })); }
   };
 

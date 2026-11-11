@@ -98,7 +98,7 @@ const UI_CODE = [
     'manifestFields', 'imageTypes', 'triggers', 'agentDefinition', 'officePack', 'officeRoles',
     'teamPlan', 'businessProfile'].map((f) => `src/shared/${f}.ts`),
   ...['docText', 'docTextCli', 'agentFolders', 'skills', 'git', 'webhook', 'control', 'breaker', 'hooks',
-    'cliInstall', 'realtime', 'harnessGuard', 'packs'].map((f) => `src/main/${f}.ts`)
+    'cliInstall', 'harnessGuard', 'packs'].map((f) => `src/main/${f}.ts`)
 ];
 
 function codeFiles(entry) {

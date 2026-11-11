@@ -75,8 +75,3 @@ test('history parses each file once and still sees new and moved mail', async (t
   const ids = hive.messageHistory('pam').map((m) => m.id).sort();
   assert.deepEqual(ids, ['a', 'b'], 'new mail and mail moved to .done both show');
 });
-
-test('voice schedule edits go through the single writer and report a failed save', () => {
-  const main = require('node:fs').readFileSync(require('node:path').resolve(__dirname, '../src/main/index.ts'), 'utf8');
-  assert.match(main, /saveMissions: \(missions\) => \{[\s\S]{0,200}const res = applyMissions\(\(\) => missions\);\s*if \(!res\.ok\) throw new Error\(res\.error\);/);
-});

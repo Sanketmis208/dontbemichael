@@ -92,7 +92,6 @@ test('only the owner closing an agent pauses its schedules; a crash, quit or boo
     const kill = src.slice(src.indexOf('const onKill = async () => {'));
     assert.ok(kill.indexOf('closeAgentByOwner(agent.id)') < kill.indexOf('killPty(agent.ptyId)'), `${f} pauses before the terminal closes`);
   }
-  assert.match(main, /if \(archived\) closeAgentByOwner\(id\);/, 'voice archive is the owner closing it');
 });
 
 test('the renderer can only change one schedule at a time', () => {
@@ -163,9 +162,4 @@ test('a save that landed is reported as saved even if re-arming the timers fails
   const main = read('src/main/index.ts');
   const fn = main.slice(main.indexOf('function applyMissions('), main.indexOf('const isMission ='));
   assert.match(fn, /writeConfig\(\{ missions: next \}\);\s*\n(?:\s*\/\/.*\n)*\s*try \{ syncMissions\(\); \} catch/);
-});
-
-test('voice unarchive clears closed-by-owner', () => {
-  const main = read('src/main/index.ts');
-  assert.match(main, /if \(archived\) closeAgentByOwner\(id\);\s*\n(?:\s*\/\/.*\n)*\s*else hive\.setClosedByOwner\(id, false\);/);
 });

@@ -89,7 +89,7 @@ export function patchTaskInLedger(
 /**
  * The ledger as the owner sees it: without the cards still in triage. A team
  * member files a card as "triage" and Michael checks it before it reaches the
- * owner's board, Ask me, the floor or voice (card-lifecycle.md section 10).
+ * owner's board, Ask me or the floor (card-lifecycle.md section 10).
  */
 export function ownerLedger(raw: unknown): unknown {
   if (!raw || typeof raw !== 'object' || !Array.isArray((raw as { tasks?: unknown }).tasks)) return raw;

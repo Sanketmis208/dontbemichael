@@ -22,7 +22,7 @@ import {
 import { SkillsTab } from './SkillsTab';
 import { clearLocalState, restoreLocalState, snapshotLocalState } from '@/store/localState';
 import { plainReasonKey } from '@/store/plainReason';
-import { ALLOW_TEMP_WORKERS, SHOW_ORG_TRIGGER, SHOW_VOICE, SHOW_SLACK, SHOW_MAILBOXES, SHOW_MCP_DEFAULTS, SHOW_SIMPLE_MODE_SWITCH, SHOW_SKILLS, SHOW_ARABIC_TERMINAL_SWITCH, SHOW_LANGUAGE_PICKER } from '@shared/buildFeatures';
+import { ALLOW_TEMP_WORKERS, SHOW_ORG_TRIGGER, SHOW_SLACK, SHOW_MAILBOXES, SHOW_MCP_DEFAULTS, SHOW_SIMPLE_MODE_SWITCH, SHOW_SKILLS, SHOW_ARABIC_TERMINAL_SWITCH, SHOW_LANGUAGE_PICKER } from '@shared/buildFeatures';
 import { WebhookSchemaEditor } from './triggers/WebhookSchemaEditor';
 import { InfoTip } from './InfoTip';
 import { KnowledgeDocList } from './KnowledgeDocList';
@@ -36,16 +36,12 @@ import { Icon } from './Icon';
 import { McpDefaultsSettings } from './McpDefaultsSettings';
 import { IntegrationsRegistry } from './IntegrationsRegistry';
 import { AiEnginesSettings } from './AiEnginesSettings';
-import { REALTIME_MODEL } from '@shared/realtimePricing';
-import { RealtimeDevicePicker } from '@/realtime/DevicePicker';
-import { CostHud } from '@/realtime/CostHud';
 import {
   isArabicTerminalEnabled,
   isArabicTerminalFollowingLanguage,
   setArabicTerminalEnabled
 } from '@/terminal/arabicSetting';
 import { notifyArabicTerminalChangeAll } from '@/components/terminalPool';
-import { isComposingKey } from '@shared/imeGuard';
 import { LANGUAGES, setLanguage } from '@/i18n';
 
 export interface SettingsModalProps {
@@ -174,7 +170,7 @@ import { showByokSettings } from '@shared/agentProvider';
 
 // v0.3.4 redesign: six tabs, one topic each. 'AI Engines' folded into
 // Agents (once Agents & Models, now also autonomy and budgets); MCP + Slack + webhook + REST live together in Connections;
-// voice gets its own tab; Danger Zone became a red row at the bottom of General.
+// Danger Zone became a red row at the bottom of General.
 /* Every Settings section is a group on the shared soft panel with its name at
    the top (app-style-rollout.md AS2, AS3); the panels' gap replaces the old
    hairlines and small caps heads. */
@@ -182,10 +178,10 @@ const group: CSSProperties = { ...panelStyle, gap: 10 };
 
 // Agents & Models and Autonomy & Budgets are one Agents tab (owner, 2026-10-01):
 // the model agents run on, how much they do alone and the limits that stop them.
-export type Section = 'General' | 'Company profile' | 'Prerequisites' | 'Agents' | 'Skills' | 'Connections' | 'Research & privacy' | 'Voice' | 'Memory & Knowledge';
-const NAV_SECTIONS: Section[] = ['General', 'Company profile', 'Prerequisites', 'Agents', 'Skills', 'Connections', 'Research & privacy', 'Voice', 'Memory & Knowledge'];
-/** The tabs shown: Voice and Skills are hidden in this build (SHOW_VOICE, SHOW_SKILLS). */
-const VISIBLE_SECTIONS: Section[] = NAV_SECTIONS.filter((s) => (s !== 'Voice' || SHOW_VOICE) && (s !== 'Skills' || SHOW_SKILLS));
+export type Section = 'General' | 'Company profile' | 'Prerequisites' | 'Agents' | 'Skills' | 'Connections' | 'Research & privacy' | 'Memory & Knowledge';
+const NAV_SECTIONS: Section[] = ['General', 'Company profile', 'Prerequisites', 'Agents', 'Skills', 'Connections', 'Research & privacy', 'Memory & Knowledge'];
+/** The tabs shown: Skills is hidden in this build (SHOW_SKILLS). */
+const VISIBLE_SECTIONS: Section[] = NAV_SECTIONS.filter((s) => s !== 'Skills' || SHOW_SKILLS);
 /** i18n key for each nav section's label — the Section values themselves stay
  *  as stable identifiers (tab state, deep links). */
 const NAV_SECTION_KEYS: Record<Section, string> = {
@@ -196,7 +192,6 @@ const NAV_SECTION_KEYS: Record<Section, string> = {
   'Skills': 'settings.nav.skills',
   'Connections': 'settings.nav.connections',
   'Research & privacy': 'settings.nav.research',
-  'Voice': 'settings.nav.voice',
   'Memory & Knowledge': 'settings.nav.memoryKnowledge'
 };
 
@@ -494,7 +489,7 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
   const [slackBotToken, setSlackBotToken] = useState(config.slackBotToken ?? '');
   const [slackChannel, setSlackChannel] = useState(config.slackChannelId ?? '');
   const [slackPort, setSlackPort] = useState(String(config.slackPort ?? 3847));
-  // App/voice-initiated proactive posting (the "queued" ack). Default OFF —
+  // App-initiated proactive posting (the "queued" ack). Default OFF —
   // the Slack-origin done-reply round-trip is unaffected by this toggle.
   const [slackProactivePosting, setSlackProactivePosting] = useState(config.slackProactivePosting ?? false);
   const [tunnelUrl, setTunnelUrl] = useState('');
@@ -581,45 +576,6 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
     setAutoCompactPending(next);
   };
 
-  // --- Free Flow (voice dictation → message queue) ---
-  const setFreeflowEnabledStore = useStore((s) => s.setFreeflowEnabled);
-  const setHasGroqKeyStore = useStore((s) => s.setHasGroqKey);
-  // Talk (Realtime Michael) is gated on the OpenAI key — read the live presence
-  // boolean so the Realtime Michael section can show its enabled/disabled status.
-  const hasOpenAiKey = useStore((s) => s.hasOpenAiKey);
-  // Voice-tab entry for the SAME broker slot the Agents tab writes (apikey:openai).
-  // Mirroring presence into the store on save is what makes the Talk button light up
-  // immediately instead of on next launch.
-  const setHasOpenAiKey = useStore((s) => s.setHasOpenAiKey);
-  const [openAiVoiceKey, setOpenAiVoiceKey] = useState('');
-  const [openAiVoiceNote, setOpenAiVoiceNote] = useState('');
-  const saveOpenAiVoiceKey = async (): Promise<void> => {
-    const key = openAiVoiceKey.trim();
-    if (!key) return;
-    try {
-      const r = await window.cth.providerKeySet({ backend: 'openai', key });
-      if (r.ok) {
-        setOpenAiVoiceKey('');
-        setHasOpenAiKey(true);
-        setOpenAiVoiceNote(t('settings.voice.keySavedNote'));
-      } else setOpenAiVoiceNote(r.error ?? t('settings.voice.couldNotSave'));
-    } catch (e) {
-      setOpenAiVoiceNote(e instanceof Error ? e.message : String(e));
-    }
-  };
-  // v0.3.4 fix: the config default is ON ('now on by default', 0.2.7) — seeding
-  // with `?? false` displayed OFF while the feature was actually running.
-  const [freeflowEnabled, setFreeflowEnabled] = useState(config.freeflowEnabled !== false);
-  const [groqKey, setGroqKey] = useState(config.groqApiKey ?? '');
-  const [freeflowModel, setFreeflowModel] = useState(config.freeflowModel ?? 'whisper-large-v3-turbo');
-  const [showGroqKey, setShowGroqKey] = useState(false);
-  const [freeflowBusy, setFreeflowBusy] = useState(false);
-  const [freeflowNote, setFreeflowNote] = useState('');
-  // rt-9 idle-tunable: realtime voice idle auto-disconnect window (ms); 0 = never.
-  const [idleDisconnectMs, setIdleDisconnectMs] = useState<number>(
-    (config as HarnessConfig).realtimeIdleDisconnectMs ?? 180_000
-  );
-
   // Re-seed every editable field from the on-disk config when the modal opens.
   // App's `config` prop is loaded once and never refreshed after a save, so
   // without this the saved budget / velocity / slack values show blank on reopen.
@@ -637,10 +593,6 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
       setSlackChannel(cc.slackChannelId ?? '');
       setSlackPort(String(cc.slackPort ?? 3847));
       setSlackProactivePosting(cc.slackProactivePosting ?? false);
-      setFreeflowEnabled(cc.freeflowEnabled !== false);
-      setGroqKey(cc.groqApiKey ?? '');
-      setFreeflowModel(cc.freeflowModel ?? 'whisper-large-v3-turbo');
-      setIdleDisconnectMs((c as HarnessConfig).realtimeIdleDisconnectMs ?? 180_000);
     }).catch(() => { /* keep prop-seeded values */ });
     window.cth.kgStatus().then((s) => { if (alive) setKgDocCount(s.docCount); })
       .catch(() => { /* status unavailable */ });
@@ -830,36 +782,6 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
     } catch (e) {
       setOrgNote(e instanceof Error ? e.message : String(e));
     } finally { setOrgBusy(false); }
-  };
-
-  // --- Free Flow handlers ---
-  /** Persist Free Flow settings; main re-arms the global hotkey. Also mirror the
-   *  flag into the store so the composer mic button appears/disappears live. */
-  const saveFreeflow = async (enabledOverride?: boolean) => {
-    const enabled = enabledOverride ?? freeflowEnabled;
-    setFreeflowBusy(true); setFreeflowNote('');
-    try {
-      await window.cth.freeflowSetConfig({
-        enabled,
-        apiKey: groqKey,
-        model: freeflowModel.trim() || 'whisper-large-v3-turbo'
-      });
-      setFreeflowEnabledStore(enabled);
-      // Mirror boolean key-presence so the voice button enables/disables live
-      // without an app restart (presence only — never the key value).
-      setHasGroqKeyStore(!!groqKey.trim());
-      setFreeflowNote('saved');
-    } catch (e) {
-      setFreeflowNote(e instanceof Error ? e.message : String(e));
-    } finally { setFreeflowBusy(false); }
-  };
-
-  /** Toggle on/off and persist immediately so the change takes effect (and the
-   *  global hotkey arms/disarms) without a separate Save click. */
-  const toggleFreeflow = () => {
-    const next = !freeflowEnabled;
-    setFreeflowEnabled(next);
-    void saveFreeflow(next);
   };
 
   const reset = async () => {
@@ -1861,7 +1783,7 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
                                 </label>
                               </div>
 
-                              {/* App/voice-INITIATED proactive posting — OFF by
+                              {/* App-INITIATED proactive posting — OFF by
                                   default ("stop posting into Slack by default").
                                   Gates ONLY the renderer's "queued" ack; the
                                   Slack-ORIGIN done-reply round-trip is never gated. */}
@@ -2213,179 +2135,6 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
                       </div>
                       </>)}
 
-                    </>
-                  )}
-
-                  {/* VOICE — Free Flow dictation + Realtime Michael (v0.3.4: its own tab) */}
-                  {activeSection === 'Voice' && SHOW_VOICE && (
-                    <>
-                      {/* Free Flow (voice dictation) */}
-                      <div style={group}>
-                        <h3 style={groupName}>
-                          {t('settings.voice.freeFlow')}
-                        </h3>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            <span style={fieldLabel}>
-                              {t('settings.voice.freeFlowTitle')}
-                            </span>
-                            <span style={hint}>
-                              {t('settings.voice.freeFlowDesc')}
-                            </span>
-                          </div>
-                          <PixelButton
-                            variant={freeflowEnabled ? 'primary' : 'secondary'}
-                            size="sm"
-                            onClick={toggleFreeflow}
-                            disabled={freeflowBusy}
-                          >
-                            {freeflowEnabled ? t('common.on') : t('common.off')}
-                          </PixelButton>
-                        </div>
-
-                        {freeflowEnabled && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                            {/* Groq API key — stored in main config, used only there. */}
-                            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                              <span style={slackLabelStyle}>{t('settings.voice.groqKey')}</span>
-                              <div style={{ display: 'flex', gap: 6 }}>
-                                <input
-                                  type={showGroqKey ? 'text' : 'password'}
-                                  value={groqKey}
-                                  onChange={(e) => setGroqKey(e.target.value)}
-                                  placeholder={t('settings.voice.groqPlaceholder')}
-                                  className="cth-input" style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-mono)' }}
-                                />
-                                <PixelButton variant="secondary" size="sm" onClick={() => setShowGroqKey((v) => !v)} disabled={!groqKey}>
-                                  {showGroqKey ? t('common.hide') : t('common.show')}
-                                </PixelButton>
-                              </div>
-                            </label>
-
-                            {/* Model picker */}
-                            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, width: 280 }}>
-                              <span style={slackLabelStyle}>{t('settings.voice.model')}</span>
-                              <select
-                                value={freeflowModel}
-                                onChange={(e) => setFreeflowModel(e.target.value)}
-                                className="cth-input" style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-mono)' }}
-                              >
-                                <option value="whisper-large-v3-turbo">{t('settings.voice.fast')}</option>
-                                <option value="whisper-large-v3">{t('settings.voice.accurate')}</option>
-                              </select>
-                            </label>
-
-                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                              <PixelButton variant="ghost" size="sm" onClick={() => saveFreeflow()} disabled={freeflowBusy}>
-                                {t('common.save')}
-                              </PixelButton>
-                              {freeflowNote && (
-                                <span style={{ fontSize: 12, color: 'var(--cth-ink-500)' }}>{freeflowNote}</span>
-                              )}
-                            </div>
-
-                            <span style={hint}>
-                              {t('settings.voice.freeFlowHint')}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-
-                      {/* Realtime Michael — voice device selection (rt-8) */}
-                      <div style={group}>
-                        <h3 style={groupName}>
-                          {t('settings.voice.realtime')}
-                        </h3>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                          <span style={fieldLabel}>
-                            {t('settings.voice.voiceChat', { godName })}
-                          </span>
-                          <span style={hint}>
-                            {t('settings.voice.voiceChatDesc', { godName })}
-                          </span>
-                        </div>
-
-                        {/* OpenAI Realtime key — settable HERE, not just described here.
-                            This is where someone looking for voice actually lands (the Talk
-                            button deep-links to it), so sending them to another tab to type
-                            the key was a dead end dressed up as documentation. Same broker
-                            slot as the Agents tab (apikey:openai) — one key, two doorways,
-                            and saving in either flips the same gate. The value never leaves
-                            main; only the presence boolean comes back. */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                          <span style={fieldLabel}>
-                            {t('settings.voice.openaiKey')}
-                          </span>
-                          <span style={{ fontSize: 12, lineHeight: '17px', color: 'var(--cth-ink-700)' }}>
-                            {t('settings.voice.openaiKeyDesc1', { godName, model: REALTIME_MODEL })}
-                          </span>
-                          <span style={{ fontSize: 12, lineHeight: '17px', color: 'var(--cth-ink-700)' }}>
-                            {t('settings.voice.openaiKeyDesc2')}
-                          </span>
-                          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                            <input
-                              type="password"
-                              value={openAiVoiceKey}
-                              onChange={(e) => setOpenAiVoiceKey(e.target.value)}
-                              onKeyDown={(e) => { if (isComposingKey(e)) return; if (e.key === 'Enter') void saveOpenAiVoiceKey(); }}
-                              placeholder={hasOpenAiKey ? t('settings.voice.keyPlaceholderSaved') : 'sk-…'}
-                              className="cth-input" style={{ ...slackInputStyle, flex: 1, fontFamily: 'var(--cth-font-mono)' }}
-                            />
-                            <PixelButton
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => void saveOpenAiVoiceKey()}
-                              disabled={!openAiVoiceKey.trim()}
-                            >
-                              {t('settings.voice.save')}
-                            </PixelButton>
-                          </div>
-                          <span style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 6,
-                            fontSize: 12, lineHeight: '16px',
-                            color: hasOpenAiKey ? 'var(--cth-ink-900)' : 'var(--cth-ink-500)'
-                          }}>
-                            <span aria-hidden style={{
-                              borderRadius: 'var(--cth-r-md)',
-                              width: 8, height: 8, flexShrink: 0,
-                              background: hasOpenAiKey ? 'var(--cth-mint)' : 'var(--cth-ink-300)',
-                              boxShadow: 'inset 0 0 0 1px var(--cth-line-2)'
-                            }} />
-                            {openAiVoiceNote || (hasOpenAiKey
-                              ? t('settings.voice.keySaved', { godName })
-                              : t('settings.voice.noKey', { godName }))}
-                          </span>
-                        </div>
-
-                        <RealtimeDevicePicker />
-                        <CostHud />
-                        {/* rt-9 idle-tunable: how long an idle voice session stays open before
-                            it auto-closes. The spend cap remains the real runaway guard. */}
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, width: 280 }}>
-                          <span style={slackLabelStyle}>{t('settings.voice.idleDisconnect')}</span>
-                          <select
-                            value={String(idleDisconnectMs)}
-                            onChange={(e) => {
-                              const v = Number(e.target.value);
-                              setIdleDisconnectMs(v);
-                              stage({ realtimeIdleDisconnectMs: v } as Partial<HarnessConfig>);
-                            }}
-                            className="cth-input" style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-mono)' }}
-                          >
-                            <option value="30000">{t('settings.voice.30s')}</option>
-                            <option value="60000">{t('settings.voice.1m')}</option>
-                            <option value="120000">{t('settings.voice.2m')}</option>
-                            <option value="180000">{t('settings.voice.3m')}</option>
-                            <option value="300000">{t('settings.voice.5m')}</option>
-                            <option value="600000">{t('settings.voice.10m')}</option>
-                            <option value="0">{t('settings.voice.never')}</option>
-                          </select>
-                          <span style={hint}>
-                            {t('settings.voice.idleDisconnectDesc')}
-                          </span>
-                        </label>
-                      </div>
                     </>
                   )}
 
