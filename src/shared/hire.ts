@@ -75,10 +75,9 @@ export interface HireManifest {
   /** Bundled skill ids to activate in the agent's workspace. References into
    *  BUNDLED_SKILL_IDS only — never raw file paths or arbitrary skill names. */
   skills?: string[];
-  /** Default MCP catalog ids to enable for this agent. References into the
-   *  MCP_CATALOG allowlist only — never raw specs. Safe-readonly ids are
-   *  pre-filled; write/secret ids are surfaced for human consent at import
-   *  and never auto-enabled. */
+  /** MCP catalog ids the hire names. References into the MCP_CATALOG
+   *  allowlist only, never raw specs. Add Agent lists them; the app starts
+   *  none of them. */
   mcpServers?: string[];
 }
 
@@ -87,8 +86,7 @@ export interface HireValidation {
   manifest?: HireManifest;
   errors: string[];
   /** MCP catalog ids present in the manifest's `mcpServers` that are NOT
-   *  safe-readonly (write or secret tier). These must be surfaced to the human
-   *  for explicit consent before they are enabled — they are NEVER auto-enabled. */
+   *  safe-readonly (write or secret tier). Nothing starts them. */
   consentRequired?: string[];
 }
 

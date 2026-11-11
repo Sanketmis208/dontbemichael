@@ -13,7 +13,7 @@ import { OFFICE_CAST, CAST_BY_NAME, CAST_GROUPS, DEFAULT_CHARACTER, HIREABLE_CAS
 import { type AccentColorName } from '@/design/tokens';
 import type { HireManifest } from '@shared/hire';
 import { hireQueueProgress } from '@shared/hireQueue';
-import { MCP_CATALOG } from '@shared/mcpCatalog';
+import { mcpCatalogEntry } from '@shared/mcpCatalog';
 import {
   type AgentProvider,
   type HarnessConfig,
@@ -830,22 +830,16 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
                 {hireMeta.skills.filter((s) => !RESEARCH_ONLY_SKILLS.includes(s)).map((s) => <code key={s} style={codeChip('mint')}>{s}</code>)}
               </span>
             )}
-            {hireMeta.mcpServers && hireMeta.mcpServers.length > 0 && (() => {
-              const safe = hireMeta.mcpServers!.filter((mid) => MCP_CATALOG.find((e) => e.id === mid)?.tier === 'safe-readonly');
-              const consent = hireMeta.mcpServers!.filter((mid) => MCP_CATALOG.find((e) => e.id === mid)?.tier !== 'safe-readonly');
-              return (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 2 }}>
-                  {safe.length > 0 && <span style={chipRow}><span style={{ fontSize: 12 }}>{tr('addAgent.mcpSafe')}:</span>{safe.map((mid) => <code key={mid} style={codeChip('sky')}>{mid}</code>)}</span>}
-                  {consent.length > 0 && (
-                    <span style={chipRow}>
-                      <span style={{ fontSize: 12 }}>{tr('addAgent.mcpConsent')}:</span>
-                      {consent.map((mid) => <code key={mid} style={codeChip('paprika')}>{mid}</code>)}
-                      <span style={{ fontSize: 11.5, color: 'var(--cth-ink-2)' }}>{tr('addAgent.mcpEnableInSettings')}</span>
-                    </span>
-                  )}
-                </div>
-              );
-            })()}
+            {hireMeta.mcpServers && hireMeta.mcpServers.length > 0 && (
+              // Named by the hire, never started: the app runs no MCP servers.
+              // A write or secret one keeps its warning colour.
+              <span style={chipRow}>
+                <span style={{ fontSize: 12 }}>{tr('addAgent.mcpNotStarted')}</span>
+                {hireMeta.mcpServers.map((mid) => (
+                  <code key={mid} style={codeChip(mcpCatalogEntry(mid)?.tier === 'safe-readonly' ? 'sky' : 'paprika')}>{mid}</code>
+                ))}
+              </span>
+            )}
           </div>
         )}
 
