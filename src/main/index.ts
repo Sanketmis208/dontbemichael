@@ -220,6 +220,7 @@ import { copyImage, copyRich } from './clipboardCopy';
 import { createReporter } from './reportProblem';
 import { createMailboxNotes, newlyHeld, GRANT_NOTES_FILE, type PendingGrant } from './mailboxNotes';
 import { PromptSubmits, confirmSubmit } from '../shared/submitConfirm';
+import { createBootWatchdog, type BootWatchdog } from './bootWatchdog';
 import { dismissNotice, emptyDegraded, noteStart, shownNotices, type DegradedNotice } from '../shared/degradedNotices';
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
@@ -3844,6 +3845,11 @@ app.on('open-url', (evt, url) => {
   void handleHireLink(url);
 });
 
+/** Each window's boot watchdog, by its webContents id (bootWatchdog.ts). */
+const bootWatchdogs = new Map<number, BootWatchdog>();
+// The page's first script ran: its window stops waiting (bootWatchdog.ts).
+ipcMain.on('app:rendererStarted', (evt) => { bootWatchdogs.get(evt.sender.id)?.started(); });
+
 // IPC: the renderer signals readiness and PULLS anything queued (deep links
 // that arrived before the window/subscription existed, incl. cold starts).
 ipcMain.handle('hire:drainPending', () => {
@@ -4032,13 +4038,28 @@ function createWindow(): BrowserWindow {
     if (details.isMainFrame) rendererReadyForHires = false;
   });
 
-  if (isDev && process.env.ELECTRON_RENDERER_URL) {
-    win.loadURL(process.env.ELECTRON_RENDERER_URL);
-  } else {
-    win.loadFile(join(__dirname, '../renderer/index.html'));
-  }
+  const loadApp = (): void => {
+    if (isDev && process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL).catch(() => { /* did-fail-load reports it */ });
+    else void win.loadFile(join(__dirname, '../renderer/index.html')).catch(() => { /* did-fail-load reports it */ });
+  };
+  // A page whose code never starts is loaded again (bootWatchdog.ts): after a
+  // wake from hibernation the office once sat on its splash for good.
+  const boot = createBootWatchdog({
+    setTimer: (fn, ms) => setTimeout(fn, ms),
+    clearTimer: (t) => clearTimeout(t as ReturnType<typeof setTimeout>),
+    reload: () => { if (!win.isDestroyed()) loadApp(); },
+    log: (line) => console.warn(line)
+  });
+  bootWatchdogs.set(wc.id, boot);
+  wc.on('did-start-navigation', (details) => { if (details.isMainFrame && !details.isSameDocument) boot.navigationStarted(); });
+  wc.on('did-fail-load', (_e, code, _desc, _url, isMainFrame) => { if (isMainFrame) boot.loadFailed(code); });
+  wc.on('render-process-gone', (_e, details) => { if (!allowQuit && details.reason !== 'clean-exit') boot.rendererGone(details.reason); });
+  const wcId = wc.id;
+  loadApp();
 
   win.on('closed', () => {
+    boot.dispose();
+    bootWatchdogs.delete(wcId);
     allWindows.delete(win);
     if (mainWindow === win) {
       mainWindow = null;
