@@ -8,6 +8,7 @@ import { PixelButton } from './PixelButton';
 import { useStore } from '@/store/store';
 import type { DegradedNotice } from '@shared/degradedNotices';
 import { AgentAvatar } from './AgentAvatar';
+import { AllClearTipCard, AnswersSent } from './AllClearTipCard';
 import { type HiveTask, type HumanQA } from './TasksKanban';
 import { compareByNewestAsk } from './askMeOrder';
 import { answerMessages, askAsText, isAnswered, isReport, isWithdrawn, labeledAnswer, openAskIndexes, openReportIndexes, partAnswerText, raiserOf, readAskShape, type AskShape } from '@shared/askMeRouting';
@@ -284,6 +285,8 @@ export function AskMeTab() {
   };
   // The whole board, whatever is picked: All clear and the answered list read it.
   const boardEmpty = !engineCard && !updateShown && !caseShown && !silentShown && !cliShown && waiting.length === 0 && scheduleRequests.length === 0 && offers.length === 0 && proposals.length === 0;
+  // All clear shows, and with it Michael's one tip (owner, 2026-11-10).
+  const showAllClear = boardEmpty && !onBreak && !researchNotice && !knowledgeNotice && degraded.length === 0;
 
   /** The answer a row would send: the owner's words, labeled with the option
    *  or the questions it answers (ask-me-options.md, 5A). */
@@ -415,20 +418,11 @@ export function AskMeTab() {
           <div style={{ marginTop: 4, fontSize: 13, lineHeight: '19px', color: 'var(--cth-ink-3)' }}>{translate(`shell.allClearLine${line}`, { godName })}</div>
         </div>
       )}
-      {boardEmpty && answeredHere.map((x) => {
-        const xDept = deptOf(x.whoId);
-        const xFam = famOf(xDept);
-        return (
-        <section key={x.id} aria-label={xDept ? `${askTitle(x.title)}, ${deptName(xDept)}` : askTitle(x.title)} style={card}>
-          <div style={{ fontSize: 13, fontWeight: 600, lineHeight: '18px', letterSpacing: '-0.01em', color: 'var(--cth-ink)' }}>{askTitle(x.title)}</div>
-          {x.who && <div style={{ marginTop: 6 }}><span style={chipLook(xFam)} title={xDept ? translate('askMe.personDept', { name: x.who, dept: deptName(xDept) }) : undefined}><AgentAvatar id={x.whoId} name={x.who} size={16} />{x.who}{xDept && <span className="cth-sr-only">, {deptName(xDept)}</span>}</span></div>}
-          <div style={{ marginTop: 8, fontSize: 11, fontWeight: 600, color: 'var(--cth-ink-3)' }}>{translate('askMe.yourAnswer')}</div>
-          <div dir={rtl ? 'auto' : undefined} style={{ marginTop: 2, fontSize: 12.5, lineHeight: '18px', color: 'var(--cth-ink-2)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{x.a}</div>
-          {/* The files that went with it, by name: the paths are for the team. */}
-          {!!x.files?.length && <div style={{ ...fileRow, marginTop: 6 }}>{x.files.map((n) => <span key={n} style={fileChip}>{n}</span>)}</div>}
-        </section>
-        );
-      })}
+      {/* What was just answered: one quiet line, not a card each (owner,
+          2026-11-10: a stack of answered cards under All clear read as work
+          still waiting). Then one tip from Michael from this office. */}
+      {boardEmpty && <AnswersSent answers={answeredHere} godName={godName} />}
+      {showAllClear && <AllClearTipCard godName={godName} />}
       {waiting.map((row) => {
         const { task: t, ask: open } = row;
         const foundationId = foundationAsk(open);

@@ -97,6 +97,15 @@ https://claude.ai/artifact/HbTomdPsAGtzCemotorLi6
   `ink-3`), then the answered card. Same voice as Michael's idle notification
   (`NOTIFY_IDLE_LINES`), added as renderer i18n keys in every locale; no dashes.
   This is where DESIGN.md 7.24's "one line of Office humor" now lives.
+- **D4 and D8 revised (owner, 2026-11-10).** The answered cards became one quiet
+  line, "N answers sent to Michael", with Show listing each title and the choice
+  (a stack of answered cards under All clear read as work still waiting). Under
+  it, one tip from Michael drawn from this office (`src/shared/allClearTip.ts`):
+  first the Pulse saving one click can apply that saves the most a week, else a
+  connector the owner switched on that no member may use (it opens Settings,
+  Connections; who gets access stays the owner's choice). Not now hides a tip
+  for a week. No tip worth offering, no card. The tip goes with the column and
+  is never counted in Needs you.
 - **D9, resize motion.** Opening or closing the column animates the column
   width and the stage `bleed` together, ease-out, 240 ms, so the office eases to
   its new size. Under `prefers-reduced-motion` both snap. Check the stage holds

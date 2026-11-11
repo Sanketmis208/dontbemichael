@@ -155,6 +155,10 @@
     "openTask": "查看完整背景",
     "justNow": "刚刚",
     "yourAnswer": "你的回答",
+    "answerSent": "已将 1 条回答发给 {{godName}}。",
+    "answersSent": "已将 {{count}} 条回答发给 {{godName}}。",
+    "showAnswers": "显示",
+    "hideAnswers": "隐藏",
     "workStyleReplaces": "使用后将替换 {{name}} 的工作方式和职位说明，并添加其定时任务。",
     "workStyleKeep": "保留我的",
     "workStyleWhy": {
@@ -3196,6 +3200,16 @@
       "savedSoFar": "已保存目前的清单。",
       "sentToMichaelWhole": "已发给 {{godName}}，由其保存为完整清单。"
     }
+  },
+  "allClearTip": {
+    "save": "节省",
+    "idea": "建议",
+    "saveTitle": "每周约可节省 {{usd}}",
+    "every": "每 {{to}}",
+    "useModel": "改用 {{model}}",
+    "connectorTitle": "{{name}} 已开启，但没有人使用",
+    "connectorBody": "团队里还没有人有权限。可在成员的访问标签中授予权限，或将其关闭。",
+    "openConnections": "打开连接"
   },
   "degradedNotice": {
     "title": "{{name}} 启动时缺了一些东西"

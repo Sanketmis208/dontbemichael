@@ -155,6 +155,10 @@
     "openTask": "عرض السياق الكامل",
     "justNow": "الآن",
     "yourAnswer": "إجابتك",
+    "answerSent": "أُرسلت إجابة واحدة إلى {{godName}}.",
+    "answersSent": "أُرسلت {{count}} إجابات إلى {{godName}}.",
+    "showAnswers": "عرض",
+    "hideAnswers": "إخفاء",
     "workStyleReplaces": "استخدامه يستبدل أسلوب عمل {{name}} وسطر دوره، ويضيف مهامه المجدولة.",
     "workStyleKeep": "احتفظ بما لدي",
     "workStyleWhy": {
@@ -3196,6 +3200,16 @@
       "savedSoFar": "تم حفظ القائمة حتى الآن.",
       "sentToMichaelWhole": "أرسلت إلى {{godName}} ليحفظها كقائمة كاملة."
     }
+  },
+  "allClearTip": {
+    "save": "توفير",
+    "idea": "فكرة",
+    "saveTitle": "وفّر نحو {{usd}} في الأسبوع",
+    "every": "كل {{to}}",
+    "useModel": "استخدم {{model}}",
+    "connectorTitle": "{{name}} مفعّل، لكن لا أحد يستخدمه",
+    "connectorBody": "لا أحد في الفريق لديه صلاحية بعد. امنح عضوًا الصلاحية من تبويب الوصول الخاص به، أو أوقفه.",
+    "openConnections": "فتح الاتصالات"
   },
   "degradedNotice": {
     "title": "بدأ {{name}} وينقصه شيء"

@@ -155,6 +155,10 @@
     "openTask": "See full context",
     "justNow": "just now",
     "yourAnswer": "Your answer",
+    "answerSent": "1 answer sent to {{godName}}.",
+    "answersSent": "{{count}} answers sent to {{godName}}.",
+    "showAnswers": "Show",
+    "hideAnswers": "Hide",
     "workStyleReplaces": "Using it replaces {{name}}'s Work style and role line, and adds its scheduled jobs.",
     "workStyleKeep": "Keep mine",
     "workStyleWhy": {
@@ -3196,6 +3200,16 @@
       "savedSoFar": "Saved the list so far.",
       "sentToMichaelWhole": "Sent to {{godName}} to save as the whole list."
     }
+  },
+  "allClearTip": {
+    "save": "Save",
+    "idea": "Idea",
+    "saveTitle": "Save about {{usd}} a week",
+    "every": "Every {{to}}",
+    "useModel": "Use {{model}}",
+    "connectorTitle": "{{name}} is on, but nobody uses it",
+    "connectorBody": "No one on the team has access yet. Give a member access in their Access tab, or switch it off.",
+    "openConnections": "Open Connections"
   },
   "degradedNotice": {
     "title": "{{name}} started with something missing"
