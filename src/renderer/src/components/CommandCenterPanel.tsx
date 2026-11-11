@@ -13,7 +13,6 @@ import { MarkdownPreview } from '@/markdown/MarkdownPreview';
 import { memoryView } from '@shared/memoryIndex';
 import { SHOW_OPEN_TERMINAL, SHOW_DELIVERY_SWITCH } from '@shared/buildFeatures';
 import { TriggersTab } from './triggers/TriggersTab';
-import { TriggerHistoryTab } from './triggers/TriggerHistoryTab';
 import { TriggerCard } from './triggers/ui';
 import { acquireTerminal, disposeTerminal, resetTerminal } from './terminalPool';
 import { terminalInstanceKey } from './terminalRecovery';
@@ -22,7 +21,7 @@ import { Icon } from './Icon';
 import { useFleetTelemetry } from '@/hooks/useTelemetry';
 import { COMMAND_GROUPS } from '@shared/claudeCommands';
 import { roleForHiveSpawn } from '@shared/agentRole';
-import { useStore, triggerHistoryVisible, type Agent } from '@/store/store';
+import { useStore, type Agent } from '@/store/store';
 import { releaseBindingsOf } from '@/shell/releaseBindings';
 import { usePtyParser } from '@/hooks/usePtyParser';
 import {
@@ -57,7 +56,7 @@ import { fieldLabel, groupName, hint } from './fieldText';
 // with that card expanded (see the ccTabRequest effect).
 // TASKS and GRAPH are not tabs: they are the floor's TASKS and GRAPH views
 // (App.tsx), and a request for either switches the floor to it.
-type CCTab = 'profile' | 'capabilities' | 'terminal' | 'triggers' | 'trigger-history'
+type CCTab = 'profile' | 'capabilities' | 'terminal' | 'triggers'
   | 'memory' | 'advanced';
 
 /** Fallback denominator for the per-agent token meter when no floor token budget
@@ -75,7 +74,7 @@ interface GHIssue {
   assignees: string[];
 }
 
-/** Canonical tab order. Not every entry is always shown — see `visibleTabs`.
+/** Canonical tab order.
  *  PROFILE is first on every agent (owner, 2026-09-25), then ASK ME. The panel
  *  still OPENS on ASK ME (`defaultTab`): it is what the team needs from the
  *  owner, and a business owner opening Michael should land there. */
@@ -88,7 +87,6 @@ const TABS: { key: CCTab; labelKey: string; icon: Parameters<typeof Icon>[0]['na
   // Everyone's jobs on a clock, read only. Michael's own are on his
   // Capabilities tab like everyone's (owner, 2026-09-26).
   { key: 'triggers', labelKey: 'commandCenter.tabs.officeSchedule', icon: 'clock' },
-  { key: 'trigger-history', labelKey: 'commandCenter.tabs.history', icon: 'ledger' },
   { key: 'memory', labelKey: 'commandCenter.tabs.memory', icon: 'sparkle' },
   // Last on purpose: the floor's inner workings, which an owner rarely needs.
   { key: 'advanced', labelKey: 'commandCenter.tabs.advanced', icon: 'mcp' }
@@ -101,18 +99,6 @@ export function CommandCenterPanel({ agent }: { agent: Agent }) {
   // terminal is the least friendly thing a business owner can meet first.
   const defaultTab: CCTab = 'profile';
   const [tab, setTab] = useState<CCTab>(defaultTab);
-  // The trigger-history ledger has nothing to say until an outside party can
-  // reach us, so its tab appears only once an org key or a webhook exists. This
-  // is the first config-gated tab in the panel: TABS stays the canonical order
-  // and the gate is applied at render, so nothing else has to know about it.
-  // The rule itself lives in the store (`triggerHistoryVisible`) beside the two
-  // mirrors it reads — a second copy here would drift from Settings.
-  const showHistory = useStore(triggerHistoryVisible);
-  // Never leave the panel parked on a tab that has just been hidden.
-  useEffect(() => {
-    if (!showHistory && tab === 'trigger-history') setTab(defaultTab);
-  }, [showHistory, tab, defaultTab]);
-  const visibleTabs = TABS.filter((t) => t.key !== 'trigger-history' || showHistory);
 
   // External tab requests (the boss-room calendar → 'triggers'; a 'tasks'
   // request switches the floor to its TASKS view). seq-keyed so clicking again re-opens the tab even
@@ -131,9 +117,6 @@ export function CommandCenterPanel({ agent }: { agent: Agent }) {
     }
     const key = ccTabRequest.tab as CCTab;
     if (!TABS.some((t) => t.key === key)) return;
-    // Read the gate live rather than depending on it — as a dependency it would
-    // re-fire a stale request the moment the tab appeared.
-    if (key === 'trigger-history' && !triggerHistoryVisible(useStore.getState())) return;
     setTab(key);
   }, [ccTabRequest]);
   // A task-detail "assign" pre-fills the Floor dispatch box and jumps to it.
@@ -195,10 +178,10 @@ export function CommandCenterPanel({ agent }: { agent: Agent }) {
         </>}
       />
 
-      {/* Tabs (DESIGN.md 7.11): Profile, Access, Work, Office schedule, History
-          (only once a webhook exists), Memory, Advanced. */}
+      {/* Tabs (DESIGN.md 7.11): Profile, Access, Work, Office schedule, Memory,
+          Advanced. */}
       <SilentPanelLine agentId={agent.id} name={agent.name} />
-      <PanelTabs tabs={visibleTabs.map((tabDef) => ({ key: tabDef.key, label: t(tabDef.labelKey) }))} current={tab} onChange={setTab} />
+      <PanelTabs tabs={TABS.map((tabDef) => ({ key: tabDef.key, label: t(tabDef.labelKey) }))} current={tab} onChange={setTab} />
 
       {/* Body (data-panel-body: see AgentDetailPanel). */}
       <div data-panel-body data-tab={tab} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
@@ -229,7 +212,6 @@ export function CommandCenterPanel({ agent }: { agent: Agent }) {
         {tab === 'profile' && <ProfileTab agent={agent} />}
         {tab === 'capabilities' && <CapabilitiesTab agent={agent} />}
         {tab === 'triggers' && <TriggersTab />}
-        {tab === 'trigger-history' && <TriggerHistoryTab />}
         {tab === 'memory' && (
           <MemoryTab godId={agent.id} who={selectedMemoryAgent ?? undefined} onWho={setSelectedMemoryAgent} />
         )}

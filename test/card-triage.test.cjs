@@ -141,8 +141,8 @@ test('the Done guard covers cards that end after the first tick, and the app\'s 
   assert.deepEqual(subjects.filter((s) => s.startsWith('DONE CARD PUT BACK')).sort(), ['DONE CARD PUT BACK: card a', 'DONE CARD PUT BACK: card b']);
 });
 
-test('the owner cannot close a card still in triage, and the owner search and webhook never show triage', async (t) => {
-  // Value: protects=a triage card stays Michael's until he releases it, on every owner path; fails_when=close lacks the triage guard, search reads raw tasks.json, or the webhook returns "triage"; why_new=review 2026-10-12 found those three paths; seam=none
+test('the owner cannot close a card still in triage, and the owner search never shows triage', async (t) => {
+  // Value: protects=a triage card stays Michael's until he releases it, on every owner path; fails_when=close lacks the triage guard or search reads raw tasks.json; why_new=review 2026-10-12 found those paths; seam=none
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'md-triage-close-'));
   t.after(() => fs.rmSync(home, { recursive: true, force: true }));
   const hive = new HiveManager(() => home);
@@ -152,7 +152,6 @@ test('the owner cannot close a card still in triage, and the owner search and we
   assert.equal(hive.tasks().tasks[0].status, 'triage');
   const main = read('src/main/index.ts');
   assert.match(main, /const text = source === 'tasks\.json' \? JSON\.stringify\(ownerLedger\(hive\.tasks\(\)\), null, 2\) : readFileSync\(path, 'utf8'\);/);
-  assert.match(main, /return \{ status: t\.status === 'triage' \? 'todo' : t\.status, title: t\.title, result: t\.result \};/);
 });
 
 

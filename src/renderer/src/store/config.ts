@@ -16,8 +16,7 @@ import {
   type AgentProviderPreset
 } from '@shared/agentProvider';
 import type {
-  ContextTriggerConfig,
-  WebhookTrigger
+  ContextTriggerConfig
 } from '@shared/triggers';
 import { isNewer } from '@shared/updateState';
 import modelCatalog from '@shared/modelCatalog.json';
@@ -172,22 +171,10 @@ export interface HarnessConfig {
   providerBaseUrls?: Partial<Record<AgentProvider, string>>;
   /** Per-CLI-provider default model slug, used to pre-fill the model picker. */
   providerDefaultModels?: Partial<Record<AgentProvider, string>>;
-  /** Legacy single-webhook fields (mirrors src/main/config.ts, where they are
-   *  deprecated in favour of `webhookTriggers` but still read until the server is
-   *  rewired). Declared here so the surfaces that show them can stop widening this
-   *  type locally.
-   *  @deprecated Use `webhookTriggers`. */
-  webhookEnabled?: boolean;
-  /** @deprecated Use `webhookTriggers[].secret`. */
-  webhookSecret?: string;
-  /** @deprecated The port belongs to the shared server, not to any one trigger. */
-  webhookPort?: number;
   /** Auto-compaction / auto-clearing of agent terminal context. Main deep-fills
    *  both halves on read, so the renderer can treat the sub-keys as present
    *  (mirrors src/main/config.ts). */
   contextTrigger?: ContextTriggerConfig;
-  /** Inbound HTTP endpoints, one per caller — replaces the legacy trio above. */
-  webhookTriggers?: WebhookTrigger[];
   /** One-time guard for the main-process triggers migration; read-only here. */
   triggersMigratedV1?: boolean;
 }

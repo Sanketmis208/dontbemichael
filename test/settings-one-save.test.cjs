@@ -226,7 +226,3 @@ test('every Settings section is a named group on the soft panel, with no small c
     assert.match(src, /groupName/, `${f} names its group`);
   }
 });
-
-test('webhooks stay in Connections', () => {
-  assert.ok(MODAL.includes('settings.connections.webhooks'), 'webhooks vanished from the Connections tab');
-});

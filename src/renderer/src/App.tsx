@@ -112,14 +112,6 @@ export function App() {
     window.cth.getConfig().then(c => {
       if (cancelled) return;
       setConfig(c);
-      // Mirror the webhooks so Settings → Connections and the Command Center's
-      // Triggers tab read one list, not two copies that drift — whichever surface
-      // saves calls the same setter and the other repaints. No extra IPC: main
-      // fills the field on every config read (withTriggerDefaults).
-      // `c` is typed as the PRELOAD's HarnessConfig; the renderer mirror type
-      // declares the field.
-      const withTriggers = c as HarnessConfig;
-      useStore.getState().setWebhookTriggers(withTriggers.webhookTriggers ?? []);
     });
     return () => { cancelled = true; };
   }, []);

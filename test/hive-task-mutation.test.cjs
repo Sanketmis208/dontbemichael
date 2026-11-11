@@ -108,21 +108,6 @@ test('renderer task actions never send a whole stale ledger back to main', () =>
   assert.doesNotMatch(preload, /'hive:addTask'/, 'the renderer has no raw card append');
 });
 
-test('webhook dispatch appends via atomic addTask, not a stale whole-ledger rewrite', () => {
-  const root = path.resolve(__dirname, '..');
-  const main = fs.readFileSync(path.join(root, 'src/main/index.ts'), 'utf8');
-  const fn = main.slice(main.indexOf('function dispatchWebhookWork'),
-    main.indexOf('function handleWebhookMessage'));
-  // The card must be appended through hive.addTask(card) — which reads the LATEST
-  // on-disk ledger and is idempotent by task id — never through a re-read of a
-  // snapshot the caller happened to hold, which would overwrite a concurrently
-  // added card (the 2026-08-15 regression this suite guards).
-  assert.match(fn, /hive\.addTask\s*\(card\)/,
-    'dispatchWebhookWork must add the card via the atomic addTask');
-  assert.doesNotMatch(fn, /writeTasks\s*\(\[\s*\.\.\.existing/,
-    'dispatchWebhookWork must not rebuild a stale whole-ledger snapshot');
-});
-
 test('the owner closing a card ends it as Done by their decision, keeps it, and tells Michael', async (t) => {
   // Value: protects=D2, a dropped card is Done marked as the owner's call and Michael hears of every owner change; fails_when=dismiss deletes the card, closedBy is missing, moving out of Done keeps the mark, or Michael is not told; why_new=dismiss used to delete (card-lifecycle.md T6); seam=none
   const hive = floor(t);

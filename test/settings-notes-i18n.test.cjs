@@ -20,10 +20,8 @@ test('Settings sets no note or error from English written in the code', () => {
 });
 
 test('the notes are in each language', () => {
-  const keys = ['noteSaved', 'noteSaveFailed', 'noteDeleted'];
   for (const locale of ['en']) {
     const s = JSON.parse(read(`src/renderer/src/i18n/locales/${locale}.json`)).settings;
-    for (const k of keys) assert.ok(s.connections[k], `${locale} settings.connections.${k}`);
     assert.ok(s.changeHome.couldNotChange, `${locale} settings.changeHome.couldNotChange`);
   }
 });

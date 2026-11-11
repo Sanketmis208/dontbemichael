@@ -191,7 +191,7 @@ test('app:resetAll erases the office data before it resets the config', () => {
   assert.match(body, /\n  stopForReset\('reset'\);\n/, 'every stop, before anything is erased');
   assert.ok(body.indexOf("stopForReset('reset')") < erase);
   const helper = src.slice(src.indexOf('function stopForReset('), src.indexOf("ipcMain.handle('app:resetAll'"));
-  assert.ok(helper.indexOf('hive.stopAllProxyBridges()') > 0 && helper.indexOf('stopWebhookServer()') > 0, 'proxy sidecars and the webhook server stop, as on quit');
+  assert.ok(helper.indexOf('hive.stopAllProxyBridges()') > 0, 'proxy sidecars stop, as on quit');
   for (const call of ['clearMissionTimers()', 'hive.stopRouter()', 'hookServer.stop()', 'memoryTidy.stop()', 'ptyManager.killAll()', 'integrationBroker.stop()', 'mailService.closeAll()']) {
     assert.ok(helper.includes(call), `the shared stops include ${call}`);
   }

@@ -32,28 +32,12 @@ test('a file link in a terminal shows the file in Finder and never opens it', ()
 
 /**
  * ORGANISATION is gone (owner, 2026-09-24 hid it; removed 2026-11-11): it was
- * configuration only and nothing read the key. WEBHOOKS moved out of Michael's
- * Triggers tab into Settings → Connections: one server and one tunnel serve the
- * whole office, and whatever arrives goes to Michael to route.
+ * configuration only and nothing read the key.
  */
 test('the organisation trigger is gone', () => {
   assert.equal(loadTs('src/shared/buildFeatures.ts').SHOW_ORG_TRIGGER, undefined);
   assert.ok(!fs.existsSync(path.resolve(__dirname, '../src/renderer/src/components/triggers/OrgSection.tsx')));
   assert.doesNotMatch(read('src/preload/index.ts'), /'org:/);
-  // Only a webhook brings the History tab.
-  assert.match(read('src/renderer/src/store/store.ts'), /export function triggerHistoryVisible\(s: State\): boolean \{\n  return s\.webhookTriggers\.length > 0;\n\}/);
-});
-
-test('webhooks live in Settings, with nothing lost from the Triggers card', () => {
-  const triggers = read('src/renderer/src/components/triggers/TriggersTab.tsx');
-  assert.doesNotMatch(triggers, /<WebhooksSection/);
-  const settings = read('src/renderer/src/components/SettingsModal.tsx');
-  // Settings already had name, on/off, URL, secret, mode and delete; the body
-  // format editor was the one piece only Triggers had.
-  assert.match(settings, /<WebhookSchemaEditor schema=\{w\.schema\} onSave=\{\(schema\) => \{ void patchWebhook\(w\.id, \{ schema \}\); \}\} \/>/);
-  for (const piece of ['patchWebhook(w.id, { enabled: !w.enabled })', 'rotateWebhookSecret(w.id)', 'patchWebhook(w.id, { mode:', 'addWebhook']) {
-    assert.ok(settings.includes(piece), `Settings still has: ${piece}`);
-  }
 });
 
 /**

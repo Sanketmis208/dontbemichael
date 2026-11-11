@@ -10,17 +10,9 @@ import { useBackdropClose } from '@/hooks/useBackdropClose';
 import { useTranslation } from 'react-i18next';
 import { agentModels, type HarnessConfig } from '@/store/config';
 import { useStore } from '@/store/store';
-import {
-  DEFAULT_TRIGGER_MODE,
-  DEFAULT_WEBHOOK_SCHEMA,
-  TRIGGER_MODES,
-  type TriggerMode,
-  type WebhookTrigger
-} from '@shared/triggers';
 import { clearLocalState, restoreLocalState, snapshotLocalState } from '@/store/localState';
 import { plainReasonKey } from '@/store/plainReason';
 import { SHOW_MAILBOXES, SHOW_SIMPLE_MODE_SWITCH } from '@shared/buildFeatures';
-import { WebhookSchemaEditor } from './triggers/WebhookSchemaEditor';
 import { InfoTip } from './InfoTip';
 import { KnowledgeDocList } from './KnowledgeDocList';
 import { PixelButton } from './PixelButton';
@@ -48,28 +40,6 @@ export interface SettingsModalProps {
 
 export interface SettingsPlace { section?: Section; group?: PlaceGroup; add?: boolean; seq: number }
 
-/**
- * The triggers IPC surface. `src/preload/index.ts` is owned by another lane and
- * these methods are landing there in parallel, so `CthApi` doesn't declare them
- * yet — read them off a narrow local view instead of widening the preload
- * contract from the renderer. Every call site wraps them in try/catch, which also
- * covers the window in which a method is still missing at runtime.
- */
-interface TriggersApi {
-  listWebhooks: () => Promise<WebhookTrigger[]>;
-  saveWebhooks: (list: WebhookTrigger[]) => Promise<{ ok: boolean; error?: string }>;
-  deleteWebhook: (id: string) => Promise<{ ok: boolean; error?: string }>;
-  generateWebhookSecret: () => Promise<{ ok: boolean; secret?: string }>;
-  webhooksStatus: () => Promise<{ running: boolean; url?: string }>;
-}
-const triggersApi = (): TriggersApi => window.cth as unknown as TriggersApi;
-
-/** Process-unique id for a new webhook — it is the path segment callers POST to,
- *  so it must be stable and collision-free across renames. */
-function newWebhookId(): string {
-  return `wh-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
 /** The v2 field (DESIGN.md 7.9). Its ring and indigo focus ring come from the
  *  `cth-input` class every caller sets. */
 const fieldInputStyle: CSSProperties = {
@@ -83,48 +53,13 @@ const fieldInputStyle: CSSProperties = {
   outline: 'none'
 };
 
-/** The request/response contract shown behind the webhook i icon. Every webhook
- *  shares one server and one tunnel and is told apart by its id in the path, so
- *  `<tunnel>` is the public base URL and `<webhookId>` picks the endpoint. The
- *  secret/token go in headers so they stay out of URLs and access logs. */
-const webhookApiDoc = (godName: string): string => `Webhook API
-
-Every webhook has its own URL, its own secret and its own mode. They share one
-server and one tunnel; the id in the path says which one you are calling.
-
-Trigger work (POST <tunnel>/<webhookId>):
-  header  x-md-webhook-secret: <that webhook's secret>
-  body    {"message": "do X for me", "title": "optional short title",
-           "kind": "directive" | "communication", "from": "who is calling"}
-  -> 200  {"ok": true, "token": "<capability token>", "taskId": "<card id>"}
-  -> 202  {"ok": true, "status": "awaiting approval"}
-
-Check status (GET <tunnel>/<webhookId>):
-  header  x-md-webhook-token: <token>     (or  ?token=<token>)
-  -> 200  {"ok": true, "status": "todo|doing|blocked|done",
-           "title": "...", "result": "<summary or null>"}
-
-The mode decides which of the two answers you get:
-  allow all           routes straight through -> 200
-  communication only  a short plain status question routes; anything else gets
-                      202 awaiting approval. "kind": "directive" holds a message;
-                      "communication" is checked like no kind at all.
-  strict              everything gets 202 awaiting approval
-
-A 202 means the message is parked in Trigger History until you approve it; the
-token you were handed still reads that task once it is routed. The secret
-authorizes new work, the token only reads one task's status. Keep both private.
-
-Each webhook checks bodies against its own JSON schema; edit it in that
-webhook's Format row, above.`;
-
 // snapshotLocalState / restoreLocalState / clearLocalState live in
 // store/localState.ts (re-exported here for existing importers).
 export { clearLocalState, restoreLocalState, snapshotLocalState } from '@/store/localState';
 import { showByokSettings } from '@shared/agentProvider';
 
 // v0.3.4 redesign: six tabs, one topic each. 'AI Engines' folded into
-// Agents (once Agents & Models, now also autonomy and budgets); connectors, mailboxes, webhooks and REST live together in Connections;
+// Agents (once Agents & Models, now also autonomy and budgets); connectors, mailboxes and REST live together in Connections;
 // Danger Zone became a red row at the bottom of General.
 /* Every Settings section is a group on the shared soft panel with its name at
    the top (app-style-rollout.md AS2, AS3); the panels' gap replaces the old
@@ -242,8 +177,6 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
    *     one back to diff it, so there is no staged value to hold.
    *   - Free Flow, which arms a global hotkey in main. Staging that would leave
    *     the hotkey and the checkbox disagreeing until you pressed Save.
-   * Webhooks keep their own controls too: those connect and
-   * disconnect live rather than storing a preference.
    */
   const [pending, setPending] = useState<Partial<HarnessConfig>>({});
   /** Auto-compact lives inside the missions array, so it is resolved at save
@@ -414,25 +347,6 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
     return String(n);
   };
 
-  // --- Webhook triggers (a LIST; src/shared/triggers.ts owns the type) ---------
-  // The list itself lives in the store, not in local state: the Triggers tab
-  // edits the same webhooks, and one of the two surfaces holding a private copy
-  // is exactly the drift this feature exists to prevent.
-  const webhookTriggers = useStore((s) => s.webhookTriggers);
-  const setWebhookTriggersStore = useStore((s) => s.setWebhookTriggers);
-  /** Public base URL of the shared tunnel; each webhook's endpoint is `<base>/<id>`. */
-  const [webhookUrl, setWebhookUrl] = useState('');
-  const [webhookRunning, setWebhookRunning] = useState(false);
-  const [webhookBusy, setWebhookBusy] = useState(false);
-  const [webhookNote, setWebhookNote] = useState('');
-  /** Which secrets the user has unmasked, by webhook id. Reset on every reopen. */
-  const [shownSecrets, setShownSecrets] = useState<Record<string, boolean>>({});
-  /** Which Copy button just copied (`<webhook id>:url` or `:secret`), for its check mark. */
-  const [copiedField, setCopiedField] = useState<string | null>(null);
-  /** Webhook awaiting a second delete click — deleting one revokes a live caller. */
-  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
-  const [showWebhookHelp, setShowWebhookHelp] = useState(false);
-
   // ─── Knowledge Graph (enterprise multimodal context for agents) ───────────
   const [kgDocCount, setKgDocCount] = useState(0);
   const [kgBusy, setKgBusy] = useState(false);
@@ -496,114 +410,8 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
     }).catch(() => { /* keep prop-seeded values */ });
     window.cth.kgStatus().then((s) => { if (alive) setKgDocCount(s.docCount); })
       .catch(() => { /* status unavailable */ });
-    // Triggers: re-read main and push the result into the shared mirror. App
-    // already seeded it at launch; this catches anything the Triggers tab (or
-    // another window) changed since, and is the ONLY place Settings reads them —
-    // every render below comes off the store.
-    void (async () => {
-      try {
-        const list = await triggersApi().listWebhooks();
-        if (alive && Array.isArray(list)) useStore.getState().setWebhookTriggers(list);
-      } catch { /* keep the mirror App seeded from getConfig() */ }
-      try {
-        const s = await triggersApi().webhooksStatus();
-        if (!alive) return;
-        setWebhookRunning(s.running);
-        if (s.url) setWebhookUrl(s.url);
-      } catch { /* status unavailable - assume not listening */ }
-    })();
     return () => { alive = false; };
   }, []);
-
-  // --- Webhook trigger handlers ---
-  /** The one write path. Updates the shared mirror FIRST so the Triggers tab
-   *  repaints immediately, then persists. Pass `persist: false` for keystroke
-   *  edits (a rename) — the blur commits them. */
-  const applyWebhooks = async (list: WebhookTrigger[], persist = true) => {
-    setWebhookTriggersStore(list);
-    if (!persist) return;
-    setWebhookBusy(true); setWebhookNote('');
-    try {
-      const res = await triggersApi().saveWebhooks(list);
-      if (res && res.ok === false) { setWebhookNote(res.error ?? t('settings.connections.noteSaveFailed')); return; }
-      setWebhookNote(t('settings.connections.noteSaved'));
-      setTimeout(() => setWebhookNote(''), 1500);
-    } catch (e) {
-      setWebhookNote(e instanceof Error ? e.message : String(e));
-    } finally { setWebhookBusy(false); }
-  };
-
-  /** Replace one entry by id (the shape every per-row control uses). */
-  const patchWebhook = (id: string, patch: Partial<WebhookTrigger>, persist = true) =>
-    applyWebhooks(webhookTriggers.map((w) => (w.id === id ? { ...w, ...patch } : w)), persist);
-
-  /** New endpoint: main mints the secret (256-bit), and it ships DISABLED —
-   *  turning on a public surface is always an explicit second click. */
-  const addWebhook = async () => {
-    setWebhookBusy(true); setWebhookNote('');
-    let secret = '';
-    try {
-      const res = await triggersApi().generateWebhookSecret();
-      secret = res.ok && res.secret ? res.secret : '';
-    } catch (e) {
-      setWebhookNote(e instanceof Error ? e.message : String(e));
-    } finally { setWebhookBusy(false); }
-    if (!secret) { setWebhookNote(t('settings.connections.secretFailed')); return; }
-    const entry: WebhookTrigger = {
-      id: newWebhookId(),
-      name: `Webhook ${webhookTriggers.length + 1}`,
-      secret,
-      enabled: false,
-      mode: DEFAULT_TRIGGER_MODE,
-      schema: DEFAULT_WEBHOOK_SCHEMA,
-      createdAt: Date.now()
-    };
-    setShownSecrets((s) => ({ ...s, [entry.id]: true })); // show it once, to copy
-    await applyWebhooks([...webhookTriggers, entry]);
-  };
-
-  /** Mint a fresh secret for ONE endpoint. The old one stops working at once —
-   *  that is the point, and it never disturbs the other webhooks. */
-  const rotateWebhookSecret = async (id: string) => {
-    setWebhookBusy(true); setWebhookNote('');
-    let secret = '';
-    try {
-      const res = await triggersApi().generateWebhookSecret();
-      secret = res.ok && res.secret ? res.secret : '';
-    } catch (e) {
-      setWebhookNote(e instanceof Error ? e.message : String(e));
-    } finally { setWebhookBusy(false); }
-    if (!secret) { setWebhookNote(t('settings.connections.secretFailed')); return; }
-    setShownSecrets((s) => ({ ...s, [id]: true }));
-    await patchWebhook(id, { secret });
-    setWebhookNote(t('settings.connections.newSecret'));
-  };
-
-  const removeWebhook = async (id: string) => {
-    setPendingDelete(null);
-    setWebhookBusy(true); setWebhookNote('');
-    try {
-      await triggersApi().deleteWebhook(id);
-      setWebhookNote(t('settings.connections.noteDeleted'));
-      setTimeout(() => setWebhookNote(''), 1500);
-    } catch (e) {
-      setWebhookNote(e instanceof Error ? e.message : String(e));
-    } finally { setWebhookBusy(false); }
-    // Mirror the removal either way: if main rejected it, the next open re-reads.
-    setWebhookTriggersStore(webhookTriggers.filter((w) => w.id !== id));
-  };
-
-  /** Endpoint URL for one webhook: every entry shares the tunnel, the id picks it. */
-  const webhookEndpoint = (id: string) => (webhookUrl ? `${webhookUrl.replace(/\/$/, '')}/${id}` : '');
-  /** Copy a webhook's URL or secret; its button shows a check mark for a moment
-   *  once the text is on the clipboard, as the setup screen's Copy does. */
-  const copyWebhookField = (field: string, text: string) => {
-    void window.cth.copyToClipboard(text).then((r) => {
-      if (!r.ok) return;
-      setCopiedField(field);
-      setTimeout(() => setCopiedField((f) => (f === field ? null : f)), 1200);
-    }).catch(() => undefined);
-  };
 
   const reset = async () => {
     setBusy(true);
@@ -1372,214 +1180,8 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
 
                       </>)}
 
-                      {/* Connected-services registry (generic, registry-driven);
-                          the hardcoded webhook block below stays as-is. */}
+                      {/* Connected-services registry (generic, registry-driven). */}
                       <IntegrationsRegistry />
-
-
-                      {/* Webhook triggers — a LIST of endpoints, one per caller.
-                          Everything renders off the store mirror, so a change made
-                          in the Triggers tab lands here without a refetch (and the
-                          other way round). */}
-                      <div style={group}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            {/* The group's name, with its help toggle (one name, not two). */}
-                            <h3 style={{ ...groupName, display: 'flex', alignItems: 'center', gap: 6 }}>
-                              {t('settings.connections.webhooks')}
-                              <button
-                                type="button"
-                                aria-label={t('settings.connections.showWebhookHelp')}
-                                aria-expanded={showWebhookHelp}
-                                onClick={() => setShowWebhookHelp((v) => !v)}
-                                style={{
-                                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                  width: 16, height: 16, padding: 0, cursor: 'pointer',
-                                  border: 'none', borderRadius: '50%',
-                                  background: showWebhookHelp ? 'var(--cth-ink-700)' : 'var(--cth-ink-300)',
-                                  color: showWebhookHelp ? 'var(--cth-paper-100)' : 'var(--cth-ink-900)',
-                                  fontFamily: 'var(--cth-font-display)', fontSize: 10, lineHeight: '16px'
-                                }}
-                              >i</button>
-                            </h3>
-                            <span style={hint}>
-                              {t('settings.connections.webhooksDesc')}
-                            </span>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{
-                              fontSize: 12, lineHeight: '16px',
-                              color: webhookRunning ? 'var(--cth-green-text)' : 'var(--cth-ink-500)'
-                            }}>
-                              {webhookRunning ? t('settings.connections.listeningOn') : t('settings.connections.notListening')}
-                            </span>
-                            <PixelButton variant="primary" size="sm" onClick={addWebhook} disabled={webhookBusy}>
-                              {t('settings.connections.addWebhook')}
-                            </PixelButton>
-                          </div>
-                        </div>
-
-                        {showWebhookHelp && (
-                          <pre style={{
-                            borderRadius: 'var(--cth-r-md)',
-                            margin: 0, padding: 10, whiteSpace: 'pre-wrap',
-                            background: 'var(--cth-paper-100)',
-                            boxShadow: 'inset 0 0 0 1px var(--cth-line-2)',
-                            fontFamily: 'var(--cth-font-mono)', fontSize: 11, lineHeight: '16px',
-                            color: 'var(--cth-ink-700)'
-                          }}>{webhookApiDoc(godName)}</pre>
-                        )}
-
-                        {/* Public surface warning. Loud, not buried. */}
-                        <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-coral-text)' }}>
-                          {t('settings.connections.webhookWarning')}
-                        </span>
-
-                        {webhookTriggers.length === 0 ? (
-                          <span style={hint}>
-                            {t('settings.connections.noWebhooks')}
-                          </span>
-                        ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                            {webhookTriggers.map((w) => {
-                              const shown = shownSecrets[w.id] === true;
-                              const endpoint = webhookEndpoint(w.id);
-                              const modeBlurb = TRIGGER_MODES.find((m) => m.value === w.mode)?.blurb ?? '';
-                              return (
-                                <div
-                                  key={w.id}
-                                  style={{
-                                    borderRadius: 'var(--cth-r-md)',
-                                    display: 'flex', flexDirection: 'column', gap: 8,
-                                    padding: '10px 12px',
-                                    background: 'var(--cth-cream-100)',
-                                    boxShadow: `inset 0 0 0 ${w.enabled ? 1.5 : 1}px ${w.enabled ? 'var(--cth-ink-500)' : 'var(--cth-ink-100)'}`
-                                  }}
-                                >
-                                  {/* Name, on/off, delete. Renaming is live in the
-                                      mirror on every keystroke and persists on blur. */}
-                                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                                    <input
-                                      value={w.name}
-                                      onChange={(e) => { void patchWebhook(w.id, { name: e.target.value }, false); }}
-                                      onBlur={() => { void applyWebhooks(webhookTriggers); }}
-                                      placeholder={t('settings.connections.namePlaceholder')}
-                                      className="cth-input" style={{ ...fieldInputStyle, flex: 1 }}
-                                    />
-                                    <PixelButton
-                                      variant={w.enabled ? 'primary' : 'secondary'}
-                                      size="sm"
-                                      onClick={() => { void patchWebhook(w.id, { enabled: !w.enabled }); }}
-                                      disabled={webhookBusy}
-                                    >
-                                      {w.enabled ? t('common.on') : t('common.off')}
-                                    </PixelButton>
-                                    {/* Two clicks: deleting revokes a caller's access for good. */}
-                                    <PixelButton
-                                      variant={pendingDelete === w.id ? 'destructive' : 'ghost'}
-                                      size="sm"
-                                      onClick={() => {
-                                        if (pendingDelete === w.id) void removeWebhook(w.id);
-                                        else setPendingDelete(w.id);
-                                      }}
-                                      disabled={webhookBusy}
-                                    >
-                                      {pendingDelete === w.id ? t('settings.connections.sure') : t('common.delete')}
-                                    </PixelButton>
-                                  </div>
-
-                                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                                    <span style={{ ...fieldLabel, width: 56, flexShrink: 0 }}>{t('settings.connections.url')}</span>
-                                    <input
-                                      readOnly
-                                      value={endpoint || t('settings.connections.endpointPlaceholder')}
-                                      onFocus={(e) => e.currentTarget.select()}
-                                      className="cth-input"
-                                      style={{
-                                        ...fieldInputStyle, fontFamily: 'var(--cth-font-mono)', fontSize: 12,
-                                        color: endpoint ? 'var(--cth-ink)' : 'var(--cth-ink-3)'
-                                      }}
-                                    />
-                                    <PixelButton
-                                      variant="secondary"
-                                      size="sm"
-                                      onClick={() => copyWebhookField(`${w.id}:url`, endpoint)}
-                                      disabled={!endpoint}
-                                    >
-                                      {copiedField === `${w.id}:url` ? `${t('common.copy')} ✓` : t('common.copy')}
-                                    </PixelButton>
-                                  </div>
-
-                                  {/* Masked by default; never in a title attribute. */}
-                                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                                    <span style={{ ...fieldLabel, width: 56, flexShrink: 0 }}>{t('settings.connections.secret')}</span>
-                                    <input
-                                      type={shown ? 'text' : 'password'}
-                                      readOnly
-                                      value={w.secret}
-                                      onFocus={(e) => e.currentTarget.select()}
-                                      className="cth-input" style={{ ...fieldInputStyle, fontFamily: 'var(--cth-font-mono)' }}
-                                    />
-                                    <PixelButton
-                                      variant="secondary"
-                                      size="sm"
-                                      onClick={() => setShownSecrets((s) => ({ ...s, [w.id]: !shown }))}
-                                    >
-                                      {shown ? t('common.hide') : t('common.show')}
-                                    </PixelButton>
-                                    <PixelButton
-                                      variant="secondary"
-                                      size="sm"
-                                      onClick={() => copyWebhookField(`${w.id}:secret`, w.secret)}
-                                    >
-                                      {copiedField === `${w.id}:secret` ? `${t('common.copy')} ✓` : t('common.copy')}
-                                    </PixelButton>
-                                    <PixelButton
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => { void rotateWebhookSecret(w.id); }}
-                                      disabled={webhookBusy}
-                                    >
-                                      {t('settings.connections.rotate')}
-                                    </PixelButton>
-                                  </div>
-
-                                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                                    <span style={{ ...fieldLabel, width: 56, flexShrink: 0 }}>{t('settings.connections.mode')}</span>
-                                    <select
-                                      value={w.mode}
-                                      onChange={(e) => { void patchWebhook(w.id, { mode: e.target.value as TriggerMode }); }}
-                                      className="cth-input" style={{ ...fieldInputStyle, width: 160, flexShrink: 0 }}
-                                    >
-                                      {TRIGGER_MODES.map((m) => (
-                                        <option key={m.value} value={m.value}>{m.label}</option>
-                                      ))}
-                                    </select>
-                                    <span style={hint}>
-                                      {modeBlurb}
-                                    </span>
-                                  </div>
-                                  {/* The body format each request is checked against. Moved
-                                      here with the rest of webhooks from Michael's Triggers tab:
-                                      a webhook serves the whole office, not one agent. */}
-                                  <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
-                                    <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 14, color: 'var(--cth-ink-700)', width: 72, flexShrink: 0 }}>{t('settings.connections.format')}</span>
-                                    <WebhookSchemaEditor schema={w.schema} onSave={(schema) => { void patchWebhook(w.id, { schema }); }} />
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-
-                        <span style={hint}>
-                          {t('settings.connections.webhooksHint', { godName })}
-                        </span>
-
-                        {webhookNote && (
-                          <span style={{ fontSize: 12, color: 'var(--cth-ink-500)' }}>{webhookNote}</span>
-                        )}
-                      </div>
 
                     </>
                   )}

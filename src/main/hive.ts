@@ -250,11 +250,6 @@ export interface HiveTask {
   humanQA?: HumanQA[];
   /** Outcome summary: the card's result when it reaches 'done'. Optional. */
   result?: string;
-  /** Set when this task originated from a generic webhook POST. Stores the SHA-256
-   *  of the capability token (never the raw token — that's returned to the caller
-   *  once and never persisted), so a GET status lookup can match by hashing the
-   *  presented token. Read-only capability: it never widens routing or exposure. */
-  webhook?: { tokenHash: string };
   /** Set when the card ended by the owner's decision rather than finished work
    *  (card-lifecycle.md section 4, D2): it is Done like any other, marked
    *  "Closed by owner". Cleared if the owner moves it out of Done. */
@@ -4146,7 +4141,7 @@ export class HiveManager {
 
   /** Append one card against the latest on-disk ledger. Renderer callers must
    *  use this instead of re-writing a collection they read before another
-   *  source (webhook, god) added work. Idempotent by task id.
+   *  source (god, an agent) added work. Idempotent by task id.
    *  False when the card is there already or the board does not parse. */
   addTask(task: HiveTask): boolean {
     const ledger = this.readLedger();
@@ -4160,7 +4155,7 @@ export class HiveManager {
   }
 
   /** Patch one card against the latest on-disk ledger, preserving unrelated
-   *  cards and fields (notably webhook.tokenHash).
+   *  cards and fields.
    *  The app closing a card (a mailbox fixed) withdraws its
    *  open questions, so none is left on Ask me for good. */
   patchTask(id: string, patch: Partial<Omit<HiveTask, 'id'>>): boolean {

@@ -4,10 +4,10 @@ import { useResolvedGodName } from '@/hooks/useResolvedGodName';
 import { Muted, Scroll } from './ui';
 
 /**
- * TRIGGERS — every way the floor gets woken up without a human typing. Three
+ * TRIGGERS — every way the floor gets woken up without a human typing. Two
  * types exist (src/shared/triggers.ts is the contract); only schedules shows
- * here. Webhooks live in Settings → Connections and context upkeep in Settings
- * → Agents (both apply to the whole office, not to Michael).
+ * here. Context upkeep lives in Settings → Agents (it applies to the whole
+ * office, not to Michael).
  * Schedules is the oldest and used to BE this tab.
  *
  * Schedules belong to the agent that runs them (docs/designs/per-agent-schedules.md):
@@ -32,9 +32,6 @@ export function TriggersTab() {
           already called Office schedule (owner, 2026-09-26). */}
       <Muted>{t('triggersTab.officeBlurb', { godName })}</Muted>
       <OfficeSchedules />
-      {/* WEBHOOKS moved to Settings → Connections: one server and one tunnel
-          serve the whole office, and everything that arrives goes to Michael
-          to route. */}
       <div style={{ height: 12 }} />
     </Scroll>
   );

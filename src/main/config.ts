@@ -22,10 +22,7 @@ import { isHeldRename, RENAME_RETRY_MS, sleepSync, writeFileAtomic } from './ato
 import type { IntegrationRecord } from '../shared/integrations';
 import {
   DEFAULT_CONTEXT_TRIGGER,
-  DEFAULT_TRIGGER_MODE,
-  DEFAULT_WEBHOOK_SCHEMA,
-  type ContextTriggerConfig,
-  type WebhookTrigger
+  type ContextTriggerConfig
 } from '../shared/triggers';
 
 /** A recurring schedule. The type and every rule about it (ownership, next run,
@@ -469,35 +466,14 @@ export interface HarnessConfig {
   /** Per-CLI-provider default model slug, used to pre-fill the model picker. */
   providerDefaultModels?: Partial<Record<AgentProvider, string>>;
 
-  // ─── Generic inbound webhook + status API (LEGACY, single-endpoint) ─────────
-  // Superseded by `webhookTriggers`, which allows many endpoints over one server
-  // and one tunnel. These three are kept because they are the MIGRATION SOURCE
-  // (`migrateTriggersV1` folds them into a `WebhookTrigger`) and because the main
-  // process still reads them until the server is rewired onto the new list.
-  // Nothing new should be written here.
-  /** @deprecated Use `webhookTriggers[].enabled`. */
-  webhookEnabled?: boolean;
-  /** App-generated shared secret callers echo in `x-md-webhook-secret`. Never
-   *  logged, and never forwarded into the routed message/card/response.
-   *  @deprecated Use `webhookTriggers[].secret` (one secret per endpoint, so
-   *  revoking one caller never disturbs the others). */
-  webhookSecret?: string;
-  /** Local HTTP port the generic webhook server binds to (default 3849).
-   *  @deprecated The port is a property of the shared server, not of any one
-   *  trigger; `webhookTriggers` are multiplexed over it by id. */
-  webhookPort?: number;
-
   // ─── Triggers (src/shared/triggers.ts owns every type here) ────────────────
   /** Auto-compaction / auto-clearing of agent terminal context. Both halves ship
    *  in DEFAULT_CONTEXT_TRIGGER; `readConfig` deep-fills them, because the
    *  top-level merge below is one level deep and a half-written sub-object would
    *  otherwise reach consumers with `undefined` thresholds. */
   contextTrigger?: ContextTriggerConfig;
-  /** Inbound HTTP endpoints, one entry per caller. Replaces the legacy single
-   *  webhook above; several coexist on one port, told apart by `id` in the path. */
-  webhookTriggers?: WebhookTrigger[];
-  /** One-time guard for `migrateTriggersV1` (legacy webhook → webhookTriggers,
-   *  1h → 2h compact cadence). Set once the migration has run to completion. */
+  /** One-time guard for `migrateTriggersV1` (1h → 2h compact cadence). Set once
+   *  the migration has run to completion. */
   triggersMigratedV1?: boolean;
 }
 
@@ -522,14 +498,10 @@ const DEFAULTS: HarnessConfig = {
   strongKeepalive: false,
   tvShowOffices: false,
   officeTheme: 'office',
-  webhookEnabled: false,
-  webhookSecret: undefined,
-  webhookPort: undefined,
-  // Triggers. These three are the ONLY object/array defaults that get handed
-  // straight back out of `readConfig` for a config that never persisted them, so
-  // `withTriggerDefaults` re-copies them on every read — see the note there.
+  // Triggers. This is the ONLY object default that gets handed
+  // straight back out of `readConfig` for a config that never persisted it, so
+  // `withTriggerDefaults` re-copies it on every read — see the note there.
   contextTrigger: DEFAULT_CONTEXT_TRIGGER,
-  webhookTriggers: [],
   triggersMigratedV1: false,
   // Company knowledge (the knowledge feature): ON by default (owner,
   // 2026-09-25). It is where company wide information, policies and rules live,
@@ -563,10 +535,7 @@ function withTriggerDefaults(cfg: HarnessConfig): HarnessConfig {
     contextTrigger: {
       compact: { ...DEFAULT_CONTEXT_TRIGGER.compact, ...cfg.contextTrigger?.compact },
       clear: { ...DEFAULT_CONTEXT_TRIGGER.clear, ...cfg.contextTrigger?.clear }
-    },
-    webhookTriggers: Array.isArray(cfg.webhookTriggers)
-      ? cfg.webhookTriggers.map((t) => ({ ...t }))
-      : []
+    }
   };
 }
 
@@ -581,16 +550,9 @@ let triggersMigrationRan = false;
  *
  * Runs from `readConfig`, so it is complete before any consumer can observe the
  * config — there is no boot ordering to get wrong and no window in which half
- * the app sees the old shape. Two things move:
- *
- *   1. The single legacy webhook (`webhookEnabled`/`webhookSecret`) becomes one
- *      `WebhookTrigger` with the stable id `legacy`, so the caller that already
- *      holds that secret keeps working across the upgrade. Skipped when
- *      `webhookTriggers` is already populated — the user has moved on, and
- *      re-adding a synthesised entry would resurrect a revoked endpoint.
- *   2. The seeded `compact-maintenance` mission moves from the old 1h cadence to
- *      2h, but ONLY if it still reads exactly 1h. A user-chosen interval is a
- *      decision, not a stale default, and is left alone.
+ * the app sees the old shape. The seeded `compact-maintenance` mission moves
+ * from the old 1h cadence to 2h, but ONLY if it still reads exactly 1h. A
+ * user-chosen interval is a decision, not a stale default, and is left alone.
  *
  * Wrapped end-to-end in a try/catch: a config that is corrupt in some unrelated
  * way must still boot the app, and a migration is never worth a failed launch.
@@ -600,21 +562,6 @@ function migrateTriggersV1(cfg: HarnessConfig): HarnessConfig {
   triggersMigrationRan = true;
   try {
     const next: HarnessConfig = { ...cfg, triggersMigratedV1: true };
-
-    const legacySecret = typeof cfg.webhookSecret === 'string' ? cfg.webhookSecret.trim() : '';
-    if (legacySecret && (cfg.webhookTriggers?.length ?? 0) === 0) {
-      next.webhookTriggers = [
-        {
-          id: 'legacy',
-          name: 'Default webhook',
-          secret: legacySecret,
-          enabled: cfg.webhookEnabled ?? false,
-          mode: DEFAULT_TRIGGER_MODE,
-          schema: DEFAULT_WEBHOOK_SCHEMA,
-          createdAt: Date.now()
-        }
-      ];
-    }
 
     const missions = Array.isArray(cfg.missions) ? cfg.missions : [];
     const stale = (m: ScheduledMission): boolean =>

@@ -17,9 +17,6 @@ reads/writes files under directories you register. What it listens on:
   reach connected apps. Each call needs the agent's own capability token.
 - **The telemetry receiver**: an HTTP server bound to `127.0.0.1` for usage data from
   the agents.
-- **The webhook server**, only while a webhook is turned on: an HTTP server bound to
-  `127.0.0.1`, reached from the internet through a public tunnel. Every request needs
-  the webhook's secret. The tunnel's address is public for as long as it is open.
 
 Nothing else on the local network can reach these listeners.
 

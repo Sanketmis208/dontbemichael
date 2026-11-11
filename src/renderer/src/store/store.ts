@@ -13,7 +13,6 @@ import {
   finishCurrentHire,
   type HireReviewQueue
 } from '@shared/hireQueue';
-import type { WebhookTrigger } from '@shared/triggers';
 import { isCompactionCommand } from '@shared/providerAutomation';
 import { preferredAgentRole } from '@shared/agentRole';
 import { isInboxNudge } from '@shared/hiveNudge';
@@ -432,17 +431,6 @@ interface State {
    *  why, and whether the owner pressed Restart now. Cleared once restarted. */
   pendingRestart: Record<string, PendingRestart>;
   setPendingRestart: (agentId: string, entry: PendingRestart | undefined) => void;
-  /** Mirror of config.webhookTriggers — the inbound HTTP endpoints. Webhooks are
-   *  editable from BOTH Settings → Connections and the Triggers tab, so neither
-   *  surface keeps its own copy: both render off this list and both call the
-   *  setter after persisting, and the other one repaints without a refetch.
-   *  Seeded by App from getConfig() (main deep-fills the field on every read).
-   *
-   *  Holds per-endpoint secrets, because a secret is what the UI has to show for
-   *  reveal/copy to mean anything. Renderer memory only — never persisted to
-   *  localStorage or the roster file, never logged, masked in every surface. */
-  webhookTriggers: WebhookTrigger[];
-  setWebhookTriggers: (list: WebhookTrigger[]) => void;
   /** Park a message for an agent. Returns nothing; the flush loop delivers it.
    *  `meta.instruction`, when set, is what gets typed into the PTY instead of
    *  `text` (UI/card surfaces still show `text`). */
@@ -1314,8 +1302,6 @@ export const useStore = create<State>((set, get) => ({
     }
     return { pendingRestart: next };
   }),
-  webhookTriggers: [],
-  setWebhookTriggers: (list) => set({ webhookTriggers: list }),
   dockOpen: false,
   dockFocus: undefined,
   dockNavigation: 0,
@@ -1465,12 +1451,4 @@ export const useStore = create<State>((set, get) => ({
 
 export function selectedAgent(s: State): Agent | undefined {
   return s.agents.find(a => a.id === s.selectedId);
-}
-
-/** Whether the Command Center's Trigger History tab has anything to be about
- *  yet: at least one webhook exists. Derived from the mirror rather than stored
- *  beside it, so it cannot fall out of step with the thing it describes. Use as
- *  `useStore(triggerHistoryVisible)`. */
-export function triggerHistoryVisible(s: State): boolean {
-  return s.webhookTriggers.length > 0;
 }

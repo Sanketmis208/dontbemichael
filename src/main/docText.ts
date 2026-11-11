@@ -478,8 +478,8 @@ async function readPdf(srcPath: string): Promise<DocExtraction> {
   const pages: string[] = [];
   let total: number;
   try {
-    // unpdf is ESM-only; main already loads ESM packages this way (tunnelmole,
-    // electron-updater). It bundles a Node-ready PDF.js — no pdftotext needed.
+    // unpdf is ESM-only; main already loads ESM packages this way
+    // (electron-updater). It bundles a Node-ready PDF.js — no pdftotext needed.
     const { getDocumentProxy } = await import('unpdf');
     const pdf = await getDocumentProxy(new Uint8Array(readFileSync(srcPath)));
     total = pdf.numPages;

@@ -42,10 +42,10 @@ export type { HookEvent } from '../shared/hookEvents';
 import type { OfficePack, PackOrigin } from '../shared/officePack';
 export type { OfficePack, PackOrigin } from '../shared/officePack';
 import type {
-  ContextRule, ContextTriggerConfig, TriggerHistoryEntry, WebhookTrigger
+  ContextRule, ContextTriggerConfig
 } from '../shared/triggers';
 export type {
-  ContextRule, ContextTriggerConfig, TriggerHistoryEntry, WebhookTrigger
+  ContextRule, ContextTriggerConfig
 } from '../shared/triggers';
 
 /** Renderer-visible integration record: the secretRef handle is redacted to a
@@ -157,9 +157,6 @@ export interface HiveTask {
   humanQA?: HumanQA[];
   /** Outcome summary: the card's result when it is done. */
   result?: string;
-  /** SHA-256 of the capability token for a generic-webhook-sourced task (drives
-   *  the GET status lookup; the raw token is never persisted). */
-  webhook?: { tokenHash: string };
   /** Ended by the owner's decision, not finished work (card-lifecycle.md D2). */
   closedBy?: 'owner';
   closedAt?: string;
@@ -312,9 +309,6 @@ export interface HarnessConfig {
   strongKeepalive?: boolean;
   /** @deprecated Ignored since 2026-10-02: updates are always checked. */
   autoUpdate?: boolean;
-  webhookEnabled?: boolean;
-  webhookSecret?: string;
-  webhookPort?: number;
   costCapUsd?: number;
   costCapTokens?: number;
   agentTokenCaps?: Record<string, number>;
@@ -1444,26 +1438,6 @@ const api = {
   hiveSetArchived: (id: string, archived: boolean): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('hive:setArchived', id, archived),
 
-  // ─── Generic webhook + status API (POST → work, GET → status) ────────────────
-  /** Start the generic webhook server; returns the public endpoint URL callers
-   *  POST to (secret-gated) and GET a token's status from. */
-  webhookStart: (): Promise<{ ok: boolean; url?: string; error?: string }> =>
-    ipcRenderer.invoke('webhook:start'),
-  /** Stop the generic webhook server + tunnel. */
-  webhookStop: (): Promise<{ ok: boolean }> =>
-    ipcRenderer.invoke('webhook:stop'),
-  /** Current state + last endpoint URL (so Settings can hydrate the badge/URL). */
-  webhookStatus: (): Promise<{ running: boolean; url?: string }> =>
-    ipcRenderer.invoke('webhook:status'),
-  /** Mint + persist a fresh secret and return it for the user to copy. */
-  webhookGenerateSecret: (): Promise<{ ok: boolean; secret?: string }> =>
-    ipcRenderer.invoke('webhook:generateSecret'),
-  /** Persist webhook settings (and stop the server if disabled / secret cleared). */
-  webhookSetConfig: (patch: {
-    secret?: string; port?: number; enabled?: boolean;
-  }): Promise<{ ok: boolean }> =>
-    ipcRenderer.invoke('webhook:setConfig', patch),
-
   // ─── Triggers: context (auto-compact / auto-clear) ──────────────────────────
   /** The two context rules (cadence + pressure gate + message), deep-filled. */
   getContextTrigger: (): Promise<ContextTriggerConfig> =>
@@ -1479,46 +1453,6 @@ const api = {
     const listener = (_e: IpcRendererEvent, payload: { action: 'compact' | 'clear'; rule: ContextRule }) => cb(payload);
     ipcRenderer.on('trigger:context', listener);
     return () => ipcRenderer.removeListener('trigger:context', listener);
-  },
-
-  // ─── Triggers: webhook endpoints (many endpoints, one server + tunnel) ──────
-  /** Every configured endpoint, enabled or not. */
-  listWebhooks: (): Promise<WebhookTrigger[]> => ipcRenderer.invoke('webhooks:list'),
-  /** Replace the whole list; main normalises each row (a blank secret keeps the
-   *  stored one, an unknown mode keeps the stored one) and hot-swaps the running
-   *  server's endpoints WITHOUT a restart, so no other caller's URL changes. */
-  saveWebhooks: (list: WebhookTrigger[]): Promise<WebhookTrigger[]> =>
-    ipcRenderer.invoke('webhooks:save', list),
-  /** Revoke one endpoint; resolves to the remaining list. */
-  deleteWebhook: (id: string): Promise<WebhookTrigger[]> =>
-    ipcRenderer.invoke('webhooks:delete', id),
-  /** Mint a 256-bit secret for the operator to paste into their caller. Not
-   *  persisted until the endpoint carrying it is saved. */
-  generateWebhookSecret: (): Promise<string> => ipcRenderer.invoke('webhooks:generateSecret'),
-  /** Server state, the tunnel root, and each endpoint's full public URL (`url` is
-   *  '' until a tunnel has come up). */
-  webhooksStatus: (): Promise<{ running: boolean; url?: string; endpoints: { id: string; url: string }[] }> =>
-    ipcRenderer.invoke('webhooks:status'),
-
-  // ─── Triggers: history ledger + approval gate ───────────────────────────────
-  /** The whole ledger, newest first (both directions). */
-  listTriggerHistory: (): Promise<TriggerHistoryEntry[]> =>
-    ipcRenderer.invoke('triggerHistory:list'),
-  /** Answer a held message. 'approved' RELEASES it to the hive (card + god
-   *  request, the same path an auto-allowed message takes); 'rejected' only flips
-   *  the verdict. Deciding an already-decided entry is a no-op, never a second
-   *  dispatch. Resolves to the updated row, or null when the id is gone. */
-  decideTriggerHistory: (arg: { id: string; decision: 'approved' | 'rejected' }): Promise<TriggerHistoryEntry | null> =>
-    ipcRenderer.invoke('triggerHistory:decide', arg),
-  /** Wipe the ledger. */
-  clearTriggerHistory: (): Promise<void> =>
-    ipcRenderer.invoke('triggerHistory:clear'),
-  /** Fires whenever the ledger changes (an inbound arrived, a verdict landed, a
-   *  reply was paired), so the history tab live-refreshes. */
-  onTriggerHistoryUpdated: (cb: () => void): (() => void) => {
-    const listener = (): void => cb();
-    ipcRenderer.on('triggerHistory:updated', listener);
-    return () => ipcRenderer.removeListener('triggerHistory:updated', listener);
   },
 
   // ─── Integrations registry (Phase 2 — labeled REST endpoints via the secret broker) ──

@@ -13,8 +13,7 @@ const read = (p) => fs.readFileSync(path.join(__dirname, '..', p), 'utf8');
 test('the fallback name for Michael is translated', () => {
   for (const f of [
     'src/renderer/src/components/CommandCenterPanel.tsx',
-    'src/renderer/src/components/SettingsModal.tsx',
-    'src/renderer/src/components/triggers/TriggerHistoryTab.tsx'
+    'src/renderer/src/components/SettingsModal.tsx'
   ]) {
     const src = read(f);
     assert.doesNotMatch(src, /'the orchestrator'/, f);
