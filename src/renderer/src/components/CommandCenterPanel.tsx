@@ -11,7 +11,7 @@ import { ProfileTab } from './ProfileTab';
 import { MemoryNotes, memorySummary } from './MemoryNotes';
 import { MarkdownPreview } from '@/markdown/MarkdownPreview';
 import { memoryView } from '@shared/memoryIndex';
-import { SHOW_FOCUS_MODE, SHOW_IDE, ALLOW_TEMP_WORKERS, SHOW_OPEN_TERMINAL, SHOW_DELIVERY_SWITCH } from '@shared/buildFeatures';
+import { ALLOW_TEMP_WORKERS, SHOW_OPEN_TERMINAL, SHOW_DELIVERY_SWITCH } from '@shared/buildFeatures';
 import { TriggersTab } from './triggers/TriggersTab';
 import { TriggerHistoryTab } from './triggers/TriggerHistoryTab';
 import { TriggerCard } from './triggers/ui';
@@ -97,17 +97,12 @@ const TABS: { key: CCTab; labelKey: string; icon: Parameters<typeof Icon>[0]['na
   { key: 'advanced', labelKey: 'commandCenter.tabs.advanced', icon: 'mcp' }
 ];
 
-/** @param fullscreen this instance IS the fullscreen overlay, so it owns the pty
- *  and renders the real terminal. The docked instance renders the "open in
- *  fullscreen" placeholder instead — two live xterms on one pty fight over its
- *  cols/rows and corrupt the display. */
-export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent; fullscreen?: boolean }) {
+export function CommandCenterPanel({ agent }: { agent: Agent }) {
   const { t } = useTranslation();
   // Design v2: Ask me is no longer a tab here; it is the Needs you board in the
-  // right column (branding/DESIGN.md 7.6). The docked panel opens on Profile: a
-  // terminal is the least friendly thing a business owner can meet first. Focus
-  // mode opens on the terminal, because reaching it means asking for it.
-  const defaultTab: CCTab = fullscreen ? 'terminal' : 'profile';
+  // right column (branding/DESIGN.md 7.6). The panel opens on Profile: a
+  // terminal is the least friendly thing a business owner can meet first.
+  const defaultTab: CCTab = 'profile';
   const [tab, setTab] = useState<CCTab>(defaultTab);
   // The trigger-history ledger has nothing to say until an outside party can
   // reach us, so its tab appears only once an org key or a webhook exists. This
@@ -164,11 +159,7 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
     if (memoryFocusRequest) setSelectedMemoryAgent(memoryFocusRequest.agentId);
   }, [memoryFocusRequest]);
   const updateAgent = useStore((s) => s.updateAgent);
-  const setFullscreen = useStore((s) => s.setFullscreen);
-  const fullscreenAgentId = useStore((s) => s.fullscreenAgentId);
   const onPtyStream = usePtyParser(agent.id);
-  // True only for the DOCKED panel while the overlay holds this agent.
-  const isFullscreenedHere = fullscreenAgentId === agent.id && !fullscreen;
   // v0.3.4: ONE floor-wide auto-delivery switch, moved off the per-agent
   // control strips — toggling applies to every live agent, god included.
   // Seeded from the god's own control state (the floor is kept in sync by
@@ -190,8 +181,8 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
 
   return (
     <PanelCard>
-      {/* Design v2 header (branding/DESIGN.md 7.10). Floor-wide delivery and
-          the IDE stay behind their build flags, beside close. */}
+      {/* Design v2 header (branding/DESIGN.md 7.10). Floor-wide delivery
+          stays behind its build flag, beside close. */}
       <PanelHeader
         agent={agent}
         role={t('studio.officeManager')}
@@ -208,14 +199,6 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
               </span>
             </PixelButton>
           )}
-          {SHOW_IDE && (
-            <PixelButton variant="secondary" size="md" onClick={() => { const st = useStore.getState(); st.setIdeOpen(true, st.selectedId); }}>
-              <span className="cth-tip cth-tip-wrap" data-tip={t('commandCenter.ideTitle')} aria-label={t('commandCenter.openIdeAria')}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                <Icon name="code" /> {t('commandCenter.ide')}
-              </span>
-            </PixelButton>
-          )}
         </>}
       />
 
@@ -227,9 +210,7 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
       {/* Body (data-panel-body: see AgentDetailPanel). */}
       <div data-panel-body data-tab={tab} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         {tab === 'terminal' && (
-          isFullscreenedHere ? (
-            <Centered>{t('commandCenter.terminalFullscreen')}</Centered>
-          ) : agent.ptyId ? (
+          agent.ptyId ? (
             <>
               <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
                 <PtyTerminalView
@@ -243,9 +224,7 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
                     }
                     void window.cth.historyAdd({ agentId: agent.id, cwd: agent.cwd, text: t });
                   }}
-                  onToggleFullscreen={SHOW_FOCUS_MODE || fullscreen ? () => setFullscreen(fullscreen ? null : agent.id) : undefined}
-                  fullscreen={fullscreen}
-                  embedded={!fullscreen}
+                  embedded
                 />
               </div>
               <MessageQueueComposer agent={agent} />

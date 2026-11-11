@@ -91,7 +91,6 @@ test('an agent\'s card and standing goal, as the owner sees them, have no dashes
 /** User-facing code. Whole directories where possible, so a new file is covered by default. */
 const UI_CODE = [
   'src/renderer/src/components',
-  'src/renderer/src/ide',
   'src/renderer/src/markdown',
   'src/renderer/src/scene/office/cafeteriaLines.ts',
   'src/renderer/src/hooks/useRestoreTeam.ts',

@@ -19,7 +19,7 @@ import { directionFor, isRtlLanguage } from './index';
  * write, and each miss is a layout change for an English user.
  *
  * `dir` on <html> rather than on a React wrapper because portalled UI (modals,
- * tooltips, the fullscreen terminal) mounts outside the React tree and would
+ * tooltips) mounts outside the React tree and would
  * otherwise keep the document's direction while the rest of the app mirrored.
  */
 

@@ -762,7 +762,7 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
   }, [cards, listAll, character, config.businessType]);
 
   return (
-    // Must sit above focus mode and its file overlays (250/280).
+    // Must sit above the task overlays (280).
     <Dialog
       title={tr('addAgent.title')}
       onClose={close}

@@ -2,19 +2,18 @@
  * A process-wide pool of live xterm terminals, one per ptyId.
  *
  * Why: node-pty keeps no scrollback. If we created/disposed an xterm every time
- * the user switched agents (or toggled fullscreen), the new terminal would be
+ * the user switched agents, the new terminal would be
  * empty and stay blank until the TUI happened to repaint — which is exactly the
  * "terminal vanishes until I drag the splitter" bug.
  *
  * Instead each pty gets ONE Terminal for the app's lifetime. It is opened into a
  * detached host <div> and subscribes to the pty stream once, so its buffer is
- * always populated. A view (the sidebar tab or the fullscreen overlay) simply
+ * always populated. A view (the sidebar tab) simply
  * re-parents that host element into itself when it mounts and detaches it on
  * unmount — the rendered content moves with it, so the terminal is always
  * visible immediately, no repaint required.
  */
 import { useEffect, useState } from 'react';
-import { SHOW_IDE } from '@shared/buildFeatures';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
@@ -23,7 +22,7 @@ import { arabicJoinRanges } from '@/terminal/arabicJoiner';
 import { attachArabicSpacingFix } from '@/terminal/arabicSpacingFix';
 import { isArabicTerminalEnabled } from '@/terminal/arabicSetting';
 import {
-  classifyPathToken, isPathToken, linkCellRange, pathTokenMatcher, stripPathToken, type PathAction
+  isPathToken, linkCellRange, pathTokenMatcher, stripPathToken
 } from '@shared/terminalPaths';
 import {
   createTerminalRecoveryState,
@@ -965,14 +964,11 @@ export function disposeTerminal(ptyId: string): void {
 // metadata-only fs:statAbs IPC before acting.
 // Plain click stays with the TUI (matches VS Code's terminal convention).
 // The path string is agent output — treated as hostile: it flows only into a
-// read-only stat, the existing read pipeline, or a REVEAL (never an "open with
-// the default app", which would turn a printed path into an execution), and
-// only on an explicit modifier-click.
-//
-// v0.4.5 widened this from markdown-only to every path token. What each type
-// does lives in @shared/terminalPaths, not here — this file only knows how to
-// find tokens on a line and how to run the three verdicts.
-const mdStatCache = new Map<string, { isFile: boolean; path: string }>();
+// read-only stat and a REVEAL in the file browser (never an "open with the
+// default app", which would turn a printed path into an execution), and only
+// on an explicit modifier-click. Which tokens count as paths lives in
+// @shared/terminalPaths.
+const mdStatCache = new Map<string, string>();
 
 function resolvePathCandidate(ptyId: string, raw: string): string | null {
   const p = stripPathToken(raw);
@@ -991,7 +987,6 @@ function resolvePathCandidate(ptyId: string, raw: string): string | null {
 interface MdStoreShape {
   getState: () => {
     agents: Array<{ ptyId?: string; cwd: string }>;
-    openFileInIde: (absPath: string) => void;
   };
 }
 let storeApi: MdStoreShape | null = null;
@@ -999,29 +994,19 @@ void import('@/store/store')
   .then((m) => { storeApi = (m as unknown as { useStore: MdStoreShape }).useStore; })
   .catch(() => { /* store unavailable (tests) — link provider stays inert */ });
 
-/** Act on a verified path. `reveal` also takes any directory that reaches here:
- *  the IDE needs a file. A miss is silent by design — the token is agent output
- *  and may simply not exist.
- *
- *  Both non-reveal verdicts land in the IDE. The IDE already routes by type
- *  (Monaco for source, preview for markdown, the viewer for images), so this
- *  does not need to pass the verdict along — it only needs to know whether the
- *  file is ours to open at all. */
-async function activatePath(abs: string, action: PathAction): Promise<void> {
+/** Show a verified path in the file browser (Finder on a Mac), file or folder.
+ *  A miss is silent by design — the token is agent output and may simply not
+ *  exist. */
+async function activatePath(abs: string): Promise<void> {
   let hit = mdStatCache.get(abs);
   if (!hit) {
     const res = await window.cth.statAbs(abs).catch(() => null);
     if (!res || !res.exists) return;
-    hit = { isFile: res.isFile, path: res.path };
+    hit = res.path;
     if (mdStatCache.size > 500) mdStatCache.clear();
     mdStatCache.set(abs, hit);
   }
-  // With the IDE hidden (SHOW_IDE), a file link shows the file in Finder too.
-  if (action === 'reveal' || !hit.isFile || !SHOW_IDE) {
-    void window.cth.revealPath(hit.path).catch(() => { /* file browser refused */ });
-    return;
-  }
-  storeApi?.getState().openFileInIde(hit.path);
+  void window.cth.revealPath(hit).catch(() => { /* file browser refused */ });
 }
 
 /** A buffer line's cells as linkCellRange reads them. */
@@ -1048,7 +1033,6 @@ function registerMarkdownLinkProvider(term: Terminal, ptyId: string): void {
           const raw = m[0];
           const abs = resolvePathCandidate(ptyId, raw);
           if (!abs) continue;
-          const action = classifyPathToken(stripPathToken(raw));
           const span = line ? linkCellRange(cellsOf(line), m.index, m.index + raw.length, raw) : null;
           if (!span) continue;
           links!.push({
@@ -1061,7 +1045,7 @@ function registerMarkdownLinkProvider(term: Terminal, ptyId: string): void {
             activate: (event: MouseEvent | undefined) => {
               // ⌘/Ctrl+click only — a plain click must keep going to the TUI.
               if (event && !(event.metaKey || event.ctrlKey)) return;
-              void activatePath(abs, action);
+              void activatePath(abs);
             }
           });
         }

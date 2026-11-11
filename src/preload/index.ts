@@ -448,52 +448,6 @@ export interface KnowledgeIngestResult {
   error?: string;
 }
 
-export interface DirEntry {
-  name: string;
-  isDir: boolean;
-  size: number;
-  mtime: number;
-}
-
-export interface GitCommit {
-  sha: string;
-  shortSha: string;
-  parents: string[];
-  subject: string;
-  author: string;
-  time: number;
-  refs: string[];
-}
-export interface GitStatusEntry { path: string; index: string; worktree: string }
-export interface GitStatus { staged: GitStatusEntry[]; unstaged: GitStatusEntry[]; untracked: string[] }
-/** A single file's two sides for a working-tree-vs-HEAD diff (see main git.getDiff). */
-export interface GitDiff {
-  ok: true;
-  path: string;
-  relPath: string;
-  head: string;
-  working: string;
-  headExists: boolean;
-  workingExists: boolean;
-  isBinary: boolean;
-}
-
-/** v0.3.4 git visualization — mirrors src/main/git.ts GitCommit / GitCommitFile. */
-export interface GitCommitRow {
-  sha: string;
-  shortSha: string;
-  parents: string[];
-  subject: string;
-  author: string;
-  time: number;
-  refs: string[];
-}
-export interface GitFileChange {
-  path: string;
-  status: string;
-  oldPath?: string;
-}
-
 /** Real token usage + estimated USD cost summed from an agent's Claude Code
  *  transcripts under ~/.claude/projects. Reconciler/fallback path — now priced
  *  PER MODEL (not Sonnet-for-everyone). The live path uses AgentUsageSample. */
@@ -612,14 +566,6 @@ export interface GHIssue {
   url: string;
   labels: string[];
   assignees: string[];
-}
-
-/** A CI (GitHub Actions) workflow run, normalized for the renderer. */
-export interface CIRun {
-  name: string;
-  status: string;
-  conclusion: string | null;
-  url: string;
 }
 
 /** One live god-triggered ephemeral worker, as shown in the Workers tab. */
@@ -882,13 +828,7 @@ const api = {
     ipcRenderer.invoke('config:startOverHere'),
 
   // ─── Filesystem (sandboxed to cwd) ───────────────────────────────────────
-  listDir: (root: string, rel: string): Promise<
-    { ok: true; entries: DirEntry[]; path: string } | { ok: false; error: string }
-  > => ipcRenderer.invoke('fs:listDir', root, rel),
-  readFile: (root: string, rel: string): Promise<
-    { ok: true; content: string; path: string; size: number } | { ok: false; error: string }
-  > => ipcRenderer.invoke('fs:readFile', root, rel),
-  /** Raw bytes for files `readFile` refuses (images). The renderer has no way to
+  /** Raw bytes for files the text reader refuses (images). The renderer has no way to
    *  load them off disk — the CSP allows no `file:` source and no file protocol
    *  is registered — so images travel as bytes and become a `blob:` URL in the
    *  renderer, which `img-src` already permits. Root-confined and size-capped in
@@ -901,9 +841,6 @@ const api = {
     { ok: true; bytes: Uint8Array<ArrayBuffer>; mime: string; path: string; size: number }
     | { ok: false; error: string }
   > => ipcRenderer.invoke('fs:readBinary', root, rel),
-  writeFile: (root: string, rel: string, content: string): Promise<
-    { ok: true; path: string } | { ok: false; error: string }
-  > => ipcRenderer.invoke('fs:writeFile', root, rel, content),
   /** v0.3.4: existence check for an absolute path (expands ~) — backs the
    *  terminal ⌘-click markdown flow. Metadata only, never contents. */
   statAbs: (p: string): Promise<{ exists: boolean; isFile: boolean; path: string }> =>
@@ -948,45 +885,6 @@ const api = {
 
   // ─── Git ─────────────────────────────────────────────────────────────────
   gitIsRepo: (cwd: string): Promise<boolean> => ipcRenderer.invoke('git:isRepo', cwd),
-  /** Absolute path of the MAIN working tree `cwd` belongs to — a linked worktree
-   *  resolves to the original repo, not to itself. null when not a git repo. */
-  gitMainRepo: (cwd: string): Promise<string | null> => ipcRenderer.invoke('git:mainRepo', cwd),
-  gitBranch: (cwd: string) =>
-    ipcRenderer.invoke('git:branch', cwd) as Promise<{ current: string | null; detached: boolean } | { error: string }>,
-  gitStatus: (cwd: string) =>
-    ipcRenderer.invoke('git:status', cwd) as Promise<GitStatus | { error: string }>,
-  gitLog: (cwd: string, n?: number) =>
-    ipcRenderer.invoke('git:log', cwd, n ?? 50) as Promise<GitCommit[] | { error: string }>,
-  gitBranches: (cwd: string) =>
-    ipcRenderer.invoke('git:branches', cwd) as Promise<{ local: string[]; remote: string[]; current: string | null } | { error: string }>,
-  gitAheadBehind: (cwd: string) =>
-    ipcRenderer.invoke('git:aheadBehind', cwd) as Promise<{ ahead: number; behind: number; upstream: string | null } | { error: string }>,
-  /** Diff one repo-root-relative file: its HEAD content vs its working-tree content.
-   *  Path-validated main-side against `cwd`; the renderer only ever gets the two
-   *  text sides. Backs the IDE's git-diff (Monaco DiffEditor) view. */
-  gitDiff: (cwd: string, relPath: string) =>
-    ipcRenderer.invoke('git:diff', cwd, relPath) as Promise<GitDiff | { ok: false; error: string }>,
-  // ── v0.3.4: history / compare / checkout (git visualization) ──
-  gitLogGraph: (cwd: string, n: number, skip?: number) =>
-    ipcRenderer.invoke('git:logGraph', cwd, n, skip ?? 0) as Promise<GitCommitRow[] | { error: string }>,
-  gitCommitFiles: (cwd: string, sha: string) =>
-    ipcRenderer.invoke('git:commitFiles', cwd, sha) as Promise<GitFileChange[] | { error: string }>,
-  gitShowFile: (cwd: string, rev: string, relPath: string) =>
-    ipcRenderer.invoke('git:showFile', cwd, rev, relPath) as Promise<
-      { ok: true; exists: boolean; isBinary: boolean; content: string } | { ok: false; error: string }
-    >,
-  gitCompareRefs: (cwd: string, base: string, head: string, mode?: 'two' | 'three') =>
-    ipcRenderer.invoke('git:compareRefs', cwd, base, head, mode ?? 'three') as Promise<
-      { ahead: number; behind: number; mergeBase: string | null; files: GitFileChange[] } | { error: string }
-    >,
-  gitWorktrees: (cwd: string) =>
-    ipcRenderer.invoke('git:worktrees', cwd) as Promise<
-      Array<{ path: string; head: string; branch: string | null }> | { error: string }
-    >,
-  gitCheckout: (cwd: string, ref: string, detach?: boolean) =>
-    ipcRenderer.invoke('git:checkout', cwd, ref, detach === true) as Promise<
-      { ok: true; detached: boolean } | { ok: false; error: string }
-    >,
 
   // ─── Hive (multi-agent coordination) ─────────────────────────────────────
   hiveRegistry: (): Promise<HiveRegistry> => ipcRenderer.invoke('hive:registry'),
@@ -1667,13 +1565,6 @@ const api = {
    *  `{ ok: false, error }` if `gh` is missing/unauthenticated or `cwd` isn't a repo. */
   githubIssues: (cwd: string): Promise<{ ok: boolean; issues?: GHIssue[]; error?: string }> =>
     ipcRenderer.invoke('github:issues', cwd),
-
-  // ─── GitHub CI status watcher (gh CLI) ─────────────────────────────────────
-  /** List up to 5 recent CI (GitHub Actions) runs in the repo at `cwd` via the
-   *  `gh` CLI. Returns `{ ok: false, error }` if `gh` is missing/unauthenticated,
-   *  `cwd` isn't a repo, or the repo has no Actions. */
-  githubCIRuns: (cwd: string): Promise<{ ok: boolean; runs?: CIRun[]; error?: string }> =>
-    ipcRenderer.invoke('github:ciRuns', cwd),
 
   // ─── Desktop notifications ───────────────────────────────────────────────────
   /** Toggle native desktop notifications for agent lifecycle events. */

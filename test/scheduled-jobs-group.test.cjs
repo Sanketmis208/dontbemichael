@@ -80,7 +80,6 @@ test('Change on Access closes Edit agent through its question, then opens On a s
   const go = edit.slice(edit.indexOf('const goToSchedules ='), edit.indexOf('const keepEditing ='));
   assert.match(go, /if \(dirtyRef\.current\) \{ afterClose\.current = go; setAsking\('close'\); return; \}/);
   assert.match(go, /onClose\(\);\s*go\(\);/);
-  assert.match(go, /if \(!docked\) useStore\.getState\(\)\.setFullscreen\(null\);/);
   assert.match(edit, /const keepEditing = \(\): void => \{ afterClose\.current = null;/, 'Keep editing drops it');
   const store = read('src/renderer/src/store/store.ts');
   assert.match(store, /openSchedules: \(agentId\) => \{\s*get\(\)\.setSidebarTab\('capabilities'\);\s*set\(\(s\) => \(\{ schedulesRequest: \{ agentId, seq: \(s\.schedulesRequest\?\.seq \?\? 0\) \+ 1 \} \}\)\);/);

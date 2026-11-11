@@ -3,29 +3,12 @@
  * so bringing one back is flipping its switch here and nothing else.
  */
 
-/** Git: the agents' GIT sidebar tab, and the IDE's CHANGES / HISTORY / COMPARE
- *  rail (the only git view Michael had). Business owners never use version
- *  control, and a diff view reads as something broken (owner, 2026-09-23). */
-export const SHOW_GIT = false;
-
 /** Developer tools on Settings → Prerequisites: the git and Node.js rows, and
  *  every agent engine this build doesn't offer (BUILD_ENGINES). Owners only need
  *  Claude Code, uv and MemPalace; the rest read as problems ("NOT SET UP") that
  *  change nothing they see. git only keeps the office's own history and Node is
  *  covered by the app's bundled copy (owner, 2026-09-25). */
 export const SHOW_DEV_TOOLS = false;
-
-/** The IDE: the full window code editor with a file tree, opened from the IDE
- *  button on every agent (Michael's panel, the agent panel, focus mode) and
- *  from file links in a terminal. Owners don't edit code; a file link now shows
- *  the file in Finder instead (owner, 2026-09-23). */
-export const SHOW_IDE = false;
-
-/** Focus mode: the full window terminal with a roster of everyone, opened from
- *  the top bar, from Focus on a Work tab terminal, and reopened at launch by a
- *  saved preference. Hidden: the office, the panels and the Work tab cover
- *  what an owner needs (owner, 2026-10-01). */
-export const SHOW_FOCUS_MODE = false;
 
 /** Temporary helpers Michael starts on his own (spawn requests → ephemeral
  *  workers), plus the Settings toggle that allowed it and the WORKERS tab that
@@ -53,19 +36,19 @@ export const AUTO_FAILURE_REPORTS = true;
  *  (owner, 2026-09-24). */
 export const SHOW_AUTO_MODE_LABEL = false;
 
-/** The red close button on a team member's panel and in its full screen view.
+/** The red close button on a team member's panel.
  *  It stopped the agent mid-task and archived it, with no button to bring it
  *  back and no return on relaunch, behind a confirm that spoke of a "PTY"
  *  (owner, 2026-09-24). Michael never had it. */
 export const SHOW_CLOSE_AGENT = false;
 
-/** "Block tools" and "stop after this step" on a team member's panel and focus
- *  view. Owners manage the team through Michael; the circuit breaker still
+/** "Block tools" and "stop after this step" on a team member's panel.
+ *  Owners manage the team through Michael; the circuit breaker still
  *  steps in on its own when an agent loops or overspends (owner, 2026-09-25). */
 export const SHOW_AGENT_BRAKES = false;
 
 /** "Open a Terminal window here": the open button next to edit on each agent,
- *  the same button in the full screen view, and the terminal icon beside each
+ *  and the terminal icon beside each
  *  folder in Michael's Command Center. A developer tool owners don't use
  *  (owner, 2026-09-24). */
 export const SHOW_OPEN_TERMINAL = false;
@@ -82,8 +65,8 @@ export const SHOW_DELIVERY_SWITCH = false;
  *  for now (owner, 2026-09-24); the rest of voice Michael is unchanged. */
 export const ALLOW_VOICE_HIRE = false;
 
-/** Voice, entirely: talking to Michael (the Talk toggle on his card and in
- *  full screen) and dictation (the mic in the message box and hold Option in a
+/** Voice, entirely: talking to Michael (the Talk toggle on his card) and
+ *  dictation (the mic in the message box and hold Option in a
  *  terminal), plus the Voice tab in Settings. Main also refuses to start a
  *  voice session or transcribe audio while this is off (owner, 2026-09-24). */
 export const SHOW_VOICE = false;

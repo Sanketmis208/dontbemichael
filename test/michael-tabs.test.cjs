@@ -35,8 +35,8 @@ test('Ask me lives on the Needs you board, which the right column shows when it 
   assert.match(read('src/renderer/src/store/store.ts'), /rightColumn: 'closed',/);
 });
 
-test('the docked panel opens on Profile; only focus mode opens on the terminal', () => {
-  assert.match(src, /const defaultTab: CCTab = fullscreen \? 'terminal' : 'profile';/);
+test('Michael\'s panel opens on Profile', () => {
+  assert.match(src, /const defaultTab: CCTab = 'profile';/);
   assert.match(src, /useState<CCTab>\(defaultTab\)/);
   assert.doesNotMatch(src, /setTab\('terminal'\)/, 'nothing falls back to the terminal behind the default\'s back');
 });

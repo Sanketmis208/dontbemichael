@@ -177,10 +177,10 @@ test('the move animates a transform only, snaps with reduced motion, and the dia
   assert.match(dialog, /export const PANEL_MOVE_EVENT = 'cth:panel-move';/);
 });
 
-test('Edit agent: wide in two columns with who it is in the title, the question on every way out, and none from fullscreen', () => {
-  // Value: protects=WD2, WD3, WD4 and outside voice 4; fails_when=wide Edit loses its title or grid, a close skips the question, the margins close it, or the fullscreen view gets a wide button; why_new=new; seam=source pin
+test('Edit agent: wide in two columns with who it is in the title, and the question on every way out', () => {
+  // Value: protects=WD2, WD3, WD4 and outside voice 4; fails_when=wide Edit loses its title or grid, a close skips the question, or the margins close it; why_new=new; seam=source pin
   const src = read('src/renderer/src/components/EditAgentModal.tsx');
-  assert.match(src, /const \[inColumn\] = useState\(\(\) => docked && !!panelBehind\(\)\);/);
+  assert.match(src, /const \[inColumn\] = useState\(\(\) => !!panelBehind\(\)\);/);
   assert.match(src, /holds: \(next\) => dirtyRef\.current && \(next\.rightColumn !== 'person' \|\| next\.selectedId !== agent\.id\)/);
   assert.match(src, /const requestClose = \(\): void => \{ if \(dirtyRef\.current\) setAsking\('close'\); else onClose\(\); \};/);
   assert.match(src, /onClose=\{requestClose\}/, '✕ and Esc ask');
@@ -195,7 +195,6 @@ test('Edit agent: wide in two columns with who it is in the title, the question 
   assert.match(read('src/renderer/src/components/fieldText.tsx'), /\? \{ fontSize: 14, lineHeight: '22px', fontWeight: 400, color: 'var\(--cth-ink-2\)' \}/);
   assert.equal((src.match(/dir="auto"/g) ?? []).length, 3, 'every text box (WD13); How X works sets its own below');
   assert.equal((read('src/renderer/src/components/fieldText.tsx').match(/dir=\{rtl \? 'auto' : undefined\}/g) ?? []).length, 2, 'the job parts follow the text direction too');
-  assert.match(read('src/renderer/src/components/FullscreenTerminal.tsx'), /<EditAgentModal agent=\{agent\} onClose=\{\(\) => setEditAgentOpen\(false\)\} docked=\{false\} \/>/);
   assert.match(read('src/renderer/src/shell/PanelChrome.tsx'), /<WideButton \/>\s*<button onClick=\{\(\) => \{ const f = getNeedsYouFeed\(\);/, 'beside close on every panel header');
 });
 

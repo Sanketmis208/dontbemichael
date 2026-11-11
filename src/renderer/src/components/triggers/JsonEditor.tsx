@@ -5,8 +5,8 @@ import { tags } from '@lezer/highlight';
 import { json } from '@codemirror/lang-json';
 
 /**
- * A small JSON editor for a webhook's schema. Same CodeMirror the IDE uses, cut
- * down for a sidebar: no line numbers, no fold gutter, no search bar — those eat
+ * A small JSON editor for a webhook's schema. CodeMirror, cut down for a
+ * sidebar: no line numbers, no fold gutter, no search bar — those eat
  * a third of the width here and none of them help edit twenty lines of schema.
  * Colors come from `--cth-*` tokens so it follows the theme like everything else.
  */

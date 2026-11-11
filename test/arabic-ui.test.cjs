@@ -117,7 +117,7 @@ test('content direction in components is gated, never content-sniffed', () => {
   // Arabic into it. Every site has to be behind the language gate.
   const files = [
     'components/AddAgentModal', 'components/AskMeTab',
-    'components/CommandCenterPanel', 'components/FullscreenTerminal',
+    'components/CommandCenterPanel',
     'components/MessageQueueComposer',
     'components/TasksKanban', 'components/ThreadsPanel',
     'components/triggers/ScheduleList',

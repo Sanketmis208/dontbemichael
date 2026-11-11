@@ -1,8 +1,7 @@
 /**
- * Rendered markdown view (v0.3.4) — the shared preview used by the IDE's
- * split/preview modes, the fullscreen file overlay, and (via those) the
- * terminal ⌘-click flow. The `card` variant renders agent-written markdown
- * inside another surface: the ASK ME question and the task detail's Q&A trail.
+ * Rendered markdown view (v0.3.4): file tabs show it as a document, and the
+ * `card` variant renders agent-written markdown inside another surface: the
+ * ASK ME question and the task detail's Q&A trail.
  *
  * SECURITY: agent-generated markdown is untrusted. react-markdown WITHOUT
  * rehype-raw renders to React elements only — no HTML sink exists, raw HTML in
@@ -13,20 +12,19 @@
  * (original-email-view.md); both render as a button and never navigate.
  *
  * Links never navigate the window: http(s)/mailto go through the main-process
- * opener; relative *.md links surface through onOpenMarkdownLink so the host
- * (IDE tab / overlay) opens them in context; everything else is inert.
+ * opener; everything else is inert.
  *
  * In a card, a web or email link is named (docs/designs/named-links.md): a
  * pasted URL shows the app or site it opens ("HubSpot"), an arrow or a mail
  * icon says where the click goes, and words that name another site get the
- * real one after the link. Documents (file tabs, the IDE) show links as written.
+ * real one after the link. Documents (file tabs) show links as written.
  */
 import { memo, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown, { type Components, type Options } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useWorkspaceImage } from '@/hooks/useWorkspaceImage';
-import { isBareLink, isExternal, labelMismatch, linkName, resolveLocalImageRel, resolveMdLinkRel } from './mdLinks';
+import { isBareLink, isExternal, labelMismatch, linkName, resolveLocalImageRel } from './mdLinks';
 import { Icon } from '@/components/Icon';
 import { remarkSoftBreaks } from './remarkSoftBreaks';
 import { remarkFileChips } from './remarkFileChips';
@@ -80,8 +78,6 @@ export interface MarkdownPreviewProps {
    *  chips into actual pictures (read through the root-confined fs IPC); without
    *  it every image stays a chip, because there is nothing to resolve against. */
   root?: string;
-  /** Open a sibling markdown file (repo-relative path) in the host's context. */
-  onOpenMarkdownLink?: (rel: string) => void;
   /** Page vs in-card rendering. Defaults to `document`. */
   variant?: MarkdownVariant;
   /** Draw each file the text names as this chip, in place of its path
@@ -97,7 +93,7 @@ export interface MarkdownPreviewProps {
 }
 
 export const MarkdownPreview = memo(function MarkdownPreview({
-  source, baseRel, root, onOpenMarkdownLink, variant = 'document', fileChip, placeLinks = false, folderTeam
+  source, baseRel, root, variant = 'document', fileChip, placeLinks = false, folderTeam
 }: MarkdownPreviewProps) {
   const card = variant === 'card';
   const basePlugins = placeLinks
@@ -150,15 +146,12 @@ export const MarkdownPreview = memo(function MarkdownPreview({
               const email = card ? parseEmailHref(h) : null;
               return email ? <EmailChip email={email} words={hastText(node)}>{children}</EmailChip> : <>{children}</>;
             }
-            // The .md file a link opens, judged on its cleaned path (resolveMdLinkRel).
-            const mdTarget = onOpenMarkdownLink && !isExternal(h) ? resolveMdLinkRel(baseRel, h) : null;
             const onClick = (e: React.MouseEvent) => {
               e.preventDefault();
               if (isExternal(h)) { void window.cth.openExternal?.(h); return; }
-              if (mdTarget !== null) onOpenMarkdownLink?.(mdTarget);
               // anything else (file:, anchors into self, unknown schemes): inert
             };
-            const clickable = isExternal(h) || mdTarget !== null;
+            const clickable = isExternal(h);
             if (card && isExternal(h)) {
               const text = hastText(node);
               const bare = isBareLink(text, h);

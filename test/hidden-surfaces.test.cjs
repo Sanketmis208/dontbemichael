@@ -2,10 +2,6 @@
 
 /**
  * Surfaces this build hides from business owners (src/shared/buildFeatures.ts).
- *
- * Git is hidden from the owner in this build (owner, 2026-09-23): no GIT tab on
- * any agent, and no CHANGES / HISTORY / COMPARE rail in the IDE, which was the
- * only git view Michael had. The code stays; SHOW_GIT brings it all back.
  */
 
 const test = require('node:test');
@@ -16,56 +12,22 @@ const loadTs = require('./load-ts.cjs');
 
 const read = (rel) => fs.readFileSync(path.resolve(__dirname, '..', rel), 'utf8');
 
-test('this build hides git', () => {
-  assert.equal(loadTs('src/shared/buildFeatures.ts').SHOW_GIT, false);
-});
-
-test('the agent sidebar drops the GIT tab and has no TRACES tab; saved ones open elsewhere', () => {
-  assert.match(read('src/renderer/src/components/SidebarTabs.tsx'), /ALL_TABS\.filter\(\(tab\) => tab\.key !== 'git' \|\| SHOW_GIT\)/);
-  assert.doesNotMatch(read('src/renderer/src/components/SidebarTabs.tsx'), /'traces'/);
+test('the agent sidebar has no GIT or TRACES tab; saved ones open elsewhere', () => {
+  // Value: protects=a tab saved by an older build opens a tab that exists; fails_when=the mapping goes and the panel opens on nothing; why_new=the git tab was removed; seam=none
+  assert.doesNotMatch(read('src/renderer/src/components/SidebarTabs.tsx'), /'git'|'traces'/);
   assert.match(read('src/renderer/src/store/store.ts'), /if \(v === 'traces'\) return 'profile';/);
-  assert.match(read('src/renderer/src/components/AgentDetailPanel.tsx'), /SHOW_GIT && sidebarTab === 'git'/);
-  assert.match(read('src/renderer/src/store/store.ts'), /if \(v === 'git'\) return SHOW_GIT \? v : 'terminal';/);
+  assert.match(read('src/renderer/src/store/store.ts'), /if \(v === 'git'\) return 'terminal';/);
 });
 
-test('the IDE hides its git rail and stops polling git status', () => {
-  const ide = read('src/renderer/src/ide/IdePanel.tsx');
-  const open = ide.indexOf('{SHOW_GIT && (<>');
-  const close = ide.indexOf('</>)}', open);
-  assert.ok(open > 0 && close > open, 'git rail wrapped in SHOW_GIT');
-  const rail = ide.slice(open, close);
-  for (const piece of ['toggleGitRail', "'changes', 'history', 'compare'", '<HistoryPane', '<ComparePane']) {
-    assert.ok(rail.includes(piece), `${piece} is inside the hidden block`);
-  }
-  assert.match(ide, /const refreshStatus = useCallback\(async \(\) => \{[\s\S]{0,120}if \(!SHOW_GIT\) return;/);
-});
-
-/**
- * The IDE is hidden too (owner, 2026-09-23): no IDE button on any agent, and no
- * other path can open it. SHOW_IDE brings it back.
- */
-test('this build hides the IDE', () => {
-  assert.equal(loadTs('src/shared/buildFeatures.ts').SHOW_IDE, false);
-});
-
-test('every IDE button is behind SHOW_IDE', () => {
-  for (const f of ['CommandCenterPanel.tsx', 'AgentDetailPanel.tsx', 'FullscreenTerminal.tsx']) {
-    const src = read(`src/renderer/src/components/${f}`);
-    const calls = [...src.matchAll(/setIdeOpen\(true/g)].map((m) => m.index);
-    assert.ok(calls.length > 0, `${f} still has its IDE button code`);
-    for (const at of calls) {
-      const before = src.slice(Math.max(0, at - 400), at);
-      assert.ok(before.includes('{SHOW_IDE && ('), `${f}: IDE button at ${at} is not behind SHOW_IDE`);
-    }
-  }
-});
-
-test('nothing else can open the IDE, and terminal file links go to Finder', () => {
-  const store = read('src/renderer/src/store/store.ts');
-  assert.match(store, /setIdeOpen: \(open, agentId\) => set\(\{ ideOpen: open && SHOW_IDE,/);
-  assert.match(store, /openFileInIde: \(absPath\) => \{\n\s+if \(!SHOW_IDE\) return;/);
-  assert.match(read('src/renderer/src/App.tsx'), /\{SHOW_IDE && ideOpen && <IdePanel \/>\}/);
-  assert.match(read('src/renderer/src/components/terminalPool.ts'), /if \(action === 'reveal' \|\| !hit\.isFile \|\| !SHOW_IDE\) \{\n\s+void window\.cth\.revealPath/);
+test('a file link in a terminal shows the file in Finder and never opens it', () => {
+  // Value: protects=a path an agent prints is only ever revealed, never launched; fails_when=activatePath opens the file or hands it to another viewer; why_new=kept from the IDE test when the IDE was removed; seam=source pin (terminalPool imports xterm)
+  const pool = read('src/renderer/src/components/terminalPool.ts');
+  const at = pool.indexOf('async function activatePath(abs: string): Promise<void> {');
+  assert.ok(at > 0, 'activatePath takes only the path');
+  const body = pool.slice(at, pool.indexOf('\n}\n', at));
+  assert.match(body, /void window\.cth\.revealPath\(hit\)/);
+  assert.doesNotMatch(body, /openPath|openExternal|openFile|openAskFile/);
+  assert.match(pool, /void activatePath\(abs\);/);
 });
 
 /**
@@ -122,27 +84,23 @@ test('the header hides the auto mode text', () => {
 
 /**
  * The close button on a team member is hidden (owner, 2026-09-24): it stopped
- * the agent mid-task and archived it with no way back in the app. Hidden in
- * both places it lived, the agent panel and the full screen view.
+ * the agent mid-task and archived it with no way back in the app.
  */
 test('the close agent button is hidden everywhere', () => {
   assert.equal(loadTs('src/shared/buildFeatures.ts').SHOW_CLOSE_AGENT, false);
   assert.match(read('src/renderer/src/components/AgentDetailPanel.tsx'),
     /\{isReal && SHOW_CLOSE_AGENT && \(\s*<PixelButton variant="destructive" size="md" onClick=\{onKill\}>/);
-  assert.match(read('src/renderer/src/components/FullscreenTerminal.tsx'),
-    /\{!agent\.isGod && SHOW_CLOSE_AGENT && \(\s*<PixelButton variant="destructive" size="sm" onClick=\{onKill\}>/);
 });
 
 /**
  * "Open a Terminal window here" is hidden everywhere (owner, 2026-09-24): the
- * open button next to edit, the same button in full screen, and the terminal
- * icon beside each folder in Michael's Command Center.
+ * open button next to edit, and the terminal icon beside each folder in
+ * Michael's Command Center.
  */
 test('the open terminal buttons are hidden everywhere', () => {
   assert.equal(loadTs('src/shared/buildFeatures.ts').SHOW_OPEN_TERMINAL, false);
   const cases = [
     ['AgentDetailPanel.tsx', "onClick={openTerminal} disabled={openTerminalState === 'opening'}"],
-    ['FullscreenTerminal.tsx', "onClick={openTerminal} disabled={openState === 'opening'}"],
     ['CommandCenterPanel.tsx', 'onClick={() => window.cth.openTerminalAt(r)}']
   ];
   for (const [file, marker] of cases) {
@@ -191,9 +149,8 @@ test('voice Michael cannot hire', () => {
  */
 test('voice is off everywhere', () => {
   assert.equal(loadTs('src/shared/buildFeatures.ts').SHOW_VOICE, false);
-  for (const f of ['FullscreenTerminal.tsx']) {
+  for (const f of fs.readdirSync(path.resolve(__dirname, '../src/renderer/src/components')).filter((n) => n.endsWith('.tsx'))) {
     const src = read(`src/renderer/src/components/${f}`);
-    assert.match(src, /\{SHOW_VOICE && <RealtimeMichaelToggle \/>\}/, `${f}: Talk toggle behind SHOW_VOICE`);
     assert.doesNotMatch(src.replace(/\{SHOW_VOICE && <RealtimeMichaelToggle \/>\}/g, ''), /<RealtimeMichaelToggle \/>/, `${f}: no ungated toggle`);
   }
   assert.match(read('src/renderer/src/store/store.ts'), /setFreeflowEnabled: \(on\) => set\(\{ freeflowEnabled: SHOW_VOICE && on \}\)/);
@@ -296,17 +253,6 @@ test('the hire wizard has no worktree, resume, projects or engine choices (owner
   assert.match(flags, /export const SHOW_ENGINE_PICKER = false;/);
   assert.match(src, /\{SHOW_ENGINE_PICKER && <>[\s\S]*?addAgent\.provider[\s\S]*?addAgent\.command[\s\S]*?<\/>\}/, 'engine and command are gated');
   assert.match(src, /const model = customModel \?\? defaultModel;/, 'the model starts on the Settings default');
-});
-
-test('focus mode is hidden: no button opens it and a saved preference cannot reopen it (owner, 2026-10-01)', () => {
-  assert.equal(loadTs('src/shared/buildFeatures.ts').SHOW_FOCUS_MODE, false);
-  const store = read('src/renderer/src/store/store.ts');
-  assert.match(store, /if \(id && !SHOW_FOCUS_MODE\) return;/, 'setFullscreen opens nothing');
-  assert.match(store, /fullscreenAgentId: SHOW_FOCUS_MODE \? focusOnLoad\(initialPrefersFocusMode, initialSelectedId\) : null,/, 'never at launch');
-  assert.match(store, /if \(!SHOW_FOCUS_MODE\) return s;/, 'restoreFocusMode does nothing');
-  assert.match(read('src/renderer/src/shell/TopBar.tsx'), /\{SHOW_FOCUS_MODE && \(\n\s+<IconButton label=\{fullscreenAgentId \? t\('shell\.exitFocus'\)/);
-  assert.match(read('src/renderer/src/components/AgentDetailPanel.tsx'), /onToggleFullscreen=\{SHOW_FOCUS_MODE \? /);
-  assert.match(read('src/renderer/src/components/CommandCenterPanel.tsx'), /onToggleFullscreen=\{SHOW_FOCUS_MODE \|\| fullscreen \? /);
 });
 
 test('Settings, General: one About card carries the version once and the update status (owner, 2026-10-01)', () => {

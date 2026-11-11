@@ -46,7 +46,7 @@ import {
   modelForRole, OPS_STANDUP_MISSION, OPS_STANDUP_BUILT_IN_BODIES, OPS_STANDUP_FOCUS, OPS_STANDUP_BUILT_IN_FOCUSES, HEARTBEAT_MISSION, heartbeatMessage, COMPACT_MAINTENANCE_MISSION, FOUNDATIONS_CHECK_MISSION, FOUNDATIONS_CHECK_BUILT_IN_FOCUSES, FOUNDATIONS_CHECK_FOCUS, type HarnessConfig, type ScheduledMission
 } from './config';
 import { terminalLaunches } from './terminalAtFolder';
-import { listDir, readFileText, readFileBinary, writeFileText, statAbs, expandTilde, askFileVerdict, askFileByName, askFileRootsFor, resolveAskFileRoots, readAskFile, isPackageDir, type AskFileAgent } from './fs';
+import { readFileBinary, statAbs, expandTilde, askFileVerdict, askFileByName, askFileRootsFor, resolveAskFileRoots, readAskFile, isPackageDir, type AskFileAgent } from './fs';
 import { answerMessages, cardConversation, mergeHumanQA, MICHAEL_ID, raiserOf } from '../shared/askMeRouting';
 import { FIRST_TASK_EDITED_MAX, firstTaskCard, firstTaskCardFromText } from '../shared/firstTask';
 import { answerKey, catchUpRequests, OwnerAnswerRetry, ownerWorkOrder } from '../shared/ownerRequests';
@@ -67,9 +67,7 @@ import {
 import { MICHAEL_WORK_STYLE } from '../shared/michaelWorkStyle';
 import { makeScheduleRequests } from './scheduleRequests';
 import {
-  getBranch, getStatus, getLog, getBranches, getAheadBehind, isRepo, getDiff, mainRepoRoot,
-  addWorktree, removeWorktree, worktreeHasUnintegratedWork, worktreeIsGcSafe,
-  getLogGraph, getCommitFiles, getFileAtRev, compareRefs, listWorktrees, checkoutRef
+  getBranch, isRepo, addWorktree, removeWorktree, worktreeHasUnintegratedWork, worktreeIsGcSafe
 } from './git';
 import { linkWorktreeDeps, unlinkWorktreeDeps } from './worktreeDeps';
 import { HiveManager, type AgentMeta, type HiveMessage, type HiveTask } from './hive';
@@ -104,7 +102,7 @@ import { readTeamMemory } from './teamMemory';
 import { readClaudePlan } from './claudeAccount';
 import { planPrice, PLAN_LABELS, PLAN_PRICES } from '../shared/claudePlan';
 import { claudeProjectsRoot, projectDir, projectDirs, readAgentUsage, readContextTokens, seedSessionTranscript, resolveSessionCwd } from './transcript';
-import { listIssues, listCIRuns } from './github';
+import { listIssues } from './github';
 import { SlackWebhookServer, SlackReplyServer, postSlackReply, type SlackEventFile } from './slack';
 import {
   WebhookServer,
@@ -5359,14 +5357,6 @@ ipcMain.handle('config:startOverHere', () => {
 });
 
 // ─── IPC: filesystem (sandboxed to a root) ──────────────────────────────────
-ipcMain.handle('fs:listDir', (_evt, root: unknown, rel: unknown) => {
-  if (typeof root !== 'string' || typeof rel !== 'string') return { ok: false, error: 'invalid args' };
-  return listDir(root, rel);
-});
-ipcMain.handle('fs:readFile', (_evt, root: unknown, rel: unknown) => {
-  if (typeof root !== 'string' || typeof rel !== 'string') return { ok: false, error: 'invalid args' };
-  return readFileText(root, rel);
-});
 // Raw bytes for files the text reader refuses (images). The renderer cannot
 // load them off disk itself — the CSP has no `file:` source and no file
 // protocol is registered — so the bytes come through here and become a `blob:`
@@ -5374,12 +5364,6 @@ ipcMain.handle('fs:readFile', (_evt, root: unknown, rel: unknown) => {
 ipcMain.handle('fs:readBinary', (_evt, root: unknown, rel: unknown) => {
   if (typeof root !== 'string' || typeof rel !== 'string') return { ok: false, error: 'invalid args' };
   return readFileBinary(root, rel);
-});
-ipcMain.handle('fs:writeFile', (_evt, root: unknown, rel: unknown, content: unknown) => {
-  if (typeof root !== 'string' || typeof rel !== 'string' || typeof content !== 'string') {
-    return { ok: false, error: 'invalid args' };
-  }
-  return writeFileText(root, rel, content);
 });
 // v0.3.4: existence check for the terminal ⌘-click markdown flow (metadata only).
 ipcMain.handle('fs:statAbs', (_evt, p: unknown) => {
@@ -5591,83 +5575,6 @@ ipcMain.handle('fs:openAskFile', async (_evt, p: unknown, who: unknown) => {
 ipcMain.handle('git:isRepo', (_evt, cwd: unknown) => {
   if (typeof cwd !== 'string') return false;
   return isRepo(cwd);
-});
-
-// The repo a cwd belongs to, following a linked worktree back to its main
-// checkout — the renderer groups the agent roster by this.
-ipcMain.handle('git:mainRepo', (_evt, cwd: unknown) => {
-  if (typeof cwd !== 'string' || !cwd) return null;
-  return mainRepoRoot(cwd);
-});
-ipcMain.handle('git:branch', (_evt, cwd: unknown) => {
-  if (typeof cwd !== 'string') return { error: 'invalid cwd' };
-  return getBranch(cwd);
-});
-ipcMain.handle('git:status', (_evt, cwd: unknown) => {
-  if (typeof cwd !== 'string') return { error: 'invalid cwd' };
-  return getStatus(cwd);
-});
-ipcMain.handle('git:log', (_evt, cwd: unknown, n: unknown) => {
-  if (typeof cwd !== 'string') return { error: 'invalid cwd' };
-  const count = typeof n === 'number' ? Math.min(500, Math.max(1, n)) : 50;
-  return getLog(cwd, count);
-});
-ipcMain.handle('git:branches', (_evt, cwd: unknown) => {
-  if (typeof cwd !== 'string') return { error: 'invalid cwd' };
-  return getBranches(cwd);
-});
-ipcMain.handle('git:aheadBehind', (_evt, cwd: unknown) => {
-  if (typeof cwd !== 'string') return { error: 'invalid cwd' };
-  return getAheadBehind(cwd);
-});
-ipcMain.handle('git:diff', (_evt, cwd: unknown, relPath: unknown) => {
-  if (typeof cwd !== 'string' || typeof relPath !== 'string') {
-    return { ok: false, error: 'invalid args' };
-  }
-  return getDiff(cwd, relPath);
-});
-// ─── v0.3.4: history / compare / checkout (git visualization) ───────────────
-ipcMain.handle('git:logGraph', (_evt, cwd: unknown, n: unknown, skip: unknown) => {
-  if (typeof cwd !== 'string') return { error: 'invalid args' };
-  const count = Math.min(500, Math.max(1, typeof n === 'number' ? n : 200));
-  const off = Math.max(0, typeof skip === 'number' ? skip : 0);
-  return getLogGraph(cwd, count, off);
-});
-ipcMain.handle('git:commitFiles', (_evt, cwd: unknown, sha: unknown) => {
-  if (typeof cwd !== 'string' || typeof sha !== 'string') return { error: 'invalid args' };
-  return getCommitFiles(cwd, sha);
-});
-ipcMain.handle('git:showFile', (_evt, cwd: unknown, rev: unknown, relPath: unknown) => {
-  if (typeof cwd !== 'string' || typeof rev !== 'string' || typeof relPath !== 'string') {
-    return { ok: false, error: 'invalid args' };
-  }
-  return getFileAtRev(cwd, rev, relPath);
-});
-ipcMain.handle('git:compareRefs', (_evt, cwd: unknown, base: unknown, head: unknown, mode: unknown) => {
-  if (typeof cwd !== 'string' || typeof base !== 'string' || typeof head !== 'string') {
-    return { error: 'invalid args' };
-  }
-  return compareRefs(cwd, base, head, mode === 'two' ? 'two' : 'three');
-});
-ipcMain.handle('git:worktrees', (_evt, cwd: unknown) => {
-  if (typeof cwd !== 'string') return { error: 'invalid args' };
-  return listWorktrees(cwd);
-});
-ipcMain.handle('git:checkout', async (_evt, cwd: unknown, ref: unknown, detach: unknown) => {
-  if (typeof cwd !== 'string' || typeof ref !== 'string') return { ok: false, error: 'invalid args' };
-  // Guard: never swap files under an actively-working agent. Objective signal
-  // owned by main — any live pty whose cwd sits in this tree and emitted output
-  // in the last 10s is treated as mid-run. (Idle-but-open terminals are fine:
-  // checkoutRef additionally requires a clean tree, and TUIs redraw on fs
-  // changes gracefully.)
-  const busy = ptyManager.list().find((p) =>
-    isSameOrInside(cwd, p.cwd) &&
-    Date.now() - p.lastOutputAt < 10_000
-  );
-  if (busy) {
-    return { ok: false, error: `an agent is actively working in this repo (${busy.id}). Try again when it goes quiet` };
-  }
-  return checkoutRef(cwd, ref, detach === true);
 });
 
 // ─── IPC: roster mirror (shared between dev and a packaged build) ───────────
@@ -7826,11 +7733,6 @@ ipcMain.handle('hive:textSearch', (_evt, query: unknown) => {
 // ─── IPC: GitHub issue ingestion (gh CLI) ────────────────────────────────────
 ipcMain.handle('github:issues', (_evt, cwd: unknown) =>
   typeof cwd === 'string' ? listIssues(cwd) : { ok: false, error: 'no cwd' }
-);
-
-// ─── IPC: GitHub CI status watcher (gh CLI) ──────────────────────────────────
-ipcMain.handle('github:ciRuns', (_evt, cwd: unknown) =>
-  typeof cwd === 'string' ? listCIRuns(cwd) : { ok: false, error: 'no cwd' }
 );
 
 // ─── IPC: desktop notifications toggle ──────────────────────────────────────

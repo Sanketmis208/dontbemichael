@@ -1,8 +1,8 @@
 'use strict';
 
 /**
- * ⌘-click on a path in terminal output. Two jobs, and the matcher is the one
- * that actually breaks: agent output is full of version strings and decimals
+ * ⌘-click on a path in terminal output shows it in the file browser. The
+ * matcher is the part that actually breaks: agent output is full of version strings and decimals
  * that look like filenames if the extension rule is loose.
  */
 
@@ -11,7 +11,7 @@ const assert = require('node:assert/strict');
 const loadTs = require('./load-ts.cjs');
 
 const {
-  classifyPathToken, isPathToken, pathTokenMatcher, stripPathToken
+  isPathToken, pathTokenMatcher, stripPathToken
 } = loadTs('src/shared/terminalPaths.ts');
 
 /** Every token the provider would underline on one line of output. */
@@ -25,38 +25,6 @@ function tokensIn(line) {
   }
   return out;
 }
-
-/* ---------------------------------------------------------------- *
- * classification
- * ---------------------------------------------------------------- */
-
-test('markdown previews, source edits — the v0.3.4 behaviour is unchanged', () => {
-  assert.equal(classifyPathToken('RELEASE.md'), 'preview');
-  assert.equal(classifyPathToken('docs/drops/v0.4.5.markdown'), 'preview');
-  assert.equal(classifyPathToken('src/main/updater.ts'), 'edit');
-  assert.equal(classifyPathToken('tools/copy-main-assets.cjs'), 'edit');
-  assert.equal(classifyPathToken('electron-builder.yml'), 'edit');
-  assert.equal(classifyPathToken('.github/workflows/release.yml'), 'edit');
-});
-
-test('images reveal rather than open — a click on a path is a navigation gesture', () => {
-  for (const p of ['build/icon.png', 'shot.JPEG', 'a/b/logo.svg', 'anim.webp']) {
-    assert.equal(classifyPathToken(p), 'reveal', p);
-  }
-});
-
-test('anything we cannot honestly render reveals instead of guessing', () => {
-  for (const p of ['report.pdf', 'dump.bin', 'archive.zip', 'db.sqlite', 'font.woff2']) {
-    assert.equal(classifyPathToken(p), 'reveal', p);
-  }
-});
-
-test('an executable never classifies as anything but reveal', () => {
-  // The whole safety argument: reveal opens a file browser, it never launches.
-  for (const p of ['installer.dmg', 'Payload.app', 'setup.exe', 'run.desktop']) {
-    assert.equal(classifyPathToken(p), 'reveal', p);
-  }
-});
 
 /* ---------------------------------------------------------------- *
  * matching — the part that goes wrong
@@ -93,9 +61,8 @@ test('shell and prose wrapping comes off, and so does :line', () => {
   assert.equal(stripPathToken('src/main/updater.ts:165'), 'src/main/updater.ts');
 });
 
-test('a :line suffix survives matching and still classifies by extension', () => {
+test('a :line suffix survives matching', () => {
   assert.deepEqual(tokensIn('fails at src/main/updater.ts:165'), ['src/main/updater.ts']);
-  assert.equal(classifyPathToken('src/main/updater.ts'), 'edit');
 });
 
 test('absolute, home, and Windows paths are all recognised', () => {
@@ -143,12 +110,12 @@ test('quoted versions and prose do not become file paths', () => {
 
 test('a dotted directory name cannot masquerade as an extension', () => {
   // extensionOf looks at the LAST segment only, so v1.2 here is not the extension.
-  assert.equal(classifyPathToken('reports/v1.2/summary.md'), 'preview');
+  assert.deepEqual(tokensIn('see reports/v1.2/summary.md'), ['reports/v1.2/summary.md']);
 });
 
-test('case does not decide the verdict', () => {
-  assert.equal(classifyPathToken('README.MD'), 'preview');
-  assert.equal(classifyPathToken('src/App.TSX'), 'edit');
+test('case does not decide whether a bare name is a path', () => {
+  assert.equal(isPathToken('README.MD'), true);
+  assert.equal(isPathToken('App.TSX'), true);
 });
 
 test('a link covers the cells of its path, past wide characters and inside its quotes', () => {
@@ -163,33 +130,30 @@ test('a link covers the cells of its path, past wide characters and inside its q
   assert.deepEqual(linkCellRange(cellsFor(plain), 4, 12, 'notes.md'), { startX: 5, endX: 12 });
 });
 
-test('a dotfile is named by its type: .gitignore, .env and .npmrc open as text', () => {
-  // Value: protects=dotfiles on the edit list open for editing instead of revealing; fails_when=the dotfile rule is dropped or extensionOf's no-extension answer wins; why_new=gitignore, dockerignore, env and npmrc never matched a real dotfile; seam=none; no_claim=a long dotfile name as a token, which waits on the longer extension fix (#190)
-  for (const p of ['.gitignore', 'src/.dockerignore', './.env', '~/.npmrc', 'C:\\proj\\.editorconfig']) {
-    assert.equal(classifyPathToken(p), 'edit', p);
+test('a dotfile is named by its type: .gitignore, .env and .npmrc are paths alone', () => {
+  // Value: protects=a bare known dotfile links without a separator; fails_when=the dotfile rule is dropped or extensionOf's no-extension answer wins; why_new=gitignore, dockerignore, env and npmrc never matched a real dotfile; seam=none; no_claim=a long dotfile name as a token, which waits on the longer extension fix (#190)
+  for (const p of ['.gitignore', '.dockerignore', '.env', '.npmrc', '.editorconfig']) {
+    assert.equal(isPathToken(p), true, p);
   }
   assert.deepEqual(tokensIn('wrote ./.env and ~/.npmrc'), ['./.env', '~/.npmrc']);
-  // A dotfile that is not on a list is still only revealed, and a name with a
-  // real extension after the dot keeps it.
-  assert.equal(classifyPathToken('~/.bashrc'), 'reveal');
-  assert.equal(classifyPathToken('.env.local'), 'reveal');
-  assert.equal(classifyPathToken('src/.eslintrc.json'), 'edit');
+  // A bare dotfile that is not on the list needs a separator, and a name with
+  // a real extension after the dot keeps it.
+  assert.equal(isPathToken('.bashrc'), false);
+  assert.equal(isPathToken('~/.bashrc'), true);
+  assert.equal(isPathToken('.env.local'), false);
+  assert.equal(isPathToken('.eslintrc.json'), true);
 });
 
-test('extensions longer than 8 characters match without truncation and classify correctly', () => {
-  // Bare properties file (10-char extension in EDIT_EXTS)
+test('extensions longer than 8 characters match without truncation', () => {
+  // Bare properties file (10-char extension in KNOWN_EXTS)
   assert.deepEqual(tokensIn('check application.properties for db config'), ['application.properties']);
-  assert.equal(classifyPathToken('application.properties'), 'edit');
 
   // Quoted path containing spaces and explicit path prefix
   assert.deepEqual(tokensIn('saved "./My Docs/app.properties" in project'), ['./My Docs/app.properties']);
-  assert.equal(classifyPathToken('./My Docs/app.properties'), 'edit');
 
   // Windows path with long extension
   assert.deepEqual(tokensIn('configured C:\\proj\\settings.properties successfully'), ['C:\\proj\\settings.properties']);
-  assert.equal(classifyPathToken('C:\\proj\\settings.properties'), 'edit');
 
   // Existing short extensions and version-like strings behave correctly
   assert.deepEqual(tokensIn('built src/index.ts in v0.4.5 after 1.5 hours'), ['src/index.ts']);
-  assert.equal(classifyPathToken('src/index.ts'), 'edit');
 });

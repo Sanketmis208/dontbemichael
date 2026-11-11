@@ -47,12 +47,6 @@ input, textarea, [contenteditable='true'] {
 .cth-tabbar { scrollbar-width: none; -ms-overflow-style: none; }
 .cth-tabbar::-webkit-scrollbar { height: 0; display: none; }
 
-/* Same treatment for a vertical list (the fullscreen agent roster): still
-   scrollable by wheel/trackpad, but the bar itself never takes a slice out of an
-   already narrow rail. */
-.cth-scroll-hidden { scrollbar-width: none; -ms-overflow-style: none; }
-.cth-scroll-hidden::-webkit-scrollbar { width: 0; height: 0; display: none; }
-
 /* Canvases (the terminal's renderer) keep crisp pixel edges. Vector art (the
    studio, the lockup, icons) renders smooth. */
 canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
@@ -96,19 +90,6 @@ canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
   border-radius: var(--cth-r-pill);
 }
 ::-webkit-scrollbar-thumb:hover { background: var(--cth-ink-4); background-clip: padding-box; }
-
-/* commit-graph (open-source git visualiser) — harmonise with the pixel theme */
-/* Commit history. The `* { font-family: … !important }` blanket that used to live
-   here existed to reach inside the third-party commit-graph widget; the rows are
-   ours now, so fonts are set per element and the override would only fight the
-   monospace on hashes and timestamps. */
-.cth-commit-graph {
-  background: var(--cth-paper-100);
-  font-family: var(--cth-font-ui);
-  color: var(--cth-ink-900);
-}
-/* Row hover — the whole line is the click target for opening a commit. */
-.cth-commit-graph > div:hover { background: var(--cth-cream-200); }
 
 /* Drag region for hidden inset title bar (mac) */
 .cth-titlebar-drag { -webkit-app-region: drag; }
@@ -343,8 +324,7 @@ canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
 [dir="rtl"] input[type="range"] { direction: rtl; }
 
 /* ─── Markdown preview (v0.3.4) ──────────────────────────────────────────────
-   Shared by the IDE split/preview view and the fullscreen file overlay. All
-   colors ride the tokens, so light + dark themes come for free. */
+   All colors ride the tokens, so light + dark themes come for free. */
 /* Memory tab rows (MemoryNotes): a divided list, one hairline between rows (DESIGN.md §7.10). */
 .cth-memory-row + .cth-memory-row { border-top: 1px solid var(--cth-ink-100); }
 /* Messages tab conversation rows (ThreadsPanel), the same divided list. */

@@ -17,9 +17,8 @@ import { DEFAULT_ORG_TRIGGER, type OrgTriggerConfig, type WebhookTrigger } from 
 import { isCompactionCommand } from '@shared/providerAutomation';
 import { preferredAgentRole } from '@shared/agentRole';
 import { isInboxNudge } from '@shared/hiveNudge';
-import { SHOW_FOCUS_MODE, SHOW_GIT, SHOW_IDE, SHOW_ORG_TRIGGER, SHOW_VOICE } from '@shared/buildFeatures';
+import { SHOW_ORG_TRIGGER, SHOW_VOICE } from '@shared/buildFeatures';
 import type { ScheduledMission } from '@shared/missions';
-import { refocusAfterRemoval, focusOnLoad, restoreFocus } from './focusMode';
 import { chooseRosterSource } from './rosterSource';
 import { renamePatches, swapName } from '@shared/hireTemplates';
 import type { Handoff, JobChangeEntry, JobVersion, PlainWords } from '@shared/jobChange';
@@ -214,10 +213,7 @@ export interface QueuedMessage {
   compactUsed?: number;
 }
 
-// 'files' retired in v0.3.4 (the per-agent IDE button superseded it) — a
-// persisted 'files' selection falls back to 'terminal' on load. 'git' added in
-// v0.3.4: at-a-glance branch/status/log without opening the IDE.
-export type SidebarTab = 'profile' | 'capabilities' | 'terminal' | 'messages' | 'memory' | 'git';
+export type SidebarTab = 'profile' | 'capabilities' | 'terminal' | 'messages' | 'memory';
 
 /** Lifecycle of the god agent ("Michael") bootstrap on launch.
  *  'booting' until his PTY is confirmed live, then 'ready' (or 'failed' if the
@@ -242,7 +238,6 @@ interface State {
   selectedId: string | null;
   feeds: Record<string, string[]>;
   addAgentOpen: boolean;
-  fullscreenAgentId: string | null;
   /** What the big floor area shows: the animated office, the task board (who
    *  is doing what, what is blocked, what is done), or the GRAPH of who talks
    *  to whom. Remembered per Mac. */
@@ -263,29 +258,6 @@ interface State {
   activeFileTab: string | null;
   /** The fixed view the owner was on, to go back to when the last file tab closes. */
   lastFixedView: FixedView;
-  /** Does the user work in focus mode by default? Persisted as a boolean, and
-   *  written ONLY by an explicit toggle. Kept in the store rather than read once
-   *  at construction because the roster arrives after the store does. */
-  prefersFocusMode: boolean;
-  /** Absolute path queued for the IDE to open on next mount. Consumed-and-cleared
-   *  by IdePanel, which routes it the same way a tree click would (Monaco for
-   *  source, preview for markdown, the viewer for images). */
-  ideInitialFile: string | null;
-  /** Whether the full-window IDE panel (file manager + Monaco editor + git diff)
-   *  is open. Toggled from the title-bar IDE button; a global feature surface,
-   *  independent of the per-agent sidebar Files/Git tabs. */
-  ideOpen: boolean;
-  /** WHICH agent the IDE was opened FOR — set by whoever opens it.
-   *
-   *  The IDE used to infer its workspace purely from `selectedId`, which is a
-   *  guess that is usually right and occasionally wrong: `setFullscreen` puts an
-   *  agent's terminal on screen WITHOUT selecting it, so hitting IDE from a
-   *  fullscreen terminal could open a different agent's directory than the one
-   *  being looked at. That was invisible while the title said only "IDE" and the
-   *  folder name; it becomes a flatly wrong agent NAME once the title names one.
-   *  Callers therefore state their intent, and `selectedId` stays as the
-   *  fallback for anything that genuinely has no particular agent in mind. */
-  ideAgentId: string | null;
   sidebarWidth: number;
   /** The person's or Michael's panel opens wide, centered over the office
    *  (wide panel WD6): the owner's choice, remembered on this computer, never
@@ -397,7 +369,6 @@ interface State {
   removeArchivedAgent: (id: string) => void;
   /** Drop one agent from the restorable list (it was respawned or dismissed). */
   removeRestorableAgent: (id: string) => void;
-  reorderAgents: (fromId: string, toId: string) => void; // move agent fromId into toId's slot (drag-reorder) and persist the new order
   /** One-shot request to open a Command-Center tab (e.g. the boss-room calendar
    *  → 'triggers'; 'tasks' and 'graph' switch the floor view instead). `seq`
    *  makes repeated identical requests distinct. */
@@ -524,7 +495,6 @@ interface State {
   enqueuePendingHires: (manifests: readonly HireManifest[]) => void;
   finishPendingHire: () => void;
   clearPendingHires: () => void;
-  setFullscreen: (id: string | null) => void;
   setFloorView: (view: FloorView) => void;
   /** Open a file's tab, or select it if it is open (keyed by main's real path). */
   openFileTab: (tab: Omit<FileTab, 'openedAt'>) => void;
@@ -532,25 +502,6 @@ interface State {
   /** Rename an open tab (an email's tab takes its subject once read). */
   retitleFileTab: (id: string, title: string) => void;
   closeFileTab: (id: string) => void;
-  /** Move focus mode WITHOUT touching the preference. For the paths that re-home
-   *  a focused agent that went away: the app is following the user, not being
-   *  told what the user wants. `setFullscreen` is the explicit toggle. */
-  refocusFullscreen: (id: string | null) => void;
-  /** Re-apply the persisted preference now that the roster has changed. */
-  restoreFocusMode: () => void;
-  /** Open an absolute path in the IDE — the ONE way to show a file.
-   *
-   *  v0.4.5 removed a second, worse file surface (a fullscreen overlay wrapping
-   *  a bare Monaco). It could not scroll, had no tabs, no tree, and no git, and
-   *  every file it opened was one click from "open in IDE" anyway. Everything
-   *  that used to open it now comes here, so there is exactly one editor to fix
-   *  when an editor bug shows up. */
-  openFileInIde: (absPath: string) => void;
-  /** Open/close the IDE. `agentId` names the agent whose workspace it should
-   *  show; omit it only when the caller truly has no specific agent (the IDE
-   *  then falls back to the selection and says so in its title). */
-  setIdeOpen: (open: boolean, agentId?: string | null) => void;
-  setIdeInitialFile: (path: string | null) => void;
   setSidebarWidth: (px: number) => void;
   setSidebarTab: (tab: SidebarTab) => void;
   /** Drop persisted agents whose PTY is no longer alive in the main process.
@@ -570,7 +521,6 @@ const LS_SELECTED = 'cth.selectedId';
 const LS_QUEUES = 'cth.messageQueues';
 /** Which hive this origin's roster keys were last written for. See rosterSource.ts. */
 const LS_ROSTER_HOME = 'cth.rosterHome';
-const LS_FOCUS_MODE = 'cth.prefersFocusMode';
 const LS_FLOOR_VIEW = 'cth.floorView';
 
 /** Opening the right column on purpose (Needs you, a person, Michael's tabs)
@@ -979,27 +929,12 @@ const initialSidebarTab: SidebarTab = (() => {
     if (v === 'traces') return 'profile';
     // Schedules is a section of Capabilities now (owner, 2026-09-26).
     if (v === 'schedules') return 'capabilities';
-    // A saved GIT tab opens on the terminal while this build hides git.
-    if (v === 'git') return SHOW_GIT ? v : 'terminal';
+    // A GIT tab saved by an older build opens on the terminal (the tab is gone).
+    if (v === 'git') return 'terminal';
   } catch { /* noop */ }
   // First visit: the agent's Profile, the first tab (owner, 2026-09-25).
   return 'profile';
 })();
-
-/** Does the user want focus mode as their default view?
- *
- *  Persisted as a BOOLEAN, deliberately not as the focused agent's id. The id is
- *  meaningless across a restart: that agent may have been closed, or its PTY may
- *  not come back, and restoring a stale one lands us straight in the dangling
- *  reference `refocusAfterRemoval` exists to prevent. The preference is "I work
- *  in focus mode", so on load we resolve it against whoever is selected now. */
-const initialPrefersFocusMode = (() => {
-  try {
-    return window.localStorage.getItem(LS_FOCUS_MODE) === '1';
-  } catch { /* noop */ }
-  return false;
-})();
-
 
 const initialAgents = loadPersistedAgents();
 const initialArchivedAgents = loadPersistedArchived();
@@ -1099,8 +1034,6 @@ export const useStore = create<State>((set, get) => ({
   missions: [],
   missionsStatus: 'loading',
   setMissions: (missions, status = 'ready') => set({ missions, missionsStatus: status }),
-  fullscreenAgentId: SHOW_FOCUS_MODE ? focusOnLoad(initialPrefersFocusMode, initialSelectedId) : null,
-  prefersFocusMode: initialPrefersFocusMode,
   floorView: initialFloorView,
   fileTabs: [],
   caseStudyPrep: 'idle',
@@ -1116,9 +1049,6 @@ export const useStore = create<State>((set, get) => ({
     : s.caseStudyBusy ? {} : { caseStudyOpen: false, floorView: s.floorView === 'case-study' ? s.lastFixedView : s.floorView })),
   activeFileTab: null,
   lastFixedView: initialFloorView === 'tasks' || initialFloorView === 'graph' || initialFloorView === 'pulse' ? initialFloorView : 'office',
-  ideInitialFile: null,
-  ideOpen: false,
-  ideAgentId: null,
   sidebarWidth: initialSidebarWidth,
   panelWide: initialPanelWide,
   setPanelWide: (on) => {
@@ -1298,11 +1228,9 @@ export const useStore = create<State>((set, get) => ({
       // BOSS card fourth — and persistAgents() then wrote that order to disk, so
       // it stuck across restarts instead of flickering once.
       //
-      // Fixed at insertion rather than by sorting at render time: the order has
-      // drag-reorder (reorderAgents) whose whole point is a persisted manual
-      // order, and a god-first sort at render time would silently override the
-      // user's own arrangement every frame. This just makes the head the honest
-      // default; a deliberate drag still wins and still persists.
+      // Fixed at insertion rather than by sorting at render time: the roster
+      // order is persisted, and a god-first sort at render time would override
+      // a saved order every frame. This just makes the head the honest default.
       const agents = agent.isGod ? [agent, ...s.agents] : [...s.agents, agent];
       // Re-spawning an archived agent un-archives it: an id is active xor archived.
       const archivedAgents = s.archivedAgents.filter((a) => a.id !== agent.id);
@@ -1326,10 +1254,9 @@ export const useStore = create<State>((set, get) => ({
       const { [id]: _gone, ...feeds } = s.feeds;
       const { [id]: _queueGone, ...messageQueues } = s.messageQueues;
       const selectedId = s.selectedId === id ? (agents[0]?.id ?? null) : s.selectedId;
-      const fullscreenAgentId = refocusAfterRemoval(s.fullscreenAgentId, agents, selectedId);
       persistAgents(agents, selectedId);
       if (_queueGone) persistQueues(messageQueues);
-      return { agents, feeds, selectedId, messageQueues, fullscreenAgentId };
+      return { agents, feeds, selectedId, messageQueues };
     }),
   archiveAgent: (id) =>
     set((s) => {
@@ -1350,11 +1277,10 @@ export const useStore = create<State>((set, get) => ({
       const { [id]: _feedGone, ...feeds } = s.feeds;
       const { [id]: _queueGone, ...messageQueues } = s.messageQueues;
       const selectedId = s.selectedId === id ? (agents[0]?.id ?? null) : s.selectedId;
-      const fullscreenAgentId = refocusAfterRemoval(s.fullscreenAgentId, agents, selectedId);
       persistAgents(agents, selectedId);
       persistArchived(archivedAgents);
       if (_queueGone) persistQueues(messageQueues);
-      return { agents, archivedAgents, feeds, selectedId, messageQueues, fullscreenAgentId };
+      return { agents, archivedAgents, feeds, selectedId, messageQueues };
     }),
   removeArchivedAgent: (id) =>
     set((s) => {
@@ -1369,20 +1295,6 @@ export const useStore = create<State>((set, get) => ({
       const restorableAgents = s.restorableAgents.filter((a) => a.id !== id);
       persistRestorable(restorableAgents);
       return { restorableAgents };
-    }),
-  reorderAgents: (fromId, toId) =>
-    set((s) => {
-      if (fromId === toId) return s;
-      const from = s.agents.findIndex((a) => a.id === fromId);
-      const to = s.agents.findIndex((a) => a.id === toId);
-      if (from === -1 || to === -1) return s;
-      const agents = [...s.agents];
-      const [moved] = agents.splice(from, 1);
-      agents.splice(to, 0, moved);
-      // Persist the new roster order so it survives a reload (same slim key the
-      // rest of the roster uses). selectedId is unchanged by a reorder.
-      persistAgents(agents, s.selectedId);
-      return { agents };
     }),
   taskDetailId: null,
   openTaskDetail: (id) => set({ taskDetailId: id }),
@@ -1544,10 +1456,9 @@ export const useStore = create<State>((set, get) => ({
       const selectedId = agents.some((a) => a.id === s.selectedId)
         ? s.selectedId
         : (agents[0]?.id ?? null);
-      const fullscreenAgentId = refocusAfterRemoval(s.fullscreenAgentId, agents, selectedId);
       persistAgents(agents, selectedId);
       persistRestorable(restorableAgents);
-      return { agents, feeds, selectedId, restorableAgents, fullscreenAgentId };
+      return { agents, feeds, selectedId, restorableAgents };
     }),
   setAddAgentOpen: (open) => set(open ? { addAgentOpen: true } : { addAgentOpen: false, addAgentPick: null }),
   addAgentPick: null,
@@ -1582,38 +1493,6 @@ export const useStore = create<State>((set, get) => ({
     const floorView: FloorView = s.floorView !== 'file' ? s.floorView : r.select ?? s.lastFixedView;
     return { fileTabs: r.fileTabs, activeFileTab: r.activeFileTab, floorView, ...(fileClosedPatch(s, floorView) ?? {}) };
   }),
-  setFullscreen: (id) => {
-    // Focus mode is hidden in this build: nothing opens it (buildFeatures.ts).
-    if (id && !SHOW_FOCUS_MODE) return;
-    // Entering focus mode makes it the default view; leaving it clears that.
-    // Only an explicit toggle writes the preference, so an agent closing under
-    // you never silently changes how the app opens next time. Every non-explicit
-    // mover goes through `refocusFullscreen` instead.
-    try { window.localStorage.setItem(LS_FOCUS_MODE, id ? '1' : '0'); } catch { /* noop */ }
-    set({ fullscreenAgentId: id, prefersFocusMode: !!id });
-  },
-  refocusFullscreen: (id) => set({ fullscreenAgentId: id }),
-  restoreFocusMode: () =>
-    set((s) => {
-      if (!SHOW_FOCUS_MODE) return s;
-      const id = restoreFocus(s.prefersFocusMode, s.fullscreenAgentId, s.agents, s.selectedId);
-      return id === s.fullscreenAgentId ? s : { fullscreenAgentId: id };
-    }),
-  openFileInIde: (absPath) => {
-    if (!SHOW_IDE) return; // hidden in this build; callers show the file in Finder instead
-    const s = get();
-    // Resolve the OWNING agent here rather than in each caller: a terminal link
-    // or a Files-tab click often has nothing selected, and the IDE would
-    // otherwise fall back to the selection and open the wrong workspace.
-    const owner = s.agents.find((a) => absPath === a.cwd || absPath.startsWith(a.cwd + '/'));
-    set({ ideInitialFile: absPath, ideOpen: true, ideAgentId: owner?.id ?? null });
-  },
-  // Closing CLEARS the target: the id is scoped to one IDE session, and a stale
-  // one left behind would silently win over the selection on the next open from
-  // a caller that passes nothing.
-  // With the IDE hidden (SHOW_IDE) nothing can open it, whichever caller asks.
-  setIdeOpen: (open, agentId) => set({ ideOpen: open && SHOW_IDE, ideAgentId: open && SHOW_IDE ? (agentId ?? null) : null }),
-  setIdeInitialFile: (path) => set({ ideInitialFile: path }),
   setSidebarWidth: (px) => {
     const clamped = Math.min(1200, Math.max(320, Math.round(px)));
     try { window.localStorage.setItem(LS_SIDEBAR_WIDTH, String(clamped)); } catch { /* noop */ }

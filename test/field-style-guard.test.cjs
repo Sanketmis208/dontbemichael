@@ -29,9 +29,7 @@ const FILE_EXCEPTIONS = [
   // Chat.
   'components/ThreadsPanel.tsx', 'components/MessageQueueComposer.tsx',
   // The floor, and the voice overlays drawn on it.
-  'scene/', 'realtime/',
-  // The terminal and the code editor.
-  'ide/'
+  'scene/', 'realtime/'
 ];
 
 function tsxFiles(dir, out = []) {

@@ -225,7 +225,7 @@ test('when a bound hire leaves, their bound work goes back to the teammates', ()
   const shell = read('src/renderer/src/shell/releaseBindings.ts');
   assert.match(shell, /s\.rewriteInstructions\(patches\);/, 'roster, archived and restorable teammates alike');
   assert.match(shell, /window\.cth\.hivePatchAgentRole\(p\.id, p\.description\)/, 'and the registry Michael routes by');
-  for (const f of ['AgentDetailPanel', 'FullscreenTerminal']) {
+  for (const f of ['AgentDetailPanel']) {
     const src = read(`src/renderer/src/components/${f}.tsx`);
     assert.match(src, /await window\.cth\.closeAgentByOwner\(agent\.id\)\.catch\(\(\) => undefined\);\s*\/\/[^\n]*\n\s*await releaseBindingsOf\(agent\.id\);/, `${f}: closing on purpose releases`);
   }

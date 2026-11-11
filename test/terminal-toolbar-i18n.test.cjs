@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * The Work tab's terminal toolbar (zoom out, reset, zoom in, Focus) was English
+ * The Work tab's terminal toolbar (zoom out, reset, zoom in) was English
  * only in an app that ships Arabic and Chinese, and its tooltips named Cmd on
  * Windows, where the owner presses Ctrl. Structural checks: the renderer has no
  * DOM test harness here.
@@ -32,7 +32,7 @@ test('the shortcut names the key this OS uses', () => {
   for (const locale of ['en', 'zh-CN', 'ar']) {
     const w = JSON.parse(read(`src/renderer/src/i18n/locales/${locale}.json`)).workTab;
     for (const k of ['zoomOut', 'zoomIn', 'zoomReset']) assert.match(w[k], /\{\{mod\}\}/, `${locale} workTab.${k} shows the key`);
-    for (const k of ['zoomOutLabel', 'zoomInLabel', 'zoomResetLabel', 'exitFocus']) assert.ok(w[k], `${locale} workTab.${k}`);
+    for (const k of ['zoomOutLabel', 'zoomInLabel', 'zoomResetLabel']) assert.ok(w[k], `${locale} workTab.${k}`);
   }
 });
 

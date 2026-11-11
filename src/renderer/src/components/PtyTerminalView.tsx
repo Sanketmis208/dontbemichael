@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import '@xterm/xterm/css/xterm.css';
-import { Icon } from './Icon';
 import { acquireTerminal, attachTerminal, detachTerminal, onCellSizeChange, reflowTerminal, screenOverflowPx, setTerminalInputLocked } from './terminalPool';
 import { useTranslation } from 'react-i18next';
 import {
@@ -118,9 +117,6 @@ export interface PtyTerminalViewProps {
   onStreamData?: (chunk: string) => void;
   /** Fires with the trimmed text whenever the user submits a line (Enter). */
   onUserPrompt?: (text: string) => void;
-  /** When provided, render an expand/minimize button in the header. */
-  onToggleFullscreen?: () => void;
-  fullscreen?: boolean;
   /** Edge-to-edge mode for the sidebar tab: no outer chrome/border. */
   embedded?: boolean;
   /** Watch only: the owner's typing, pasting and dropping never reach this
@@ -128,7 +124,7 @@ export interface PtyTerminalViewProps {
   inputLocked?: boolean;
 }
 
-export function PtyTerminalView({ ptyId, onStreamData, onUserPrompt, onToggleFullscreen, fullscreen, embedded, inputLocked = false }: PtyTerminalViewProps) {
+export function PtyTerminalView({ ptyId, onStreamData, onUserPrompt, embedded, inputLocked = false }: PtyTerminalViewProps) {
   const { t } = useTranslation();
   // Re-applied whenever the pty or the lock changes; the entry outlives this view.
   useEffect(() => { setTerminalInputLocked(ptyId, inputLocked); }, [ptyId, inputLocked]);
@@ -146,7 +142,7 @@ export function PtyTerminalView({ ptyId, onStreamData, onUserPrompt, onToggleFul
   // Attach this view to the pty's persistent terminal. The terminal and its
   // buffer live in the pool across mounts, so re-parenting its host element
   // here shows the already-rendered content immediately — no blank pane while
-  // switching agents or toggling fullscreen.
+  // switching agents.
   useEffect(() => {
     const container = hostRef.current;
     if (!container) return;
@@ -160,8 +156,8 @@ export function PtyTerminalView({ ptyId, onStreamData, onUserPrompt, onToggleFul
     // Snap to bottom immediately on re-attach before fit settles
     try { entry.term.scrollToBottom(); } catch { /* not yet open */ }
 
-    // `scrollToEnd` is true only for the initial attach (switching agents /
-    // toggling fullscreen) so we land on the most recent output. Re-parenting
+    // `scrollToEnd` is true only for the initial attach (switching agents)
+    // so we land on the most recent output. Re-parenting
     // the pooled terminal resets its viewport to the top otherwise. Later
     // resize-driven fits pass false so they don't yank a user who has scrolled
     // up to read history back down to the bottom.
@@ -393,7 +389,7 @@ export function PtyTerminalView({ ptyId, onStreamData, onUserPrompt, onToggleFul
       flexDirection: 'column'
     }}>
       {/* Design v2 Work row (branding/DESIGN.md 7.12): live, watching or
-          typing, the zoom group, and Focus. No developer words. */}
+          typing, and the zoom group. No developer words. */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8,
         fontFamily: 'var(--cth-font-ui)', fontSize: 12, fontWeight: 500, color: 'var(--cth-ink-2)',
@@ -412,14 +408,6 @@ export function PtyTerminalView({ ptyId, onStreamData, onUserPrompt, onToggleFul
             <button onClick={resetZoom} title={t('workTab.zoomReset', { mod })} aria-label={`${t('workTab.zoomResetLabel')}, ${fontSize}px`} style={{ ...zoomBtnStyle, width: 'auto', padding: '0 8px', fontFamily: 'var(--cth-font-mono)', fontSize: 11, borderInline: '1px solid var(--cth-line)' }}>{fontSize}px</button>
             <button onClick={() => zoom(1)} disabled={fontSize >= MAX_FONT_SIZE} title={t('workTab.zoomIn', { mod })} aria-label={t('workTab.zoomInLabel')} style={zoomBtnStyle}>+</button>
           </div>
-          {onToggleFullscreen && (
-            <button onClick={onToggleFullscreen} title={fullscreen ? t('workTab.exitFocus') : t('workTab.focus')} style={{ ...zoomBtnStyle, width: 'auto', padding: '0 10px', gap: 6, borderRadius: 'var(--cth-r-md)', boxShadow: 'inset 0 0 0 1px var(--cth-line-2)', fontWeight: 600 }}>
-              {fullscreen ? <Icon name="minimize" /> : (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5" /></svg>
-              )}
-              {!fullscreen && t('workTab.focus')}
-            </button>
-          )}
         </div>
       </div>
       <div ref={hostRef} onDragOver={onDragOver} onDrop={onDrop} style={{

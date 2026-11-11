@@ -87,7 +87,7 @@ test('only the owner closing an agent pauses its schedules; a crash, quit or boo
   const migrate = main.slice(main.indexOf('function migrateMissionOwners(): void {'), main.indexOf('function hiveGodId'));
   assert.doesNotMatch(migrate, /archived|pause/i, 'the upgrade pauses nothing');
   // The owner's close paths do pause.
-  for (const f of ['src/renderer/src/components/AgentDetailPanel.tsx', 'src/renderer/src/components/FullscreenTerminal.tsx']) {
+  for (const f of ['src/renderer/src/components/AgentDetailPanel.tsx']) {
     const src = read(f);
     const kill = src.slice(src.indexOf('const onKill = async () => {'));
     assert.ok(kill.indexOf('closeAgentByOwner(agent.id)') < kill.indexOf('killPty(agent.ptyId)'), `${f} pauses before the terminal closes`);

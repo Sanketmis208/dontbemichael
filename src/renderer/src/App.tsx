@@ -31,10 +31,7 @@ import { MichaelStopped } from '@/components/MichaelStopped';
 import { PixelButton } from '@/components/PixelButton';
 import { SidebarSplitter } from '@/components/SidebarSplitter';
 import { acquireTerminal } from '@/components/terminalPool';
-import { FullscreenTerminal } from '@/components/FullscreenTerminal';
 import { TaskDetailOverlay } from '@/components/TaskDetailOverlay';
-import { IdePanel } from '@/ide/IdePanel';
-import { SHOW_IDE } from '@shared/buildFeatures';
 import { useHoldOptionToTalk } from '@/freeflow/holdOption';
 import { useTranslation } from 'react-i18next';
 import { TopBar, NeedsYouStrip } from '@/shell/TopBar';
@@ -71,15 +68,12 @@ export function App() {
   const setAddAgentOpen = useStore(s => s.setAddAgentOpen);
   const clearPendingHires = useStore(s => s.clearPendingHires);
   const godStatus = useStore(s => s.godStatus);
-  const fullscreenAgentId = useStore(s => s.fullscreenAgentId);
   const { t } = useTranslation();
   const rightColumn = useStore(s => s.rightColumn);
   const sidebarWidth = useStore(s => s.sidebarWidth);
   const columnMinimized = useStore(s => s.columnMinimized);
   const panelWide = useStore(s => s.panelWide);
   const setSidebarWidth = useStore(s => s.setSidebarWidth);
-  const ideOpen = useStore(s => s.ideOpen);
-  const setIdeOpen = useStore(s => s.setIdeOpen);
   const floorView = useStore(s => s.floorView);
   const caseStudyOpen = useStore(s => s.caseStudyOpen);
   const godId = useStore(s => s.agents.find((a) => a.isGod)?.id) ?? 'god';
@@ -302,20 +296,6 @@ export function App() {
     }).catch(() => { /* ignore — keep restored agents as-is */ });
     return () => { cancelled = true; };
   }, [config?.onboardingComplete]);
-
-  // Re-apply the persisted focus-mode preference as the roster fills in.
-  //
-  // Not a one-shot at store construction: at launch every restored agent still
-  // carries the PREVIOUS session's PTY id, so the reconcile above prunes the lot
-  // and correctly drops focus mode to null before god has respawned. The
-  // preference therefore has to be re-checked once agents with live terminals
-  // actually exist. `restoreFocusMode` is a no-op unless the preference is on and
-  // focus mode is currently off, so re-running it on every roster change is safe
-  // and pressing Esc stays sticky.
-  useEffect(() => {
-    if (!config?.onboardingComplete) return;
-    useStore.getState().restoreFocusMode();
-  }, [config?.onboardingComplete, agents]);
 
   // The right column (docs/designs/needs-you-empty-state.md): while anything
   // waits on the owner it is open and cannot be closed; only when nothing at
@@ -686,8 +666,6 @@ export function App() {
       )}
 
 
-      {fullscreenAgentId && <FullscreenTerminal config={config} />}
-      {SHOW_IDE && ideOpen && <IdePanel />}
       <TaskDetailOverlay />
     </div>
   );

@@ -20,9 +20,8 @@
  *     before for terminals and text fields.
  *
  * Scope: works app-wide while the window is focused (covers any agent's terminal
- * screen per the requirement). Target = the fullscreen agent, else the selected
- * agent. A window blur resets state so a release missed off-window can't strand a
- * recording.
+ * screen per the requirement). Target = the selected agent. A window blur
+ * resets state so a release missed off-window can't strand a recording.
  */
 import { useEffect } from 'react';
 import { useStore } from '@/store/store';
@@ -46,8 +45,7 @@ export function useHoldOptionToTalk(): void {
     let disqualified = false;   // another key joined → treat as a normal Alt combo
 
     const focusedAgentId = (): string | null => {
-      const s = useStore.getState();
-      return s.fullscreenAgentId ?? s.selectedId;
+      return useStore.getState().selectedId;
     };
 
     const clearArm = (): void => {

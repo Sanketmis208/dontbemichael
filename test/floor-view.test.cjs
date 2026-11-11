@@ -39,7 +39,7 @@ test('the view tabs sit in the top bar, and the board covers the office above th
 
 test('the office pauses while the board covers it, and its whiteboard opens the board', () => {
   const floor = read('src/renderer/src/scene/studio/StudioStage.tsx');
-  assert.match(floor, /const paused = docHidden \|\| floorView !== 'office' \|\| !!fullscreenAgentId;/);
+  assert.match(floor, /const paused = docHidden \|\| floorView !== 'office';/);
   assert.match(floor, /onClick=\{\(\) => useStore\.getState\(\)\.setFloorView\('tasks'\)\}/);
 });
 
