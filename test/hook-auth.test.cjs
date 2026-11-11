@@ -168,8 +168,8 @@ test('every engine bridge sends the secret, and the spawn hands it over without 
   for (const name of ['HOOK_SHIM', 'AGY_HOOK_SHIM', 'PROXY_BRIDGE_SHIM', 'GEMINI_HOOK_SHIM', 'GROK_HOOK_SHIM']) {
     assert.match(shimBody(name), /hook_token[:= ]+process\.env\.HIVE_HOOK_SEAL/, name);
   }
-  // Pi and OpenCode post from their in-process plugins.
-  assert.equal((hiveSrc.match(/payload\.hook_token = process\.env\.HIVE_HOOK_SEAL \|\| null;/g) || []).length >= 4, true, 'Claude shim, pi, opencode and the proxy emit');
+  // OpenCode posts from its in-process plugin (Pi's went with Pi, 2026-11-11).
+  assert.equal((hiveSrc.match(/payload\.hook_token = process\.env\.HIVE_HOOK_SEAL \|\| null;/g) || []).length >= 3, true, 'Claude shim, opencode and the proxy emit');
   assert.match(hiveSrc, /HIVE_HOOK_SEAL: this\.hookTokens\.get\(agentId\) \?\? ''/, 'the proxy sidecar gets its agent\'s secret');
 
   const { home, hive } = office(t);
