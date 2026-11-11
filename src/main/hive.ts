@@ -1533,17 +1533,6 @@ export class HiveManager {
               // board (engineWritableDirs). Harmless outside auto mode.
               for (const d of this.engineWritableDirs(meta, dir, root, opts.extraWritableDirs)) preArgs.push('--add-dir', d);
             }
-            else if (desc.shim === 'pi') {
-              // Pi (earendil-works) has a rich pi.on(event) lifecycle. We drop a
-              // bundled extension into a PER-AGENT PI_CODING_AGENT_DIR (so the user's
-              // global ~/.pi is never touched) that posts cth-hook-shaped payloads to
-              // HIVE_SOCK on tool_call/agent_end and auto-approves tools when the floor
-              // is in auto mode. HIVE_AUTO_APPROVE (set in spawnAgentCore from
-              // config.autoMode) gates the auto-allow — Pam guardrail #5.
-              // LIVE-UNVERIFIED: the exact extension API surface needs BYOK keys to
-              // prove; the renderer idle inbox-wake nudge is the guaranteed drain.
-              env.PI_CODING_AGENT_DIR = this.installPiHooks(dir);
-            }
             else if (desc.shim === 'opencode') {
               // OpenCode (anomalyco/opencode) has no Claude-shaped Stop hook, but its
               // plugin API exposes a real session.idle event (god Decision 1). We drop
@@ -5709,44 +5698,6 @@ export class HiveManager {
     }
   }
 
-  /** Pi (earendil-works) bridge. Pi has a rich `pi.on(event, …)` lifecycle but no
-   *  Claude-shaped hook file; instead we drop a bundled EXTENSION into a PER-AGENT
-   *  PI_CODING_AGENT_DIR (so the user's global ~/.pi is never mutated) that, when Pi
-   *  loads it, posts cth-hook-shaped payloads to HIVE_SOCK on tool_call/agent_end and
-   *  auto-approves tool calls when the floor is in auto mode (HIVE_AUTO_APPROVE).
-   *  Emitting an `agent_end`→`Stop` keeps the harness status in step (→ idle), which
-   *  lets the renderer idle inbox-wake nudge deliver mail. Returns the per-agent dir
-   *  for PI_CODING_AGENT_DIR.
-   *
-   *  LIVE-UNVERIFIED: Pi's exact extension-discovery path + event API need BYOK keys
-   *  to confirm; this is written best-effort and wrapped so a wrong guess can never
-   *  break the spawn. The renderer nudge is the guaranteed drain regardless. */
-  private installPiHooks(dir: string): string {
-    const home = join(dir, '.pi-agent');
-    try {
-      // Pi discovers extensions under its agent dir; we write to the documented
-      // `extensions/` location (and keep it isolated per agent).
-      const extDir = join(home, 'extensions');
-      mkdirSync(extDir, { recursive: true });
-      this.atomicWriteText(join(extDir, 'hive-bridge.js'), PI_EXTENSION);
-      // A manifest so Pi auto-loads the extension on start (best-effort; harmless if
-      // Pi ignores it). Kept minimal and hive-authored.
-      const manifest = { name: 'munder-hive-bridge', version: '0.3.1', main: 'extensions/hive-bridge.js', auto: true };
-      this.atomicWriteJson(join(home, 'extensions.json'), manifest);
-
-      const userPiDir = join(homedir(), '.pi', 'agent');
-      for (const fileName of ['models.json', 'models-store.json'] as const) {
-        try {
-          const data = readFileSync(join(userPiDir, fileName), 'utf8');
-          this.atomicWriteText(join(home, fileName), data);
-        } catch (e) {
-          if ((e as NodeJS.ErrnoException).code !== 'ENOENT') console.error(`[hive] installPiHooks copy ${fileName} failed:`, e);
-        }
-      }
-    } catch (e) { console.error('[hive] installPiHooks failed:', e); }
-    return home;
-  }
-
   /** OpenCode (anomalyco/opencode) bridge — god Decision 1 (native plugin, not proxy).
    *  OpenCode has no Claude-shaped Stop hook, but its plugin API exposes a real
    *  `session.idle` lifecycle event. We drop a bundled PLUGIN into a PER-AGENT config
@@ -6877,47 +6828,6 @@ process.stdin.on('end', () => {
     setTimeout(() => process.exit(0), 5000).unref();
   } catch (_) { process.exit(0); }
 });
-`;
-
-// ─── pi bridge extension (written to <agentDir>/.pi-agent/extensions/) ───────
-// A bundled extension for Pi (earendil-works). Pi exposes a pi.on(event,…)
-// lifecycle; this posts cth-hook-shaped payloads to HIVE_SOCK on tool_call /
-// tool_result / agent_end and AUTO-APPROVES tool calls when the floor is in auto
-// mode (HIVE_AUTO_APPROVE, gated by config.autoMode — Pam guardrail #5). The
-// agent_end→Stop keeps the harness status in step (→ idle) so the renderer idle
-// inbox-wake nudge can deliver mail. Fully wrapped so a wrong API guess can never
-// break the spawn. LIVE-UNVERIFIED (Pi's exact extension surface needs BYOK keys).
-const PI_EXTENSION = `'use strict';
-var net = require('node:net');
-var SOCK = process.env.HIVE_SOCK;
-var AGENT = process.env.AGENT_ID || null;
-var AUTO = process.env.HIVE_AUTO_APPROVE === '1';
-function post(payload) {
-  try {
-    if (!SOCK) return;
-    payload.agent_id = payload.agent_id || AGENT;
-    payload.hook_token = process.env.HIVE_HOOK_SEAL || null;
-    var c = net.createConnection(SOCK, function () { try { c.end(JSON.stringify(payload) + '\\n'); } catch (e) {} });
-    c.on('error', function () {});
-  } catch (e) {}
-}
-function register(pi) {
-  if (!pi || typeof pi.on !== 'function') return false;
-  try {
-    pi.on('tool_call', function (ev) {
-      post({ hook_event_name: 'PreToolUse', tool_name: ev && (ev.name || (ev.tool && ev.tool.name)), tool_input: ev && (ev.args || ev.input) });
-      if (AUTO) { try { if (ev && typeof ev.approve === 'function') ev.approve(); } catch (e) {} return { approve: true }; }
-      return undefined;
-    });
-    pi.on('tool_result', function (ev) { post({ hook_event_name: 'PostToolUse', tool_name: ev && (ev.name || (ev.tool && ev.tool.name)) }); });
-    pi.on('agent_end', function () { post({ hook_event_name: 'Stop' }); });
-    return true;
-  } catch (e) { return false; }
-}
-try { if (typeof globalThis !== 'undefined' && globalThis.pi) register(globalThis.pi); } catch (e) {}
-module.exports = function (pi) { return register(pi); };
-module.exports.activate = function (pi) { return register(pi); };
-module.exports.default = module.exports;
 `;
 
 // ─── opencode bridge plugin (written to <agentDir>/.opencode/plugin/) ────────

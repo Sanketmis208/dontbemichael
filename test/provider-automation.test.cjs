@@ -18,7 +18,7 @@ const {
 // — the queue's one-pending-compact invariant depends entirely on this predicate —
 
 test('isCompactionCommand matches every provider that has a compact verb', () => {
-  for (const p of ['claude', 'codex', 'grok', 'kimi', 'qwen', 'opencode', 'pi', 'copilot', 'cursor']) {
+  for (const p of ['claude', 'codex', 'grok', 'kimi', 'qwen', 'opencode', 'copilot', 'cursor']) {
     const cmd = compactionCommandForProvider(p, '');
     if (!cmd) continue; // provider has no typeable compaction — nothing to dedupe
     assert.equal(isCompactionCommand(cmd), true, `${p}: ${cmd}`);
@@ -56,7 +56,6 @@ test('each provider receives only its supported compaction syntax', () => {
   assert.equal(compactionCommandForProvider('kimi', ''), '/compact');
   assert.equal(compactionCommandForProvider('qwen', ''), '/compress');
   assert.equal(compactionCommandForProvider('opencode', ''), '/compact');
-  assert.equal(compactionCommandForProvider('pi', ''), '/compact');
 
   // No command we can trust → no keystrokes at all.
   for (const p of ['antigravity', 'crush', 'copilot', 'cursor', 'custom']) {
@@ -69,7 +68,6 @@ test('the focus rides along only where the TUI parses it', () => {
   assert.equal(compactionCommandForProvider('claude', focus), `/compact ${focus}`);
   assert.equal(compactionCommandForProvider('grok', focus), `/compact ${focus}`);
   assert.equal(compactionCommandForProvider('kimi', focus), `/compact ${focus}`);
-  assert.equal(compactionCommandForProvider('pi', focus), `/compact ${focus}`);
   assert.equal(compactionCommandForProvider('qwen', focus), `/compress ${focus}`);
 
   // codex/opencode ignore trailing text, so it must be dropped, not typed.
@@ -92,10 +90,9 @@ test('clearing uses each CLI own verb, not a hardcoded /clear', () => {
   assert.equal(clearCommandForProvider('qwen'), '/clear');
   // agy's /clear resets the conversation; Ctrl+L is the screen-only one.
   assert.equal(clearCommandForProvider('antigravity'), '/clear');
-  // These three start a fresh session instead — '/clear' is not a command there.
+  // These two start a fresh session instead — '/clear' is not a command there.
   assert.equal(clearCommandForProvider('grok'), '/new');
   assert.equal(clearCommandForProvider('opencode'), '/new');
-  assert.equal(clearCommandForProvider('pi'), '/new');
   // Palette-only TUI, print-mode CLI, Cursor (unverified slash surface), unknown binary.
   for (const p of ['crush', 'copilot', 'cursor', 'custom']) {
     assert.equal(clearCommandForProvider(p), null, p);

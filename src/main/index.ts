@@ -1428,7 +1428,7 @@ function noticePausedGrants(): void {
 }
 
 /** BYOK backend model-providers whose API keys the non-Claude CLI engines
- *  (OpenCode/Crush/pi/qwen) read from standard env vars. Keys are stored
+ *  (OpenCode/Crush/qwen) read from standard env vars. Keys are stored
  *  WRITE-ONLY in the same encrypted secret broker as integrations, under
  *  `apikey:<backend>`, and materialized MAIN-ONLY at spawn (never over IPC). */
 const BACKEND_KEY_ENV: Record<string, string> = {
@@ -4105,8 +4105,8 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
     // step would reach here with neither the flag nor any equivalent.
     // argsWithAutoModeFlag is idempotent (a GUI spawn's args already has
     // the flag, so this is a no-op for it) and is the SAME check spawnAgentCore
-    // already applies for opencode/crush et al a few lines below via
-    // HIVE_AUTO_APPROVE — one global toggle, one posture, every spawn path.
+    // already applies for the other engines through their auto flags. One
+    // global toggle, one posture, every spawn path.
     // Confirmed live: a worker spawned without this flag deadlocked — a
     // cross-session message to it came back "held for the recipient user's
     // approval" with no surface for anyone to ever grant that approval.
@@ -4280,11 +4280,11 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
     opts.env = { ...(opts.env ?? {}), ...nonInteractiveEnv };
   }
   // ── BYOK keys + per-provider config for the non-Claude CLI engines (v0.3.1) ──
-  // OpenCode / Crush / pi / qwen read BYOK API keys from standard env vars and, for
+  // OpenCode / Crush / qwen read BYOK API keys from standard env vars and, for
   // the local-LLM path, a per-provider base URL. Keys are write-only in the broker
   // (read MAIN-ONLY here, never logged); base URLs ride HarnessConfig. Claude/codex
   // use their own login, so they skip this. Pam guardrails #3/#4/#5.
-  if (opts.hive && (provider === 'opencode' || provider === 'crush' || provider === 'pi' || provider === 'qwen')) {
+  if (opts.hive && (provider === 'opencode' || provider === 'crush' || provider === 'qwen')) {
     const cfg = readConfig();
     const extra: Record<string, string> = {};
     // 1) BYOK keys — LEAST-PRIVILEGE (Pam/Jim NIT-2): inject ONLY the key for the
@@ -4307,10 +4307,7 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
       // GEMINI_API_KEY — inject both so google/* authenticates (Jim NIT #1).
       if (backend === 'google') extra.GOOGLE_GENERATIVE_AI_API_KEY = key;
     }
-    // 2) Floor auto-state for pi's bundled extension auto-allow (guardrail #5): it
-    //    only auto-approves tool calls when this is '1' (i.e. floor auto mode on).
-    extra.HIVE_AUTO_APPROVE = cfg.autoMode ? '1' : '0';
-    // 3) OpenCode's auto-approve + local provider live in its single config-injection
+    // 2) OpenCode's auto-approve + local provider live in its single config-injection
     //    env var, built dynamically so permission:allow is GATED on autoMode (#2).
     if (provider === 'opencode') {
       const oc: Record<string, unknown> = { autoupdate: false };

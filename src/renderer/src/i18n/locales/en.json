@@ -951,7 +951,7 @@
   },
   "aiEngines": {
     "providers": "AI engine providers (BYOK)",
-    "providersDesc": "API keys + local endpoints for the OpenCode, Crush, pi.dev and Qwen engines. Keys are stored write only (encrypted at rest; never shown again) and used only when those engines spawn. Claude Code and Codex use their own login.",
+    "providersDesc": "API keys + local endpoints for the OpenCode, Crush and Qwen engines. Keys are stored write only (encrypted at rest; never shown again) and used only when those engines spawn. Claude Code and Codex use their own login.",
     "apiKeys": "API keys",
     "setCheck": "set ✓",
     "keyStoredPlaceholder": "•••••••• (stored; type to replace)",

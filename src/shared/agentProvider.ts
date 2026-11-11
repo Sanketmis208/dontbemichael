@@ -32,7 +32,6 @@ export type AgentProvider =
   | 'qwen'
   | 'opencode'
   | 'crush'
-  | 'pi'
   | 'copilot'
   | 'cursor'
   | 'custom';
@@ -52,7 +51,7 @@ export type AgentProvider =
  *               and `inboxDelivery` is how mail reaches it ('terminal' work-order
  *               handoff today; 'serve' reserved for a future HTTP push path). */
 export type BridgeDescriptor =
-  | { kind: 'hooks'; shim: 'agy' | 'codex' | 'pi' | 'opencode' | 'grok' | 'gemini' }
+  | { kind: 'hooks'; shim: 'agy' | 'codex' | 'opencode' | 'grok' | 'gemini' }
   | {
       kind: 'proxy';
       api: 'openai' | 'anthropic';
@@ -69,7 +68,7 @@ export type BridgeDescriptor =
  *                                protocol is delivered in the initial turn and
  *                                re-injected on `SessionStart` (compact/resume)
  *                                via hook bridge `additionalContext` (e.g. Gemini CLI,
- *                                Antigravity, OpenCode, Pi, Grok). */
+ *                                Antigravity, OpenCode, Grok). */
 export type InstructionsDelivery = 'system-level' | 're-injected on compact';
 
 /** Short initial turn prompt used when the agent's full protocol is delivered
@@ -195,7 +194,7 @@ export const BUILD_ENGINES: readonly AgentProvider[] = ['claude'];
 /** Engines that read the owner's own API keys and local endpoints (Settings →
  *  Agents, AI engine providers). Claude Code and Codex use their own
  *  login, so the panel only means something when a build offers one of these. */
-export const BYOK_ENGINES: readonly AgentProvider[] = ['opencode', 'crush', 'pi', 'qwen'];
+export const BYOK_ENGINES: readonly AgentProvider[] = ['opencode', 'crush', 'qwen'];
 
 /** Show the API keys and endpoints panel? Only when this build offers an engine
  *  that reads them; otherwise nothing typed there reaches any agent (owner,
@@ -517,51 +516,6 @@ export const AGENT_PROVIDER_PRESETS: AgentProviderPreset[] = [
     instructionsDelivery: 're-injected on compact'
   },
   {
-    // Pi (Pi Coding Agent, earendil-works; npm @earendil-works/pi-coding-agent).
-    // Terminal-first, headless-driveable, 15-provider BYOK. Non-hiveAware, but has a
-    // rich pi.on(event) lifecycle (tool_call→PreToolUse, agent_end→Stop, …). Bridged
-    // via a bundled per-agent extension (installPiHooks) that posts HIVE_SOCK payloads
-    // and auto-approves tools — a `hooks` bridge with a new `pi` shim.
-    id: 'pi',
-    label: 'Pi',
-    defaultCommand: 'pi',
-    commandGroups: [],
-    // pi has NO yolo flag. `--approve` is per-run PROJECT trust (accept the cwd so pi
-    // doesn't prompt to trust the folder); the actual tool auto-allow lives INSIDE the
-    // bridge extension's tool_call handler, which respects the floor auto-state via
-    // HIVE_AUTO_APPROVE env (Pam guardrail #5). Gated by config.autoMode like the rest.
-    autoModeFlag: '--approve',
-    autoFlag: '--approve',
-    // Suppress first-run version-check / telemetry chatter in the PTY. // humanQA exact names
-    nonInteractiveEnv: { PI_SKIP_VERSION_CHECK: '1', PI_TELEMETRY: '0' },
-    supportsModel: true,
-    modelFlag: '--model', // value form: provider/model, e.g. anthropic/claude-sonnet-4-5 (thinking via :high)
-    hiveAware: false,
-    // HOOKS bridge via the new `pi` shim (installPiHooks). NOTE: only the structured
-    // `bridge` is set (NOT the legacy hookBridge) — bridgeOf returns preset.bridge
-    // first, so a hookBridge:'pi' would be dead weight + force a second union widening.
-    bridge: { kind: 'hooks', shim: 'pi' },
-    recommendedOrchestratorModel: 'anthropic/claude-sonnet-4-5',
-    // god-eligible. Live runtime (whether the extension auto-continues from agent_end,
-    // or we lean on the renderer idle nudge) is UNVERIFIED pending keys. Renderer nudge
-    // is the guaranteed drain fallback either way.
-    canReceiveInbox: true,
-    // pi's own usage is `pi [options] [--] [@files...] [messages...]`, where a
-    // `message` provides the initial prompt. We spawn in a PTY, so pi opens its TUI
-    // after that turn instead of running once and exiting. Declaring the positional
-    // is what makes hive.ensureAgent put the identity and the protocol on argv; with
-    // it unset the same branch spawned pi BARE, so the bridge, HIVE_SOCK and
-    // canReceiveInbox above were all live for an agent that had never been told the
-    // hive exists. test/hive-protocol-on-spawn.test.cjs holds that line.
-    initialPromptFlag: undefined,
-    positionalInitialPrompt: true,
-    resumeFlag: '--session',
-    // --ignore-scripts: don't run the package's postinstall on the user's machine.
-    installCommand: 'npm install -g --ignore-scripts @earendil-works/pi-coding-agent',
-    docsUrl: 'https://pi.dev/docs/latest',
-    instructionsDelivery: 're-injected on compact'
-  },
-  {
     // GitHub Copilot CLI (`copilot`, npm @github/copilot). Driven in print mode:
     // `copilot -p "<prompt>" -s --allow-all-tools --no-ask-user [--model]`, the
     // documented non-interactive shape (single prompt, clean stdout, exits when
@@ -657,7 +611,6 @@ export function isAgentProvider(value: unknown): value is AgentProvider {
     value === 'qwen' ||
     value === 'opencode' ||
     value === 'crush' ||
-    value === 'pi' ||
     value === 'copilot' ||
     value === 'cursor' ||
     value === 'custom'
@@ -709,13 +662,33 @@ export function inferAgentProvider(command: string | undefined, explicit?: unkno
   if (bin === 'qwen') return 'qwen';
   if (bin === 'opencode') return 'opencode';
   if (bin === 'crush') return 'crush';
-  if (bin === 'pi') return 'pi';
   if (bin === 'copilot') return 'copilot';
   // Cursor ships as `cursor-agent`; `agent` is a shorter alias (generic name — check last).
   if (bin === 'cursor-agent') return 'cursor';
   if (bin === 'agent') return 'cursor';
   if (bin === 'claude' || !bin) return 'claude';
   return 'custom';
+}
+
+/** Engines a past build ran that this one no longer does (Pi, owner
+ *  2026-11-11). Their ids are not AgentProviders any more, so a team member or
+ *  Michael saved on one is moved to Claude Code where it is loaded. */
+const RETIRED_ENGINES: ReadonlySet<string> = new Set(['pi']);
+
+/** Was this saved member set up on a retired engine? A saved engine id
+ *  decides; with none saved, the command's program does, as inferAgentProvider
+ *  used to read it. A custom command the owner typed is left alone. */
+export function onRetiredEngine(command: string | undefined, provider: unknown): boolean {
+  if (typeof provider === 'string' && provider) return RETIRED_ENGINES.has(provider);
+  return RETIRED_ENGINES.has(commandBinary(command));
+}
+
+/** The member moved to Claude Code: the old engine's command and model go, so
+ *  its next start builds the office's Claude command; its name, job, memory and
+ *  folders stay. Returned unchanged when it is not on a retired engine. */
+export function moveOffRetiredEngine<T extends { command?: string; provider?: unknown; model?: string }>(a: T): T {
+  if (!onRetiredEngine(a.command, a.provider)) return a;
+  return { ...a, provider: 'claude', command: '', model: undefined };
 }
 
 /** The structured bridge descriptor for how a non-hiveAware provider receives hive

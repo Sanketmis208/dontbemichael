@@ -12,6 +12,7 @@ import {
   autoModeFlagForProvider,
   defaultCommandForProvider,
   inferAgentProvider,
+  onRetiredEngine,
   providerPreset,
   type AgentProvider
 } from '../shared/agentProvider';
@@ -643,7 +644,7 @@ export function readConfig(): HarnessConfig {
   try {
     const raw = readFileSync(p, 'utf8');
     const parsed = JSON.parse(raw);
-    return normalizeStoredHomes(migrateTriggersV1(withTriggerDefaults({ ...DEFAULTS, ...parsed })));
+    return offRetiredEngines(normalizeStoredHomes(migrateTriggersV1(withTriggerDefaults({ ...DEFAULTS, ...parsed }))));
   } catch {
     return withTriggerDefaults({ ...DEFAULTS });
   }
@@ -668,6 +669,21 @@ function normalizeStoredHomes(cfg: HarnessConfig): HarnessConfig {
       .filter((h): h is string => typeof h === 'string' && !!h.trim())
       .map((h) => expandTilde(h))
       .filter((h) => (seen.has(h) ? false : (seen.add(h), true)));
+  }
+  return cfg;
+}
+
+/** Michael, or the office's default command, saved on an engine this build
+ *  no longer runs (Pi) moves to Claude Code, with the old engine's model
+ *  dropped. Applied on every read, so nothing on disk has to be rewritten. */
+function offRetiredEngines(cfg: HarnessConfig): HarnessConfig {
+  if (onRetiredEngine(undefined, cfg.godProvider)) {
+    cfg.godProvider = 'claude';
+    cfg.godModel = undefined;
+  }
+  if (onRetiredEngine(cfg.defaultCommand, undefined)) {
+    cfg.defaultCommand = DEFAULTS.defaultCommand;
+    cfg.defaultModel = undefined;
   }
   return cfg;
 }

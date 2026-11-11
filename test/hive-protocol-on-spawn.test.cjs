@@ -5,11 +5,11 @@
  *
  * The preset registry is only ever checked against itself (engine-readiness.test.cjs
  * reads its own fields), so a preset can be complete on paper and still spawn an
- * agent that was never told what it is. `pi` was exactly that. Its own comment said
- * the protocol arrives positionally, `positionalInitialPrompt` was never set, and
- * `HiveManager.ensureAgent` therefore fell through to a BARE spawn: the bridge,
- * HIVE_SOCK and `canReceiveInbox` were all live, so the router delivered owner mail
- * to an agent that did not know it had a mailbox. That is the same failure
+ * agent that was never told what it is. Pi (since removed) was exactly that. Its
+ * own comment said the protocol arrives positionally, `positionalInitialPrompt`
+ * was never set, and `HiveManager.ensureAgent` therefore fell through to a BARE
+ * spawn: the bridge, HIVE_SOCK and `canReceiveInbox` were all live, so the router
+ * delivered owner mail to an agent that did not know it had a mailbox. That is the same failure
  * `buildCmdCommandLine`'s doc comment describes for the Windows command line, one
  * level up: the agent boots looking healthy and never learns what it is.
  *
@@ -87,7 +87,6 @@ async function injectFor(id, t) {
 
 test('the check covers every engine that claims the hive, and only those', () => {
   const claimed = AGENT_PROVIDER_PRESETS.filter(claimsHive).map((p) => p.id);
-  assert.ok(claimed.includes('pi'), 'the engine this change is about must be in the set');
   assert.ok(claimed.includes('claude'), 'the engine this build offers must be in the set');
   for (const id of ['kimi', 'custom']) {
     assert.ok(!claimed.includes(id), `${id} claims no bridge, inbox or resume, so nothing promises it a seed`);
@@ -135,21 +134,6 @@ test('every engine that claims the hive is spawned with the protocol', async (t)
       }
     });
   }
-});
-
-test('a pi worker gets the protocol and keeps its hooks bridge', async (t) => {
-  // The regression this change fixes, named on its own so it fails loudly: pi was
-  // wired on every side except the one that tells the agent it is in an office.
-  const injection = await injectFor('pi', t);
-  const last = injection.args[injection.args.length - 1];
-  assert.ok(isProtocol(last), `pi must be spawned with the protocol, got ${JSON.stringify(summarise(injection.args))}`);
-  // The bridge still has to be installed: seeding a worker that reports no
-  // lifecycle events would be worse than the bare spawn it replaces.
-  const piDir = injection.env.PI_CODING_AGENT_DIR;
-  assert.ok(piDir, 'the pi extension dir must still be set');
-  assert.ok(fs.existsSync(path.join(piDir, 'extensions', 'hive-bridge.js')),
-    `the pi extension must be written under ${piDir}`);
-  assert.ok(injection.env.HIVE_SOCK, 'the hook socket must still be passed');
 });
 
 /** argv with the long protocol elided, so a failure prints something readable. */

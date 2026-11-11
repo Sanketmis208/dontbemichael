@@ -124,13 +124,6 @@ const CONTEXT_COMMANDS: Record<AgentProvider, ProviderContextCommands> = {
   // (Crush's compact/clear are reachable only over its HTTP API.)
   crush: NO_CONTEXT_COMMANDS,
 
-  // pi's dist/core/slash-commands.js, verbatim:
-  //   { name:"compact", description:"Manually compact the session context" }
-  //   { name:"new",     description:"Start a new session" }
-  // and docs/compaction.md: "trigger manually with `/compact [instructions]`,
-  // where optional instructions focus the summary". There is no `/clear`.
-  pi: { compact: '/compact', clear: '/new', compactTakesFocus: true },
-
   // Copilot's INTERACTIVE mode does have `/compact [FOCUS-INSTRUCTIONS]` and
   // `/clear` — but this app never runs it interactively. The preset spawns it in
   // print mode (`initialPromptFlag: '-p'`, `canReceiveInbox: false`), which runs

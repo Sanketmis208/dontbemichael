@@ -133,7 +133,6 @@ export const ENGINE_FACTS: Readonly<Record<AgentProvider, EngineFacts>> = {
   gemini: { ...UNCHECKED, fileSandbox: { darwin: 'no', win32: 'no', linux: 'no' } },
   antigravity: UNCHECKED,
   opencode: UNCHECKED,
-  pi: UNCHECKED,
   // The proxy tier watches traffic: it can report, never refuse (#139). The
   // proxy reads usage from the responses, unchecked live.
   qwen: { ...UNCHECKED, toolGuard: 'no', costData: 'unknown' },

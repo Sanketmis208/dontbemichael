@@ -951,7 +951,7 @@
   },
   "aiEngines": {
     "providers": "AI 引擎提供商（BYOK）",
-    "providersDesc": "OpenCode、Crush、pi.dev 和 Qwen 引擎的 API 密钥与本地端点。密钥只写存储（加密落盘；之后不再显示），且仅在那些引擎启动时使用。Claude Code 和 Codex 使用各自的登录。",
+    "providersDesc": "OpenCode、Crush 和 Qwen 引擎的 API 密钥与本地端点。密钥只写存储（加密落盘；之后不再显示），且仅在那些引擎启动时使用。Claude Code 和 Codex 使用各自的登录。",
     "apiKeys": "API 密钥",
     "setCheck": "已设置 ✓",
     "keyStoredPlaceholder": "••••••••（已存储，输入以替换）",

@@ -7,7 +7,7 @@ import { fieldLabel, groupName, hint, panelStyle } from './fieldText';
 
 /**
  * AiEnginesSettings — the v0.3.1 per-provider config surface for the BYOK CLI
- * engines (OpenCode · Crush · pi.dev · Qwen). Two stores by what the datum is:
+ * engines (OpenCode · Crush · Qwen). Two stores by what the datum is:
  *  - API keys → WRITE-ONLY in the secret broker (`providerKey:*` IPC). Keyed by the
  *    BACKEND model-provider (anthropic/openai/…). The field shows only set/not-set;
  *    the plaintext is never read back to the renderer (materialized MAIN-only at spawn).
@@ -31,7 +31,6 @@ const BACKENDS: Array<{ id: string; label: string; envVar: string }> = [
 const CLIS: Array<{ id: AgentProvider; label: string; hint: string }> = [
   { id: 'opencode', label: 'OpenCode', hint: 'http://localhost:11434/v1 (Ollama), added as a local provider' },
   { id: 'crush', label: 'Crush', hint: 'an endpoint compatible with OpenAI, used as the proxy upstream' },
-  { id: 'pi', label: 'Pi', hint: 'local models come from a file (models.json); base URL reserved' },
   { id: 'qwen', label: 'Qwen', hint: 'an endpoint compatible with OpenAI, used as the proxy upstream' }
 ];
 

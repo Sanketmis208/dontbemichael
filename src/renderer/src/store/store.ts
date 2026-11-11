@@ -3,7 +3,7 @@ import type { OfficeOpening } from '@/shell/clockingIn';
 import type { AccentColorName } from '@/design/tokens';
 import type { OfficeCharacterName } from '@/scene/office/cast';
 import type { StatusKind } from '@/components/PixelBadge';
-import type { AgentProvider } from '@shared/agentProvider';
+import { moveOffRetiredEngine, type AgentProvider } from '@shared/agentProvider';
 import type { HireManifest } from '@shared/hire';
 import { ownValue } from '@shared/ownValue';
 import {
@@ -765,7 +765,7 @@ function loadPersistedAgents(): Agent[] {
     if (!parsed.length) return [];
     // Reset volatile run-state; the PTY stream / mock loop will repopulate it.
     return parsed.map((a) => ({
-      ...a,
+      ...moveOffRetiredEngine(a),
       progress: 0,
       status: 'idle',
       action: ACTION_CLOCKING_IN,
@@ -793,7 +793,7 @@ function loadPersistedArchived(): Agent[] {
     if (!parsed.length) return [];
     // Archived agents have no live process — force the flag + clear run-state.
     return parsed.map((a) => ({
-      ...a,
+      ...moveOffRetiredEngine(a),
       archived: true,
       status: 'idle',
       ptyId: undefined,
@@ -826,7 +826,7 @@ function loadPersistedRestorable(): Agent[] {
     if (!parsed.length) return [];
     // No live process — clear run-state; the spawn recipe fields are what matter.
     return parsed.map((a) => ({
-      ...a,
+      ...moveOffRetiredEngine(a),
       status: 'idle',
       carrying: undefined,
       currentStation: undefined

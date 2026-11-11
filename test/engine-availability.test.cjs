@@ -33,7 +33,7 @@ test('an installed engine is installed, whatever its installer story', () => {
 
 test('a missing engine with an installer installs on first run and does not block', () => {
   const s = statusesFor([]);
-  for (const id of ['claude', 'codex', 'qwen', 'opencode', 'crush', 'pi', 'copilot']) {
+  for (const id of ['claude', 'codex', 'qwen', 'opencode', 'crush', 'copilot']) {
     const a = classifyEngineAvailability(s, id);
     assert.equal(a.state, 'installs-on-first-run', id);
     assert.ok(a.installCommand.length > 0, id);

@@ -37,7 +37,7 @@ export const KIND_CLASS: Readonly<Record<FailureKind, FailureClass>> = Object.fr
  *  lists differ. */
 export const ENGINES = [
   'claude', 'codex', 'grok', 'kimi', 'gemini', 'antigravity', 'qwen',
-  'opencode', 'crush', 'pi', 'copilot', 'cursor', 'custom'
+  'opencode', 'crush', 'copilot', 'cursor', 'custom'
 ] as const;
 
 /** The background check callers. Each logs the check's error verbatim as
