@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { AskOption, AskPart, PartAnswer } from '@shared/askMeRouting';
 import { isComposingKey } from '@shared/imeGuard';
 import { useRtl } from '@/i18n/useDirection';
+import { GrowingTextarea } from './GrowingTextarea';
 import { FileText } from './FileChip';
 
 /**
@@ -115,7 +116,9 @@ export function PartLines({ parts, answers, onChange, onSend, who }: {
                 })}
               </div>
             )}
-            <input
+            {/* Grows with the answer, like the reply box below (owner, 2026-11-11:
+                a one line field left no room for more than a line). */}
+            <GrowingTextarea
               className="cth-input"
               dir={rtl ? 'auto' : undefined}
               value={a.text ?? ''}
@@ -138,6 +141,6 @@ const recTag: CSSProperties = {
   background: 'var(--cth-green-soft)', color: 'var(--cth-green-text)', fontSize: 10.5, fontWeight: 600, whiteSpace: 'nowrap'
 };
 const lineStyle: CSSProperties = {
-  gridColumn: 2, minWidth: 0, boxSizing: 'border-box', height: 30, padding: '5px 9px', border: 'none', outline: 'none',
+  gridColumn: 2, minWidth: 0, width: '100%', display: 'block', boxSizing: 'border-box', minHeight: 30, padding: '5px 9px', border: 'none', outline: 'none',
   background: 'var(--cth-card)', fontFamily: 'var(--cth-font-ui)', fontSize: 12, lineHeight: '18px', color: 'var(--cth-ink)'
 };
