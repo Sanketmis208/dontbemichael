@@ -3,7 +3,9 @@
  *
  * Phase A scope (the rest of the renderer state stays in localStorage for now):
  *   - kv:               scalar app state. Today: the main window's bounds.
- *   - command_history:  NET-NEW — every prompt the user submits to an agent.
+ *   - command_history:  created by migration 1 and no longer written (owner,
+ *                       2026-11-11: nothing read it). Kept so shipped
+ *                       migrations stay unedited.
  *
  * Lives in the Electron MAIN process (better-sqlite3 is native + synchronous);
  * the renderer reaches it over IPC. The DB file sits next to config.json under
@@ -249,17 +251,6 @@ export class PersistStore {
       `INSERT INTO kv (key, value, updated_at) VALUES (?, ?, ?)
        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
     ).run(key, JSON.stringify(value), Date.now());
-  }
-
-  // ─── command history (net-new) ─────────────────────────────────────────────
-
-  /** Record one submitted prompt. Empty text or missing agent id are ignored. */
-  addHistory(entry: { agentId: string; cwd?: string | null; text: string }): void {
-    if (!this.db) return;
-    const text = (entry.text ?? '').trim();
-    if (!text || !entry.agentId) return;
-    this.db.prepare('INSERT INTO command_history (agent_id, cwd, text, ts) VALUES (?, ?, ?, ?)')
-      .run(entry.agentId, entry.cwd ?? null, text, Date.now());
   }
 }
 

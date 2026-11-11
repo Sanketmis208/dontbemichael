@@ -156,7 +156,6 @@ export function AgentDetailPanel({ agent }: AgentDetailPanelProps) {
                     if (t.trim().toLowerCase() === '/clear') {
                       updateAgent(agent.id, { contextTokens: 0, contextLimit: undefined, progress: 0 });
                     }
-                    void window.cth.historyAdd({ agentId: agent.id, cwd: agent.cwd, text: t });
                   }}
                   embedded
                   // Team members take work from Michael; the owner types to

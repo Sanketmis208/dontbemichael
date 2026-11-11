@@ -5675,16 +5675,6 @@ ipcMain.handle('clipboard:saveImage', async () => {
   }
 });
 
-// ─── IPC: command history (SQLite — every prompt submitted to an agent) ──────
-ipcMain.handle('history:add', (_evt, payload: unknown) => {
-  const p = (payload ?? {}) as { agentId?: unknown; cwd?: unknown; text?: unknown };
-  if (typeof p.agentId !== 'string' || typeof p.text !== 'string') return { ok: false, error: 'invalid args' };
-  try {
-    persist.addHistory({ agentId: p.agentId, cwd: typeof p.cwd === 'string' ? p.cwd : null, text: p.text });
-    return { ok: true };
-  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
-});
-
 // ─── IPC: quit confirmation ─────────────────────────────────────────────────
 /** Tear the harness down and quit. Shared by the hard "kill all & quit" path
  *  and the closing-time conclusion (after the god confirmed the floor saved). */

@@ -196,7 +196,6 @@ export function CommandCenterPanel({ agent }: { agent: Agent }) {
                     if (t.trim().toLowerCase() === '/clear') {
                       updateAgent(agent.id, { contextTokens: 0, contextLimit: undefined, progress: 0 });
                     }
-                    void window.cth.historyAdd({ agentId: agent.id, cwd: agent.cwd, text: t });
                   }}
                   embedded
                 />
