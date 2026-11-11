@@ -16,7 +16,7 @@ const loadTs = require('./load-ts.cjs');
 const { trustKeys, keptSafe } = loadTs('src/shared/pulseSafety.ts');
 const { learning, MIN_TURNS_FOR_RATE } = loadTs('src/shared/teamLearning.ts');
 const { teamAtWork } = loadTs('src/shared/teamPerformance.ts');
-const { readTranscript, gateOfTool, logPoints, ledgerDays } = loadTs('src/main/pulseBackfill.ts');
+const { readTranscript, gateOfTool, logPoints, LedgerFold } = loadTs('src/main/pulseBackfill.ts');
 const { readTeamMemory } = loadTs('src/main/teamMemory.ts');
 
 test('a trust layer deny is a stop only when the check judged it; a check that could not run is held', () => {
@@ -234,13 +234,14 @@ test('office log points carry the past mark, and only a member\'s message is wor
 test('the cost ledger folds with the restart rule and counts only growth inside the window', () => {
   // Value: protects=backfilled value; fails_when=a restart drop loses the new spend, growth before the window counts, or a later line counts; why_new=owner proposal 3 backfill; seam=none; no_claim=none beyond protects
   const day = new Date(2026, 9, 12, 12).getTime();
-  const m = ledgerDays([
+  const fold = new LedgerFold(day - 86_400_000, day + 86_400_000);
+  for (const r of [
     { agent_id: 'pam', session_id: 's', ts: day - 30 * 86_400_000, usd: 5 },
     { agent_id: 'pam', session_id: 's', ts: day, usd: 7 },
     { agent_id: 'pam', session_id: 's', ts: day + 1, usd: 1 },
     { agent_id: 'pam', session_id: 's', ts: day + 2 * 86_400_000, usd: 50 }
-  ], day - 86_400_000, day + 86_400_000);
-  assert.deepEqual([...m], [['pam\t2026-10-12', 3]]);
+  ]) fold.add(r);
+  assert.deepEqual([...fold.days()], [['pam\t2026-10-12', 3]]);
 });
 
 test('team memory reads each note\'s id, date, source and line, for the members asked about', (t) => {

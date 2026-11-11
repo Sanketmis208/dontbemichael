@@ -704,11 +704,6 @@ export function bridgeOf(provider: AgentProvider | undefined): BridgeDescriptor 
   return undefined;
 }
 
-export function defaultCommandForProvider(provider: AgentProvider, fallback = ''): string {
-  if (provider === 'custom') return fallback;
-  return providerPreset(provider).defaultCommand || fallback;
-}
-
 /** Returns the preset's auto-mode CLI flag for the given provider. Empty string = no flag. */
 export function autoModeFlagForProvider(provider: AgentProvider): string {
   return providerPreset(provider).autoModeFlag ?? '';
@@ -770,11 +765,6 @@ export function hasAutoModeStance(args: string[], provider: AgentProvider): bool
 /** Returns any env vars the provider needs for non-interactive / first-run suppression. */
 export function nonInteractiveEnvForProvider(provider: AgentProvider): Record<string, string> {
   return providerPreset(provider).nonInteractiveEnv ?? {};
-}
-
-/** Returns the command reference groups for the given provider. */
-export function commandGroupsForProvider(provider: AgentProvider): CmdGroup[] {
-  return providerPreset(provider).commandGroups ?? [];
 }
 
 /** Install metadata for a provider's engine CLI, consumed by the missing-CLI

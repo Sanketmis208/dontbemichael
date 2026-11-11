@@ -19,7 +19,7 @@
 import {
   CASE_STUDY_TO, caseStudyEmail, caseWhen, draftPrompt, fontFaceCss, hasWork, heroPalette, memberFigure, mergeDrafts, missingParts, pageHtml, parseDraft, startingEdits,
   type CaseDraft, type CaseDraftResult, type CaseFont, type CasePrep, type CaseInput, type CaseLogo, type CaseMember, type CaseOpen, type CasePeriod,
-  type CaseSendOutcome, type CaseStudyFacts, type HeroPalette, type Paper
+  type CaseSendOutcome, type CaseStudyFacts, type Paper
 } from '../shared/caseStudy';
 import { dayKey, type DayRange, type PulseSnapshot } from '../shared/teamPerformance';
 import { splitAgentRole } from '../shared/agentRole';
@@ -27,7 +27,6 @@ import type { CompanyProfile } from '../shared/companyProfile';
 import { MailError } from './mail';
 import type { LogoResult } from './siteLogo';
 
-export const CASE_PERIODS: readonly CasePeriod[] = ['last-30', 'this-month'];
 /** The screen's draft gives up after this long (eng C4). */
 export const CASE_DRAFT_TIMEOUT_MS = 60_000;
 /** A picked logo file is read up to this size. */

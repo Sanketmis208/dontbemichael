@@ -88,7 +88,7 @@ export class TelemetryStore {
   private lastTick: number | null = null;
   private run: RunBuffer | null = null;
   private loggedFailure = false;
-  /** Told of each point queued, for the health readout (telemetry:health). */
+  /** Told of each point queued, for the stall warning (pulseHealth.ts). */
   onRecord?: (office: string) => void;
 
   constructor(

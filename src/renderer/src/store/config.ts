@@ -15,9 +15,6 @@ import {
   type AgentProvider,
   type AgentProviderPreset
 } from '@shared/agentProvider';
-import type {
-  ContextTriggerConfig
-} from '@shared/triggers';
 import { isNewer } from '@shared/updateState';
 import modelCatalog from '@shared/modelCatalog.json';
 import type { CatalogModel, ModelCatalog } from '@shared/modelCatalogPayload';
@@ -163,20 +160,12 @@ export interface HarnessConfig {
   knowledgeGraph?: KnowledgeGraphConfig;
   /** TV-show office themes feature flag (Settings picker + switch flow). Default OFF. */
   tvShowOffices?: boolean;
-  /** Active office map/cast theme (honored only when tvShowOffices is on). */
-  officeTheme?: 'office' | 'friends' | 'brooklyn99' | 'siliconvalley' | 'got' | 'hogwarts';
   /** Per-CLI-provider local/self-hosted base URL (Ollama/LM Studio/vLLM, …) for the
    *  OpenCode/Crush/pi/qwen engines; applied at spawn. API KEYS are NOT stored here —
    *  they live write-only in the secret broker. */
   providerBaseUrls?: Partial<Record<AgentProvider, string>>;
   /** Per-CLI-provider default model slug, used to pre-fill the model picker. */
   providerDefaultModels?: Partial<Record<AgentProvider, string>>;
-  /** Auto-compaction / auto-clearing of agent terminal context. Main deep-fills
-   *  both halves on read, so the renderer can treat the sub-keys as present
-   *  (mirrors src/main/config.ts). */
-  contextTrigger?: ContextTriggerConfig;
-  /** One-time guard for the main-process triggers migration; read-only here. */
-  triggersMigratedV1?: boolean;
 }
 
 /** The Sonnet model with the 1M-token context window — used for Michael's prep

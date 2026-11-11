@@ -1,33 +1,16 @@
 import type { AgentProvider } from './agentProvider';
-import { DEFAULT_COMPACTION_FOCUS } from './triggers';
-
-/**
- * Back-compat alias. The compaction focus used to be a private constant here;
- * it now lives in shared/triggers.ts as the DEFAULT VALUE of the user-editable
- * `ContextRule.message`, so the Triggers UI and this module cannot drift apart.
- * Kept exported under the old name for any consumer still reaching for it.
- */
-export const COMPACTION_FOCUS = DEFAULT_COMPACTION_FOCUS;
 
 /** What one provider's interactive TUI accepts for each context action. */
-export interface ProviderContextCommands {
+interface ProviderContextCommands {
   /** Summarise-in-place. `null` = no command we can type with confidence. */
   compact: string | null;
   /** Discard-and-restart. `null` = same. */
   clear: string | null;
-  /**
-   * Whether the TUI parses text AFTER the compact command as a focus
-   * instruction. When false the focus is DROPPED rather than typed: a CLI whose
-   * slash parser ignores the remainder is harmless, but one that re-reads it as
-   * a fresh prompt would silently turn a compaction into a whole extra turn.
-   */
-  compactTakesFocus: boolean;
 }
 
 const NO_CONTEXT_COMMANDS: ProviderContextCommands = {
   compact: null,
-  clear: null,
-  compactTakesFocus: false
+  clear: null
 };
 
 /**
@@ -50,17 +33,14 @@ const CONTEXT_COMMANDS: Record<AgentProvider, ProviderContextCommands> = {
   // claudeCommands.ts:34,37 (this repo's own catalog): `/compact` takes a focus
   // ("usage: /compact keep the auth decisions"), `/clear` starts a fresh
   // conversation and reclaims the window.
-  claude: { compact: '/compact', clear: '/clear', compactTakesFocus: true },
+  claude: { compact: '/compact', clear: '/clear' },
 
   // Codex 0.137.0 binary, TUI slash-command description table:
   //   "summarize conversation to prevent hitting the context limit"  → /compact
   //   "clear the terminal and start a new chat"                      → /clear
   // NOTE this contradicts codexCommands.ts, which lists /clear but NOT /compact.
   // The binary is right and that catalog is incomplete (see report).
-  // compactTakesFocus stays FALSE: codex's own `Usage: /…` strings spell out an
-  // argument for every command that takes one (/goal, /raw, /mcp, /keymap,
-  // /ide, /sandbox-add-read-dir) and /compact has none.
-  codex: { compact: '/compact', clear: '/clear', compactTakesFocus: false },
+  codex: { compact: '/compact', clear: '/clear' },
 
   // Grok binary ships its own docs inline (04-slash-commands.md):
   //   "/compact [context] — Compress conversation history… Optionally specify
@@ -69,13 +49,13 @@ const CONTEXT_COMMANDS: Record<AgentProvider, ProviderContextCommands> = {
   //    Aliases: /clear"
   // `/new` is the documented spelling (and what grokCommands.ts:13 already
   // records), so prefer it over the alias.
-  grok: { compact: '/compact', clear: '/new', compactTakesFocus: true },
+  grok: { compact: '/compact', clear: '/new' },
 
   // Moonshot kimi-cli slash-command reference: `/compact` accepts appended
   // custom instructions ("/compact preserve database-related discussions");
   // `/clear` (alias /reset) "Clear the current session's context and start a
   // new conversation". NB `/new` there forks a session rather than discarding.
-  kimi: { compact: '/compact', clear: '/clear', compactTakesFocus: true },
+  kimi: { compact: '/compact', clear: '/clear' },
 
   // antigravity.google/docs/cli/reference (Google's own command table):
   //   "/clear  (/new)  — Clear the terminal and reset active conversation
@@ -87,12 +67,11 @@ const CONTEXT_COMMANDS: Record<AgentProvider, ProviderContextCommands> = {
   // compress / summarize), and the shipped `agy` binary has no such literal
   // either — agy compacts AUTOMATICALLY when the window fills ("# Resuming from
   // a compaction"). Nothing to type, so: null.
-  antigravity: { compact: null, clear: '/clear', compactTakesFocus: false },
+  antigravity: { compact: null, clear: '/clear' },
 
   // Google Gemini CLI's command reference documents `/compress` as replacing
   // the chat context with a summary and `/clear` as starting a clean context.
-  // `/compress` has no focus-argument contract, so never append user prose.
-  gemini: { compact: '/compress', clear: '/clear', compactTakesFocus: false },
+  gemini: { compact: '/compress', clear: '/clear' },
 
   // qwen-code's bundled cli.js, verbatim:
   //   compressCommand = { name:"compress", altNames:["summarize"],
@@ -103,18 +82,16 @@ const CONTEXT_COMMANDS: Record<AgentProvider, ProviderContextCommands> = {
   //     description "Clear conversation history and free up context." }
   // It is `/compress`, NOT `/compact`: qwen dropped upstream gemini-cli's
   // `compact` altName, so `/compact` would land as plain text here.
-  qwen: { compact: '/compress', clear: '/clear', compactTakesFocus: true },
+  qwen: { compact: '/compress', clear: '/clear' },
 
   // opencode binary's command registry, verbatim:
   //   { title:"Compact session", value:"session.compact",
   //     slash:{ name:"compact", aliases:["summarize"] }, run: … }
   // and its own tip text "Run /compact to summarize long sessions near context
-  // limits". That `run()` calls session.summarize({sessionID,model}) and never
-  // looks at the invocation args → the focus would be silently dropped, so
-  // compactTakesFocus is false.
+  // limits".
   // `/clear` does NOT exist in the binary (zero literals); the fresh-session
   // verb is `/new` — matched exactly (`t.trim().toLowerCase()==="/new"`).
-  opencode: { compact: '/compact', clear: '/new', compactTakesFocus: false },
+  opencode: { compact: '/compact', clear: '/new' },
 
   // Crush has NO typed slash commands at all. Its own binary strings show
   // "Summarize Session" / "New Session" as ctrl+p COMMAND-PALETTE rows, and the
@@ -141,28 +118,6 @@ const CONTEXT_COMMANDS: Record<AgentProvider, ProviderContextCommands> = {
   // means typing slashes into someone's unknown REPL.
   custom: NO_CONTEXT_COMMANDS
 };
-
-/** The full context-command entry for a provider (unknown ids degrade to none). */
-export function contextCommandsForProvider(provider: AgentProvider): ProviderContextCommands {
-  return CONTEXT_COMMANDS[provider] ?? NO_CONTEXT_COMMANDS;
-}
-
-/**
- * The compaction command to type, or null when this provider has none.
- *
- * `message` is the user-editable `ContextRule.message` (default
- * `DEFAULT_COMPACTION_FOCUS`) and is appended only where the provider's parser
- * actually reads it — see `compactTakesFocus`.
- */
-export function compactionCommandForProvider(
-  provider: AgentProvider,
-  message: string = DEFAULT_COMPACTION_FOCUS
-): string | null {
-  const { compact, compactTakesFocus } = contextCommandsForProvider(provider);
-  if (!compact) return null;
-  const focus = message.trim();
-  return compactTakesFocus && focus ? `${compact} ${focus}` : compact;
-}
 
 /** Every distinct compaction verb this harness can type, across all providers.
  *  Derived from CONTEXT_COMMANDS rather than hand-listed, so a provider added to
@@ -201,36 +156,6 @@ export const CONTEXT_COMMAND_VERBS: ReadonlySet<string> = new Set(
  */
 export function isCompactionCommand(text: string): boolean {
   return COMPACT_VERBS.has(text.trim().split(/\s+/)[0]);
-}
-
-/**
- * The context-clearing command to type, or null when nothing typed can reach
- * this provider.
- *
- * Per `ContextRule.message`, a non-empty message on the CLEAR rule is "the
- * literal command to send" — an override, not a suffix. That asymmetry with
- * compact is deliberate and useful: it is the operator's escape hatch for the
- * providers this table answers `null` for, and for a CLI that renames its verb
- * between releases. Empty message = the table's own bare command.
- */
-export function clearCommandForProvider(
-  provider: AgentProvider,
-  message: string = ''
-): string | null {
-  const override = message.trim();
-  if (override) return override;
-  return contextCommandsForProvider(provider).clear;
-}
-
-/** Claude exposes remote control as a slash command; Codex uses its daemon and
- * Kimi has no equivalent slash command. */
-export function remoteControlCommandForProvider(
-  provider: AgentProvider,
-  sessionName?: string
-): string | null {
-  if (provider !== 'claude') return null;
-  const name = sessionName?.trim();
-  return name ? `/remote-control ${name}` : '/remote-control';
 }
 
 /** Initial TUI output needs a short provider-specific settle before typing. */

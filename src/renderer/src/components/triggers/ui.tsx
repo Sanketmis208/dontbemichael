@@ -70,17 +70,6 @@ export function Chip({ children, tone = 'plain' }: { children: ReactNode; tone?:
   );
 }
 
-export function Callout({ children, tone = 'warn' }: { children: ReactNode; tone?: 'warn' | 'note' }) {
-  const warn = tone === 'warn';
-  return (
-    <div style={{
-      marginTop: 6, padding: '8px 10px', borderRadius: 'var(--cth-r-md)',
-      fontSize: 12.5, lineHeight: '18px', color: warn ? 'var(--cth-coral-text)' : 'var(--cth-ink-2)',
-      background: warn ? 'var(--cth-coral-soft)' : 'var(--cth-neutral-soft)'
-    }}>{children}</div>
-  );
-}
-
 /* ─────────────────────────────── controls ────────────────────────────────── */
 
 /** An on/off switch. `role="switch"` + `aria-checked` so a screen reader hears

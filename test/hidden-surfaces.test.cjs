@@ -56,7 +56,7 @@ test('no clock-driven context upkeep is left in Settings or the Triggers tab', (
  * setting itself still works and stays in Settings → Agents.
  */
 test('the header hides the auto mode text', () => {
-  assert.equal(loadTs('src/shared/buildFeatures.ts').SHOW_AUTO_MODE_LABEL, false);
+  assert.equal(loadTs('src/shared/buildFeatures.ts').SHOW_AUTO_MODE_LABEL, undefined, 'the flag is gone with the text');
   // Design v2's top bar (shell/TopBar.tsx) has no auto mode text at all.
   for (const f of ['src/renderer/src/App.tsx', 'src/renderer/src/shell/TopBar.tsx']) {
     assert.doesNotMatch(read(f), /auto mode on/, f);
@@ -139,7 +139,7 @@ test('the Skills page is gone, and agents keep their skills', () => {
 });
 
 test('the pixel office themes are gone with the floor', () => {
-  assert.equal(loadTs('src/shared/buildFeatures.ts').SHOW_OFFICE_THEME, false);
+  assert.equal(loadTs('src/shared/buildFeatures.ts').SHOW_OFFICE_THEME, undefined, 'the flag is gone with the picker');
   assert.doesNotMatch(read('src/renderer/src/components/SettingsModal.tsx'), /OfficeThemePicker/);
   assert.doesNotMatch(read('src/renderer/src/App.tsx'), /setOfficeTheme/);
   assert.equal(fs.existsSync(path.resolve(__dirname, '../src/renderer/src/scene/office/themeRegistry.ts')), false);

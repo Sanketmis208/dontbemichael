@@ -129,19 +129,6 @@ export function loadBundledPacks(deps: PackLoaderDeps): PackLoadResult {
 }
 
 /**
- * Validate a pack that arrived from a file or a deep link.
- *
- * Always `'imported'`, which is what forces every outward capability down to
- * "Ask me" (Decision 7). The caller shows the result on the "from outside this
- * app" review screen before anything is created.
- */
-export function loadImportedPack(raw: unknown, core?: OfficePack): { pack?: OfficePack; errors: string[] } {
-  const res = validateOfficePack(raw, 'imported');
-  if (!res.ok || !res.pack) return { errors: res.errors };
-  return { pack: core ? mergeWithCore(res.pack, core) : res.pack, errors: [] };
-}
-
-/**
  * The bundled packs directory.
  *
  * Mirrors `skillsResourceDir()`: packs ship as a directory copy under

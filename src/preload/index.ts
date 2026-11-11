@@ -9,7 +9,6 @@ import type { OrganizedList } from '../shared/organizedRecord';
 import type { PulseView } from '../shared/pulseView';
 import type { CaseDraftResult, CaseInput, CaseOpen, CasePrep, CaseSaveResult, CaseSendOutcome } from '../shared/caseStudy';
 import type { FoundationsView } from '../shared/foundations';
-import type { PulseHealthView } from '../shared/pulseHealth';
 import type { ResearchConfig } from '../shared/research';
 import type { DataClassId, DataClassSetting } from '../shared/dataClasses';
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
@@ -41,12 +40,6 @@ import type { HookEvent } from '../shared/hookEvents';
 export type { HookEvent } from '../shared/hookEvents';
 import type { OfficePack, PackOrigin } from '../shared/officePack';
 export type { OfficePack, PackOrigin } from '../shared/officePack';
-import type {
-  ContextRule, ContextTriggerConfig
-} from '../shared/triggers';
-export type {
-  ContextRule, ContextTriggerConfig
-} from '../shared/triggers';
 
 /** Renderer-visible integration record: the secretRef handle is redacted to a
  *  presence boolean. Matches main `integrations.listRecordsRedacted()` — the
@@ -321,8 +314,6 @@ export interface HarnessConfig {
   terminalTheme?: 'light' | 'dark';
   /** TV-show office themes feature flag (Settings picker + switch flow). Default OFF. */
   tvShowOffices?: boolean;
-  /** Active office map/cast theme (honored only when tvShowOffices is on). */
-  officeTheme?: 'office' | 'friends' | 'brooklyn99' | 'siliconvalley' | 'got' | 'hogwarts';
   /** Per-CLI-provider local/self-hosted base URL (Ollama/LM Studio/vLLM, …) for the
    *  OpenCode/Crush/pi/qwen engines; applied at spawn. API KEYS are NOT stored here —
    *  they live write-only in the secret broker. */
@@ -364,15 +355,6 @@ export interface KnowledgeDoc {
   truncated: boolean;
   /** When an edit the owner saved was last read in. */
   updatedAt?: string;
-}
-export interface KnowledgeHit {
-  docId: string;
-  title: string;
-  source: string;
-  modality: string;
-  chunkIdx: number;
-  score: number;
-  snippet: string;
 }
 export interface KnowledgeIngestResult {
   ok: boolean;
@@ -479,15 +461,6 @@ export type TelemetryEvent =
 export interface TelemetrySnapshot {
   usage: AgentUsageSample[];
   spans: Record<string, ToolSpan[]>;
-}
-
-/** One captured user prompt from the SQLite command_history table. */
-export interface CommandHistoryEntry {
-  id: number;
-  agentId: string;
-  cwd: string | null;
-  text: string;
-  ts: number;
 }
 
 /** A GitHub issue, normalized for the renderer (labels/assignees flattened to names). */
@@ -964,21 +937,10 @@ const api = {
   modelCatalog: (force?: boolean): Promise<{
     catalog: ModelCatalog | null; fetchedAt: number; stale: boolean;
   }> => ipcRenderer.invoke('models:catalog', force),
-  memoryWakeUp: (wing?: string): Promise<{ ok: boolean; output: string; error?: string }> =>
-    ipcRenderer.invoke('hive:memoryWakeUp', wing),
-  mineNow: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('hive:mineNow'),
-  /** Tidy agents' memory notes into their index now (memoryTidy.ts). With an
-   *  id, that agent is tidied if it has anything to tidy. */
-  reflectNow: (id?: string): Promise<Array<{ id: string; tidied: boolean; reason: string }>> =>
-    ipcRenderer.invoke('memory:reflectNow', id),
 
   // ─── Enterprise Knowledge Graph (multimodal context for agents) ───────────
   kgStatus: (): Promise<KnowledgeStatus> => ipcRenderer.invoke('kg:status'),
   kgList: (): Promise<KnowledgeDoc[]> => ipcRenderer.invoke('kg:list'),
-  kgSearch: (query: string, limit?: number): Promise<KnowledgeHit[]> =>
-    ipcRenderer.invoke('kg:search', query, limit),
-  kgGet: (id: string): Promise<{ meta: KnowledgeDoc; text: string } | null> =>
-    ipcRenderer.invoke('kg:get', id),
   kgRemove: (id: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('kg:remove', id),
   /** Open a document in the owner's own app; a save there is read in again.
    *  Company foundations opens as a read only copy. */
@@ -991,9 +953,6 @@ const api = {
   },
   /** Open an OS file picker and ingest the chosen artifacts in one round-trip. */
   kgAddFiles: (): Promise<KnowledgeIngestResult> => ipcRenderer.invoke('kg:addFiles'),
-  /** Ingest explicit file paths (e.g. drag-and-drop). */
-  kgIngestFiles: (paths: string[], tags?: string[]): Promise<KnowledgeIngestResult> =>
-    ipcRenderer.invoke('kg:ingestFiles', { paths, tags }),
 
   // ─── Composer attachments (images + files, sent to agents by PATH) ─────────
   /** Open an OS picker for images/files; returns chosen absolute paths + names. */
@@ -1011,12 +970,6 @@ const api = {
   /** Record one submitted prompt. Fire-and-forget from the prompt-detection hook. */
   historyAdd: (entry: { agentId: string; cwd?: string; text: string }): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('history:add', entry),
-  /** Most-recent-first history, optionally scoped to one agent. */
-  historyList: (agentId?: string, limit?: number): Promise<CommandHistoryEntry[]> =>
-    ipcRenderer.invoke('history:list', agentId, limit),
-  /** Substring search over prompt text, most-recent-first. */
-  historySearch: (query: string, limit?: number): Promise<CommandHistoryEntry[]> =>
-    ipcRenderer.invoke('history:search', query, limit),
   hiveSend: (msg: Partial<HiveMessage>, from?: string): Promise<{ ok: boolean; error?: string; message?: HiveMessage }> =>
     ipcRenderer.invoke('hive:send', msg, from),
   /** Michael's open requests from the owner, oldest first (card-lifecycle.md). */
@@ -1043,14 +996,6 @@ const api = {
     const listener = (_e: IpcRendererEvent, payload: HiveRouteEvent) => cb(payload);
     ipcRenderer.on('hive:message', listener);
     return () => ipcRenderer.removeListener('hive:message', listener);
-  },
-  /** Register a listener for hive tasks routed to non-Claude agents (e.g.
-   *  Codex). Main emits this instead of bouncing; the renderer enqueues the
-   *  raw text so the drain effect types it into the agent's REPL when idle. */
-  onHiveEnqueue: (cb: (e: { targetId: string; text: string }) => void): (() => void) => {
-    const listener = (_e: IpcRendererEvent, payload: { targetId: string; text: string }) => cb(payload);
-    ipcRenderer.on('hive:enqueueToAgent', listener);
-    return () => ipcRenderer.removeListener('hive:enqueueToAgent', listener);
   },
   /** Register a listener for terminal work-order handoffs (#53) — hive mail to a
    *  hookless provider that can't drain an inbox; the renderer types it into the
@@ -1154,10 +1099,6 @@ const api = {
   memoryResetFolders: (): Promise<string[]> => ipcRenderer.invoke('app:memoryResetFolders'),
 
   // ─── Token telemetry (real usage + est. cost from CC transcripts) ──────────
-  /** Sum input/output/cache tokens + estimated USD cost for an agent from its
-   *  Claude Code transcripts (reconciler/fallback). Returns null for an invalid cwd. */
-  agentUsage: (cwd: string): Promise<AgentUsage | null> =>
-    ipcRenderer.invoke('hive:agentUsage', cwd),
   /** Current context size (tokens) of an agent's live session, read from the
    *  last assistant message of its transcript. Null until the agent's hooks
    *  have fired at least once (the transcript path is learned from them). */
@@ -1165,9 +1106,6 @@ const api = {
     ipcRenderer.invoke('hive:agentContext', agentId),
 
   // ─── Live telemetry (OTel collector — the usage-provider seam + spans) ──────
-  /** Live cumulative usage for an agent (OTel-preferred, transcript fallback). */
-  telemetryUsage: (agentId: string): Promise<AgentUsageSample | null> =>
-    ipcRenderer.invoke('telemetry:usage', agentId),
   /** Cold-start backfill of all agents' usage + recent spans. */
   telemetrySnapshot: (): Promise<TelemetrySnapshot> =>
     ipcRenderer.invoke('telemetry:snapshot'),
@@ -1185,9 +1123,6 @@ const api = {
     ipcRenderer.on('control:breakerState', listener);
     return () => ipcRenderer.removeListener('control:breakerState', listener);
   },
-  /** Push a breaker state to the renderer (Lane A's policy / interim glue calls this). */
-  setBreakerState: (state: BreakerState): Promise<{ ok: boolean }> =>
-    ipcRenderer.invoke('control:setBreakerState', state),
 
   // ─── Operator control over agents (#7C.1–7C.3) ──────────────────────────────
   /** Pause/unpause an agent — paused → its tool calls are denied at PreToolUse. */
@@ -1199,9 +1134,6 @@ const api = {
   /** Clear pause + halt so the agent can run again. */
   controlResume: (agentId: string): Promise<AgentControlSnapshot | null> =>
     ipcRenderer.invoke('control:resume', agentId),
-  /** Gate/ungate a specific tool for an agent (denied at PreToolUse). */
-  controlGateTool: (agentId: string, tool: string, on: boolean): Promise<AgentControlSnapshot | null> =>
-    ipcRenderer.invoke('control:gateTool', agentId, tool, on),
   /** Queue a steer note — injected as context on the agent's next hook (#7C.2). */
   controlSteer: (agentId: string, text: string): Promise<AgentControlSnapshot | null> =>
     ipcRenderer.invoke('control:steer', agentId, text),
@@ -1325,8 +1257,6 @@ const api = {
   runCompareSuggestions: (): Promise<RunSuggestion[]> => ipcRenderer.invoke('runCompare:suggestions'),
   /** Not now on a suggestion. */
   runCompareDismiss: (runId: number): Promise<boolean> => ipcRenderer.invoke('runCompare:dismiss', runId),
-  /** Whether Pulse's points are flowing: the last batch, failed writes, refused hook frames. */
-  telemetryHealth: (): Promise<PulseHealthView> => ipcRenderer.invoke('telemetry:health'),
   /** Fires when new telemetry was folded, so an open Pulse view refreshes. */
   onPulseUpdated: (cb: () => void): (() => void) => {
     const listener = (): void => cb();
@@ -1437,23 +1367,6 @@ const api = {
    *  archives it automatically via pty:kill; this is the explicit primitive. */
   hiveSetArchived: (id: string, archived: boolean): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('hive:setArchived', id, archived),
-
-  // ─── Triggers: context (auto-compact / auto-clear) ──────────────────────────
-  /** The two context rules (cadence + pressure gate + message), deep-filled. */
-  getContextTrigger: (): Promise<ContextTriggerConfig> =>
-    ipcRenderer.invoke('triggers:getContext'),
-  /** Persist both rules and RE-ARM main's timers; resolves to what was stored
-   *  (main clamps the cadence/percentages, so the echo is authoritative). */
-  setContextTrigger: (cfg: ContextTriggerConfig): Promise<ContextTriggerConfig> =>
-    ipcRenderer.invoke('triggers:setContext', cfg),
-  /** Fires when a context rule comes due. `rule` rides along because main owns
-   *  only the CADENCE — the renderer applies the per-agent pressure gate and
-   *  queues the command for each agent that qualifies. */
-  onContextTrigger: (cb: (evt: { action: 'compact' | 'clear'; rule: ContextRule }) => void): (() => void) => {
-    const listener = (_e: IpcRendererEvent, payload: { action: 'compact' | 'clear'; rule: ContextRule }) => cb(payload);
-    ipcRenderer.on('trigger:context', listener);
-    return () => ipcRenderer.removeListener('trigger:context', listener);
-  },
 
   // ─── Integrations registry (Phase 2 — labeled REST endpoints via the secret broker) ──
   // Bridges the §6 IPC surface for the Settings UI. WRITE-ONLY secret contract end to

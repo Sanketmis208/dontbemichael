@@ -21,18 +21,7 @@
     "clear": "Clear"
   },
   "commandBar": {
-    "free": "free",
-    "skill": "/skill",
-    "quick": "quick",
-    "placeholder": "Type a command",
-    "placeholderBusy": "Ada is working...",
-    "placeholderBlocked": "Ada needs you...",
-    "send": "send",
-    "busyNote": "Ada is in the middle of a tool. Queue or hit pause.",
-    "blockedNote": "Approval needed."
-  },
-  "blockedBanner": {
-    "needsYou": "needs you"
+    "send": "send"
   },
   "costHud": {
     "tok": "tok"
@@ -89,7 +78,6 @@
     "report": "Report",
     "gotIt": "Got it",
     "skipNotice": "Don't show me these",
-    "fileFiles": "Files in this question",
     "fileOpen": "Open",
     "fileReveal": "Show in Finder",
     "fileNotFound": "Not found",
@@ -101,17 +89,6 @@
     "fileRevealLabel": "Show {{name}} in Finder",
     "fileRevealWindows": "Show in folder",
     "fileRevealLabelWindows": "Show {{name}} in its folder",
-    "fileKind": {
-      "markdown": "Markdown",
-      "text": "Text",
-      "csv": "CSV",
-      "excel": "Excel",
-      "word": "Word",
-      "powerpoint": "PowerPoint",
-      "pdf": "PDF",
-      "image": "Image",
-      "file": "File"
-    },
     "openDetail": "The full background to this ask, with earlier answers",
     "answerPlaceholder": "Your answer, or done if you handled it",
     "sending": "Sending…",
@@ -141,7 +118,6 @@
     "answersSent": "{{count}} answers sent to {{godName}}.",
     "showAnswers": "Show",
     "hideAnswers": "Hide",
-    "workStyleReplaces": "Using it replaces {{name}}'s Work style and role line, and adds its scheduled jobs.",
     "workStyleKeep": "Keep mine",
     "workStyleWhy": {
       "sendingSetting": "Some jobs said to keep every reply as a draft, even when your Sending setting on the Access tab allows more. Replies now go out the way that setting says.",
@@ -257,9 +233,6 @@
       "notifications": "Notifications",
       "desktopNotifications": "Desktop notifications",
       "desktopNotificationsDesc": "Desktop alerts from {{godName}} when he needs you, plus the app's own warnings.",
-      "maintenance": "Maintenance",
-      "autoCompact": "Compact on a schedule",
-      "autoCompactDesc": "Queue /compact for every agent on a schedule (hourly by default; set the interval in the Triggers tab). Off by default. Agents that run for a long time may overflow their context without it.",
       "dangerZone": "Danger zone",
       "dangerDesc": "Reset memory: every member starts over and the office stays. Reset & start over: the office is erased and setup opens again. Your team's folders and your Claude sign in stay.",
       "resetMemory": "Reset memory",
@@ -369,7 +342,6 @@
     "agents": "Agents",
     "godTag": " (god)",
     "toolCalls": "{{count}} tool calls",
-    "rate": "rate",
     "budget": "budget",
     "meterTitle": "CUMULATIVE session usage: {{used}} of {{limit}} tokens{{note}}. This is not the context window.",
     "agentLimit": " (agent limit: work tokens, cache reads excluded)",
@@ -383,7 +355,6 @@
     "engine": "engine:",
     "apply": "apply",
     "confirmRestartEngine": "This restarts {{name}}; a conversation on a different engine can't be resumed.",
-    "restartFailed": "Restart failed.",
     "archived": "Archived ({{count}})",
     "showClosed": "show closed agents",
     "hideClosed": "hide closed agents",
@@ -393,15 +364,10 @@
     "issues": "Issues",
     "fetching": "fetching…",
     "fetchIssues": "Fetch issues",
-    "noRepoSelected": "No repo selected.",
-    "fetchFailed": "Failed to fetch issues.",
     "noIssues": "No issues fetched yet.",
     "assign": "Assign",
-    "textSearch": "TEXT SEARCH (board, tasks, memory)",
     "textSearchPlaceholder": "Find words in the team's notes, the board and tasks",
     "nothingMatched": "Nothing matched.",
-    "semanticSearch": "SEMANTIC SEARCH (MemPalace)",
-    "memoryFile": "Memory file",
     "noMemory": "No memory recorded yet.",
     "activity": "Activity",
     "nothingYet": "Nothing yet.",
@@ -417,12 +383,10 @@
     "tokenLimit": "limit {{value}}",
     "setLimit": "set limit",
     "saveLimit": "Save limit",
-    "fleetTokens": "Σ {{value}} tok",
     "fleetInputs": "inputs {{value}} (cache {{pct}}%)",
     "fleetRate": "{{value}} tok/min",
     "telemetryNote": "live from each agent's OpenTelemetry · bars show tokens used vs each agent's limit, else the {{cap}} floor budget",
     "defaultBudgetNote": " (default; set a floor token budget in Settings)",
-    "openIssue": "GitHub Issue #{{num}}: {{title}}",
     "deliveryResumeAria": "Resume automatic delivery for the whole floor",
     "deliveryHoldAria": "Hold automatic delivery for the whole floor",
     "advanced": {
@@ -444,14 +408,12 @@
     "name": "Name",
     "namePlaceholder": "Ada",
     "character": "Character",
-    "projectPlaceholder": "/path/to/your/project",
     "pick": "Pick",
     "provider": "Provider",
     "model": "Model",
     "command": "Command",
     "role": "Role",
     "rolePlaceholder": "For example: Finance",
-    "roleDescriptionPlaceholder": "For example: Answers customers who write to the support inbox, and passes refund requests to Oscar.",
     "roleHelp": "{{godName}} reads this to decide what goes to {{name}}. Name the requests, inbox or customers, so no teammate covers the same thing.",
     "errFolderShared": "That folder is {{godName}}'s. Pick a folder of this team member's own.",
     "importHireDesc": "Import hire loads a ready to use agent from a .json manifest. It fills in every field below for you to review. Nothing spawns until you hit spawn.",
@@ -779,77 +741,6 @@
       "seeWork": "Open Work tab"
     },
     "clockedInCount": "{{count}} of {{total}} in",
-    "gpuError": "The office floor lost its GPU context.\n\nToo many terminals are using the GPU at once.\nClose a few agent terminals, or restart the app, to bring it back.",
-    "errand": {
-      "water": [
-        "watering the plants 🌿",
-        "giving the plants a drink",
-        "they grow so fast"
-      ],
-      "window": [
-        "letting some air in 🍃",
-        "a bit of fresh air",
-        "nice breeze today"
-      ],
-      "dispenser": [
-        "getting some water 💧",
-        "hydration break",
-        "staying sharp"
-      ],
-      "fridge": [
-        "anything good in the fridge?",
-        "who took my yogurt?",
-        "just looking…"
-      ],
-      "shelf": [
-        "checking out the shelf 📚",
-        "anything new in here?",
-        "so much good stuff"
-      ],
-      "bin": [
-        "out with the scrap paper 🗑️",
-        "desk cleanup day",
-        "tidying up a little"
-      ],
-      "smoke": [
-        "the floor runs itself 🚬",
-        "boss break.",
-        "thinking big thoughts 🚬",
-        "I DECLARE… a break"
-      ]
-    },
-    "suckUp": [
-      "already shipped {{done}} tasks, {{godName}}. raise? 🥺",
-      "{{done}} tasks done this week, boss!",
-      "great vision as always, boss!",
-      "I was JUST about to do exactly that!",
-      "love the tie today, {{godName}}",
-      "working hard, boss! 💪",
-      "best boss ever. genuinely."
-    ],
-    "gossip": [
-      "has he ever actually written code?",
-      "another 'quick sync' that took an hour…",
-      "'world's best boss'? He bought that mug himself.",
-      "he pinned MY task as his idea",
-      "the cigar smell, honestly…",
-      "he watered the plant. ONE plant. his own.",
-      "did you hear him? 'I DECLARE… a break'"
-    ],
-    "cheer": [
-      "done! ✔",
-      "nailed it",
-      "that's a wrap",
-      "ship it 🚀",
-      "another one done",
-      "crushed it",
-      "in the books"
-    ],
-    "mugs": {
-      "empty": "no clean mugs left…",
-      "brewing": "brewing a fresh one ☕",
-      "washing": "washing the mug"
-    },
     "activity": {
       "waiting": "waiting",
       "needsYou": "needs you",
@@ -890,7 +781,6 @@
     }
   },
   "setupPanel": {
-    "title": "Prerequisites",
     "checking": "Checking what is installed…",
     "summary": "{{ready}} of {{total}} ready{{missing}}",
     "summaryMissing": " · {{count}} recommended missing",
@@ -902,7 +792,6 @@
     "recommended": "recommended",
     "docs": "docs →",
     "askDesc": "{{godName}} can install the {{count}} missing recommended tool for you. This fills in his dispatch box; nothing runs until you press dispatch.",
-    "askDescPlural": "{{godName}} can install the {{count}} missing recommended tools for you. This fills in his dispatch box; nothing runs until you press dispatch.",
     "allReady": "Everything is installed.",
     "askMichael": "ask {{godName}} to set up everything",
     "sections": {
@@ -935,7 +824,6 @@
     "autoModeCaveat": "⚠ In auto mode these engines run with full filesystem + shell access (no sandbox), like Claude's bypass mode. Turn auto mode off (General) to make them ask first. Live end to end verification with real model calls is pending your keys or a local LLM."
   },
   "updatesSection": {
-    "title": "Updates",
     "onVersion": "You're on v{{v}}",
     "checkingDetail": "Checking for a newer release…",
     "availableHeadline": "v{{version}} is available",
@@ -972,7 +860,6 @@
     "readMore": "Read more",
     "star": "⭐ Star us on GitHub",
     "later": "Later",
-    "restarting": "Restarting…",
     "restart": "Restart to update",
     "download": "Download {{version}}",
     "openReleases": "Open releases"
@@ -1021,7 +908,6 @@
     "linux2": "Quit this app, then launch the new AppImage. Your team and files are still there."
   },
   "triggersTab": {
-    "schedules": "Schedules",
     "officeBlurb": "Every job that is on, {{godName}}'s included. To change a job, open that team member and go to their Access tab."
   },
   "schedulesSection": {
@@ -1033,7 +919,6 @@
     "notFired": "not yet fired",
     "next": "next {{time}}",
     "beat": "♥ beat",
-    "noPrompt": "No prompt set.",
     "saved": "saved",
     "when": "When",
     "beatCeiling": "The beat adapts to how quiet the floor is, so this is the ceiling, not the exact gap.",
@@ -1102,16 +987,6 @@
     "timeN": "Time {{n}}",
     "dayTaken": "{{day}} is in another time",
     "daysClash": "{{days}} can't be in an every line and another time. Turn it off in one of them."
-  },
-  "fileEditor": {
-    "file": "File",
-    "edit": "edit",
-    "preview": "preview",
-    "editTitle": "Edit the source",
-    "previewTitle": "Rendered preview (of the saved file)",
-    "openInIde": "open in IDE",
-    "openInIdeTitle": "Open this file in the full IDE",
-    "closeTitle": "Close (Esc)"
   },
   "memoryPanel": {
     "notSetUp": "Not set up",
@@ -1279,7 +1154,6 @@
     "search": "Search tasks",
     "everyone": "Everyone",
     "member": "Team member",
-    "count": "{{count}} tasks",
     "newWorkHint": "New work goes through {{godName}}",
     "colTodo": "To do",
     "colDoing": "Doing",
@@ -1296,7 +1170,6 @@
     "needsYouTitle": "waiting on your answer; see Needs you",
     "dismissTitle": "Close as done, your call. {{godName}} is told.",
     "dismissAria": "close task",
-    "taskTitle": "Task",
     "unassigned": "unassigned",
     "humanQA": "Questions",
     "awaitingAnswer": "Waiting for you",
@@ -1450,9 +1323,6 @@
     "knowledgeHead": "Everything else goes in Memory & Knowledge",
     "knowledgeBody": "Product and price lists, your ideal customers, how you sell, policies, your mission: add them as documents in Settings, Memory & Knowledge. Every team member can search them.",
     "knowledgeOpen": "Open Memory & Knowledge",
-    "save": "Save",
-    "saved": "Saved. Your team gets the change with their next message.",
-    "saveFailed": "Couldn't save. Try again.",
     "stillMissing": "Fields marked * are still empty.",
     "missing": {
       "ceo": "Add the CEO or owner's name.",
@@ -2779,7 +2649,6 @@
     "leaveWithChange_few": "Leave the part {{names}} already do with them.",
     "leaveWithChange_many": "Leave the part {{names}} already do with them.",
     "leaveWithChange_other": "Leave the part {{names}} already do with them.",
-    "editMine": "Edit my change",
     "errorTitle": "Couldn't work out the change",
     "errorNote": "Try again in a moment. Your words are still in the box.",
     "errorNoteCard": "Try again in a moment. Nothing has changed.",
@@ -2809,10 +2678,6 @@
     "anythingChangeInfo": "Optional. Say what {{name}} should do differently from this job, and see what changes before hiring.",
     "errJobFirst": "Say what {{name}} will do, then see the job and press Apply.",
     "packTitle": "A better job description for {{name}}",
-    "packKeptOne": "Your change will be kept.",
-    "packKeptMany": "Your {{count}} changes will be kept.",
-    "packOlderEdits": "Your earlier edits to {{name}}'s job will be replaced.",
-    "seeIt": "See it",
     "steps": {
       "starting": "Getting ready",
       "reading": "Reading what you wrote",
@@ -2920,13 +2785,6 @@
     "loading": "Reading your office's figures",
     "loadFailed": "Couldn't read your office's figures. Close the tab and try again.",
     "pageLabel": "Case study page",
-    "figure": {
-      "email": "{{n}} emails organized",
-      "task": "{{n}} tasks finished",
-      "away": "{{n}} hours while you were away",
-      "sent": "{{n}} emails sent",
-      "check": "{{n}} scheduled checks"
-    },
     "drafting": "Writing a first draft",
     "draftFailed": "The first draft couldn't be written. The page uses standard words until it is. Try again.",
     "retry": "Try again",

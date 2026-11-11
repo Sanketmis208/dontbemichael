@@ -19,15 +19,6 @@ import Database from 'better-sqlite3';
 import { app } from 'electron';
 import { join } from 'node:path';
 
-/** A captured user prompt, as returned to the renderer (camelCase columns). */
-export interface CommandHistoryRow {
-  id: number;
-  agentId: string;
-  cwd: string | null;
-  text: string;
-  ts: number;
-}
-
 /**
  * Ordered, append-only migrations. Index N takes the DB from user_version N to
  * N+1. To evolve the schema, APPEND a new function — never edit an existing one
@@ -270,38 +261,5 @@ export class PersistStore {
     this.db.prepare('INSERT INTO command_history (agent_id, cwd, text, ts) VALUES (?, ?, ?, ?)')
       .run(entry.agentId, entry.cwd ?? null, text, Date.now());
   }
-
-  /** Most-recent-first history, optionally scoped to one agent. */
-  listHistory(agentId?: string, limit = 100): CommandHistoryRow[] {
-    if (!this.db) return [];
-    const lim = clampLimit(limit, 100);
-    const rows = agentId
-      ? this.db.prepare(
-          'SELECT id, agent_id AS agentId, cwd, text, ts FROM command_history WHERE agent_id = ? ORDER BY ts DESC, id DESC LIMIT ?'
-        ).all(agentId, lim)
-      : this.db.prepare(
-          'SELECT id, agent_id AS agentId, cwd, text, ts FROM command_history ORDER BY ts DESC, id DESC LIMIT ?'
-        ).all(lim);
-    return rows as CommandHistoryRow[];
-  }
-
-  /** Substring search over prompt text, most-recent-first. */
-  searchHistory(query: string, limit = 50): CommandHistoryRow[] {
-    if (!this.db) return [];
-    const q = (query ?? '').trim();
-    if (!q) return [];
-    const lim = clampLimit(limit, 50);
-    // Escape LIKE wildcards so a literal % or _ in the query isn't a metachar.
-    const needle = `%${q.replace(/[\\%_]/g, '\\$&')}%`;
-    return this.db.prepare(
-      "SELECT id, agent_id AS agentId, cwd, text, ts FROM command_history WHERE text LIKE ? ESCAPE '\\' ORDER BY ts DESC, id DESC LIMIT ?"
-    ).all(needle, lim) as CommandHistoryRow[];
-  }
 }
 
-/** Coerce an untrusted limit into [1, 1000] with a sane fallback. */
-function clampLimit(n: number, fallback: number): number {
-  const v = Math.floor(Number(n));
-  if (!Number.isFinite(v) || v <= 0) return fallback;
-  return Math.min(1000, v);
-}

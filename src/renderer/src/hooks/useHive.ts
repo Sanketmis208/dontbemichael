@@ -5,7 +5,6 @@ import { useEffect, useRef } from 'react';
 import { useStore, type Agent, type QueuedMessage, type StationKind, type ToolKind } from '@/store/store';
 import {
   buildSpawnCommand,
-  ASSISTANT_MODEL,
   inferAgentProvider,
   isClaudeProvider,
   tokenizeCommand,
@@ -22,7 +21,7 @@ import { resolveGodName } from '../../../shared/godIdentity';
 import { acquireTerminal, resetTerminal, isTerminalAutomationSafe, hasTerminalDraft } from '@/components/terminalPool';
 import { canDeliverToAgent, deliverWithAcknowledgement, checkPrecondition } from './queueDelivery';
 import { RunningToolCalls } from './runningToolCalls';
-import { OFFICE_CAST, DEFAULT_CHARACTER, HIREABLE_CAST, type OfficeCharacterName } from '@/scene/office/cast';
+import { DEFAULT_CHARACTER, HIREABLE_CAST, type OfficeCharacterName } from '@/scene/office/cast';
 import { teamMemberName, teamMemberRole, teamMemberGoal, teamAccent, teamMemberStart, rewrittenInstructions, didNotStartNote } from '../../../shared/teamPlan';
 import type { AgentDefinitionV2 } from '../../../shared/agentDefinition';
 import { FIRST_TASK_EDITED_MAX, withoutLegacyFirstTask } from '../../../shared/firstTask';
@@ -174,17 +173,6 @@ function submitToPty(
   });
   writeChains.set(ptyId, next);
   return next;
-}
-
-/** Wrap a user message as an enrich task for the assistant. The assistant's
- *  system prompt has the full instructions; this just frames the one task. */
-function enrichTaskPrompt(text: string): string {
-  return [
-    `ENRICH TASK: ${text}`,
-    '',
-    '(Identify the relevant project, cd in, gather READ-ONLY context, then send the improved,',
-    'self-contained prompt to Michael via an outbox message with "to":"god". Do not do the task yourself.)'
-  ].join('\n');
 }
 
 function terminalWorkOrderPrompt(msg: {
@@ -548,13 +536,6 @@ export function useHive(config: HarnessConfig | null): void {
   // 'working' (there's a short window where it still reads 'idle' right after we
   // type into it). One message per cooldown keeps delivery strictly one-by-one.
   const lastFlush = useRef<Record<string, number>>({});
-  // Queue-drain delivery tracking (#36): a message now stays IN the queue until
-  // its PTY write chain resolves, so `inFlightSends` (message ids mid-write)
-  // stops a store-update burst from double-sending the head, and `sendFailures`
-  // bounds retries — after MAX_SEND_ATTEMPTS failed writes the message is
-  // dropped WITH a console.warn instead of being silently destroyed.
-  const inFlightSends = useRef<Set<string>>(new Set());
-  const sendFailures = useRef<Record<string, number>>({});
   // In-flight spawn guard so a re-render / StrictMode double-mount can't spawn
   // Michael twice (the window between the listPtys check and spawnPty is racy).
   const godSpawning = useRef(false);
@@ -571,8 +552,9 @@ export function useHive(config: HarnessConfig | null): void {
   // mid-revive) within REVIVE_DEBOUNCE_MS is skipped. Set BEFORE the async spawn
   // so a re-entrant event can't race a second respawn for the same id.
   const reviving = useRef<Record<string, number>>({});
-  // Reactive so the assistant bootstrap (effect #1b) re-runs once Michael is ready.
-  const godStatus = useStore((s) => s.godStatus);
+  // Subscribed so the host re-renders when Michael's status changes, as before;
+  // nothing here reads the value.
+  useStore((s) => s.godStatus);
   // Per-pty `lastOutputAt`, refreshed by the quiescence sweep (#2e) and read by
   // the queue drain (#4) so it can tell a terminal parked at its prompt from one
   // mid-turn. Kept here rather than fetched again in #4 — #2e already polls
@@ -1195,7 +1177,6 @@ export function useHive(config: HarnessConfig | null): void {
 
     const flush = () => {
       const { agents, messageQueues } = useStore.getState();
-      const byId = (id: string) => agents.find((a) => a.id === id);
       const now = Date.now();
 
       for (const a of agents) {
@@ -1218,19 +1199,6 @@ export function useHive(config: HarnessConfig | null): void {
     const iv = setInterval(flush, 3000);
     schedule();
     return () => { unsub(); if (debounce) clearTimeout(debounce); clearInterval(iv); };
-  }, [config?.onboardingComplete]);
-
-  // 5b) Pipe hive tasks addressed to non-Claude agents (e.g. Codex) into their
-  //     terminal queues. When main routes a message to a non-claude provider it
-  //     emits 'hive:enqueueToAgent' instead of bouncing; we enqueue the raw
-  //     task text here so effect #4 types it into the REPL when the agent idles.
-  //     No inbox nudge, no /compact — just the verbatim subject+body text.
-  useEffect(() => {
-    if (!config?.onboardingComplete) return;
-    return window.cth.onHiveEnqueue?.((msg) => {
-      if (!msg?.targetId || !msg?.text?.trim()) return;
-      useStore.getState().enqueueMessage(msg.targetId, msg.text.trim());
-    });
   }, [config?.onboardingComplete]);
 
   // 6) Context upkeep has no clock-driven path here any more: compaction is

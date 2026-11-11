@@ -179,9 +179,6 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
    *     the hotkey and the checkbox disagreeing until you pressed Save.
    */
   const [pending, setPending] = useState<Partial<HarnessConfig>>({});
-  /** Auto-compact lives inside the missions array, so it is resolved at save
-   *  time against the config on disk rather than staged as a whole array. */
-  const [autoCompactPending, setAutoCompactPending] = useState<boolean | null>(null);
   const [saveBusy, setSaveBusy] = useState(false);
   const [saveNote, setSaveNote] = useState('');
   // Keep the raw profile draft across section changes. Cleaning on each key
@@ -196,7 +193,7 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
     setSaveNote('');
   };
   /** Staged controls and the company profile share the close guard. */
-  const dirty = Object.keys(pending).length > 0 || autoCompactPending !== null || companyProfileDirty;
+  const dirty = Object.keys(pending).length > 0 || companyProfileDirty;
   const stage = (patch: Partial<HarnessConfig>): void =>
     setPending((prev) => ({ ...prev, ...patch }));
 
@@ -309,20 +306,11 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
           businessCity: cityLine(clean.address) ?? config.businessCity
         });
       }
-      if (autoCompactPending !== null) {
-        // Read-modify-write against disk, not against a stale copy: another
-        // window (or main) may have edited a different mission meanwhile.
-        const cfg = await window.cth.getConfig();
-        patch.missions = (cfg.missions ?? []).map((m) =>
-          m.id === 'compact-maintenance' ? { ...m, enabled: autoCompactPending } : m
-        );
-      }
       await window.cth.updateConfig(patch);
       // Mark only the submitted draft saved. An edit made while the write
       // was running must still be shown as unsaved and included next time.
       if (companyProfileDirty) setSavedCompanyDraft(companyDraft);
       setPending({});
-      setAutoCompactPending(null);
       setSaveNote(t('settings.saved'));
       setTimeout(() => setSaveNote(''), 1800);
     } catch (e) {
@@ -382,18 +370,6 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
       await refreshKgStatus();
     } catch (e) { setKgNote(e instanceof Error ? e.message : String(e)); }
     finally { setKgBusy(false); }
-  };
-
-  // ─── Scheduled auto-compact — the compact-maintenance mission's enabled flag.
-  // The mission itself stays the single source of truth (the Triggers tab edits
-  // the same field); this is just a General-section shortcut. Default OFF (v0.3.4).
-  const [autoCompactOn, setAutoCompactOn] = useState<boolean>(
-    (config.missions ?? []).some((m) => m.id === 'compact-maintenance' && m.enabled)
-  );
-  const toggleAutoCompact = async () => {
-    const next = !autoCompactOn;
-    setAutoCompactOn(next);
-    setAutoCompactPending(next);
   };
 
   // Re-seed every editable field from the on-disk config when the modal opens.
@@ -816,31 +792,6 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
                             onClick={toggleNotifications}
                           >
                             {notifications ? t('common.on') : t('common.off')}
-                          </PixelButton>
-                        </div>
-                      </div>
-
-
-                      {/* Scheduled auto-compact (compact-maintenance mission) */}
-                      <div style={group}>
-                        <h3 style={groupName}>
-                          {t('settings.general.maintenance')}
-                        </h3>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            <span style={fieldLabel}>
-                              {t('settings.general.autoCompact')}
-                            </span>
-                            <span style={hint}>
-                              {t('settings.general.autoCompactDesc')}
-                            </span>
-                          </div>
-                          <PixelButton
-                            variant={autoCompactOn ? 'primary' : 'secondary'}
-                            size="sm"
-                            onClick={toggleAutoCompact}
-                          >
-                            {autoCompactOn ? t('common.on') : t('common.off')}
                           </PixelButton>
                         </div>
                       </div>

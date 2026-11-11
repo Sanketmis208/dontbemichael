@@ -123,8 +123,6 @@ test('with the name switch off the page hides the name, logo and website (D8)', 
   assert.match(html, /--hero:#1E1B2E/, 'our ink when the name, and so the logo, is hidden');
   assert.match(html, /<figcaption><div class="av">[^<]*<\/div><span>The owner<\/span><\/figcaption>/);
   assert.match(html, /Run your office like a bakery in Austin\./, 'the closing reads as a sentence with the type and city');
-  assert.equal(cs.namesBusiness('We are Harbor Bakery', f), true);
-  assert.equal(cs.namesBusiness('We are a bakery', f), false);
 });
 
 test('every team member is on the page (D27); text is escaped; zero figures are left out', () => {

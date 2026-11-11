@@ -19,7 +19,6 @@ import { terminalInstanceKey } from './terminalRecovery';
 import { areLogsEqual, type LogEntry } from './activityLog';
 import { Icon } from './Icon';
 import { useFleetTelemetry } from '@/hooks/useTelemetry';
-import { COMMAND_GROUPS } from '@shared/claudeCommands';
 import { roleForHiveSpawn } from '@shared/agentRole';
 import { useStore, type Agent } from '@/store/store';
 import { releaseBindingsOf } from '@/shell/releaseBindings';
@@ -29,7 +28,6 @@ import {
   decodeProviderModel,
   encodeProviderModel,
   inferAgentProvider,
-  isClaudeProvider,
   modelProvidersForAgent,
   modelsForProvider,
   providerPreset,

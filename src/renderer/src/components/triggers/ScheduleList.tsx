@@ -269,7 +269,7 @@ function ScheduleRow({ mission, nameOf, readOnly, last, ownerName, noEmail, focu
   const [focus, setFocus] = useState(startFocus);
   const [focusTouched, setFocusTouched] = useState(false);
   const [saved, setSaved] = useState(false);
-  const { busy, failed, setFailed, run } = useSaveOp();
+  const { busy, failed, run } = useSaveOp();
   const focusCheck = useFocusCheck(focusOwner ?? { name: ownerName, workStyle: '', jobs: [] });
   const [confirming, setConfirming] = useState(false);
   // Run now (docs/designs/schedule-run-now.md): its own state, so a failed run

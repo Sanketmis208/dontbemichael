@@ -12,6 +12,8 @@ const path = require('node:path');
 const loadTs = require('./load-ts.cjs');
 
 const H = loadTs('src/shared/hireTemplates.ts');
+/** The verdict the hire check uses, or null when the answer holds none. */
+const parseDistinctAnswer = (text, names) => { const r = H.readDistinctAnswer(text, names); return 'verdict' in r ? r.verdict : null; };
 const { OFFICE_CAST } = (() => {
   // cast.ts imports renderer paths; read the names from the source instead.
   const src = fs.readFileSync(path.resolve(__dirname, '..', 'src/renderer/src/scene/office/cast.ts'), 'utf8');
@@ -110,13 +112,13 @@ test('a binding scopes the new line and hands the rest back once', () => {
 });
 
 test('the AI verdict keeps only real teammate names and falls back to null on junk', () => {
-  const v = H.parseDistinctAnswer('ok {"distinct": false, "overlapsWith": ["pam", "Bob"], "why": "Both sort mail.", "suggestion": "Bind to support@"}', ['Pam', 'Ryan']);
+  const v = parseDistinctAnswer('ok {"distinct": false, "overlapsWith": ["pam", "Bob"], "why": "Both sort mail.", "suggestion": "Bind to support@"}', ['Pam', 'Ryan']);
   assert.deepEqual(v.overlapsWith, ['Pam']);
   assert.equal(v.distinct, false);
   assert.equal(v.source, 'ai');
-  assert.equal(H.parseDistinctAnswer('{"distinct": true, "overlapsWith": ["Ryan"]}', ['Ryan']).distinct, false);
-  assert.equal(H.parseDistinctAnswer('no json here', ['Pam']), null);
-  assert.equal(H.parseDistinctAnswer('{"distinct": "maybe"}', ['Pam']), null);
+  assert.equal(parseDistinctAnswer('{"distinct": true, "overlapsWith": ["Ryan"]}', ['Ryan']).distinct, false);
+  assert.equal(parseDistinctAnswer('no json here', ['Pam']), null);
+  assert.equal(parseDistinctAnswer('{"distinct": "maybe"}', ['Pam']), null);
 });
 
 test('the check prompt names every teammate and asks for JSON', () => {
@@ -225,10 +227,10 @@ test('a verdict reads past form slips, and says which check failed (issue 677)',
   // Value: protects=the hire check's own verdict is used when the model's answer differs only in form, and the next failure report names the failed check; fails_when=a near miss falls back to the rules again or a fail code goes missing; why_new=issue 677 reported answer-unparseable with no way to tell which check; seam=none; no_claim=which slip the reported answer had (its text is never kept)
   const team = ['Pam', 'Ryan'];
   const fenced = '```json\n{\n  "distinct": false,\n  "overlapsWith": ["Pam"],\n  "why": "Both answer customers."\n}\n```';
-  assert.deepEqual(H.parseDistinctAnswer(fenced, team).overlapsWith, ['Pam'], 'a fenced answer, as the check model writes it');
-  assert.equal(H.parseDistinctAnswer('{"distinct": false, "overlapsWith": ["Pam"], "why": "Both answer\ncustomers."}', team).why, 'Both answer\ncustomers.', 'a raw line break inside a string');
-  assert.equal(H.parseDistinctAnswer('{"distinct": true, "overlapsWith": []}\nNote: {none}', team).distinct, true, 'a note with braces after the object');
-  assert.deepEqual(H.parseDistinctAnswer('{"distinct": "false", "overlapsWith": "Ryan"}', team).overlapsWith, ['Ryan'], 'the verdict and a name written as words');
+  assert.deepEqual(parseDistinctAnswer(fenced, team).overlapsWith, ['Pam'], 'a fenced answer, as the check model writes it');
+  assert.equal(parseDistinctAnswer('{"distinct": false, "overlapsWith": ["Pam"], "why": "Both answer\ncustomers."}', team).why, 'Both answer\ncustomers.', 'a raw line break inside a string');
+  assert.equal(parseDistinctAnswer('{"distinct": true, "overlapsWith": []}\nNote: {none}', team).distinct, true, 'a note with braces after the object');
+  assert.deepEqual(parseDistinctAnswer('{"distinct": "false", "overlapsWith": "Ryan"}', team).overlapsWith, ['Ryan'], 'the verdict and a name written as words');
   assert.deepEqual(H.readDistinctAnswer('I think they are fine.', team), { fail: 'json' });
   assert.deepEqual(H.readDistinctAnswer('{"distinct": "maybe"}', team), { fail: 'verdict' });
   assert.deepEqual(H.readDistinctAnswer('{"overlapsWith": ["Pam"]}', team), { fail: 'verdict' });

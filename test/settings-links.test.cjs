@@ -12,7 +12,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const loadTs = require('./load-ts.cjs');
 
-const { parsePlace, placeHref, placeWords, placeLinkRule, PLACE_SECTIONS } = loadTs('src/shared/settingsPlaces.ts');
+const { parsePlace, placeHref, placeLinkRule, PLACE_SECTIONS } = loadTs('src/shared/settingsPlaces.ts');
 const { spotPlaces, remarkSettingsLinks } = loadTs('src/renderer/src/markdown/remarkSettingsLinks.ts');
 const { placeUrlTransform } = loadTs('src/renderer/src/markdown/placeUrl.ts');
 const { createMailboxNotes, newlyHeld, mailboxAddedNote, grantNote, GRANT_NOTE_FALLBACK_MS } = loadTs('src/main/mailboxNotes.ts');
@@ -44,7 +44,6 @@ test('a dbm: link names only our own places; anything else is words', () => {
     assert.equal(parsePlace(bad), null, String(bad));
   for (const href of ['dbm:settings/research-privacy', 'dbm:settings/connections/claude-connectors', 'dbm:settings/connections/mailboxes/add', 'dbm:member/oscar/access/email'])
     assert.equal(placeHref(parsePlace(href)), href, 'round trip');
-  assert.equal(placeWords({ kind: 'settings', section: 'Connections', group: 'mailboxes' }), 'Settings, Connections, Mailboxes');
   assert.ok(!Object.values(PLACE_SECTIONS).includes('Voice'), 'there is no Voice section');
   assert.ok(!Object.values(PLACE_SECTIONS).includes('Skills'), 'Skills is hidden in this build');
 });

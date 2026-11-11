@@ -8,7 +8,7 @@ import { readCodexContext } from './codexUsage';
 import { execFile, spawn } from 'node:child_process';
 import {
   rmSync, existsSync, readFileSync, readdirSync, statSync, writeFileSync,
-  unlinkSync, mkdirSync, renameSync, copyFileSync, lstatSync,
+  unlinkSync, mkdirSync, renameSync, lstatSync,
   readlinkSync, symlinkSync, realpathSync, chmodSync, watch as watchFs
 } from 'node:fs';
 import { promises as fsPromises } from 'node:fs';
@@ -41,11 +41,11 @@ import { RESEARCH_DESK_DIR, RESEARCH_ID, RESEARCH_NAME, RESEARCH_WORK_STYLE } fr
 import { initAutoUpdater, abortPendingRestart } from './updater';
 import {
   readConfig, damagedConfigCopy, writeConfig, setAgentTokenCap, resetConfig, onConfigWritten, ensureHarnessHome, ensureClaudePermissionsAccepted, approveClaudeApiKey,
-  modelForRole, OPS_STANDUP_MISSION, OPS_STANDUP_BUILT_IN_BODIES, OPS_STANDUP_FOCUS, OPS_STANDUP_BUILT_IN_FOCUSES, HEARTBEAT_MISSION, heartbeatMessage, COMPACT_MAINTENANCE_MISSION, FOUNDATIONS_CHECK_MISSION, FOUNDATIONS_CHECK_BUILT_IN_FOCUSES, FOUNDATIONS_CHECK_FOCUS, type HarnessConfig, type ScheduledMission
+  modelForRole, OPS_STANDUP_MISSION, OPS_STANDUP_BUILT_IN_BODIES, OPS_STANDUP_FOCUS, OPS_STANDUP_BUILT_IN_FOCUSES, HEARTBEAT_MISSION, heartbeatMessage, FOUNDATIONS_CHECK_MISSION, FOUNDATIONS_CHECK_BUILT_IN_FOCUSES, FOUNDATIONS_CHECK_FOCUS, type HarnessConfig, type ScheduledMission
 } from './config';
 import { terminalLaunches } from './terminalAtFolder';
 import { readFileBinary, statAbs, expandTilde, askFileVerdict, askFileByName, askFileRootsFor, resolveAskFileRoots, readAskFile, isPackageDir, type AskFileAgent } from './fs';
-import { answerMessages, cardConversation, mergeHumanQA, MICHAEL_ID, raiserOf } from '../shared/askMeRouting';
+import { cardConversation, mergeHumanQA, MICHAEL_ID } from '../shared/askMeRouting';
 import { FIRST_TASK_EDITED_MAX, firstTaskCard, firstTaskCardFromText } from '../shared/firstTask';
 import { answerKey, catchUpRequests, OwnerAnswerRetry, ownerWorkOrder } from '../shared/ownerRequests';
 import {
@@ -97,12 +97,9 @@ import { backfilled, runBackfill } from './pulseBackfill';
 import { readTeamMemory } from './teamMemory';
 import { readClaudePlan } from './claudeAccount';
 import { planPrice, PLAN_LABELS, PLAN_PRICES } from '../shared/claudePlan';
-import { claudeProjectsRoot, projectDir, projectDirs, readAgentUsage, readContextTokens, seedSessionTranscript, resolveSessionCwd } from './transcript';
+import { claudeProjectsRoot, projectDir, projectDirs, readContextTokens, seedSessionTranscript, resolveSessionCwd } from './transcript';
 import { listIssues } from './github';
-import {
-  AUTO_COMPACT_WINDOW_TOKENS, DEFAULT_CONTEXT_TRIGGER,
-  type ContextRule, type ContextTriggerConfig
-} from '../shared/triggers';
+import { AUTO_COMPACT_WINDOW_TOKENS } from '../shared/triggers';
 import { TelemetryCollector } from './telemetry';
 import { CostLedgerTotals } from './costLifetime';
 import { RUN_COMPARE_MODEL, RUN_COMPARE_TIMEOUT_MS, RunCompare } from './runCompare';
@@ -912,7 +909,7 @@ function foundationsForAgent(agentId: string): string | null {
   if (agentId === team.godId || agentId === 'god') return michaelFoundations(foundations.read(), team.office, team.nameOf);
   return sectionFor(foundations.read(), team.jobs[agentId] ?? [], team.nameOf);
 }
-// Whether points are flowing, for telemetry:health and the stall warning (T9).
+// Whether points are flowing, for the batch log and the stall warning (T9).
 const pulseHealth = new PulseHealth();
 pulseTelemetry.onRecord = (office) => pulseHealth.point(office);
 /** One processor pass, noted for the health readout; a pass that read
@@ -1755,57 +1752,6 @@ function syncMissions(): void {
   }
 }
 
-// ─── Context trigger (auto-compact / auto-clear own their own timers) ────────
-// Compaction used to ride on a mission (`compact-maintenance`), which meant the
-// operator had TWO competing controls for one behaviour — a schedule with an
-// interval and a trigger with a cadence. The mission is retired (see the
-// retirement migration in ensureDefaultMissions); these timers are the single
-// remaining source of scheduled context maintenance.
-//
-// Main owns only the CADENCE. The pressure gate (`minContextPct`) needs each
-// agent's live context usage, which only the renderer has, so the whole rule
-// rides along in the event and the renderer decides which agents actually get
-// the command. That split is why the payload carries the rule rather than a bare
-// "go" signal.
-
-/** Timers for the two halves, keyed by action. Same two-phase shape as
- *  `missionTimers` (a setTimeout for the remaining time, then a steady interval)
- *  so a partially-elapsed cadence survives a re-arm. */
-const contextTimers = new Map<'compact' | 'clear', MissionTimer>();
-
-/** `ContextRule` has no `lastFiredAt` (unlike `ScheduledMission`), so the last-run
- *  instants live in the durable kv store instead. Without them every re-arm —
- *  boot, a settings edit, a wake from sleep — would restart a 2h cadence from
- *  zero, and an operator who edits the rule twice a day would never see it fire. */
-const CONTEXT_LAST_RUN_KV_KEY = 'triggers.context.lastRun';
-let contextLastRun: Record<string, number> | null = null;
-
-function contextRunMap(): Record<string, number> {
-  if (!contextLastRun) {
-    try { contextLastRun = persist.getKv<Record<string, number>>(CONTEXT_LAST_RUN_KV_KEY) ?? {}; }
-    catch { contextLastRun = {}; }
-  }
-  return contextLastRun;
-}
-
-/** Clear and forget both context timers (setTimeout + setInterval handles). */
-function clearContextTimers(): void {
-  for (const t of contextTimers.values()) {
-    if (t.timeout) clearTimeout(t.timeout);
-    if (t.interval) clearInterval(t.interval);
-  }
-  contextTimers.clear();
-}
-
-function syncContextTriggers(): void {
-  // Nothing runs on a clock any more. Compaction is Claude Code's own
-  // (AUTO_COMPACT_WINDOW_TOKENS), and a conversation is cleared only after a
-  // finished, handed-off task (safeClearer.ts), never on a timer (owner,
-  // 2026-09-25). Kept so older callers (boot, settings, wake) still stop any
-  // timer a previous version armed.
-  clearContextTimers();
-}
-
 /** Startup migration (#57/#58): archive every agent entry that is `archived:false`
  *  but has NO live PTY. This runs in bootstrapHiveServices, BEFORE the renderer can
  *  respawn anything, so at this point NO agent owns a PTY — every `archived:false`
@@ -1995,61 +1941,10 @@ function ensureDefaultMissions(): void {
     });
   }
 
-  // maint-1 RETIREMENT: `compact-maintenance` is no longer a mission. Scheduled
-  // compaction is now the CONTEXT TRIGGER's job, so the operator has exactly one
-  // control (a cadence + a pressure gate + an editable message) instead of two
-  // that could disagree — a mission saying "hourly" while the trigger said "2h"
-  // was a real, unresolvable conflict.
-  //
-  // The carry-over preserves the operator's decisions: whether compaction was ON
-  // and how often. It runs at most once per install, and its guard is the
-  // mission's own ABSENCE — nothing seeds `compact-maintenance` any more, so once
-  // this has removed it there is nothing left to carry and a later hand-edit of
-  // the trigger can never be clobbered. That keeps the `*Seeded` convention's
-  // promise (exactly once, ever) without a config flag that would only ever be
-  // read here; `compactMaintenanceSeeded` is left set so nothing re-seeds it.
-  const cfg3 = readConfig();
-  const missions3 = cfg3.missions ?? [];
-  const retiring = missions3.find((m) => m.id === COMPACT_MAINTENANCE_MISSION.id);
-  if (retiring) {
-    const current = cfg3.contextTrigger ?? DEFAULT_CONTEXT_TRIGGER;
-    writeConfig({
-      missions: missions3.filter((m) => m.id !== COMPACT_MAINTENANCE_MISSION.id),
-      contextTrigger: {
-        ...current,
-        compact: {
-          ...current.compact,
-          enabled: retiring.enabled,
-          // A hand-tuned interval is a decision; only a missing/absurd one falls
-          // back to whatever the trigger already carries.
-          everyMs: retiring.intervalMs > 0 ? retiring.intervalMs : current.compact.everyMs
-        }
-      },
-      compactMaintenanceSeeded: true
-    });
-    // …and its elapsed time, so retiring the mission mid-cycle doesn't restart a
-    // 2h cadence from zero (the timers honour last-run exactly as arming did).
-    if (typeof retiring.lastFiredAt === 'number' && retiring.lastFiredAt > 0) {
-      const map = contextRunMap();
-      map.compact = retiring.lastFiredAt;
-      try { persist.setKv(CONTEXT_LAST_RUN_KV_KEY, map); } catch { /* DB best-effort */ }
-    }
-    console.log('[triggers] retired the compact-maintenance mission into contextTrigger.compact',
-      `(enabled: ${retiring.enabled}, everyMs: ${retiring.intervalMs})`);
-  }
-
-  // autoCompact RETIREMENT: the flag above was only ever half-removed. Retiring
-  // `compact-maintenance` left `autoCompact: true` sitting on the ops standup, so
-  // a default install still asked for compaction on TWO cadences — hourly from the
-  // standup, 2-hourly from the trigger — which is precisely the disagreement that
-  // retirement claims to have ended. (config.ts even documented a migration that
-  // strips this; it did not exist.)
-  //
-  // Strip it wherever it survives. This is a pure de-duplication, not a behaviour
-  // change: contextTrigger.compact still runs, still on the user's own cadence and
-  // pressure gate, and it is what actually performed every one of these
-  // compactions already — both paths have called the context trigger since Triggers
-  // landed. Idempotent, so it costs one no-op scan per boot once clean.
+  // autoCompact RETIREMENT: older offices kept `autoCompact: true` on the ops
+  // standup. Nothing compacts on a schedule any more (Claude Code compacts on
+  // its own), so the stale flag is stripped wherever it survives. Idempotent, so
+  // it costs one no-op scan per boot once clean.
   const cfg4 = readConfig();
   const missions4 = cfg4.missions ?? [];
   if (missions4.some((m) => m.autoCompact)) {
@@ -2060,7 +1955,7 @@ function ensureDefaultMissions(): void {
       })
     });
     console.log('[triggers] dropped the legacy per-mission autoCompact flag —',
-      'contextTrigger.compact is now the only schedule that compacts');
+      'Claude Code compacts on its own');
   }
 
   // The standup used to tell Michael each agent would be asked to summarise and
@@ -4328,7 +4223,6 @@ ipcMain.handle('config:changeHome', async (_evt, payload: unknown) => {
   // mid-copy — a live git commit into hive/.git would otherwise be copied as a
   // half-written object and corrupt the moved repo.
   try { clearMissionTimers(); } catch (e) { console.error('[changeHome] clearMissionTimers:', e); }
-  try { clearContextTimers(); } catch (e) { console.error('[changeHome] clearContextTimers:', e); }
   try { integrationBroker.stop(); } catch (e) { console.error('[changeHome] broker.stop:', e); }
   try { mailService.closeAll(); } catch (e) { console.error('[changeHome] mail.closeAll:', e); }
   try { hive.stopRouter(); } catch (e) { console.error('[changeHome] stopRouter:', e); }
@@ -5701,23 +5595,10 @@ ipcMain.handle('tools:status', (): ToolStatus[] => {
 // the mine loop that boot's start() had to skip — otherwise the pill reads
 // "getting ready" until the app is restarted.
 ipcMain.handle('hive:memoryStatus', () => memory.refresh());
-ipcMain.handle('hive:memoryWakeUp', (_evt, wing: unknown) =>
-  memory.wakeUp(typeof wing === 'string' ? wing : undefined));
-ipcMain.handle('hive:mineNow', () => { memory.mineNow(); return { ok: true }; });
-// Condense memory.md on demand: an explicit id condenses that one agent (skips
-// the size trigger — a "condense now" button); no id runs a full threshold scan.
-ipcMain.handle('memory:reflectNow', (_evt, id: unknown) =>
-  memoryTidy.tidyNow(typeof id === 'string' && id ? id : undefined));
 
 // ─── IPC: enterprise Knowledge Graph (multimodal context for agents) ─────────
 ipcMain.handle('kg:status', () => knowledge.status());
 ipcMain.handle('kg:list', () => knowledge.list());
-ipcMain.handle('kg:search', (_evt, query: unknown, limit: unknown) => {
-  if (typeof query !== 'string' || !query.trim()) return [];
-  return knowledge.search(query, typeof limit === 'number' ? limit : undefined);
-});
-ipcMain.handle('kg:get', (_evt, id: unknown) =>
-  (typeof id === 'string' && id ? knowledge.get(id) : null));
 // Open a document in the owner's own app; a save there is read in again.
 ipcMain.handle('kg:open', (_evt, id: unknown) =>
   (typeof id === 'string' && id ? knowledgeEdits.open(id).catch((e) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) })) : { ok: false as const, error: 'missing' }));
@@ -5726,16 +5607,6 @@ ipcMain.handle('kg:remove', (_evt, id: unknown) => {
   const ok = typeof id === 'string' && id ? knowledge.remove(id) : false;
   if (ok) memory.companyKnowledgeChanged(); // drop it from search by meaning too
   return { ok };
-});
-// Ingest one or more files from disk. Best-effort per file; returns per-file
-// results so the UI can report partial success.
-ipcMain.handle('kg:ingestFiles', async (_evt, payload: unknown) => {
-  const p = (payload ?? {}) as { paths?: unknown; tags?: unknown };
-  const paths = Array.isArray(p.paths) ? p.paths.filter((x): x is string => typeof x === 'string') : [];
-  const tags = Array.isArray(p.tags) ? p.tags.filter((x): x is string => typeof x === 'string') : undefined;
-  const results = await ingestSequentially(paths, tags);
-  if (results.some((r) => r.ok)) memory.companyKnowledgeChanged(); // index it for search by meaning
-  return { results };
 });
 // Open a multi-file picker and ingest the chosen artifacts in one round-trip.
 ipcMain.handle('kg:addFiles', async (evt) => {
@@ -5813,13 +5684,6 @@ ipcMain.handle('history:add', (_evt, payload: unknown) => {
     return { ok: true };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 });
-ipcMain.handle('history:list', (_evt, agentId: unknown, limit: unknown) =>
-  persist.listHistory(
-    typeof agentId === 'string' && agentId ? agentId : undefined,
-    typeof limit === 'number' ? limit : undefined
-  ));
-ipcMain.handle('history:search', (_evt, query: unknown, limit: unknown) =>
-  persist.searchHistory(typeof query === 'string' ? query : '', typeof limit === 'number' ? limit : undefined));
 
 // ─── IPC: quit confirmation ─────────────────────────────────────────────────
 /** Tear the harness down and quit. Shared by the hard "kill all & quit" path
@@ -5829,7 +5693,6 @@ function teardownAndQuit(): void {
   // Each teardown step is best-effort: a throw here (e.g. a dying child or a
   // half-torn-down socket) must never abort the quit or pop a crash dialog.
   try { clearMissionTimers(); } catch (e) { console.error('[quit] clearMissionTimers:', e); }
-  try { clearContextTimers(); } catch (e) { console.error('[quit] clearContextTimers:', e); }
   try { integrationBroker.stop(); } catch (e) { console.error('[quit] broker.stop:', e); }
   try { mailService.closeAll(); } catch (e) { console.error('[quit] mail.closeAll:', e); }
   try { hive.stopRouter(); } catch (e) { console.error('[quit] stopRouter:', e); }
@@ -5911,7 +5774,6 @@ ipcMain.handle('app:closingTimeSaid', (_evt, ids: unknown) => {
 function stopForReset(tag: string, opts: { keepPersist?: boolean } = {}): void {
   const step = (name: string, fn: () => void): void => { try { fn(); } catch (e) { console.error(`[${tag}] ${name}:`, e); } };
   step('clearMissionTimers', () => clearMissionTimers());
-  step('clearContextTimers', () => clearContextTimers());
   step('broker.stop', () => integrationBroker.stop());
   step('mail.closeAll', () => mailService.closeAll());
   step('stopRouter', () => hive.stopRouter());
@@ -6047,11 +5909,7 @@ ipcMain.handle('app:resetMemory', async () => {
   return { ok: true };
 });
 
-// ─── IPC: token telemetry (real usage + est. cost from CC transcripts) ───────
-// Reconciler/fallback path: per-cwd transcript sum, now priced PER MODEL (cost
-// bug #1 fixed in pricing.ts). Kept for back-compat with the existing UsageRow.
-ipcMain.handle('hive:agentUsage', (_evt, cwd: unknown) =>
-  typeof cwd === 'string' ? readAgentUsage(cwd) : null);
+// ─── IPC: token telemetry (context size from CC transcripts) ─────────────────
 // Current context size (tokens) of an agent's LIVE session — the transcript
 // path is learned from the agent's hook payloads (SessionStart fires right at
 // spawn), so this works even when several agents share one cwd. Null until the
@@ -6075,19 +5933,7 @@ ipcMain.handle('hive:agentContext', (_evt, agentId: unknown) => {
 // ─── IPC: live telemetry (the OTel collector — the locked usage-provider seam) ─
 // The fleet grid (#7B) reads these; Lane A's breaker (#6)
 // consumes getAgentUsage in-process via the provider, not over IPC.
-ipcMain.handle('telemetry:usage', (_evt, agentId: unknown) =>
-  typeof agentId === 'string' ? telemetry.getAgentUsage(agentId) : null);
 ipcMain.handle('telemetry:snapshot', () => telemetry.snapshot());
-
-// ─── IPC: circuit-breaker state (Lane A #6 policy → this lane's avatars/meter) ─
-// Lane A's breaker calls this with a BreakerState; we fan it out to the renderer
-// on `control:breakerState`, where the avatar adapter gives it precedence over
-// hook-derived status (#5C looping/zombie). Defined here so the channel exists
-// before Jim's policy lands; he produces, this lane consumes.
-ipcMain.handle('control:setBreakerState', (_evt, state: unknown) => {
-  try { liveWebContents()?.send('control:breakerState', state); } catch { /* window tore down */ }
-  return { ok: true };
-});
 
 // ─── IPC: operator control over agents (#7C.1–7C.3) ─────────────────────────
 // All return the agent's fresh control snapshot so the UI can reflect state.
@@ -6108,11 +5954,6 @@ ipcMain.handle('control:autoDelivery', (_evt, agentId: unknown, paused: unknown)
 ipcMain.handle('control:resume', (_evt, agentId: unknown) => {
   if (typeof agentId !== 'string') return null;
   control.resume(agentId);
-  return control.snapshot(agentId);
-});
-ipcMain.handle('control:gateTool', (_evt, agentId: unknown, tool: unknown, on: unknown) => {
-  if (typeof agentId !== 'string' || typeof tool !== 'string') return null;
-  control.gateTool(agentId, tool, on === true);
   return control.snapshot(agentId);
 });
 ipcMain.handle('control:steer', (_evt, agentId: unknown, text: unknown) => {
@@ -6231,12 +6072,6 @@ ipcMain.handle('pulse:snapshot', (_evt, period: unknown, compare: unknown) => {
   // they land).
   try { pulseTelemetry.flush(); const office = pulseOffice(); if (office) { pulseBackfillOnce(office); pulseTick(office); } } catch (e) { console.error('[pulse] snapshot tick', e); }
   return pulse.snapshot(isPeriod(period) ? period : 'this-week', compare === true);
-});
-// Whether Pulse's points are flowing (T9): the last batch, failed writes by
-// day and hook frames refused per member.
-ipcMain.handle('telemetry:health', () => {
-  const office = pulseOffice();
-  return pulseHealth.view(office, office ? pulseTelemetry.failedWrites(office) : {}, hookServer.rejectedFrames());
 });
 ipcMain.handle('pulse:apply', (_evt, id: unknown, expected: unknown) => (typeof id === 'string' ? pulse.apply(id, expected) : { ok: false, error: 'stale' }));
 ipcMain.handle('pulse:modelApplied', (_evt, id: unknown, agentId: unknown, from: unknown, to: unknown) =>
@@ -6672,39 +6507,6 @@ ipcMain.handle('app:setLoginItem', (_evt, enabled: unknown) => {
   return app.getLoginItemSettings().openAtLogin;
 });
 
-// ─── IPC: Triggers — context (auto-compact / auto-clear) ────────────────────
-ipcMain.handle('triggers:getContext', () => readConfig().contextTrigger ?? DEFAULT_CONTEXT_TRIGGER);
-ipcMain.handle('triggers:setContext', (_evt, arg: unknown) => {
-  const current = readConfig().contextTrigger ?? DEFAULT_CONTEXT_TRIGGER;
-  const p = (arg ?? {}) as Partial<ContextTriggerConfig>;
-  const next: ContextTriggerConfig = {
-    compact: sanitizeContextRule(p.compact, current.compact),
-    clear: sanitizeContextRule(p.clear, current.clear)
-  };
-  writeConfig({ contextTrigger: next });
-  // The timers ARE the setting — a cadence saved but not re-armed would keep
-  // firing on the old rhythm until the next boot.
-  syncContextTriggers();
-  return next;
-});
-
-/** Clamp one half of the context trigger. The renderer is not trusted with the
- *  arming maths: a zero/negative/NaN `everyMs` would arm a runaway timer, and an
- *  out-of-range percentage would silently disable (or permanently trip) the
- *  pressure gate. */
-function sanitizeContextRule(patch: Partial<ContextRule> | undefined, current: ContextRule): ContextRule {
-  const p = (patch ?? {}) as Partial<ContextRule>;
-  const num = (v: unknown, fallback: number, min: number, max: number): number =>
-    typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : fallback;
-  return {
-    enabled: typeof p.enabled === 'boolean' ? p.enabled : current.enabled,
-    everyMs: num(p.everyMs, current.everyMs, 60_000, 86_400_000),
-    minContextPct: num(p.minContextPct, current.minContextPct, 0, 100),
-    minContextPctLargeWindow: num(p.minContextPctLargeWindow, current.minContextPctLargeWindow, 0, 100),
-    message: typeof p.message === 'string' ? p.message : current.message
-  };
-}
-
 // ─── IPC: app info ───────────────────────────────────────────────────────────
 // `packaged`: only installed builds check for updates (updater.ts), so
 // Settings → Updates can say so instead of promising checks a dev build never runs.
@@ -6812,7 +6614,6 @@ function bootstrapHiveServices(): void {
   ensureDefaultMissions(); // one-time: seed the built-in hourly ops standup
   migrateMissionOwners(); // one-time: everyone rows to Michael, createdBy stamped
   syncMissions(); // arm recurring auto-dispatch missions now the router is live
-  syncContextTriggers(); // …and the context trigger's own compact/clear cadences
   hookServer.start();
   // Bind the telemetry collector BEFORE the renderer spawns any agent, then point
   // the hive at it so every subsequent spawn is instrumented. Best-effort — a bind
@@ -7085,10 +6886,6 @@ function healthCheckPtys(reason: string, awayMs: number | null): void {
 function onSystemResume(reason: string): void {
   console.log(`[power] ${reason} — re-arming scheduler, beats, router, keep-awake`);
   try { syncMissions(); } catch (e) { console.error('[power] syncMissions on resume', e); }
-  // Same freeze, same catch-up: the context timers honour elapsed-time-since-last-
-  // run, so a compact/clear that came due while the machine slept fires ONCE here
-  // rather than being lost or replayed N times.
-  try { syncContextTriggers(); } catch (e) { console.error('[power] syncContextTriggers on resume', e); }
   try { armAlwaysOnBeats(); } catch (e) { console.error('[power] armAlwaysOnBeats on resume', e); }
   // The hive message router (outbox→inbox drain) is a setInterval that freezes
   // during true system sleep exactly like the beats above — but it was the one

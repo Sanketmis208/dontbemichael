@@ -162,12 +162,6 @@ export interface Agent {
   seedPrompt?: string;
 }
 
-export interface FeedEntry {
-  agentId: string;
-  text: string;
-  ts: number;
-}
-
 /** A message the user has parked for an agent while its terminal was busy.
  *  Queued messages are drained one at a time when the agent next goes idle (see
  *  useHive's flush loop). */

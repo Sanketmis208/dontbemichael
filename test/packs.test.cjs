@@ -22,8 +22,7 @@ const os = require('node:os');
 const path = require('node:path');
 const loadTs = require('./load-ts.cjs');
 
-const { loadBundledPacks, loadImportedPack, packsResourceDir } = loadTs('src/main/packs.ts');
-const { levelFor } = loadTs('src/shared/agentDefinition.ts');
+const { loadBundledPacks, packsResourceDir } = loadTs('src/main/packs.ts');
 
 const REAL_PACKS = path.resolve(__dirname, '..', 'resources', 'packs');
 const readReal = (file) => JSON.parse(fs.readFileSync(path.join(REAL_PACKS, file), 'utf8'));
@@ -108,27 +107,6 @@ test('non-JSON files in the directory are ignored entirely', () => {
   });
 });
 
-test('an imported pack is capped even when it arrives through the loader', () => {
-  // Same group-chat scenario as office-pack.test.cjs, but via the entry point
-  // the import UI actually calls — the cap must not live only in the validator's
-  // unit test.
-  const restaurant = readReal('restaurant-food.json');
-  const pam = restaurant.agents.find((a) => a.id === 'pam');
-  pam.tools = pam.tools.map((t) => (t.capability === 'email.send' ? { ...t, level: 'auto' } : t));
-
-  const res = loadImportedPack(restaurant);
-  assert.deepEqual(res.errors, []);
-  const loaded = res.pack.agents.find((a) => a.id === 'pam');
-  assert.equal(levelFor(loaded, 'email.send'), 'ask', 'an imported pack cannot grant unattended sending');
-  assert.equal(levelFor(loaded, 'email.read'), 'auto', 'reading is not capped');
-});
-
-test('an invalid imported pack returns errors and no pack', () => {
-  const res = loadImportedPack({ spec: 'something/else@1' });
-  assert.equal(res.pack, undefined);
-  assert.ok(res.errors.length > 0);
-});
-
 test('the packs directory resolves the same way skills do', () => {
   const app = { isPackaged: false, getAppPath: () => '/repo' };
   assert.equal(packsResourceDir(app, '/ignored'), path.join('/repo', 'resources', 'packs'));
@@ -186,22 +164,4 @@ test('a packs path that is a file, not a directory, is reported rather than thro
     assert.equal(res.problems[0].file, file);
     assert.ok(res.problems[0].reason.length > 0);
   });
-});
-
-test('an imported pack given core gets core merged in, and the cap still holds', () => {
-  const core = loadTs('src/shared/officePack.ts').validateOfficePack(readReal('core.json'), 'bundled').pack;
-  const restaurant = readReal('restaurant-food.json');
-  // Drop the restaurant's own Oscar so the merged one must come from core.
-  restaurant.agents = restaurant.agents.filter((a) => a.id !== 'oscar');
-  restaurant.defaultPicks = restaurant.defaultPicks.filter((id) => id !== 'oscar');
-  restaurant.starterMissions = (restaurant.starterMissions || []).filter((m) => m.agentId !== 'oscar');
-  if (!restaurant.starterMissions.length) delete restaurant.starterMissions;
-  const pam = restaurant.agents.find((a) => a.id === 'pam');
-  pam.tools = pam.tools.map((t) => (t.capability === 'email.send' ? { ...t, level: 'auto' } : t));
-
-  const res = loadImportedPack(restaurant, core);
-  assert.deepEqual(res.errors, []);
-  assert.ok(res.pack.agents.some((a) => a.id === 'oscar'), 'core finance is merged into an import');
-  assert.ok(res.pack.defaultPicks.includes('oscar'));
-  assert.equal(levelFor(res.pack.agents.find((a) => a.id === 'pam'), 'email.send'), 'ask');
 });

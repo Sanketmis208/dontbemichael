@@ -17,12 +17,6 @@ export const SHOW_DEV_TOOLS = false;
  *  and sending in a release (R9); revoking the key stops sending at once. */
 export const AUTO_FAILURE_REPORTS = true;
 
-/** The "auto mode on / off" text in the header bar. It named a developer
- *  setting in words owners don't use, and it wasn't clickable. The setting
- *  itself is unchanged and stays in Settings → Agents
- *  (owner, 2026-09-24). */
-export const SHOW_AUTO_MODE_LABEL = false;
-
 /** The red close button on a team member's panel.
  *  It stopped the agent mid-task and archived it, with no button to bring it
  *  back and no return on relaunch, behind a confirm that spoke of a "PTY"
@@ -46,12 +40,6 @@ export const SHOW_OPEN_TERMINAL = false;
  *  cleared at launch, so no one is left with messages held and no switch to
  *  release them. */
 export const SHOW_DELIVERY_SWITCH = false;
-
-/** Office Theme in Settings → General: the switch that turns on TV show
- *  office maps and the map picker. Hidden (owner, 2026-09-26). While it is
- *  hidden the floor always shows the office, so a theme picked earlier cannot
- *  stay on with no way to turn it off. */
-export const SHOW_OFFICE_THEME = false;
 
 /** "Explain things simply" in Settings → General. Hidden (owner, 2026-10-02).
  *  The saved audience still applies: agents keep briefing in plain language

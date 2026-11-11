@@ -9,9 +9,6 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, rename
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import {
-  autoModeFlagForProvider,
-  defaultCommandForProvider,
-  inferAgentProvider,
   onRetiredEngine,
   providerPreset,
   type AgentProvider
@@ -20,10 +17,6 @@ import { MAX_AGENT_TOKEN_CAP } from '../shared/tokenCaps';
 import { expandTilde, normalizeHiveHome } from './fs';
 import { isHeldRename, RENAME_RETRY_MS, sleepSync, writeFileAtomic } from './atomicFile';
 import type { IntegrationRecord } from '../shared/integrations';
-import {
-  DEFAULT_CONTEXT_TRIGGER,
-  type ContextTriggerConfig
-} from '../shared/triggers';
 
 /** A recurring schedule. The type and every rule about it (ownership, next run,
  *  what a run sends) live in shared/missions.ts so main, preload and the
@@ -91,7 +84,6 @@ export const OPS_STANDUP_MISSION: ScheduledMission = {
   body: '',
   focus: OPS_STANDUP_FOCUS,
   enabled: true
-  // NO autoCompact. Compaction belongs to contextTrigger.compact and nothing else.
 };
 
 /** Company foundations check (office-foundations.md, eng D3): once a week,
@@ -188,37 +180,6 @@ export function heartbeatMessage(body: string | undefined, digest: string): stri
   const own = body?.trim();
   return own && own !== HEARTBEAT_MISSION.body.trim() ? `${own}\n\n${digest}` : digest;
 }
-
-/** The dedicated auto-compact MAINTENANCE schedule (maint-1). DECOUPLED from the
- *  ops standup so editing/replacing a standup can never silently disable
- *  compaction again (the bug this fixes). It fires ONLY the auto-compact signal —
- *  `kind:'compact'` makes syncMissions skip the hive.send dispatch (empty to/body).
- *  Shipped DISABLED (v0.3.4 founder decision): scheduled compaction is opt-in.
- *  Turn it on in Settings → General or the Schedules tab; the Schedules warning
- *  panel explains the risk of leaving it off for long-running agents. It is the
- *  SINGLE source of truth for compaction, and it's persistent: deleting it makes
- *  it reappear DISABLED.
- *  Existing installs keep whatever enabled state the user already has
- *  (compactMaintenanceSeeded guards re-seeding). */
-export const COMPACT_MAINTENANCE_MISSION: ScheduledMission = {
-  id: 'compact-maintenance',
-  label: 'Auto-compact (maintenance)',
-  // 2h, matching DEFAULT_CONTEXT_TRIGGER.compact.everyMs. The two cadences must
-  // agree: this mission is the schedule half of the same behaviour the context
-  // trigger now owns, and a 1h seed here would keep interrupting agents on the
-  // old rhythm no matter what the trigger says.
-  intervalMs: 7_200_000,
-  to: '',
-  body: '',
-  enabled: false,
-  autoCompact: true,
-  kind: 'compact'
-};
-
-/** The 1h cadence `compact-maintenance` was seeded with before Triggers doubled
- *  it. `migrateTriggersV1` bumps only missions still sitting on this EXACT value,
- *  so an interval the user tuned by hand is left exactly where they put it. */
-const LEGACY_COMPACT_MAINTENANCE_INTERVAL_MS = 3_600_000;
 
 /** Circuit-breaker thresholds (Lane A #6.6b). The breaker runs inside the
  *  heartbeat beat, so it only ticks when the heartbeat is enabled. Trip
@@ -395,11 +356,6 @@ export interface HarnessConfig {
   /** One-time guard for the built-in heartbeat mission (mirrors opsStandupSeeded
    *  so a user who deletes the heartbeat doesn't get it re-added every boot). */
   heartbeatSeeded?: boolean;
-  /** maint-1 guard for the dedicated auto-compact maintenance mission. UNLIKE the
-   *  two above, this does NOT suppress re-add forever: once seeded (flag set), a
-   *  later delete makes the mission reappear DISABLED on next boot (compaction is
-   *  required, so it's never silently lost — only user-disabled). */
-  compactMaintenanceSeeded?: boolean;
   /** DEPRECATED (v0.3.4): config-file only, no UI anywhere. Hard dollar ceiling
    *  across all active agents. Still enforced if present so legacy configs keep
    *  their guard, but the token cap (costCapTokens) is the real budget —
@@ -454,10 +410,6 @@ export interface HarnessConfig {
    *  destructive switch flow). Default false = the picker is hidden and the
    *  office renders as today (zero behavior change). */
   tvShowOffices?: boolean;
-  /** Which office map/cast theme the pixel office renders. Only honored when
-   *  `tvShowOffices` is on; otherwise the office theme is used. Unbuilt show
-   *  themes fall back to 'office' in the loader. */
-  officeTheme?: 'office' | 'friends' | 'brooklyn99' | 'siliconvalley' | 'got' | 'hogwarts';
   /** Per-CLI-provider local/self-hosted base URL (Ollama/LM Studio/vLLM, …) for the
    *  OpenCode/Crush/pi/qwen engines; applied at spawn (config-injection or proxy
    *  upstream). API KEYS are NOT stored here — they live write-only in the secret
@@ -466,15 +418,6 @@ export interface HarnessConfig {
   /** Per-CLI-provider default model slug, used to pre-fill the model picker. */
   providerDefaultModels?: Partial<Record<AgentProvider, string>>;
 
-  // ─── Triggers (src/shared/triggers.ts owns every type here) ────────────────
-  /** Auto-compaction / auto-clearing of agent terminal context. Both halves ship
-   *  in DEFAULT_CONTEXT_TRIGGER; `readConfig` deep-fills them, because the
-   *  top-level merge below is one level deep and a half-written sub-object would
-   *  otherwise reach consumers with `undefined` thresholds. */
-  contextTrigger?: ContextTriggerConfig;
-  /** One-time guard for `migrateTriggersV1` (1h → 2h compact cadence). Set once
-   *  the migration has run to completion. */
-  triggersMigratedV1?: boolean;
 }
 
 const DEFAULTS: HarnessConfig = {
@@ -497,12 +440,6 @@ const DEFAULTS: HarnessConfig = {
   notifications: true,
   strongKeepalive: false,
   tvShowOffices: false,
-  officeTheme: 'office',
-  // Triggers. This is the ONLY object default that gets handed
-  // straight back out of `readConfig` for a config that never persisted it, so
-  // `withTriggerDefaults` re-copies it on every read — see the note there.
-  contextTrigger: DEFAULT_CONTEXT_TRIGGER,
-  triggersMigratedV1: false,
   // Company knowledge (the knowledge feature): ON by default (owner,
   // 2026-09-25). It is where company wide information, policies and rules live,
   // and every agent, Michael included, searches it. Existing installs are
@@ -514,72 +451,17 @@ function configPath(): string {
   return join(app.getPath('userData'), 'config.json');
 }
 
-/**
- * Deep-fill the trigger sub-objects, and hand back copies of them.
- *
- * TWO problems, one fix. First, the merge in `readConfig` is one level deep, so a
- * `contextTrigger` persisted by an older build (or by a `writeConfig` that
- * patched only `compact`) arrives missing sub-keys that DEFAULTS would have
- * supplied — the consumer then reads `undefined` where it expects a number and
- * the rule never fires. Second, that same shallow merge hands the literal
- * DEFAULT_CONTEXT_TRIGGER instance to every config that
- * didn't persist them, so one caller mutating what it read would rewrite the
- * defaults for the whole process — and for every config read afterwards.
- *
- * Every branch below therefore constructs a fresh object, including the
- * "nothing persisted" branch.
- */
-function withTriggerDefaults(cfg: HarnessConfig): HarnessConfig {
-  return {
-    ...cfg,
-    contextTrigger: {
-      compact: { ...DEFAULT_CONTEXT_TRIGGER.compact, ...cfg.contextTrigger?.compact },
-      clear: { ...DEFAULT_CONTEXT_TRIGGER.clear, ...cfg.contextTrigger?.clear }
-    }
-  };
+/** Scheduled compaction is retired (owner, 2026-09-25): Claude Code compacts on
+ *  its own. An older install may still hold the `compact-maintenance` schedule
+ *  (or another compact-only one), so every read drops it and it can never be
+ *  armed or run. The next save leaves it out of config.json. */
+function isRetiredMission(m: ScheduledMission | null | undefined): boolean {
+  return m?.id === 'compact-maintenance' || m?.kind === 'compact';
 }
 
-/** Set once `migrateTriggersV1` has run in THIS process. `writeConfig` reads
- *  before it writes, so without an in-memory latch the migration's own persist
- *  would re-enter `readConfig` and run the migration a second time before
- *  `triggersMigratedV1: true` ever reached disk. */
-let triggersMigrationRan = false;
-
-/**
- * Fold the pre-Triggers config shape forward, exactly once per install.
- *
- * Runs from `readConfig`, so it is complete before any consumer can observe the
- * config — there is no boot ordering to get wrong and no window in which half
- * the app sees the old shape. The seeded `compact-maintenance` mission moves
- * from the old 1h cadence to 2h, but ONLY if it still reads exactly 1h. A
- * user-chosen interval is a decision, not a stale default, and is left alone.
- *
- * Wrapped end-to-end in a try/catch: a config that is corrupt in some unrelated
- * way must still boot the app, and a migration is never worth a failed launch.
- */
-function migrateTriggersV1(cfg: HarnessConfig): HarnessConfig {
-  if (cfg.triggersMigratedV1 || triggersMigrationRan) return cfg;
-  triggersMigrationRan = true;
-  try {
-    const next: HarnessConfig = { ...cfg, triggersMigratedV1: true };
-
-    const missions = Array.isArray(cfg.missions) ? cfg.missions : [];
-    const stale = (m: ScheduledMission): boolean =>
-      m?.id === COMPACT_MAINTENANCE_MISSION.id
-      && m.intervalMs === LEGACY_COMPACT_MAINTENANCE_INTERVAL_MS;
-    if (missions.some(stale)) {
-      next.missions = missions.map((m) =>
-        stale(m) ? { ...m, intervalMs: COMPACT_MAINTENANCE_MISSION.intervalMs } : m
-      );
-    }
-
-    persistConfig(next);
-    return next;
-  } catch {
-    // Leave the config exactly as read. The latch above stays set, so a failing
-    // migration retries on the next launch rather than on every single read.
-    return cfg;
-  }
+function dropRetiredMissions(cfg: HarnessConfig): HarnessConfig {
+  if (!Array.isArray(cfg.missions) || !cfg.missions.some(isRetiredMission)) return cfg;
+  return { ...cfg, missions: cfg.missions.filter((m) => !isRetiredMission(m)) };
 }
 
 /** What the removed webhook feature saved (owner, 2026-11-11). The fields held
@@ -608,13 +490,13 @@ export function readConfig(): HarnessConfig {
   // No file yet = a first run with nothing to migrate; the defaults ARE the
   // post-migration shape. Deliberately does not persist — a bare read must not
   // conjure a config.json before onboarding has written one.
-  if (!existsSync(p)) return withTriggerDefaults({ ...DEFAULTS });
+  if (!existsSync(p)) return { ...DEFAULTS };
   try {
     const raw = readFileSync(p, 'utf8');
     const parsed = dropRemovedWebhookData(p, JSON.parse(raw));
-    return offRetiredEngines(normalizeStoredHomes(migrateTriggersV1(withTriggerDefaults({ ...DEFAULTS, ...parsed }))));
+    return offRetiredEngines(normalizeStoredHomes(dropRetiredMissions({ ...DEFAULTS, ...parsed })));
   } catch {
-    return withTriggerDefaults({ ...DEFAULTS });
+    return { ...DEFAULTS };
   }
 }
 
@@ -699,16 +581,17 @@ export function damagedConfigCopy(): string | null {
   try { return keepUnreadableConfig(configPath()); } catch { return null; }
 }
 
-function persistConfig(next: HarnessConfig): HarnessConfig {
+function persistConfig(patched: HarnessConfig): HarnessConfig {
+  // A stale copy of the missions cannot bring a retired schedule back.
+  const next = dropRetiredMissions(patched);
   const p = configPath();
   mkdirSync(dirname(p), { recursive: true });
   keepUnreadableConfig(p);
   writeFileAtomic(p, JSON.stringify(next, null, 2));
   // Saving one setting stores only that setting, so fill the rest back in first:
   // subscribers must see the same complete config a read gives them, never a
-  // half-filled one. Skip the migration — it saves in its own right, and has
-  // already run against what this change was built on.
-  const view = normalizeStoredHomes(withTriggerDefaults({ ...DEFAULTS, ...next }));
+  // half-filled one.
+  const view = normalizeStoredHomes({ ...DEFAULTS, ...next });
   // The change is already saved, so one failed subscriber must not fail the save
   // for its caller, nor stop the subscribers after it.
   for (const listener of configWriteListeners) {
@@ -784,11 +667,7 @@ export function setAgentTokenCap(agentId: unknown, tokenCap: unknown): HarnessCo
 export function resetConfig(): HarnessConfig {
   // Saved like any other change, so a reset announces itself too.
   persistConfig({ ...DEFAULTS });
-  // Drop the migration latch too: the file on disk is back to `triggersMigratedV1:
-  // false`, and a latch left set would keep the flag from ever being written again
-  // in this process. The migration itself is a no-op on defaults either way.
-  triggersMigrationRan = false;
-  return withTriggerDefaults({ ...DEFAULTS });
+  return { ...DEFAULTS };
 }
 
 /** Model ids by tier (Lane A #6.4). Kept in sync with the claude list in

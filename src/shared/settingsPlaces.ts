@@ -85,13 +85,6 @@ export function placeHref(place: Place): string {
   return PLACE_SCHEME + parts.join('/');
 }
 
-/** The words an agent writes for a place: "Settings, Connections, Mailboxes". */
-export function placeWords(place: Extract<Place, { kind: 'settings' }>): string {
-  const key = sectionKeyOf(place.section);
-  const group = place.group ? groupsOf(key)[place.group] : undefined;
-  return ['Settings', place.section, ...(group ? [group] : [])].join(', ');
-}
-
 /** The section and group names, longest first, for the word spotter. */
 export function placeNames(): { section: PlaceSection; key: PlaceSectionKey; groups: [PlaceGroup, string][] }[] {
   return (Object.keys(PLACE_SECTIONS) as PlaceSectionKey[])

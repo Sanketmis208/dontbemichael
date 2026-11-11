@@ -419,14 +419,6 @@ export function quoteSignature(facts: CaseStudyFacts): string {
   return facts.ceoName?.trim() ? `${facts.ceoName.trim()}, ${facts.businessName.trim()}` : w.ownerOf(facts.businessName.trim());
 }
 
-/** With D8 off, text that still names the business or its website (a warning, not a block). */
-export function namesBusiness(text: string, facts: Pick<CaseStudyFacts, 'businessName' | 'website'>): boolean {
-  const t = text.toLowerCase();
-  const name = facts.businessName?.trim().toLowerCase();
-  const host = (facts.website ?? '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '');
-  return !!((name && name.length > 2 && t.includes(name)) || (host && host.length > 3 && t.includes(host)));
-}
-
 // ---------------------------------------------------------------- the draft (D5, D13, D16)
 
 /** The draft prompt, from CaseStudyFacts only. The name and website are in it

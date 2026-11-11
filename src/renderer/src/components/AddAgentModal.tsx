@@ -6,10 +6,9 @@ import { PixelButton } from './PixelButton';
 import { SpritePortrait } from './SpritePortrait';
 import { Icon } from './Icon';
 import { ProviderLogo } from './ProviderLogo';
-import { InfoTip } from './InfoTip';
 import { Dialog } from '@/shell/Dialog';
 import { useStore, type Agent, ACTION_CLOCKING_IN } from '@/store/store';
-import { OFFICE_CAST, CAST_BY_NAME, CAST_GROUPS, DEFAULT_CHARACTER, HIREABLE_CAST, type OfficeCharacterName } from '@/scene/office/cast';
+import { CAST_BY_NAME, CAST_GROUPS, DEFAULT_CHARACTER, HIREABLE_CAST, type OfficeCharacterName } from '@/scene/office/cast';
 import { type AccentColorName } from '@/design/tokens';
 import type { HireManifest } from '@shared/hire';
 import { hireQueueProgress } from '@shared/hireQueue';
@@ -452,7 +451,6 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
   // The instant rules always count, live on every edit, so a job whose what to
   // send reads like a teammate's is flagged even before or after the AI check.
   const overlapNames = [...new Set([...(verdict?.overlapsWith ?? []), ...ruleOverlaps])];
-  const cleared = !!verdict && (overlapNames.length === 0 || !!binding);
 
   const [bindMode, setBindMode] = useState<'mailbox' | 'topic' | 'connection' | null>(null);
   const [topic, setTopic] = useState('');

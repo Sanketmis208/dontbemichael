@@ -683,19 +683,3 @@ function PriorityDots({ level }: { level: number }) {
     </span>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  width: '100%', padding: '6px 8px', background: 'var(--cth-paper-100)', border: 'none',
-  boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', fontFamily: 'var(--cth-font-ui)',
-  fontSize: 12, lineHeight: '17px', color: 'var(--cth-ink-900)', outline: 'none', boxSizing: 'border-box'
-};
-
-const selectStyle: React.CSSProperties = {
-  padding: '3px 6px', background: 'var(--cth-paper-100)', border: 'none',
-  boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', fontFamily: 'var(--cth-font-ui)',
-  fontSize: 12, color: 'var(--cth-ink-900)', cursor: 'pointer'
-};
-
-const labelStyle: React.CSSProperties = {
-  fontFamily: 'var(--cth-font-display)', fontSize: 10, fontWeight: 600, color: 'var(--cth-ink-500)'
-};
