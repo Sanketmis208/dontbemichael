@@ -582,6 +582,27 @@ function migrateTriggersV1(cfg: HarnessConfig): HarnessConfig {
   }
 }
 
+/** What the removed webhook feature saved (owner, 2026-11-11). The fields held
+ *  live secrets, so the first read drops them from config.json, saves it once,
+ *  and deletes the webhook log (trigger-history.json) beside it. A failed save
+ *  still hands back the stripped copy, and the next save writes it. */
+const REMOVED_WEBHOOK_FIELDS = ['webhookEnabled', 'webhookSecret', 'webhookPort', 'webhookTriggers'] as const;
+
+function dropRemovedWebhookData<T>(p: string, parsed: T): T {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return parsed;
+  const rec = parsed as Record<string, unknown>;
+  if (!REMOVED_WEBHOOK_FIELDS.some((k) => k in rec)) return parsed;
+  const next: Record<string, unknown> = { ...rec };
+  for (const k of REMOVED_WEBHOOK_FIELDS) delete next[k];
+  try {
+    writeFileAtomic(p, JSON.stringify(next, null, 2));
+    rmSync(join(dirname(p), 'trigger-history.json'), { force: true });
+  } catch (e) {
+    console.warn('[config] could not remove the old webhook settings:', e);
+  }
+  return next as T;
+}
+
 export function readConfig(): HarnessConfig {
   const p = configPath();
   // No file yet = a first run with nothing to migrate; the defaults ARE the
@@ -590,7 +611,7 @@ export function readConfig(): HarnessConfig {
   if (!existsSync(p)) return withTriggerDefaults({ ...DEFAULTS });
   try {
     const raw = readFileSync(p, 'utf8');
-    const parsed = JSON.parse(raw);
+    const parsed = dropRemovedWebhookData(p, JSON.parse(raw));
     return offRetiredEngines(normalizeStoredHomes(migrateTriggersV1(withTriggerDefaults({ ...DEFAULTS, ...parsed }))));
   } catch {
     return withTriggerDefaults({ ...DEFAULTS });

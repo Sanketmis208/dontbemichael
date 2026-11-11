@@ -40,8 +40,8 @@ test('en.json has no webhook or trigger history copy', () => {
   assert.doesNotMatch(JSON.stringify(en), /webhook/i);
 });
 
-test('a config.json that still holds webhook fields reads, and only the cadence moves', () => {
-  // Value: protects=an older install opens and its 1h compact schedule still moves to 2h; fails_when=the old fields break the read, a legacy endpoint is rebuilt, or the cadence fold is lost; why_new=webhook fold removed from migrateTriggersV1; seam=electron app.getPath
+test('a config.json that still holds webhook fields reads, loses them, and the cadence still moves', () => {
+  // Value: protects=an older install opens and its 1h compact schedule still moves to 2h; fails_when=the old fields break the read, a legacy endpoint is rebuilt, the old secret stays on disk, or the cadence fold is lost; why_new=webhook fold removed from migrateTriggersV1; seam=electron app.getPath
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'md-no-webhooks-'));
   const electron = require.resolve('electron');
   require.cache[electron] = { id: electron, filename: electron, loaded: true, exports: { app: { getPath: () => userData } } };
@@ -55,6 +55,7 @@ test('a config.json that still holds webhook fields reads, and only the cadence 
       missions: [{ id: 'compact-maintenance', label: 'Auto-compact (maintenance)', intervalMs: 3_600_000, to: '', enabled: false }],
       triggersMigratedV1: false
     }));
+    fs.writeFileSync(path.join(userData, 'trigger-history.json'), '[]');
     const { readConfig } = loadTs('src/main/config.ts');
     const cfg = readConfig();
     assert.equal(cfg.onboardingComplete, true);
@@ -64,6 +65,13 @@ test('a config.json that still holds webhook fields reads, and only the cadence 
     assert.equal(cfg.missions.find((m) => m.id === 'compact-maintenance').intervalMs, 7_200_000, '1h moves to 2h');
     const saved = JSON.parse(fs.readFileSync(path.join(userData, 'config.json'), 'utf8'));
     assert.equal(saved.missions.find((m) => m.id === 'compact-maintenance').intervalMs, 7_200_000, 'the move is saved');
+    // The old webhook secret and settings leave the file, and the webhook log goes.
+    for (const k of ['webhookEnabled', 'webhookSecret', 'webhookPort', 'webhookTriggers']) {
+      assert.equal(k in saved, false, `${k} is removed from config.json`);
+      assert.equal(k in cfg, false, `${k} is not handed to the app`);
+    }
+    assert.doesNotMatch(fs.readFileSync(path.join(userData, 'config.json'), 'utf8'), /abc123secret/);
+    assert.equal(fs.existsSync(path.join(userData, 'trigger-history.json')), false, 'the webhook log is deleted');
   } finally {
     delete require.cache[electron];
     fs.rmSync(userData, { recursive: true, force: true });
