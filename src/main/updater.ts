@@ -375,7 +375,7 @@ async function runDownload(): Promise<{ ok: boolean; error?: string }> {
  *  v0.4.4-rc.1 body: this shape yields the same 3 bullets the real toast shows. */
 const SIMULATED_NOTES = `# Don't Be Michael v9.9.9
 
-**A local hive of Claude Code, Antigravity, Codex, Grok & Copilot agents that run themselves** —
+**A local hive of Claude Code, Codex & Gemini agents that run themselves** —
 messaging, routing, and remembering, coordinated by Michael, your office manager, who you talk to.
 
 ---

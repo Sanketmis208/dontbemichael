@@ -65,10 +65,7 @@ const CLAUDE_PLANS_URL = 'https://claude.com/pricing';
 const PROVIDER_BLURB_KEYS: Partial<Record<AgentProvider, string>> = {
   gemini: 'onboarding.providerBlurb.gemini',
   claude: 'onboarding.providerBlurb.claude',
-  codex: 'onboarding.providerBlurb.codex',
-  antigravity: 'onboarding.providerBlurb.antigravity',
-  qwen: 'onboarding.providerBlurb.qwen',
-  cursor: 'onboarding.providerBlurb.cursor'
+  codex: 'onboarding.providerBlurb.codex'
 };
 
 export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps) {
@@ -855,7 +852,7 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
                     );
                   })}
                   {/* Engines a WORKER can run but Michael cannot (issue #355): shown
-                      disabled instead of hidden, so "Copilot is missing" reads as the
+                      disabled instead of hidden, so a missing engine reads as the
                       real constraint — no inbox drain path — not as "unsupported". */}
                   {onboardingEngineChoices().workersOnly.map((p) => (
                     <label key={p.id} aria-disabled title={t('onboarding.orchestrator.workersOnlyHint')} style={{

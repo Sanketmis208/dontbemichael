@@ -22,17 +22,6 @@ const {
 
 const autoConfig = { defaultCommand: 'claude', autoMode: true };
 
-test('Kimi is a first-class inferred provider with autonomous defaults', () => {
-  assert.equal(isAgentProvider('kimi'), true);
-  assert.equal(inferAgentProvider('kimi --auto'), 'kimi');
-  const preset = providerPreset('kimi');
-  assert.equal(preset.defaultCommand, 'kimi');
-  assert.equal(preset.autoFlag, '--auto');
-  assert.equal(preset.supportsModel, true);
-  assert.equal(preset.canReceiveInbox, false);
-  assert.equal(preset.positionalInitialPrompt, undefined);
-});
-
 test('Gemini CLI has hooks, interactive seeding, resume, and current yolo mode', () => {
   assert.equal(isAgentProvider('gemini'), true);
   assert.equal(inferAgentProvider('/usr/local/bin/gemini --model pro'), 'gemini');
@@ -47,19 +36,6 @@ test('Gemini CLI has hooks, interactive seeding, resume, and current yolo mode',
   assert.equal(preset.installCommand, 'npm install -g @google/gemini-cli');
 });
 
-test('Grok is a first-class inferred provider with hooks, resume, and always-approve', () => {
-  assert.equal(isAgentProvider('grok'), true);
-  assert.equal(inferAgentProvider('/Users/test/.local/bin/grok --model grok-4.5'), 'grok');
-  const preset = providerPreset('grok');
-  assert.equal(preset.defaultCommand, 'grok');
-  assert.equal(preset.autoFlag, '--permission-mode bypassPermissions');
-  assert.equal(preset.supportsModel, true);
-  assert.equal(preset.canReceiveInbox, true);
-  assert.equal(preset.hookBridge, 'grok');
-  assert.equal(preset.positionalInitialPrompt, true);
-  assert.equal(preset.resumeFlag, '--resume');
-});
-
 test('provider commands use matching models and equivalent bypass modes', () => {
   assert.equal(
     buildSpawnCommand(autoConfig, 'claude-sonnet-5', 'claude'),
@@ -68,14 +44,6 @@ test('provider commands use matching models and equivalent bypass modes', () => 
   assert.equal(
     buildSpawnCommand(autoConfig, 'gpt-5.6-sol', 'codex'),
     'codex --model gpt-5.6-sol -a never -s workspace-write'
-  );
-  assert.equal(
-    buildSpawnCommand(autoConfig, 'grok-4.5', 'grok'),
-    'grok --model grok-4.5 --permission-mode bypassPermissions'
-  );
-  assert.equal(
-    buildSpawnCommand(autoConfig, 'kimi-code/k3', 'kimi'),
-    'kimi --model kimi-code/k3 --auto'
   );
   assert.equal(
     buildSpawnCommand(autoConfig, 'pro', 'gemini'),
@@ -93,79 +61,65 @@ test('model picker options stay provider-specific', () => {
     [undefined, 'gpt-6-astra', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna']
   );
   assert.deepEqual(
-    modelsForProvider('grok').map((model) => model.id),
-    [undefined, 'grok-4.6', 'grok-4.5']
-  );
-  assert.deepEqual(
-    modelsForProvider('kimi').map((model) => model.id),
-    [
-      undefined,
-      'kimi-code/k3',
-      'kimi-code/kimi-for-coding',
-      'kimi-code/kimi-for-coding-highspeed'
-    ]
-  );
-  assert.deepEqual(
     modelsForProvider('gemini').map((model) => model.id),
     [undefined, 'auto', 'pro', 'flash', 'flash-lite']
   );
-  assert.deepEqual(modelsForProvider('custom'), []);
 });
 
 test('Command Center model choices round-trip provider and model', () => {
-  const encoded = encodeProviderModel('antigravity', 'Gemini 3.1 Pro (High)');
+  const encoded = encodeProviderModel('codex', 'gpt-5.6-sol');
   assert.deepEqual(
     decodeProviderModel(encoded),
-    { provider: 'antigravity', model: 'Gemini 3.1 Pro (High)' }
+    { provider: 'codex', model: 'gpt-5.6-sol' }
   );
   assert.deepEqual(
-    decodeProviderModel(encodeProviderModel('kimi')),
-    { provider: 'kimi', model: undefined }
+    decodeProviderModel(encodeProviderModel('gemini')),
+    { provider: 'gemini', model: undefined }
   );
   assert.equal(decodeProviderModel('unknown:model'), null);
+  // A removed engine is no choice any more (owner, 2026-11-11).
+  assert.equal(decodeProviderModel(encodeProviderModel('antigravity', 'Gemini 3.1 Pro (High)')), null);
 });
 
-test('onboarding lists every engine — orchestrator-capable first, workers-only after, custom never', () => {
-  // Issue #355: hiding Copilot from the onboarding engine step read as "not
-  // supported at all". The step now SHOWS inbox-less engines as disabled
-  // workers-only rows instead of omitting them, so the split must be exact:
-  // selectable = the god-eligible set, workersOnly = everything a worker can
-  // run but Michael cannot (custom stays hidden — it is not a preset engine).
-  // Checked with every engine offered: that is the layout when BUILD_ENGINES
-  // brings the others back.
+test('onboarding lists every engine — orchestrator-capable first, workers-only after', () => {
+  // Issue #355: the step SHOWS inbox-less engines as disabled workers-only rows
+  // instead of omitting them, so the split must be exact: selectable = the
+  // god-eligible set, workersOnly = everything a worker can run but Michael
+  // cannot. Checked with every engine offered: that is the layout when
+  // BUILD_ENGINES brings the others back. Claude, Codex and Gemini all drain
+  // the inbox, so none is workers only (the inbox-less Kimi and Copilot were
+  // removed, owner 2026-11-11).
   const { eligible, workersOnly } = onboardingEngineChoices(AGENT_PROVIDER_PRESETS.map((p) => p.id));
   assert.deepEqual(
     eligible.map((preset) => preset.id),
     modelProvidersForAgent(true).map((preset) => preset.id),
     'selectable rows are exactly the god-eligible engines, same order'
   );
-  assert.deepEqual(workersOnly.map((preset) => preset.id), ['kimi', 'copilot']);
-  assert.ok(!eligible.concat(workersOnly).some((preset) => preset.id === 'custom'));
+  assert.deepEqual(eligible.map((preset) => preset.id), ['claude', 'codex', 'gemini']);
+  assert.deepEqual(workersOnly.map((preset) => preset.id), []);
 });
 
 test('God only sees providers that can drain hive inbox messages', () => {
-  // God-eligible = supportsModel && canReceiveInbox: kimi and copilot are
-  // excluded (no inbox drain path), custom is excluded (no model picker).
-  // Cursor is interactive (no -p) so it IS god-eligible.
+  // God-eligible = supportsModel && canReceiveInbox: all three kept engines.
   assert.deepEqual(
     modelProvidersForAgent(true).map((preset) => preset.id),
-    ['claude', 'codex', 'grok', 'gemini', 'antigravity', 'qwen', 'opencode', 'crush', 'cursor']
+    ['claude', 'codex', 'gemini']
   );
   assert.deepEqual(
     modelProvidersForAgent(false).map((preset) => preset.id),
-    ['claude', 'codex', 'grok', 'kimi', 'gemini', 'antigravity', 'qwen', 'opencode', 'crush', 'copilot', 'cursor']
+    ['claude', 'codex', 'gemini']
   );
 });
 
-test('this build offers only Claude Code at setup, and keeps every other engine in the code', () => {
+test('this build offers only Claude Code at setup, and keeps Codex and Gemini in the code', () => {
   // The owner's call (2026-09-23): the current build supports Claude Code only.
-  // The other presets stay wired so each can come back by adding its id to
-  // BUILD_ENGINES, with no other change.
+  // Codex and Gemini stay wired so each can come back by adding its id to
+  // BUILD_ENGINES, with no other change (the rest went 2026-11-11).
   assert.deepEqual([...BUILD_ENGINES], ['claude']);
   const { eligible, workersOnly } = onboardingEngineChoices();
   assert.deepEqual(eligible.map((preset) => preset.id), ['claude']);
   assert.deepEqual(workersOnly, [], 'engines this build does not offer are not shown, not even disabled');
-  for (const id of ['codex', 'gemini', 'antigravity', 'kimi', 'copilot', 'cursor']) {
+  for (const id of ['codex', 'gemini']) {
     assert.ok(AGENT_PROVIDER_PRESETS.some((p) => p.id === id), `${id} preset must stay in the code`);
   }
   assert.ok(modelsForProvider('claude').length > 1, 'the owner still picks between Claude models');

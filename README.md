@@ -366,9 +366,8 @@ If `node-pty` fails to load after an Electron upgrade, run `npm install` again.
 ### What this build leaves out
 
 Setup offers only Claude Code, signed in with a Claude account or an Anthropic API key. The code
-still carries presets for other agent CLIs (Codex, Gemini, Antigravity, Grok, Kimi, Qwen, OpenCode, Crush, pi,
-Copilot and Cursor), API keys for other providers and local models,
-but this build doesn't offer them. Some developer features are switched off because business
+still carries presets for two other agent CLIs (Codex, the ChatGPT engine, and Gemini CLI),
+but this build doesn't offer them. A team member saved on any other engine moves to Claude Code. Some developer features are switched off because business
 owners don't use them: git views, the built in code editor, temporary helper agents, voice, the
 Skills page in Settings (skills keep working), and opening a Terminal in an agent's folder. Each one has a switch in
 [`src/shared/buildFeatures.ts`](./src/shared/buildFeatures.ts).

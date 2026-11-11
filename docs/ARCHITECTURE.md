@@ -25,7 +25,7 @@ Two data planes feed one renderer:
                 │ hook payloads          │ stdin / stdout
                 └─────────┬──────────────┘
                    ┌──────┴──────────────┐
-                   │ claude / agy / codex│
+                   │ claude/codex/gemini │
                    └─────────────────────┘
 ```
 
@@ -34,8 +34,8 @@ Two data planes feed one renderer:
   typed `window.cth` bridge ([`src/preload/index.ts`](../src/preload/index.ts)), which also exposes
   sandboxed filesystem and git helpers.
 - **Hive / event plane.** `hive.ts` is the on-disk multi-agent layer; `hooks.ts` runs the hook
-  server that provider bridges POST lifecycle payloads to (`cth-hook` for Claude Code, `agy-hook`
-  for Antigravity). `memory.ts` wraps the MemPalace CLI for search by meaning. The router delivers messages, drains
+  server that provider bridges POST lifecycle payloads to (`cth-hook` for Claude Code and Codex,
+  `gemini-hook` for Gemini CLI). `memory.ts` wraps the MemPalace CLI for search by meaning. The router delivers messages, drains
   provider outboxes, the GOD agent adjudicates, and idle/inbox wakeups keep workers draining mail.
 
 ## Project structure
@@ -46,7 +46,7 @@ src/
     index.ts                 window, IPC handlers, quit guard
     pty.ts                   node-pty manager (spawn/write/resize/kill/stream)
     hive.ts                  on-disk multi-agent layer (memory, mailboxes, router)
-    hooks.ts                 hook server + provider hook shims (`cth-hook`, `agy-hook`); takes each frame's sender from its per start secret (HIVE_HOOK_SEAL, #61) and refuses frames without a valid one
+    hooks.ts                 hook server + provider hook shims (`cth-hook`, `gemini-hook`); takes each frame's sender from its per start secret (HIVE_HOOK_SEAL, #61) and refuses frames without a valid one
     hookShell.ts             the shell Claude Code runs hooks and the status line in (bash, or PowerShell on Windows
                              without Git Bash), and each hook command written for it
     memory.ts                search by meaning over company knowledge (MemPalace CLI wrapper, degrade-to-noop)

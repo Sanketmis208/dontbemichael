@@ -664,7 +664,7 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
         // A hire manifest may carry validated capability tags (routing hints).
         capabilities: hireMeta?.capabilities
       }
-    }).catch((e: unknown) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e), cwd: undefined, seedPrompt: undefined }));
+    }).catch((e: unknown) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e), cwd: undefined }));
     if (!spawnRes.ok) {
       // Give back what the failed hire was holding.
       releaseBindingAccess();
@@ -695,7 +695,6 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
       command: command.trim(),
       provider,
       model,
-      seedPrompt: spawnRes.seedPrompt,
       recentTextTs: Date.now()
     };
     addAgent(agent);

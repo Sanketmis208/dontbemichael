@@ -26,7 +26,9 @@ test('a member is in once their engine has started, and real work is never overw
   assert.equal(O.engineStarted('PreToolUse', 'startup'), false);
   const hive = read('src/renderer/src/hooks/useHive.ts');
   assert.match(hive, /if \(engineStarted\(e\.event, e\.source\) && self\.action === ACTION_CLOCKING_IN\) updateAgent\(e\.agentId, \{ action: '' \}\);/);
-  assert.match(hive, /if \(a\.action === ACTION_CLOCKING_IN && a\.ptyId && printed\.has\(a\.ptyId\) && !usesHookStandingGoal\(a\)\) updateAgent\(a\.id, \{ action: '' \}\);/, 'an engine with no hooks: first output');
+  // Every kept engine reports its start through hooks; the first output rule
+  // for an engine with none went with those engines (owner, 2026-11-11).
+  assert.doesNotMatch(hive, /usesHookStandingGoal/);
 });
 
 test('the lock can never trap: it lifts on the opening ending, Michael stopping, or the limit', () => {

@@ -14,7 +14,7 @@ const {
 // — the queue's one-pending-compact invariant depends entirely on this predicate —
 
 test('isCompactionCommand matches every provider compact verb', () => {
-  // /compact (claude, codex, grok, kimi, opencode) and /compress (gemini, qwen).
+  // /compact (claude, codex) and /compress (gemini).
   for (const cmd of ['/compact', '/compress']) assert.equal(isCompactionCommand(cmd), true, cmd);
 });
 
@@ -41,8 +41,7 @@ test('a clear command is not a compaction command', () => {
 test('provider readiness policies allow each TUI to settle', () => {
   assert.equal(terminalReadySettleMs('claude'), 400);
   assert.equal(terminalReadySettleMs('codex'), 500);
-  assert.equal(terminalReadySettleMs('grok'), 500);
-  assert.equal(terminalReadySettleMs('kimi'), 650);
+  assert.equal(terminalReadySettleMs('gemini'), 500);
 });
 
 test('continuous TUI repainting cannot block terminal readiness', () => {
@@ -61,25 +60,25 @@ const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 const { ownerComposeTarget } = loadTs('src/shared/ownerRequests.ts');
 const { COMMAND_GROUPS } = loadTs('src/shared/claudeCommands.ts');
 const { CODEX_COMMAND_GROUPS } = loadTs('src/shared/codexCommands.ts');
-const { GROK_COMMAND_GROUPS } = loadTs('src/shared/grokCommands.ts');
 
 /** The slash verbs the command references carry, as ownerSend.ts reads them. */
 function catalogVerbs() {
-  return [...COMMAND_GROUPS, ...CODEX_COMMAND_GROUPS, ...GROK_COMMAND_GROUPS]
+  return [...COMMAND_GROUPS, ...CODEX_COMMAND_GROUPS]
     .flatMap((g) => g.items)
     .filter((c) => c.kind === 'slash')
     .map((c) => c.cmd.split(/\s+/)[0].toLowerCase());
 }
 
 test('every context verb an engine takes is one the owner may type', () => {
-  // The three command references cover claude, codex and grok. gemini and qwen
-  // compact with /compress, which none of them carries, so on those engines the
+  // The two command references cover claude and codex. gemini compacts with
+  // /compress, which neither carries, so on that engine the
   // owner's own /compress was filed as a question and handed back as a work
   // order instead of reaching Michael's terminal.
   const ownerSet = new Set([...catalogVerbs(), ...CONTEXT_COMMAND_VERBS]);
-  assert.deepEqual([...CONTEXT_COMMAND_VERBS].sort(), ['/clear', '/compact', '/compress', '/new']);
+  // '/new' left with Grok and OpenCode (owner, 2026-11-11).
+  assert.deepEqual([...CONTEXT_COMMAND_VERBS].sort(), ['/clear', '/compact', '/compress']);
   for (const verb of CONTEXT_COMMAND_VERBS) assert.equal(ownerComposeTarget(verb, ownerSet), 'terminal', verb);
-  assert.equal(CONTEXT_COMMAND_VERBS.has('/compress'), true, 'gemini and qwen compact verb');
+  assert.equal(CONTEXT_COMMAND_VERBS.has('/compress'), true, 'gemini compact verb');
 });
 
 test('the owner composer derives its commands from the provider table', () => {

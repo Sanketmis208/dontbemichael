@@ -156,8 +156,6 @@ test('an API key instead of a Claude account: checked with Anthropic, kept write
   // Hidden checks approve the key too, or Claude's own question rejects it.
   // Once per key, not on every check.
   assert.match(main, /if \(key && key !== hiddenApprovedKey\) \{\s*try \{ if \(approveClaudeApiKey\(key\)\) hiddenApprovedKey = key; \}/);
-  // A key changed or cleared in Settings, AI engines, while it signs Claude in.
-  assert.match(main, /if \(res\.ok && p\.backend === 'anthropic' && readConfig\(\)\.claudeAuth === 'apiKey'\) \{\s*try \{ approveClaudeApiKey\(p\.key\); \}/);
   assert.match(main, /const \{ verdict, reason \} = await checkAnthropicKey\(key, net\.fetch as unknown as KeyCheckFetch\);/, 'the check follows the system proxy');
   assert.match(read('src/main/hiddenClaude.ts'), /const auth = hiddenClaudeAuthEnv\(\);[\s\S]*\.\.\.auth,\s*\.\.\.\(opts\.env \?\? \{\}\)/);
   // The key an isolated check approves is the one its session gets (cycle 3 review).

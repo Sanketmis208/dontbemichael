@@ -146,7 +146,7 @@ export function useRestoreTeam(config?: HarnessConfig | null): RestoreTeamState 
             isolate: false,
             // Continue the worker's prior CLI session if one was recorded — the
             // main process picks the provider's resume flag (Claude --resume,
-            // agy --conversation) and for Claude reattaches the transcript. The
+            // codex resume) and for Claude reattaches the transcript. The
             // agent id is preserved across restart, so its registry entry,
             // memory.md and inbox reattach by id. No-op without a recorded session.
             resume: true,
@@ -170,10 +170,6 @@ export function useRestoreTeam(config?: HarnessConfig | null): RestoreTeamState 
                 // as a plain base-cwd agent going forward (a future restore won't keep
                 // re-probing a dead path).
                 worktreePath: worktreeGone ? undefined : a.worktreePath,
-                // Crush spawns bare (no positional protocol) and hands the seed back
-                // here; useHive types it after boot. Re-seeding a resumed worker is
-                // idempotent (it just re-reads its inbox per protocol). (ondev-b)
-                seedPrompt: res.seedPrompt,
                 carrying: undefined,
                 currentStation: 'desk',
                 recentTextTs: Date.now()

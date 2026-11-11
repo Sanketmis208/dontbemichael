@@ -580,10 +580,7 @@
     "providerBlurb": {
       "claude": "Claude Code (Anthropic)",
       "codex": "Codex (OpenAI)",
-      "antigravity": "Antigravity (Google Gemini)",
-      "qwen": "Qwen: runs a local Qwen model on your machine",
-      "gemini": "Gemini CLI (Google Gemini)",
-      "cursor": "Cursor Agent CLI: uses your Cursor credits (Luna, Composer and more)"
+      "gemini": "Gemini CLI (Google Gemini)"
     },
     "home": {
       "desc": "Create a new, empty folder for the app to call home. Everything the app remembers (its own settings and your agents' memory) is stored here. Something like ~/HarnessAgents works well. We'll create it for you if it doesn't exist.",
@@ -808,20 +805,6 @@
         "blurb": "What your agents run on."
       }
     }
-  },
-  "aiEngines": {
-    "providers": "AI engine providers (BYOK)",
-    "providersDesc": "API keys + local endpoints for the OpenCode, Crush and Qwen engines. Keys are stored write only (encrypted at rest; never shown again) and used only when those engines spawn. Claude Code and Codex use their own login.",
-    "apiKeys": "API keys",
-    "setCheck": "set ✓",
-    "keyStoredPlaceholder": "•••••••• (stored; type to replace)",
-    "keyPlaceholder": "paste {{label}} key",
-    "saved": "saved",
-    "failed": "failed",
-    "cleared": "cleared",
-    "localEndpoint": "Local endpoint · Default model (per engine)",
-    "defaultModelPlaceholder": "default model (provider/model)",
-    "autoModeCaveat": "⚠ In auto mode these engines run with full filesystem + shell access (no sandbox), like Claude's bypass mode. Turn auto mode off (General) to make them ask first. Live end to end verification with real model calls is pending your keys or a local LLM."
   },
   "updatesSection": {
     "onVersion": "You're on v{{v}}",

@@ -337,7 +337,7 @@ function FloorTab({ seed, embedded = false }: { seed: { text: string; seq: numbe
     try {
       const cfg = await window.cth.getConfig();
       // Respawn on the same CLI this agent already runs on (inferred from its
-      // command if not explicitly tagged) so an Antigravity/Codex worker stays
+      // command if not explicitly tagged) so a Codex or Gemini worker stays
       // on its own binary. tokenizeCommand keeps quoted model labels one arg.
       // opts.provider overrides the inferred provider — used when changing GOD's engine.
       const previousProvider = inferAgentProvider(a.command, a.provider);

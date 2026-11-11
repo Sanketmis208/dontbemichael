@@ -88,7 +88,7 @@ const BASE_TOOLS: ToolSpec[] = [
     bin: 'node',
     label: 'Node.js',
     kind: 'prerequisite',
-    why: 'Runs the npm-installed agent engines (OpenCode, and Claude Code on machines without the native build).',
+    why: 'Runs the npm-installed agent engines (Codex, Gemini CLI, and Claude Code on machines without the native build).',
     essential: false,
     // Deliberately no scripted command: the app already ships a checksum-verified
     // Node installer (nodeInstall.ts) that runs automatically when an engine needs
@@ -105,8 +105,7 @@ const BASE_TOOLS: ToolSpec[] = [
  */
 export function toolCatalog(): ToolSpec[] {
   const engines: ToolSpec[] = AGENT_PROVIDER_PRESETS
-    // `custom` is whatever the user typed — there is nothing to detect or install.
-    .filter((p) => p.id !== 'custom' && !!p.defaultCommand)
+    .filter((p) => !!p.defaultCommand)
     .map((p) => ({
       id: `engine:${p.id}`,
       bin: p.defaultCommand,

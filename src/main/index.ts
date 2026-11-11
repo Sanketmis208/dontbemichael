@@ -1,6 +1,5 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, net, powerMonitor, powerSaveBlocker, screen, shell, Notification } from 'electron';
 import { ownerLedger } from '../shared/taskLedger';
-import { ownValue } from '../shared/ownValue';
 import { cutText } from '../shared/cutText';
 import { MAX_NAMES } from '../shared/askFiles';
 import { copyableLink, DEFAULT_COPY_LINK_LABEL, menuLabel } from '../shared/linkMenu';
@@ -1415,17 +1414,9 @@ function noticePausedGrants(): void {
   }
 }
 
-/** BYOK backend model-providers whose API keys the non-Claude CLI engines
- *  (OpenCode/Crush/qwen) read from standard env vars. Keys are stored
- *  WRITE-ONLY in the same encrypted secret broker as integrations, under
- *  `apikey:<backend>`, and materialized MAIN-ONLY at spawn (never over IPC). */
-const BACKEND_KEY_ENV: Record<string, string> = {
-  anthropic: 'ANTHROPIC_API_KEY',
-  openai: 'OPENAI_API_KEY',
-  google: 'GEMINI_API_KEY',
-  openrouter: 'OPENROUTER_API_KEY',
-  groq: 'GROQ_API_KEY'
-};
+/** Where the Anthropic API key Claude signs in with is kept: WRITE-ONLY in the
+ *  same encrypted secret broker as integrations, under `apikey:anthropic`, and
+ *  read MAIN-ONLY at spawn (never over IPC). */
 const providerKeyRef = (backend: string): string => `apikey:${backend}`;
 
 /** Claude's sign in for the team when the owner chose an API key in Get Michael
@@ -1474,7 +1465,6 @@ function pausePty(id: string): void {
   try { breaker.forget(agentId); } catch { /* best-effort */ }
   // The restart is a new terminal with its own usage counter.
   try { telemetry.forgetAgent(agentId); } catch { /* best-effort */ }
-  try { hive.stopProxyBridge(agentId); } catch { /* best-effort */ }
   // Closing time stops waiting for it; the keep awake follows the terminals.
   try { closingTime.refresh(agentId); } catch (e) { console.error('[closing-time] refresh:', e); }
   syncKeepAwake();
@@ -1502,9 +1492,6 @@ function teardownPty(id: string, opts: { keepWorktree?: boolean } = {}): void {
     try { breaker.forget(agentId); } catch { /* best-effort */ }
     // A replacement using this id needs a new usage counter, not the dead PTY's.
     try { telemetry.forgetAgent(agentId); } catch { /* best-effort */ }
-    // W1 — kill this agent's proxy-bridge sidecar (qwen), if any, so a dead
-    // PTY never leaves an orphan loopback listener. No-op for non-proxy agents.
-    try { hive.stopProxyBridge(agentId); } catch (e) { console.error('[hive] stopProxyBridge failed:', e); }
     if (hive.enabled()) {
       try { hive.setArchived(agentId, true); } catch (e) { console.error('[hive] setArchived failed:', e); }
     }
@@ -3204,7 +3191,7 @@ ipcMain.handle('pty:spawn', async (evt, opts: AgentSpawnOptions) => {
  *  and the final PTY spawn. Extracted from the `pty:spawn` IPC handler so the
  *  missing-CLI relaunch can run it without a renderer `evt`. `owner` is the window
  *  that should receive this PTY's output (null → the primary window). */
-async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebContents | null): Promise<{ ok: boolean; error?: string; cwd?: string; worktreePath?: string; resumeNotFound?: boolean; resumed?: boolean; seedPrompt?: string; name?: string }> {
+async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebContents | null): Promise<{ ok: boolean; error?: string; cwd?: string; worktreePath?: string; resumeNotFound?: boolean; resumed?: boolean; name?: string }> {
   // A team member never starts without the hook channel (S1,
   // docs/designs/windows-11-installer.md): it would run unwatched, or report to
   // whatever holds the channel's name.
@@ -3231,7 +3218,7 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
     opts.hive = { ...opts.hive, cwd: businessFolder };
   }
   // Which CLI is this? Explicit wins; else inferred from the binary
-  // (claude/codex/grok/agy). Non-Claude providers skip every Claude-only spawn step
+  // (claude/codex/gemini). Non-Claude providers skip every Claude-only spawn step
   // below. Persist the resolved provider onto opts (+ hive meta) so the registry
   // record and downstream provider-aware steps agree on one value.
   const provider = inferAgentProvider(opts.command, opts.provider ?? opts.hive?.provider);
@@ -3373,24 +3360,9 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
       console.error('[worktree] isolation failed:', e);
     }
   }
-  // Proxy-tier CLIs (qwen/crush) route their LLM traffic through a loopback sidecar
-  // whose UPSTREAM is read from the preset's bridge.baseUrlEnv inside hive.ensureAgent.
-  // For the local-LLM path, feed the user's configured base URL as that upstream so the
-  // proxy forwards to their endpoint (Ollama/LM Studio/vLLM). Set on process.env BEFORE
-  // ensureAgent reads it. (Crush's baseUrlEnv is an inert sentinel used ONLY as this
-  // upstream source; its real routing is the per-agent CRUSH_GLOBAL_CONFIG base_url.)
-  if (opts.hive && (provider === 'crush' || provider === 'qwen')) {
-    const bridge = providerPreset(provider).bridge;
-    const baseUrl = readConfig().providerBaseUrls?.[provider];
-    if (bridge && bridge.kind === 'proxy' && baseUrl) process.env[bridge.baseUrlEnv] = baseUrl;
-  }
   // If the agent carries hive metadata, provision its workspace and add
   // provider-specific spawn injection. Non-Claude providers get shared AGENT_*
   // env only; Claude Code also gets prompt/settings hook args.
-  // Protocol seed that must be TYPED into a bare TUI after boot (Crush —
-  // seedDelivery:'type-into-tui') rather than passed on argv. Surfaced in the spawn
-  // result so the renderer types it through the per-pty write-chain. (ondev-b)
-  let seedPrompt: string | undefined;
   // Claude connectors (docs/designs/claude-connectors.md): the plan is worked
   // out once, passed to the spawn and recorded as what this agent started with,
   // so a change in between still asks for a restart. It rides in the settings
@@ -3553,9 +3525,8 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
       // Only the settings file itself counts: another engine takes none.
       settingsApplied = !claudeProvider || inj.args.includes('--settings');
       researchWalled = isResearch && settingsApplied;
-      seedPrompt = inj.seedPrompt;
-      // A degraded spawn (a proxy bridge that never bound, a team list it
-      // couldn't read, a hooks file of the owner's it left alone) is told the
+      // A degraded spawn (a team list it couldn't read, a hooks file of the
+      // owner's it left alone) is told the
       // same way breaker escalations are, a native toast gated on the
       // notifications setting, and always as Michael's report card on Ask me.
       // A clean start clears the card.
@@ -3694,8 +3665,8 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
     }
     opts.args = args;
   }
-  // Idempotent session resume on respawn (#6.6a) — provider-aware: Claude
-  // `--resume <sid>`, Grok `--resume <sid>`, Antigravity `--conversation <id>`.
+  // Idempotent session resume on respawn (#6.6a) — provider-aware: Claude and
+  // Gemini `--resume <sid>`, Codex `resume <sid>`.
   // The recorded session id comes from hook payloads, so
   // a restored worker continues its prior CLI session. Only when requested AND a
   // prior id exists for this agent.
@@ -3782,54 +3753,6 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
   if (Object.keys(nonInteractiveEnv).length > 0) {
     opts.env = { ...(opts.env ?? {}), ...nonInteractiveEnv };
   }
-  // ── BYOK keys + per-provider config for the non-Claude CLI engines (v0.3.1) ──
-  // OpenCode / Crush / qwen read BYOK API keys from standard env vars and, for
-  // the local-LLM path, a per-provider base URL. Keys are write-only in the broker
-  // (read MAIN-ONLY here, never logged); base URLs ride HarnessConfig. Claude/codex
-  // use their own login, so they skip this. Pam guardrails #3/#4/#5.
-  if (opts.hive && (provider === 'opencode' || provider === 'crush' || provider === 'qwen')) {
-    const cfg = readConfig();
-    const extra: Record<string, string> = {};
-    // 1) BYOK keys — LEAST-PRIVILEGE (Pam/Jim NIT-2): inject ONLY the key for the
-    //    spawned model's provider prefix when we can identify it; fall back to all
-    //    stored keys when the model/prefix is unknown (default model, qwen slugs,
-    //    custom). Reduces the blast radius vs handing every CLI all keys.
-    const modelIdx = (opts.args ?? []).indexOf('--model');
-    const modelSlug = modelIdx >= 0 ? (opts.args?.[modelIdx + 1] ?? '') : '';
-    const prefix = modelSlug.includes('/') ? modelSlug.split('/')[0].toLowerCase() : '';
-    const PREFIX_BACKEND: Record<string, string> = {
-      anthropic: 'anthropic', openai: 'openai', google: 'google', gemini: 'google', groq: 'groq', openrouter: 'openrouter'
-    };
-    const scoped = ownValue(PREFIX_BACKEND, prefix);
-    const backends = scoped ? [scoped] : Object.keys(BACKEND_KEY_ENV);
-    for (const backend of backends) {
-      const key = integrations.getSecret(providerKeyRef(backend));
-      if (!key) continue;
-      extra[BACKEND_KEY_ENV[backend]] = key;
-      // OpenCode/AI-SDK's Google provider reads GOOGLE_GENERATIVE_AI_API_KEY, not
-      // GEMINI_API_KEY — inject both so google/* authenticates (Jim NIT #1).
-      if (backend === 'google') extra.GOOGLE_GENERATIVE_AI_API_KEY = key;
-    }
-    // 2) OpenCode's auto-approve + local provider live in its single config-injection
-    //    env var, built dynamically so permission:allow is GATED on autoMode (#2).
-    if (provider === 'opencode') {
-      const oc: Record<string, unknown> = { autoupdate: false };
-      if (cfg.autoMode) oc.permission = { edit: 'allow', bash: 'allow', webfetch: 'allow' };
-      const baseUrl = cfg.providerBaseUrls?.opencode;
-      if (baseUrl) {
-        // Register the model id the user actually selects (the part after 'local/')
-        // so `--model local/<id>` resolves; default to 'local'. Without this the
-        // dropdown's `local/llama3` failed against a config that only declared model
-        // 'local' (Jim verify-opencode MUST-FIX #2).
-        const localModel = (prefix === 'local' && modelSlug.slice(6)) || 'local';
-        oc.provider = {
-          local: { npm: '@ai-sdk/openai-compatible', name: 'Local (self-hosted)', options: { baseURL: baseUrl }, models: { [localModel]: { name: localModel } } }
-        };
-      }
-      extra.OPENCODE_CONFIG_CONTENT = JSON.stringify(oc);
-    }
-    opts.env = { ...(opts.env ?? {}), ...extra };
-  }
   // Codex Remote is daemon-based (there is no `/remote-control` slash command).
   // Start/enable the daemon under this agent's isolated CODEX_HOME and connect
   // the TUI to it so the thread is visible in ChatGPT mobile. Best-effort: an
@@ -3901,7 +3824,7 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
   if (res.ok && opts.hive?.isGod) { standupOnOfficeOpen(); catchUpOwnerAnswers(); }
   // Research's name is the app's, from its settings (ship 2 D17): the floor
   // takes it from here, so a card saved under an older name follows it.
-  return { ...res, cwd: opts.cwd, ...(worktreePath ? { worktreePath } : {}), ...(resumeNotFound ? { resumeNotFound: true } : {}), ...(didResume ? { resumed: true } : {}), ...(seedPrompt ? { seedPrompt } : {}), ...(isResearch ? { name: hive.researchName() } : {}) };
+  return { ...res, cwd: opts.cwd, ...(worktreePath ? { worktreePath } : {}), ...(resumeNotFound ? { resumeNotFound: true } : {}), ...(didResume ? { resumed: true } : {}), ...(isResearch ? { name: hive.researchName() } : {}) };
 }
 ipcMain.handle('pty:write', (_evt, id: string, data: string) => {
   if (typeof id !== 'string' || typeof data !== 'string') return { ok: false, error: 'invalid args' };
@@ -4063,40 +3986,6 @@ ipcMain.handle('integrations:setAccess', (_evt, agentId: unknown, id: unknown, l
   const agentCapabilities = withIntegrationLevel(before.agentCapabilities, agentId, id, level);
   writeConfig({ agentCapabilities });
   return { ok: true, restartNeeded: !hasIntegrationTools(before, agentId) && hasIntegrationTools({ agentCapabilities }, agentId) };
-});
-// ─── IPC: per-CLI-provider BYOK keys (write-only) ────────────────────────────
-// API keys for the backend model-providers the non-Claude CLIs use are stored
-// WRITE-ONLY under `apikey:<backend>` in the same encrypted broker. The renderer
-// can SET a key and ASK whether one is set (boolean) — it can never read the
-// plaintext back. Keys are materialized MAIN-ONLY at spawn (spawnAgentCore). Base
-// URLs are non-secret and ride HarnessConfig.providerBaseUrls (normal config save).
-ipcMain.handle('providerKey:set', (_evt, payload: unknown) => {
-  const p = (payload ?? {}) as { backend?: unknown; key?: unknown };
-  if (typeof p.backend !== 'string' || !ownValue(BACKEND_KEY_ENV, p.backend)) return { ok: false, error: 'unknown backend' };
-  if (typeof p.key !== 'string' || !p.key) return { ok: false, error: 'key required' };
-  // A key this computer cannot encrypt is never saved, so say so (and what to do
-  // about it) before anything else touches it.
-  if (!integrations.canStoreSecrets()) return { ok: false, error: integrations.secretStoreUnavailableReason() };
-  const res = integrations.setSecret(providerKeyRef(p.backend), p.key);
-  // The same Anthropic key signs Claude in when the owner chose one in Get
-  // Michael ready: approve the new one and let the step and the card look again.
-  if (res.ok && p.backend === 'anthropic' && readConfig().claudeAuth === 'apiKey') {
-    try { approveClaudeApiKey(p.key); } catch { /* approved again at each start */ }
-    noticeEngineSetup('api-key');
-  }
-  return res;
-});
-ipcMain.handle('providerKey:has', (_evt, backend: unknown) =>
-  typeof backend === 'string' ? integrations.hasSecret(providerKeyRef(backend)) : false);
-ipcMain.handle('providerKey:clear', (_evt, backend: unknown) => {
-  if (typeof backend !== 'string' || !ownValue(BACKEND_KEY_ENV, backend)) return { ok: false, error: 'unknown backend' };
-  try {
-    // deleteSecret never throws: false means the key may still be stored.
-    if (!integrations.deleteSecret(providerKeyRef(backend))) return { ok: false, error: 'The saved key could not be removed. Try again; if it keeps failing, the saved secrets file needs repair.' };
-    if (backend === 'anthropic' && readConfig().claudeAuth === 'apiKey') noticeEngineSetup('api-key');
-    return { ok: true };
-  }
-  catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 });
 // Probe an integration's reachability through the broker's own auth path (admin-only;
 // runs in main, so the secret is used but never returned — only the upstream status).
@@ -5692,7 +5581,6 @@ function teardownAndQuit(): void {
   try { memoryTidy.stop(); } catch (e) { console.error('[quit] memoryTidy.stop:', e); }
   try { pulseTelemetry.runningPause(officeStopped()); pulseTelemetry.flush(); } catch (e) { console.error('[quit] pulse flush:', e); }
   try { persist.close(); } catch (e) { console.error('[quit] persist.close:', e); }
-  try { hive.stopAllProxyBridges(); } catch (e) { console.error('[quit] stopAllProxyBridges:', e); }
   try { ptyManager.killAll(); } catch (e) { console.error('[quit] killAll:', e); }
   app.quit();
 }
@@ -5772,9 +5660,6 @@ function stopForReset(tag: string, opts: { keepPersist?: boolean } = {}): void {
   step('memory.stop', () => memory.stop());
   step('memoryTidy.stop', () => memoryTidy.stop());
   if (!opts.keepPersist) step('persist.close', () => persist.close());
-  // The same stops as quitting (teardownAndQuit): proxy sidecars would
-  // otherwise outlive the relaunch.
-  step('stopAllProxyBridges', () => hive.stopAllProxyBridges());
   step('killAll', () => ptyManager.killAll());
 }
 
@@ -6986,8 +6871,8 @@ onConfigWritten((config) => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    // Full teardown, not a bare killAll: this path must also stop the proxy
-    // sidecars and helper servers — on Windows a child is NOT killed when its
+    // Full teardown, not a bare killAll: this path must also stop the
+    // helper servers — on Windows a child is NOT killed when its
     // parent exits, so anything skipped here outlives the app.
     teardownAndQuit();
   }

@@ -25,15 +25,15 @@ function statusesFor(found) {
 }
 
 test('an installed engine is installed, whatever its installer story', () => {
-  const s = statusesFor(['claude', 'grok']);
+  const s = statusesFor(['claude', 'gemini']);
   assert.equal(classifyEngineAvailability(s, 'claude').state, 'installed');
-  assert.equal(classifyEngineAvailability(s, 'grok').state, 'installed');
-  assert.equal(classifyEngineAvailability(s, 'grok').path, '/usr/local/bin/grok');
+  assert.equal(classifyEngineAvailability(s, 'gemini').state, 'installed');
+  assert.equal(classifyEngineAvailability(s, 'gemini').path, '/usr/local/bin/gemini');
 });
 
 test('a missing engine with an installer installs on first run and does not block', () => {
   const s = statusesFor([]);
-  for (const id of ['claude', 'codex', 'qwen', 'opencode', 'crush', 'copilot']) {
+  for (const id of ['claude', 'codex', 'gemini']) {
     const a = classifyEngineAvailability(s, id);
     assert.equal(a.state, 'installs-on-first-run', id);
     assert.ok(a.installCommand.length > 0, id);
@@ -41,17 +41,17 @@ test('a missing engine with an installer installs on first run and does not bloc
   }
 });
 
-test('grok and antigravity have no installer, so the wizard blocks but links to the docs', () => {
-  const s = statusesFor([]);
-  const offered = AGENT_PROVIDER_PRESETS.filter((p) => canReceiveInbox(p.id)).map((p) => p.id);
-  for (const id of ['grok', 'antigravity']) {
-    assert.ok(offered.includes(id), `${id} is on the picker`);
+test('an engine with no installer blocks the wizard but links to the docs', () => {
+  // Every kept engine ships an installer since Grok and Antigravity went
+  // (owner, 2026-11-11), so the dead end is checked on a row with none.
+  const s = statusesFor([]).map((row) => row.id === 'engine:gemini' ? { ...row, installCommand: '' } : row);
+  for (const id of ['gemini']) {
     const a = classifyEngineAvailability(s, id);
     assert.equal(a.state, 'not-installable', id);
     assert.equal(engineBlocksOnboarding(a), true, id);
     assert.match(a.docsUrl ?? '', /^https:\/\//, `${id} links to install instructions`);
     assert.equal(engineAvailabilityBadge(a), 'NOT INSTALLED');
-    const msg = engineAvailabilityMessage(a, 'Grok');
+    const msg = engineAvailabilityMessage(a, 'Gemini CLI');
     assert.match(msg, /not installed/);
     assert.match(msg, /check again/);
     assert.match(msg, /Claude Code/);
@@ -61,20 +61,20 @@ test('grok and antigravity have no installer, so the wizard blocks but links to 
 
 test('every engine the wizard offers links to install instructions', () => {
   const s = statusesFor([]);
-  for (const p of AGENT_PROVIDER_PRESETS.filter((p) => canReceiveInbox(p.id) && p.id !== 'custom')) {
+  for (const p of AGENT_PROVIDER_PRESETS.filter((p) => canReceiveInbox(p.id))) {
     const a = classifyEngineAvailability(s, p.id);
     assert.match(a.docsUrl ?? '', /^https:\/\//, `${p.id} has a docs link`);
   }
 });
 
 test('no probe result means unknown, and unknown never blocks', () => {
-  const a = classifyEngineAvailability(undefined, 'grok');
+  const a = classifyEngineAvailability(undefined, 'gemini');
   assert.equal(a.state, 'unknown');
   assert.equal(engineBlocksOnboarding(a), false);
   assert.equal(engineAvailabilityBadge(a), null);
-  assert.equal(engineAvailabilityMessage(a, 'Grok'), null);
+  assert.equal(engineAvailabilityMessage(a, 'Gemini CLI'), null);
   // a probe that ran but lacks the row behaves the same
-  assert.equal(classifyEngineAvailability([], 'grok').state, 'unknown');
+  assert.equal(classifyEngineAvailability([], 'gemini').state, 'unknown');
 });
 
 test('only the dead end has a message', () => {

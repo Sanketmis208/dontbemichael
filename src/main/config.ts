@@ -281,7 +281,7 @@ export interface HarnessConfig {
   defaultModel?: string;
   /** Which provider powers the GOD orchestrator ("Michael"). The persona is
    *  constant; only its engine is selectable. Default 'claude'. Eligible providers
-   *  are those that can receive inbox (claude/codex/antigravity/qwen). */
+   *  are those that can receive inbox (claude/codex/gemini). */
   godProvider?: AgentProvider;
   /** How Claude Code signs in for the team (docs/designs/get-michael-ready.md):
    *  the owner's Claude account (default), or an Anthropic API key kept in the
@@ -410,11 +410,6 @@ export interface HarnessConfig {
    *  destructive switch flow). Default false = the picker is hidden and the
    *  office renders as today (zero behavior change). */
   tvShowOffices?: boolean;
-  /** Per-CLI-provider local/self-hosted base URL (Ollama/LM Studio/vLLM, …) for the
-   *  OpenCode/Crush/pi/qwen engines; applied at spawn (config-injection or proxy
-   *  upstream). API KEYS are NOT stored here — they live write-only in the secret
-   *  broker (integrations.ts), read MAIN-ONLY at spawn. */
-  providerBaseUrls?: Partial<Record<AgentProvider, string>>;
   /** Per-CLI-provider default model slug, used to pre-fill the model picker. */
   providerDefaultModels?: Partial<Record<AgentProvider, string>>;
 
@@ -524,7 +519,8 @@ function normalizeStoredHomes(cfg: HarnessConfig): HarnessConfig {
 }
 
 /** Michael, or the office's default command, saved on an engine this build
- *  no longer runs (Pi) moves to Claude Code, with the old engine's model
+ *  no longer runs (Pi, Grok, Kimi, Antigravity, Qwen, OpenCode, Crush, Copilot,
+ *  Cursor, a custom command) moves to Claude Code, with the old engine's model
  *  dropped. Applied on every read, so nothing on disk has to be rewritten. */
 function offRetiredEngines(cfg: HarnessConfig): HarnessConfig {
   if (onRetiredEngine(undefined, cfg.godProvider)) {

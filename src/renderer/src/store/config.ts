@@ -160,10 +160,6 @@ export interface HarnessConfig {
   knowledgeGraph?: KnowledgeGraphConfig;
   /** TV-show office themes feature flag (Settings picker + switch flow). Default OFF. */
   tvShowOffices?: boolean;
-  /** Per-CLI-provider local/self-hosted base URL (Ollama/LM Studio/vLLM, …) for the
-   *  OpenCode/Crush/pi/qwen engines; applied at spawn. API KEYS are NOT stored here —
-   *  they live write-only in the secret broker. */
-  providerBaseUrls?: Partial<Record<AgentProvider, string>>;
   /** Per-CLI-provider default model slug, used to pre-fill the model picker. */
   providerDefaultModels?: Partial<Record<AgentProvider, string>>;
 }
@@ -218,36 +214,8 @@ export type { CatalogModel, ModelCatalog } from '@shared/modelCatalogPayload';
  *    both "default" is what made the two impossible to tell apart.
  *  - codex: current OpenAI models offered by Codex. The command field stays
  *    editable and `codex --model <id>` is the source of truth.
- *  - antigravity: agy's `--model` takes the DISPLAY-NAME LABEL exactly as
- *    `agy models` prints it (verified: agy logs `Propagating selected model
- *    override … label="…"`), not a slug — so these ids ARE labels, spaces and
- *    parens included; buildSpawnCommand quotes them and the command tokenizer
- *    keeps them whole. `agy models` is the source of truth for the live list.
  *  - gemini: stable aliases accepted by the official Google Gemini CLI. They
  *    follow the CLI instead of pinning preview model ids that drift.
- *  - qwen: qwen-code (`qwen`), the proxy-bridge CLI driving an OpenAI-compatible
- *    endpoint. Starting suggestions only. // TODO-verify the live list.
- *  - opencode: `--model` takes a `provider/model` slug; curated BYOK suggestions
- *    (`opencode models` / models.dev is the source of truth). `CLI default` is the
- *    PRESELECTED entry, because a BYOK slug the user holds no key for fails
- *    silently — see the recommendedOrchestratorModel note in agentProvider.ts.
- *    // TODO-verify exact live slugs (they drift).
- *  - crush: `--model` takes a `provider/model-id` slug; free-text editable (Crush
- *    accepts arbitrary slugs). The local pick is an OpenAI-wire slug so traffic
- *    routes through the proxy (the harness overrides the `openai` provider's
- *    base_url → loopback → your configured Crush base-URL); an `ollama/*` slug
- *    would bypass the proxy. // TODO-verify exact live ids.
- *  - pi: `--model` takes a `provider/model` slug (thinking via a `:high` suffix).
- *    Curated BYOK suggestions; free-text editable. // TODO-verify exact live slugs.
- *  - copilot: `--model` takes a plain model id ('auto' lets Copilot pick); curated
- *    suggestions, editable command field. // TODO-verify exact live ids (the
- *    /model picker is the source of truth; they drift).
- *  - cursor: ids match `cursor-agent models` / `--model` (Cursor account catalog).
- *    Luna is the cheap, high-context default for Michael; the rest are curated
- *    quick-picks and the command field stays editable for any live slug.
- *  - grok: the models reported by the installed Grok CLI (`grok models`).
- *  - kimi: managed Kimi Code aliases accepted by `kimi --model <alias>`.
- *  - custom: no presets at all; the command field is the whole interface.
  */
 // The JSON import types `tier` as a plain string; the parser's ModelTier is the contract.
 const BAKED: ModelCatalog = modelCatalog as ModelCatalog;
@@ -360,7 +328,7 @@ export function modelsForProviderAtVersion(
   providers: Record<string, CatalogModel[]> = CATALOG.providers
 ): ModelOption[] {
   // An unknown provider falls back to the Claude list, as the hardcoded dispatch
-  // did. 'custom' is a real key holding an empty list, not a missing one.
+  // did.
   const entries = providers[provider] ?? providers.claude ?? [];
   return entries
     .filter((model) => offeredAtVersion(model, appVersion))
@@ -394,14 +362,11 @@ export function modelProvidersForAgent(isGod = false) {
   );
 }
 
-/** The onboarding engine step's two groups (issue #355). Hiding inbox-less
- *  engines there read as "Copilot isn't supported at all", when the truth is
- *  narrower: a print-mode / bridge-less CLI can be HIRED as a worker but cannot
- *  run Michael, because the orchestrator must drain hive mail. So the step now
- *  shows those engines too, as disabled workers-only rows — same god-eligible
- *  set as `modelProvidersForAgent(true)` for the selectable group, and every
- *  other preset except `custom` (bring-your-own command, not an engine) in the
- *  disabled group.
+/** The onboarding engine step's two groups (issue #355). An inbox-less engine
+ *  can be HIRED as a worker but cannot run Michael, because the orchestrator
+ *  must drain hive mail. So the step shows such engines as disabled
+ *  workers-only rows — same god-eligible set as `modelProvidersForAgent(true)`
+ *  for the selectable group, and every other preset in the disabled group.
  *
  *  Both groups are limited to `offered`, the engines this build supports
  *  (`BUILD_ENGINES`, only Claude Code today). An engine left out is not shown
@@ -412,7 +377,7 @@ export function onboardingEngineChoices(offered: readonly AgentProvider[] = BUIL
 } {
   const eligible = modelProvidersForAgent(true).filter((preset) => offered.includes(preset.id));
   const workersOnly = AGENT_PROVIDER_PRESETS.filter(
-    (preset) => preset.id !== 'custom' && offered.includes(preset.id) && !modelProvidersForAgent(true).includes(preset)
+    (preset) => offered.includes(preset.id) && !modelProvidersForAgent(true).includes(preset)
   );
   return { eligible, workersOnly };
 }
@@ -470,25 +435,23 @@ export function buildSpawnCommand(
   provider: AgentProvider = inferAgentProvider(config.defaultCommand)
 ): string {
   const preset = providerPreset(provider);
-  // Claude keeps the user's configured defaultCommand; custom falls back to it
-  // too; every other provider (codex, grok, kimi, agy) uses its preset binary so the app
-  // works even without Claude installed.
+  // Claude keeps the user's configured defaultCommand; every other provider
+  // (codex, gemini) uses its preset binary so the app works even without
+  // Claude installed.
   const base =
     provider === 'claude'
       ? config.defaultCommand || preset.defaultCommand
-      : provider === 'custom'
-        ? config.defaultCommand || ''
-        : preset.defaultCommand;
+      : preset.defaultCommand;
   let cmd = base;
   if (preset.supportsModel && model && preset.modelFlag) {
-    // Quote model values that contain whitespace (agy labels like
-    // "Gemini 3.1 Pro (High)") so the command tokenizer keeps them one arg.
+    // Quote model values that contain whitespace so the command tokenizer
+    // keeps them one arg.
     const m = /\s/.test(model) ? `"${model}"` : model;
     cmd = `${cmd} ${preset.modelFlag} ${m}`;
   }
   // Auto (skip-permissions) mode appends each provider's own flag — Claude's
-  // bypassPermissions, Codex's dangerous bypass, Grok's always-approve, Kimi's
-  // auto, or agy's skip flag.
+  // bypassPermissions, Codex's never-ask with its sandbox, or Gemini's yolo
+  // approval mode.
   if (config.autoMode && preset.autoFlag) cmd = `${cmd} ${preset.autoFlag}`;
   return cmd;
 }

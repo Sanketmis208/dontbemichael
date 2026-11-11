@@ -35,10 +35,7 @@ export const KIND_CLASS: Readonly<Record<FailureKind, FailureClass>> = Object.fr
 /** The engines a report can name. Kept here rather than imported from
  *  agentProvider.ts so this file stays standalone; a test fails when the two
  *  lists differ. */
-export const ENGINES = [
-  'claude', 'codex', 'grok', 'kimi', 'gemini', 'antigravity', 'qwen',
-  'opencode', 'crush', 'copilot', 'cursor', 'custom'
-] as const;
+export const ENGINES = ['claude', 'codex', 'gemini'] as const;
 
 /** The background check callers. Each logs the check's error verbatim as
  *  `reason`, so the class comes from that text (eng E-R1). */

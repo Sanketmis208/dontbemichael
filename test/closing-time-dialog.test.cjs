@@ -48,7 +48,7 @@ test('the tool detail and its clock are live-only: never saved, never a reason t
   const store = read('src/renderer/src/store/store.ts');
   assert.match(store, /'lastPrompt', 'actionDetail', 'actionAt'/, 'volatile: a tool call does not rewrite localStorage');
   assert.equal((store.match(/actionDetail, actionAt, \.\.\.rest/g) || []).length, 2, 'stripped from both saved rosters');
-  assert.match(store, /'seedPrompt' \| 'actionDetail' \| 'actionAt'>/);
+  assert.match(store, /'contextLimit' \| 'actionDetail' \| 'actionAt'>/);
 });
 
 test('the clock restarts on hook events only, never from the terminal parser', () => {
@@ -59,7 +59,8 @@ test('the clock restarts on hook events only, never from the terminal parser', (
   // Hook-event idle patches only (updateAgent(e.agentId, ...)); the silence
   // watchdog's guess (updateAgent(a.id, ...)) leaves the detail and clock alone.
   const idleSets = hive.match(/updateAgent\(e\.agentId, \{ status: 'idle', action: 'idle', carrying: undefined[^}]*\}/g) || [];
-  assert.equal(idleSets.length, 3, 'PostInvocation, Stop and the idle Notification');
+  // Antigravity's PostInvocation idle went with it (owner, 2026-11-11).
+  assert.equal(idleSets.length, 2, 'Stop and the idle Notification');
   for (const p of idleSets) assert.match(p, /actionDetail: undefined, actionAt: Date\.now\(\)/, p);
   // Value: protects=a compacting or prompt-parked agent never shows the last tool's detail or its old clock; fails_when=the compact or at-prompt hook patch stops clearing them; why_new=only the idle patches were checked; seam=none
   for (const re of [
@@ -100,7 +101,6 @@ test('a finished tool call leaves the row: its detail clears and the clock resta
   // Value: protects=the owner never judges an agent by a tool call that already ended; fails_when=PostToolUse keeps the previous actionDetail; why_new=review run 2 pass B (red team); seam=none
   const hive = read('src/renderer/src/hooks/useHive.ts');
   assert.match(hive, /e\.event === 'PostToolUse' \|\| e\.event === 'PostToolUseFailure' \|\| e\.event === 'PostToolBatch' \|\| e\.event === 'UserPromptSubmit'[\s\S]{0,400}updateAgent\(e\.agentId, \{ status: 'working', actionDetail: undefined, actionAt: Date\.now\(\) \}\)/);
-  assert.match(hive, /action: 'thinking', actionDetail: undefined, actionAt: Date\.now\(\)/);
   // Value: protects=a finished tool is not named as still running; fails_when=PostToolUse with nothing running keeps "using <tool>"; why_new=TODOS "Row still names a finished tool"; seam=source pin
   assert.match(hive, /else if \(toolEnded && !breakerArmed\) updateAgent\(e\.agentId, \{ action: 'thinking' \}\);/);
 });

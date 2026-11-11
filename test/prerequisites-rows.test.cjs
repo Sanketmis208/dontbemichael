@@ -34,13 +34,14 @@ test('the panel filters what it shows, not what main reports', () => {
   assert.match(main, /return toolCatalog\(\)\.map\(/, 'tools:status keeps the full catalog');
 });
 
-test('Agents & Models hides the API keys panel while no offered engine reads it', () => {
-  const { showByokSettings, BUILD_ENGINES } = loadTs('src/shared/agentProvider.ts');
-  assert.deepEqual([...BUILD_ENGINES], ['claude']);
-  assert.equal(showByokSettings(), false, 'Claude Code uses its own login');
-  assert.equal(showByokSettings(['claude', 'opencode']), true, 'it comes back when a build offers OpenCode');
+test('Agents & Models has no API keys panel: no kept engine reads one', () => {
+  // Value: protects=the other engines' API keys panel stays gone with them; fails_when=the panel or its switch comes back; why_new=owner 2026-11-11, only Claude, Gemini and ChatGPT; seam=source pins; no_claim=a rendered Settings
+  const P = loadTs('src/shared/agentProvider.ts');
+  assert.deepEqual([...P.BUILD_ENGINES], ['claude']);
+  assert.equal('showByokSettings' in P, false);
+  assert.equal(fs.existsSync(path.resolve(__dirname, '../src/renderer/src/components/AiEnginesSettings.tsx')), false);
   const modal = fs.readFileSync(path.resolve(__dirname, '../src/renderer/src/components/SettingsModal.tsx'), 'utf8');
-  assert.match(modal, /\{showByokSettings\(\) && \(\s*<>\s*<AiEnginesSettings config=\{config\} \/>/);
+  assert.doesNotMatch(modal, /AiEnginesSettings|showByokSettings/);
   assert.match(modal, /settings\.agentsModels\.maxTurns/, 'Max turns stays (owner, 2026-09-25)');
 });
 

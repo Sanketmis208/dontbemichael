@@ -23,12 +23,7 @@ One place types automatic messages into a live agent's PTY: the **drain loop**,
 `useHive.ts` effect #4. Everything that wants to reach a running agent enqueues into
 the MD queue and lets the drain decide when.
 
-(The single exception is Michael's first prompt on engines that cannot take their
-protocol on the command line, such as Crush. On a fresh spawn, never a resume, the
-god agent's boot effect in `useHive.ts` writes `res.seedPrompt` directly with
-`submitToPty`. That PTY was spawned moments earlier and is covered by the
-boot-grace window (`BOOT_GRACE_MS`), so there is no user draft it could land on.
-Every other engine gets nothing typed at startup: its instructions arrive on the
+(No engine gets anything typed at startup: its instructions arrive on the
 command line, and its first turn comes through the inbox.)
 
 ```

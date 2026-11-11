@@ -20,7 +20,6 @@ import { redactSecrets, SOLO_ENDED, SOLO_RULES, type HiveManager } from './hive'
 import type { HarnessConfig } from './config';
 import type { ControlRegistry } from './control';
 import type { CircuitBreaker } from './breaker';
-import { estimateCostUsd } from './pricing';
 import { claudeProjectsRoot, projectDir } from './transcript';
 import { HOOK_PATH_UNCHECKED, HOOK_SENDER_UNCHECKED, MAX_HOOK_FRAME_BYTES, TERMINAL_PROMPT_TYPES, batchToolUseIds, isTerminalPrompt, validateHookEvent } from '../shared/hookEvents';
 export { TERMINAL_PROMPT_TYPES, isTerminalPrompt };
@@ -158,13 +157,6 @@ interface HookPayload {
   /** Notification hook text, e.g. "Claude is waiting for your input" (idle) vs a
    *  permission request. Used to tell "needs you" from "just done / lingering". */
   message?: string;
-  /** CostSample payloads only (synthesized by the proxy-bridge sidecar for
-   *  qwen). Raw token counts for one response, fed to the cost ledger. */
-  model?: string;
-  input?: number;
-  output?: number;
-  cache_read?: number;
-  cache_creation?: number;
 }
 
 /** What the hook stream tells the office break (src/main/officeBreak.ts). */
@@ -589,38 +581,6 @@ export class HookServer {
     // Capture the Claude Code session id for idempotent --resume + cost dedup
     // (Lane A #6.6a). Cheap: recordSession writes only when it changes.
     if (agentId && !subagent && p.session_id) this.hive.recordSession(agentId, p.session_id);
-
-    // CostSample — synthesized by the proxy-bridge sidecar (qwen) on every
-    // response with usage. Persist it to the SAME cost ledger as Claude's OTel
-    // path, keyed by the synthesized session_id, then return early so cost stays
-    // OUT of the Claude-only OTel/breaker/drain paths below. `usd` is the fallback
-    // per-model estimate (a local model normally costs ~$0, but the row keeps the
-    // accounting schema uniform). Pure telemetry — never feeds the loop detector.
-    if (event === 'CostSample') {
-      if (agentId && p.session_id) {
-        const input = p.input ?? 0;
-        const output = p.output ?? 0;
-        const cacheRead = p.cache_read ?? 0;
-        const cacheCreation = p.cache_creation ?? 0;
-        this.hive.appendCostLedger({
-          agentId,
-          sessionId: p.session_id,
-          ts: Date.now(),
-          input,
-          output,
-          cacheRead,
-          cacheCreation,
-          model: p.model ?? '',
-          usd: estimateCostUsd(p.model, {
-            inputTokens: input,
-            outputTokens: output,
-            cacheReadTokens: cacheRead,
-            cacheWriteTokens: cacheCreation
-          })
-        });
-      }
-      return {};
-    }
 
     // Feed the breaker its hook-derived loop signal: a tool that actually ran.
     // A repeated identical (name+input) PostToolUse is the runaway-loop tell.
@@ -1109,7 +1069,9 @@ export class HookServer {
     // Protocol re-injection for engines with no native system prompt channel (#298).
     // On compaction or resume, auto-compaction summarizes history and drops initial
     // rules; engines whose instructions delivery is 're-injected on compact'
-    // re-receive their protocol via additionalContext here.
+    // (Gemini CLI) re-receive their protocol via additionalContext. Gemini CLI
+    // ignores SessionStart output, so the agent is marked and its protocol is
+    // injected on the following BeforeAgent / UserPromptSubmit.
     let reInjectedProtocol: string | null = null;
     if (event === 'SessionStart' && (p.source === 'compact' || p.source === 'resume') && agentId) {
       const reg = this.hive.registry?.();
@@ -1117,15 +1079,7 @@ export class HookServer {
       const provider = meta?.provider ?? 'claude';
       const preset = providerPreset(provider);
       if (preset.instructionsDelivery === 're-injected on compact') {
-        if (provider === 'gemini') {
-          // Gemini CLI ignores SessionStart output; mark the agent so its protocol
-          // is injected on the following BeforeAgent / UserPromptSubmit (#298).
-          if (p.source === 'resume' || p.source === 'compact') {
-            this.pendingProtocolReInjection.add(agentId);
-          }
-        } else {
-          reInjectedProtocol = this.hive.injectedPromptFor?.(agentId) ?? null;
-        }
+        this.pendingProtocolReInjection.add(agentId);
       }
     }
 

@@ -66,7 +66,7 @@ export interface RosterSnapshot {
 export interface HiveAgentMeta {
   id: string;
   name: string;
-  /** Which CLI this agent runs on (claude/codex/grok/antigravity/custom); defaults claude. */
+  /** Which CLI this agent runs on (claude/codex/gemini); defaults claude. */
   provider?: AgentProvider;
   role?: string;
   capabilities?: string[];
@@ -197,7 +197,7 @@ export interface SpawnPtyOptions {
   /** When true (and cwd is a git repo), spawn the agent in its own git worktree. */
   isolate?: boolean;
   /** When true, continue the agent's prior CLI session if one was recorded
-   *  (provider-aware: Claude/Grok `--resume`, Antigravity `--conversation`). For
+   *  (provider-aware: Claude/Gemini `--resume`, Codex `resume`). For
    *  Claude the main process looks up the session id from the hive registry and
    *  seeds its transcript into the cwd's project dir (#1 — restore on restart). */
   resume?: boolean;
@@ -314,10 +314,6 @@ export interface HarnessConfig {
   terminalTheme?: 'light' | 'dark';
   /** TV-show office themes feature flag (Settings picker + switch flow). Default OFF. */
   tvShowOffices?: boolean;
-  /** Per-CLI-provider local/self-hosted base URL (Ollama/LM Studio/vLLM, …) for the
-   *  OpenCode/Crush/pi/qwen engines; applied at spawn. API KEYS are NOT stored here —
-   *  they live write-only in the secret broker. */
-  providerBaseUrls?: Partial<Record<AgentProvider, string>>;
   /** Per-CLI-provider default model slug, used to pre-fill the model picker. */
   providerDefaultModels?: Partial<Record<AgentProvider, string>>;
 }
@@ -575,7 +571,7 @@ const api = {
   // ─── PTY ─────────────────────────────────────────────────────────────────
   /** `cwd` in the result is the TILDE-EXPANDED absolute path main actually spawned
    *  into — the renderer stores that, not the raw `~/…` the user typed. */
-  spawnPty: (opts: SpawnPtyOptions): Promise<{ ok: boolean; error?: string; cwd?: string; worktreePath?: string; resumeNotFound?: boolean; resumed?: boolean; seedPrompt?: string; name?: string }> =>
+  spawnPty: (opts: SpawnPtyOptions): Promise<{ ok: boolean; error?: string; cwd?: string; worktreePath?: string; resumeNotFound?: boolean; resumed?: boolean; name?: string }> =>
     ipcRenderer.invoke('pty:spawn', opts),
   writePty: (id: string, data: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('pty:write', id, data),
@@ -1388,15 +1384,6 @@ const api = {
     ipcRenderer.invoke('integrations:remove', req),
   integrationsTest: (req: { id: string; path?: string }): Promise<{ ok: boolean; status?: number; error?: string }> =>
     ipcRenderer.invoke('integrations:test', req),
-  // Per-CLI-provider BYOK keys — WRITE-ONLY. `providerKeySet` stores a backend key one
-  // way (never echoed); `providerKeyHas` returns only a boolean; no method ever returns
-  // the plaintext. Keys are materialized MAIN-ONLY at spawn.
-  providerKeySet: (req: { backend: string; key: string }): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke('providerKey:set', req),
-  providerKeyHas: (backend: string): Promise<boolean> =>
-    ipcRenderer.invoke('providerKey:has', backend),
-  providerKeyClear: (backend: string): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke('providerKey:clear', backend),
   /** The app version, and whether this is an installed build (Settings → Updates). */
   appInfo: (): Promise<{ version: string; packaged?: boolean }> =>
     ipcRenderer.invoke('app:info'),

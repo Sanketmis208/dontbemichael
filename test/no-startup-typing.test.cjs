@@ -3,9 +3,9 @@
 /**
  * Nothing is typed into Michael's terminal when he starts (owner, 2026-09-25):
  * no /remote-control and no orientation prompt. His startup instructions and
- * the standup sent when the office opens give him his first turn. Only an
- * engine that takes its protocol by typing (Crush's seedPrompt) still has it
- * typed, on a fresh spawn.
+ * the standup sent when the office opens give him his first turn. The last
+ * engine that took its protocol by typing (Crush's seedPrompt) was removed
+ * (owner, 2026-11-11), so nothing at all is typed at his start.
  */
 
 const test = require('node:test');
@@ -20,6 +20,7 @@ test('Michael gets no remote-control command or orientation prompt at start', ()
   assert.doesNotMatch(src, /INITIAL_GOD_PROMPT/);
 });
 
-test('a seed prompt is still typed on a fresh spawn only', () => {
-  assert.match(src, /if \(res\.seedPrompt && !resumedGod\) \{/);
+test('no seed prompt is typed at start any more', () => {
+  // Value: protects=Michael's start types nothing into his terminal; fails_when=a typed seed comes back; why_new=owner 2026-11-11, the only engines that needed one were removed; seam=source pin; no_claim=a live start
+  assert.doesNotMatch(src, /seedPrompt/);
 });

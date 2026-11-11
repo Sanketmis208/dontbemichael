@@ -106,7 +106,7 @@ export interface Agent {
   /** Incremented by Restart & Continue to remount this agent's xterm without
    * changing its durable PTY/session identity. */
   terminalGeneration?: number;
-  /** the command being run in the PTY (e.g. 'claude' or 'agy') */
+  /** the command being run in the PTY (e.g. 'claude' or 'codex') */
   command?: string;
   /** which agent CLI preset owns this PTY recipe; drives the model picker +
    *  spawn flags. Defaults to 'claude' when unset (legacy agents / inferred
@@ -155,11 +155,6 @@ export interface Agent {
    *  (in the store's `archivedAgents` list + the hive registry) but flagged and
    *  kept off the floor; only live-PTY agents are 'active'. */
   archived?: boolean;
-  /** Hive protocol to TYPE into this agent's TUI as its first turn, set at spawn
-   *  for `seedDelivery:'type-into-tui'` providers (Crush) whose bare TUI rejects a
-   *  positional seed. useHive types it once after boot-grace then clears it.
-   *  Ephemeral spawn state — not persisted. (ondev-b) */
-  seedPrompt?: string;
 }
 
 /** A message the user has parked for an agent while its terminal was busy.
@@ -601,7 +596,7 @@ export function liveActivity(agent: Pick<Agent, 'action' | 'lastPrompt'>, fallba
   return out.length > 42 ? `${out.slice(0, 41)}…` : out;
 }
 
-type PersistedAgent = Omit<Agent, 'recentAssistantText' | 'recentTextTs' | 'blockReason' | 'contextTokens' | 'contextLimit' | 'seedPrompt' | 'actionDetail' | 'actionAt'>;
+type PersistedAgent = Omit<Agent, 'recentAssistantText' | 'recentTextTs' | 'blockReason' | 'contextTokens' | 'contextLimit' | 'actionDetail' | 'actionAt'>;
 
 // ─── The roster mirror ──────────────────────────────────────────────────────
 //
@@ -691,8 +686,8 @@ try {
 } catch { /* not a browser context (unit tests) */ }
 
 function slimAgents(agents: Agent[]): PersistedAgent[] {
-  return agents.map(({ recentAssistantText, recentTextTs, blockReason, contextTokens, contextLimit, seedPrompt, actionDetail, actionAt, ...rest }) => {
-    void recentAssistantText; void recentTextTs; void blockReason; void contextTokens; void contextLimit; void seedPrompt; void actionDetail; void actionAt;
+  return agents.map(({ recentAssistantText, recentTextTs, blockReason, contextTokens, contextLimit, actionDetail, actionAt, ...rest }) => {
+    void recentAssistantText; void recentTextTs; void blockReason; void contextTokens; void contextLimit; void actionDetail; void actionAt;
     return rest;
   });
 }
@@ -791,8 +786,8 @@ function persistRestorable(restorable: Agent[]): void {
   // Keeps contextTokens/contextLimit, unlike the other two: a restorable entry
   // is a spawn recipe for a session that has not been re-entered yet, so its
   // last known context size is still meaningful.
-  const slim: PersistedAgent[] = restorable.map(({ recentAssistantText, recentTextTs, blockReason, seedPrompt, actionDetail, actionAt, ...rest }) => {
-    void recentAssistantText; void recentTextTs; void blockReason; void seedPrompt; void actionDetail; void actionAt;
+  const slim: PersistedAgent[] = restorable.map(({ recentAssistantText, recentTextTs, blockReason, actionDetail, actionAt, ...rest }) => {
+    void recentAssistantText; void recentTextTs; void blockReason; void actionDetail; void actionAt;
     return rest;
   });
   try {

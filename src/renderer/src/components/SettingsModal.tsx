@@ -23,7 +23,6 @@ import { SetupPanel } from './SetupPanel';
 import { ClaudeSignInSettings } from './ClaudeSignInSettings';
 import { Icon } from './Icon';
 import { IntegrationsRegistry } from './IntegrationsRegistry';
-import { AiEnginesSettings } from './AiEnginesSettings';
 
 export interface SettingsModalProps {
   config: HarnessConfig;
@@ -56,7 +55,6 @@ const fieldInputStyle: CSSProperties = {
 // snapshotLocalState / restoreLocalState / clearLocalState live in
 // store/localState.ts (re-exported here for existing importers).
 export { clearLocalState, restoreLocalState, snapshotLocalState } from '@/store/localState';
-import { showByokSettings } from '@shared/agentProvider';
 
 // v0.3.4 redesign: six tabs, one topic each. 'AI Engines' folded into
 // Agents (once Agents & Models, now also autonomy and budgets); connectors, mailboxes and REST live together in Connections;
@@ -945,14 +943,6 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
                         </div>
                       </div>
 
-
-                      {/* API keys and local endpoints feed only OpenCode, Crush, pi and
-                          Qwen; this build offers none of them (BUILD_ENGINES). */}
-                      {showByokSettings() && (
-                        <>
-                          <AiEnginesSettings config={config} />
-                        </>
-                      )}
 
                       {/* Advanced */}
                       <div style={group}>

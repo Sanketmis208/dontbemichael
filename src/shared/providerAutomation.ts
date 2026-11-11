@@ -8,11 +8,6 @@ interface ProviderContextCommands {
   clear: string | null;
 }
 
-const NO_CONTEXT_COMMANDS: ProviderContextCommands = {
-  compact: null,
-  clear: null
-};
-
 /**
  * THE per-provider context-command table.
  *
@@ -42,81 +37,9 @@ const CONTEXT_COMMANDS: Record<AgentProvider, ProviderContextCommands> = {
   // The binary is right and that catalog is incomplete (see report).
   codex: { compact: '/compact', clear: '/clear' },
 
-  // Grok binary ships its own docs inline (04-slash-commands.md):
-  //   "/compact [context] — Compress conversation history… Optionally specify
-  //    what to preserve", example `/compact keep the auth implementation details`
-  //   "/new — Start a new session, clearing the current conversation.
-  //    Aliases: /clear"
-  // `/new` is the documented spelling (and what grokCommands.ts:13 already
-  // records), so prefer it over the alias.
-  grok: { compact: '/compact', clear: '/new' },
-
-  // Moonshot kimi-cli slash-command reference: `/compact` accepts appended
-  // custom instructions ("/compact preserve database-related discussions");
-  // `/clear` (alias /reset) "Clear the current session's context and start a
-  // new conversation". NB `/new` there forks a session rather than discarding.
-  kimi: { compact: '/compact', clear: '/clear' },
-
-  // antigravity.google/docs/cli/reference (Google's own command table):
-  //   "/clear  (/new)  — Clear the terminal and reset active conversation
-  //    contexts."     ← a REAL context reset, and
-  //   "Ctrl+L  cli.clear_screen — Refreshes and clears the visual terminal
-  //    buffer."       ← the screen-only one. The two are different things, so
-  // the "agy /clear only clears the screen" worry does not hold.
-  // That reference lists NO compaction verb at all (zero hits for compact /
-  // compress / summarize), and the shipped `agy` binary has no such literal
-  // either — agy compacts AUTOMATICALLY when the window fills ("# Resuming from
-  // a compaction"). Nothing to type, so: null.
-  antigravity: { compact: null, clear: '/clear' },
-
   // Google Gemini CLI's command reference documents `/compress` as replacing
   // the chat context with a summary and `/clear` as starting a clean context.
-  gemini: { compact: '/compress', clear: '/clear' },
-
-  // qwen-code's bundled cli.js, verbatim:
-  //   compressCommand = { name:"compress", altNames:["summarize"],
-  //     description "Compresses the context by replacing it with a summary." }
-  //   and its action reads `context.invocation?.args` as `customInstructions`
-  //   (capped at 2000 chars) → it genuinely takes a focus.
-  //   clearCommand    = { name:"clear", altNames:["reset","new"],
-  //     description "Clear conversation history and free up context." }
-  // It is `/compress`, NOT `/compact`: qwen dropped upstream gemini-cli's
-  // `compact` altName, so `/compact` would land as plain text here.
-  qwen: { compact: '/compress', clear: '/clear' },
-
-  // opencode binary's command registry, verbatim:
-  //   { title:"Compact session", value:"session.compact",
-  //     slash:{ name:"compact", aliases:["summarize"] }, run: … }
-  // and its own tip text "Run /compact to summarize long sessions near context
-  // limits".
-  // `/clear` does NOT exist in the binary (zero literals); the fresh-session
-  // verb is `/new` — matched exactly (`t.trim().toLowerCase()==="/new"`).
-  opencode: { compact: '/compact', clear: '/new' },
-
-  // Crush has NO typed slash commands at all. Its own binary strings show
-  // "Summarize Session" / "New Session" as ctrl+p COMMAND-PALETTE rows, and the
-  // hint "/ or ctrl+p" means a leading `/` OPENS that palette rather than
-  // submitting a command. Typing "/compact" would filter a modal and leave it
-  // open, swallowing everything queued behind it. Nothing safe to type: null.
-  // (Crush's compact/clear are reachable only over its HTTP API.)
-  crush: NO_CONTEXT_COMMANDS,
-
-  // Copilot's INTERACTIVE mode does have `/compact [FOCUS-INSTRUCTIONS]` and
-  // `/clear` — but this app never runs it interactively. The preset spawns it in
-  // print mode (`initialPromptFlag: '-p'`, `canReceiveInbox: false`), which runs
-  // one prompt and EXITS. There is no prompt left alive to type a slash command
-  // into, so both are null by construction rather than by ignorance.
-  copilot: NO_CONTEXT_COMMANDS,
-
-  // Cursor Agent CLI (`agent`) is interactive in this preset, but its slash /
-  // command surface is not yet verified against a frozen binary catalog in-repo.
-  // Prefer null over guessing — wrong slashes into a live TUI are worse than no
-  // auto-compact. Revisit when a shipped command table is transcribed.
-  cursor: NO_CONTEXT_COMMANDS,
-
-  // An arbitrary user binary. We cannot know its command surface, and guessing
-  // means typing slashes into someone's unknown REPL.
-  custom: NO_CONTEXT_COMMANDS
+  gemini: { compact: '/compress', clear: '/clear' }
 };
 
 /** Every distinct compaction verb this harness can type, across all providers.
@@ -161,8 +84,6 @@ export function isCompactionCommand(text: string): boolean {
 /** Initial TUI output needs a short provider-specific settle before typing. */
 export function terminalReadySettleMs(provider: AgentProvider): number {
   switch (provider) {
-    case 'kimi': return 650;
-    case 'grok': return 500;
     case 'gemini': return 500;
     case 'codex': return 500;
     default: return 400;
@@ -183,8 +104,5 @@ export function terminalReadyToReceive(
   elapsedMs: number,
   provider: AgentProvider
 ): boolean {
-  if (provider === 'antigravity') {
-    return elapsedMs >= terminalReadySettleMs(provider);
-  }
   return hasOutput !== false && elapsedMs >= terminalReadySettleMs(provider);
 }
