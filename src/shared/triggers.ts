@@ -1,17 +1,16 @@
 /**
  * TRIGGERS — every way the God orchestrator gets woken up without a human typing.
  *
- * This module is the single contract shared by main, preload and renderer. Four
+ * This module is the single contract shared by main, preload and renderer. Three
  * trigger types live under one roof:
  *
  *   schedules  — recurring dispatched missions (the pre-existing `ScheduledMission`;
  *                still owned by config.missions, surfaced under Triggers)
  *   context    — auto-compaction / auto-clearing of agent terminal context
  *   webhook    — inbound HTTP from arbitrary callers, one entry per endpoint
- *   org        — inbound peer messages from teammates' clone nodes (UI only for now)
  *
- * The webhook and org types both admit an outside party, so both share one
- * `TriggerMode` gate and both write to one `TriggerHistoryEntry` ledger.
+ * A webhook admits an outside party, so it has a `TriggerMode` gate and writes
+ * to the `TriggerHistoryEntry` ledger.
  */
 
 /* ────────────────────────────── behaviour gate ───────────────────────────── */
@@ -224,33 +223,6 @@ export const DEFAULT_WEBHOOK_SCHEMA_OBJECT = {
 
 export const DEFAULT_WEBHOOK_SCHEMA = JSON.stringify(DEFAULT_WEBHOOK_SCHEMA_OBJECT, null, 2);
 
-/* ────────────────────────── organisation trigger ─────────────────────────── */
-
-/**
- * Peer-to-peer messaging between teammates' installs. Each teammate runs their own
- * Munder Difflin; setting an org key lets their instance address yours.
- *
- * UI + persistence only for now — the transport service does not exist yet, so
- * nothing reads `apiKey` beyond the settings surfaces that display it.
- */
-export interface OrgTriggerConfig {
-  apiKey: string;
-  enabled: boolean;
-  mode: TriggerMode;
-}
-
-export const DEFAULT_ORG_TRIGGER: OrgTriggerConfig = {
-  apiKey: '',
-  enabled: false,
-  mode: DEFAULT_TRIGGER_MODE
-};
-
-/** Copy shown under the org key field. Kept here so Settings and Triggers agree. */
-export const CLONE_NODE_BLURB =
-  'Set an organisation key and your teammates can message your office (the copy of '
-  + 'Don\'t Be Michael running on your machine). Each teammate runs their own, so an org key '
-  + 'is how two installs find each other.';
-
 /* ──────────────────────────── trigger history ────────────────────────────── */
 
 /**
@@ -260,8 +232,8 @@ export const CLONE_NODE_BLURB =
  */
 export interface TriggerHistoryEntry {
   id: string;
-  source: 'webhook' | 'org';
-  /** Which webhook (or which peer) — `WebhookTrigger.id` for webhooks. */
+  source: 'webhook';
+  /** Which webhook: its `WebhookTrigger.id`. */
   sourceId: string;
   /** Display name at the time of the event, so history survives a rename/delete. */
   sourceName: string;

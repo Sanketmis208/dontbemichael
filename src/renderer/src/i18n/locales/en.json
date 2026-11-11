@@ -382,12 +382,6 @@
       "mode": "Mode",
       "format": "Format",
       "webhooksHint": "Callers POST to a webhook's URL with its secret in the x-md-webhook-secret header. Each one checks bodies against its own format (edit it above). Everything that arrives goes to {{godName}} to route, and the History tab on his panel lists it all.",
-      "organisation": "Organisation",
-      "orgKey": "Organisation key",
-      "orgKeyDesc": "How a teammate's install addresses yours.",
-      "apiKey": "API key",
-      "orgKeyPlaceholder": "Paste your organisation key",
-      "orgConfigOnly": "Configuration only for now. The organisation messaging service does not exist yet, so a key here starts no transport. It is saved, shown in the Triggers tab, and waits.",
       "newSecret": "New secret made. Copy it now.",
       "secretFailed": "Couldn't make a new secret. Try again.",
       "noteSaved": "saved",
@@ -416,7 +410,6 @@
       "terminal": "Work",
       "history": "History",
       "memory": "Memory",
-      "workers": "Workers",
       "advanced": "Advanced",
       "officeSchedule": "Office schedule"
     },
@@ -1001,20 +994,6 @@
     "defaultModelPlaceholder": "default model (provider/model)",
     "autoModeCaveat": "⚠ In auto mode these engines run with full filesystem + shell access (no sandbox), like Claude's bypass mode. Turn auto mode off (General) to make them ask first. Live end to end verification with real model calls is pending your keys or a local LLM."
   },
-  "mcpDefaults": {
-    "title": "Default MCP servers",
-    "desc": "These servers are merged into each new agent's session settings. Safe servers are on by default; write and secret servers are off until you consent. Changes take effect on the next agent spawn; running agents are not affected.",
-    "toggleNote": "{{id}}: {{state}}",
-    "couldNotSave": "could not save",
-    "tiers": {
-      "safeReadonly": "Safe & Read Only (on by default)",
-      "write": "Write Access (consent required)",
-      "secret": "Requires Secret / API Key (consent required)",
-      "safeReadonlyNote": "These servers read data only, need no secrets, and are scoped to the agent workspace. They are enabled for every new agent.",
-      "writeNote": "These servers can mutate state beyond the workspace. Off by default; enable only after reviewing.",
-      "secretNote": "These servers require an API key or credentials. Off by default; add your credentials and enable after consent."
-    }
-  },
   "updatesSection": {
     "title": "Updates",
     "onVersion": "You're on v{{v}}",
@@ -1103,18 +1082,7 @@
   },
   "triggersTab": {
     "schedules": "Schedules",
-    "organisation": "Organisation",
-    "organisationBlurb": "Let a teammate's office message yours.",
     "officeBlurb": "Every job that is on, {{godName}}'s included. To change a job, open that team member and go to their Access tab."
-  },
-  "orgSection": {
-    "acceptMessages": "Accept messages from your organisation",
-    "key": "Organisation key",
-    "keyPlaceholder": "paste your key",
-    "trust": "Trust",
-    "settingsOnly": "Settings only, for now. The org messaging service does not exist yet, so a key here starts no connection and nothing is sent or received. It is stored ready for when it does.",
-    "noKeyWarning": "This is switched on with no key set, so no teammate can reach you yet.",
-    "noKey": "no key"
   },
   "schedulesSection": {
     "label": "Do what?",
@@ -1258,16 +1226,11 @@
     "rejectTitle": "Drop this message. Nothing is sent",
     "reject": "reject",
     "task": "Task {{id}}",
-    "sectionWebhooks": "Webhooks",
     "sectionWebhooksBlurb": "Everything posted to your webhook endpoints, next to what {{godName}} sent back.",
-    "sectionOrg": "Organization",
-    "sectionOrgBlurb": "Messages from your teammates' clone nodes, next to what {{godName}} sent back.",
     "heldOne": "One message is held, waiting on your yes or no.",
     "heldMany": "{{count}} messages are held, waiting on your yes or no.",
     "decideFailed": "That did not go through. Try again.",
     "clearFailed": "Could not clear it. Try again.",
-    "emptyOrgTitle": "Nothing here yet, and nothing is broken.",
-    "emptyOrgBody": "Teammate messaging is not built yet. You can set an org key and pick a mode today, but no one's clone node can reach yours until the transport ships. When it does, their messages and our replies land here.",
     "emptyWebhookTitle": "No webhook messages yet.",
     "emptyWebhookBody": "When something posts to one of your endpoints, it lands here with {{godName}}'s reply underneath. Nothing has called in so far. Add an endpoint under Webhooks to get a URL you can hand out.",
     "clearConfirm": "Delete all {{count}} messages? The record is gone for good.",
@@ -1361,30 +1324,6 @@
     "removeFailed": "could not remove it",
     "uninstallFailed": "uninstall failed",
     "catalogUnreachable": "could not reach the catalog"
-  },
-  "workersTab": {
-    "stopping": "stopping",
-    "working": "working",
-    "liveWorkers": "Live workers",
-    "liveIntro": "Isolated workers {{godName}} spins up to handle Slack messages. They run to completion, reply in the thread, then shut down.",
-    "noneRunning": "No workers running right now.",
-    "repliesToSlack": "replies to a Slack thread",
-    "stoppingEllipsis": "stopping…",
-    "stop": "stop",
-    "workerIdTitle": "worker / PTY id",
-    "baseBranchTitle": "base branch the worktree was cut from",
-    "base": "base: {{branch}}",
-    "upSinceTitle": "time since spawn",
-    "up": "up {{age}}",
-    "idleTitle": "time since last terminal output",
-    "ptyGone": "pty gone",
-    "idle": "idle {{age}}",
-    "tokensTitle": "cumulative tokens (input+output+cache)",
-    "tokens": "tokens {{value}}",
-    "uncapped": "uncapped",
-    "preserved": "Preserved worktrees ({{count}})",
-    "preservedIntro": "Finished workers whose worktree held work that wasn't merged yet. They're kept (never thrown away automatically) and reclaimed automatically once the work lands in its base branch.",
-    "keptAgo": "kept {{age}} ago"
   },
   "memoryGraph": {
     "refresh": "Refresh",

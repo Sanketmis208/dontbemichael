@@ -13,11 +13,10 @@ import {
   finishCurrentHire,
   type HireReviewQueue
 } from '@shared/hireQueue';
-import { DEFAULT_ORG_TRIGGER, type OrgTriggerConfig, type WebhookTrigger } from '@shared/triggers';
+import type { WebhookTrigger } from '@shared/triggers';
 import { isCompactionCommand } from '@shared/providerAutomation';
 import { preferredAgentRole } from '@shared/agentRole';
 import { isInboxNudge } from '@shared/hiveNudge';
-import { SHOW_ORG_TRIGGER } from '@shared/buildFeatures';
 import type { ScheduledMission } from '@shared/missions';
 import { chooseRosterSource } from './rosterSource';
 import { renamePatches, swapName } from '@shared/hireTemplates';
@@ -446,12 +445,6 @@ interface State {
    *  localStorage or the roster file, never logged, masked in every surface. */
   webhookTriggers: WebhookTrigger[];
   setWebhookTriggers: (list: WebhookTrigger[]) => void;
-  /** Mirror of config.orgTrigger (peer messaging between teammates' clone nodes).
-   *  Same two-way contract as `webhookTriggers`, and the same handling for
-   *  `apiKey` — in memory for the two surfaces that display it masked, nowhere
-   *  else. Configuration only for now: no transport reads the key yet. */
-  orgTrigger: OrgTriggerConfig;
-  setOrgTrigger: (cfg: OrgTriggerConfig) => void;
   /** Park a message for an agent. Returns nothing; the flush loop delivers it.
    *  `meta.instruction`, when set, is what gets typed into the PTY instead of
    *  `text` (UI/card surfaces still show `text`). */
@@ -1198,10 +1191,8 @@ export const useStore = create<State>((set, get) => ({
     set((s) => ({ feeds: { ...s.feeds, [id]: [...(s.feeds[id] ?? []), line] } })),
   addAgent: (agent, opts) =>
     set((s) => {
-      // Idempotent by id: a MAIN-initiated spawn broadcast (hive:agentSpawned, e.g.
-      // a temporary worker) and a renderer-initiated hire (AddAgentModal) can both call
-      // addAgent for the same id — never render a duplicate card. The first writer
-      // (richer local record) wins; the broadcast is a no-op for it.
+      // Idempotent by id: two callers adding the same id never render a
+      // duplicate card. The first writer (richer local record) wins.
       if (s.agents.some((a) => a.id === agent.id)) return s;
       // GOD enters at the HEAD, everyone else at the tail. Michael's position was
       // otherwise decided by a race he usually lost: useHive's bootstrap removes
@@ -1327,11 +1318,6 @@ export const useStore = create<State>((set, get) => ({
   }),
   webhookTriggers: [],
   setWebhookTriggers: (list) => set({ webhookTriggers: list }),
-  // A copy, not the shared DEFAULT_ORG_TRIGGER instance — main takes the same
-  // care (withTriggerDefaults), and handing the module-level default out is how
-  // one careless mutation rewrites the default for everyone.
-  orgTrigger: { ...DEFAULT_ORG_TRIGGER },
-  setOrgTrigger: (cfg) => set({ orgTrigger: cfg }),
   dockOpen: false,
   dockFocus: undefined,
   dockNavigation: 0,
@@ -1485,9 +1471,9 @@ export function selectedAgent(s: State): Agent | undefined {
 }
 
 /** Whether the Command Center's Trigger History tab has anything to be about
- *  yet: an organisation key is set, or at least one webhook exists. Derived from
- *  the two mirrors rather than stored beside them, so it cannot fall out of step
- *  with the thing it describes. Use as `useStore(triggerHistoryVisible)`. */
+ *  yet: at least one webhook exists. Derived from the mirror rather than stored
+ *  beside it, so it cannot fall out of step with the thing it describes. Use as
+ *  `useStore(triggerHistoryVisible)`. */
 export function triggerHistoryVisible(s: State): boolean {
-  return s.webhookTriggers.length > 0 || (SHOW_ORG_TRIGGER && s.orgTrigger.apiKey.trim() !== '');
+  return s.webhookTriggers.length > 0;
 }

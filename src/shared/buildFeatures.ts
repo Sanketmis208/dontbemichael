@@ -10,19 +10,6 @@
  *  covered by the app's bundled copy (owner, 2026-09-25). */
 export const SHOW_DEV_TOOLS = false;
 
-/** Temporary helpers Michael starts on his own (spawn requests → ephemeral
- *  workers), plus the Settings toggle that allowed it and the WORKERS tab that
- *  listed them. Off in this build: starting an agent is a spend the owner never
- *  saw. When a job fits no one on the team and is too big for Michael, he puts
- *  it on the ASK ME board with suggestions instead (owner, 2026-09-24). */
-export const ALLOW_TEMP_WORKERS = false;
-
-/** ORGANISATION: an org key that would let teammates' offices message this
- *  one. Configuration only (no transport reads the key yet), so it is hidden
- *  from the Triggers tab and Settings → Connections, and a leftover key no
- *  longer surfaces the History tab (owner, 2026-09-24). */
-export const SHOW_ORG_TRIGGER = false;
-
 /** Automatic failure reports (docs/designs/auto-report-failures.md): failures
  *  the repo owners can fix in code are filed to GitHub, always on with no
  *  switch (owner D14) and separate from any usage stats (owner, eng D1);
@@ -94,23 +81,6 @@ export const SHOW_SLACK = false;
  *  agent is started with the md-mail server, even with email saved earlier.
  *  On in this build (docs/designs/multi-mailbox.md, plan section 9). */
 export const SHOW_MAILBOXES = true;
-
-/** The "Safe & read only" list in Settings → Connections (Sequential
- *  Thinking, Time, Fetch, Context7 Docs, Filesystem, Git). Hidden (owner,
- *  2026-09-26): none of it is a choice a business owner can make, and none of
- *  it does anything today. Claude Code ignores `mcpServers` in the settings
- *  file each agent starts with, so these servers never load (agents use their
- *  built in file and web tools instead). The servers that need an explicit yes
- *  are listed below it and stay. */
-export const SHOW_READONLY_SERVERS = false;
-
-/** The whole Default MCP servers section in Settings → Connections. Hidden
- *  (owner, 2026-10-01): its servers go into each agent's settings file, and
- *  Claude Code ignores `mcpServers` there (probe on 2.1.287: 0 loaded from
- *  `--settings`, loaded from `--mcp-config`), so the GitHub, database and
- *  search switches did nothing either. Bring it back once the servers are
- *  passed with `--mcp-config`, like the md-mail server. */
-export const SHOW_MCP_DEFAULTS = false;
 
 /** Import hire in Add Agent: the "import hire…" button, its explainer and the
  *  "generate one with AI…" prompt. Hidden (owner, 2026-09-27); adding a team

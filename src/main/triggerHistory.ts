@@ -1,6 +1,6 @@
 /**
- * The trigger ledger on disk — every inbound message a webhook or a peer's clone
- * node pushed at us, and every reply we sent back.
+ * The trigger ledger on disk — every inbound message a webhook pushed at us,
+ * and every reply we sent back.
  *
  * It lives in its OWN file rather than in config.json for two reasons: it is
  * append-heavy (config.json is rewritten wholesale on every `writeConfig`, so a
@@ -13,7 +13,7 @@
  *
  * SECURITY — NEVER write a secret, API key or token into an entry. The ledger is
  * plaintext JSON in userData and is surfaced verbatim in the UI, so a webhook
- * secret or an org apiKey landing here would be a durable leak of a live
+ * secret landing here would be a durable leak of a live
  * credential. Entries are therefore built FIELD BY FIELD below rather than by
  * spreading the caller's object: a caller that hands us a whole `WebhookTrigger`
  * (which carries `secret`) still gets only the ledger fields persisted.
@@ -74,7 +74,7 @@ function isEntry(v: unknown): v is TriggerHistoryEntry {
   if (!v || typeof v !== 'object') return false;
   const e = v as Partial<TriggerHistoryEntry>;
   return typeof e.id === 'string'
-    && (e.source === 'webhook' || e.source === 'org')
+    && e.source === 'webhook'
     && (e.direction === 'inbound' || e.direction === 'outbound')
     && typeof e.body === 'string'
     && typeof e.at === 'number';
@@ -141,13 +141,8 @@ export function updateTriggerHistory(
   return next;
 }
 
-/** Wipe the ledger, or just one source's half of it (clearing webhook noise
- *  should not throw away the org conversation, and vice versa). Removing the file
- *  outright on a full clear keeps a stale-but-unreadable file from lingering. */
-export function clearTriggerHistory(source?: 'webhook' | 'org'): void {
-  if (!source) {
-    try { rmSync(historyPath(), { force: true }); } catch { /* best-effort */ }
-    return;
-  }
-  writeAll(readAll().filter((e) => e.source !== source));
+/** Wipe the ledger. Removing the file outright keeps a stale-but-unreadable
+ *  file from lingering. */
+export function clearTriggerHistory(): void {
+  try { rmSync(historyPath(), { force: true }); } catch { /* best-effort */ }
 }

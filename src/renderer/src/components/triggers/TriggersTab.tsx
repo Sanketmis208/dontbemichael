@@ -1,17 +1,13 @@
-import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { OfficeSchedules } from './ScheduleList';
 import { useResolvedGodName } from '@/hooks/useResolvedGodName';
-import { OrgSection } from './OrgSection';
-import { Muted, Scroll, TriggerCard } from './ui';
-import { SHOW_ORG_TRIGGER } from '@shared/buildFeatures';
+import { Muted, Scroll } from './ui';
 
 /**
- * TRIGGERS — every way the floor gets woken up without a human typing. Four
+ * TRIGGERS — every way the floor gets woken up without a human typing. Three
  * types exist (src/shared/triggers.ts is the contract); only schedules shows
  * here. Webhooks live in Settings → Connections and context upkeep in Settings
- * → Agents (both apply to the whole office, not to Michael), and
- * organisation is hidden in this build (SHOW_ORG_TRIGGER).
+ * → Agents (both apply to the whole office, not to Michael).
  * Schedules is the oldest and used to BE this tab.
  *
  * Schedules belong to the agent that runs them (docs/designs/per-agent-schedules.md):
@@ -28,7 +24,6 @@ import { SHOW_ORG_TRIGGER } from '@shared/buildFeatures';
  */
 export function TriggersTab() {
   const { t } = useTranslation();
-  const [orgSummary, setOrgSummary] = useState('');
   const godName = useResolvedGodName();
 
   return (
@@ -37,20 +32,10 @@ export function TriggersTab() {
           already called Office schedule (owner, 2026-09-26). */}
       <Muted>{t('triggersTab.officeBlurb', { godName })}</Muted>
       <OfficeSchedules />
-      <div style={{ height: 12 }} />
-
       {/* WEBHOOKS moved to Settings → Connections: one server and one tunnel
           serve the whole office, and everything that arrives goes to Michael
-          to route. ORGANISATION is hidden in this build (SHOW_ORG_TRIGGER). */}
-      {SHOW_ORG_TRIGGER && (
-        <TriggerCard
-          title={t('triggersTab.organisation')}
-          blurb={t('triggersTab.organisationBlurb')}
-          summary={orgSummary}
-        >
-          <OrgSection onSummary={setOrgSummary} />
-        </TriggerCard>
-      )}
+          to route. */}
+      <div style={{ height: 12 }} />
     </Scroll>
   );
 }

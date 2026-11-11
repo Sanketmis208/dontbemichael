@@ -59,6 +59,4 @@ test('Agents & Models and Autonomy & Budgets are one Agents tab (owner, 2026-10-
     assert.ok(nav.agents, `${loc}: Agents label`);
     assert.equal(nav.autonomyBudgets, undefined, `${loc}: no second tab label`);
   }
-  // Agents are told where the owner turns hiring on (hive.ts).
-  assert.match(fs.readFileSync(path.resolve(__dirname, '..', 'src/main/hive.ts'), 'utf8'), /under Settings → Agents, and it is/);
 });

@@ -220,7 +220,6 @@ test('no Arabic string is left as its English source', () => {
     'onboarding.team.conn.shopify',
     'onboarding.team.conn.mailchimp',
     'onboarding.team.conn.github',
-    'mcpDefaults.toggleNote',                // "{{id}}: {{state}}" — pure interpolation
     'webhooksSection.summary',               // "{{count}} · {{state}}" — same
     'askMe.fileKind.markdown',               // file kinds on Ask me file rows are
     'askMe.fileKind.excel',                  // product names (Markdown, Excel,

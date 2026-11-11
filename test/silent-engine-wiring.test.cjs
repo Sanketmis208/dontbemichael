@@ -206,6 +206,4 @@ test('a restart keeps the member\'s worktree; closing or deleting removes it', (
   // Restart and Continue and the model switch restart in the worktree too.
   const cc = read('src/renderer/src/components/CommandCenterPanel.tsx');
   assert.match(cc, /const cwd = a\.worktreePath && \(await window\.cth\.gitIsRepo\(a\.worktreePath\)\) \? a\.worktreePath : a\.cwd;\n\s*const killed = await window\.cth\.killPty\(a\.ptyId, \{ restart: true \}\);/);
-  // A worker's restart keeps its gated teardown for later.
-  assert.match(main, /if \(!opts\.keepWorktree && liveWorkers\.has\(id\)\) liveWorkers\.delete\(id\);/);
 });

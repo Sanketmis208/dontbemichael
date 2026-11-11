@@ -230,10 +230,8 @@ test('when a bound hire leaves, their bound work goes back to the teammates', ()
     assert.match(src, /await window\.cth\.closeAgentByOwner\(agent\.id\)\.catch\(\(\) => undefined\);\s*\/\/[^\n]*\n\s*await releaseBindingsOf\(agent\.id\);/, `${f}: closing on purpose releases`);
   }
   assert.match(read('src/renderer/src/components/CommandCenterPanel.tsx'), /onClick=\{\(\) => \{ void releaseBindingsOf\(a\.id\)\.finally\(\(\) => removeArchivedAgent\(a\.id\)\); \}\}/, 'forgetting releases');
-  // A crash or a quit only archives: the hive's archive event does not release.
-  const hive = read('src/renderer/src/hooks/useHive.ts');
-  assert.match(hive, /if \(e\?\.id\) useStore\.getState\(\)\.archiveAgent\(e\.id\);/);
-  assert.doesNotMatch(hive, /releaseBindingsOf/);
+  // A crash or a quit does not release.
+  assert.doesNotMatch(read('src/renderer/src/hooks/useHive.ts'), /releaseBindingsOf/);
 });
 
 test('every connector is offered for a binding: switched off ones greyed, QuickBooks read only', () => {

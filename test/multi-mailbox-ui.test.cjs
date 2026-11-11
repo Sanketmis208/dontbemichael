@@ -35,7 +35,6 @@ test('Claude connectors lead Connections, then Mailboxes; Gmail on the Claude ac
   assert.equal((mb.match(/<Toggle /g) || []).length, 0, 'no Claude account switch among the mailboxes');
   assert.doesNotMatch(mb, /email-calendar|claudeAccess/);
   assert.match(mb, /t\('mailboxes\.onlyHere'\)/, 'the info icon says email goes only through these mailboxes');
-  assert.match(read('src/renderer/src/components/McpDefaultsSettings.tsx'), /e\.id !== 'email-calendar'/);
 });
 
 test('Email is a list of the mailboxes a member uses; watching starts on Send on approval (owner, 2026-10-30); Sending is a radio group (7A)', () => {

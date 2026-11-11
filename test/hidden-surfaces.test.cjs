@@ -31,20 +31,17 @@ test('a file link in a terminal shows the file in Finder and never opens it', ()
 });
 
 /**
- * ORGANISATION is hidden (owner, 2026-09-24): configuration only, nothing reads
- * the key yet. WEBHOOKS moved out of Michael's Triggers tab into Settings →
- * Connections: one server and one tunnel serve the whole office, and whatever
- * arrives goes to Michael to route, so they were never his alone.
+ * ORGANISATION is gone (owner, 2026-09-24 hid it; removed 2026-11-11): it was
+ * configuration only and nothing read the key. WEBHOOKS moved out of Michael's
+ * Triggers tab into Settings → Connections: one server and one tunnel serve the
+ * whole office, and whatever arrives goes to Michael to route.
  */
-test('this build hides the organisation trigger', () => {
-  assert.equal(loadTs('src/shared/buildFeatures.ts').SHOW_ORG_TRIGGER, false);
-  const triggers = read('src/renderer/src/components/triggers/TriggersTab.tsx');
-  assert.match(triggers, /\{SHOW_ORG_TRIGGER && \(\s*<TriggerCard\s+title=\{t\('triggersTab\.organisation'\)\}/);
-  const settings = read('src/renderer/src/components/SettingsModal.tsx');
-  const gate = settings.indexOf('{SHOW_ORG_TRIGGER && (<>');
-  assert.ok(gate > 0 && settings.indexOf("t('settings.connections.organisation')") > gate, 'Settings block is behind the flag');
-  // A leftover org key must not bring back the History tab on its own.
-  assert.match(read('src/renderer/src/store/store.ts'), /\(SHOW_ORG_TRIGGER && s\.orgTrigger\.apiKey\.trim\(\) !== ''\)/);
+test('the organisation trigger is gone', () => {
+  assert.equal(loadTs('src/shared/buildFeatures.ts').SHOW_ORG_TRIGGER, undefined);
+  assert.ok(!fs.existsSync(path.resolve(__dirname, '../src/renderer/src/components/triggers/OrgSection.tsx')));
+  assert.doesNotMatch(read('src/preload/index.ts'), /'org:/);
+  // Only a webhook brings the History tab.
+  assert.match(read('src/renderer/src/store/store.ts'), /export function triggerHistoryVisible\(s: State\): boolean \{\n  return s\.webhookTriggers\.length > 0;\n\}/);
 });
 
 test('webhooks live in Settings, with nothing lost from the Triggers card', () => {
@@ -185,19 +182,14 @@ test('this build hides Slack, and a Slack connection saved earlier does not star
   assert.match(read('src/main/index.ts'), /async function startSlackServer\(\)[\s\S]{0,200}?\n  if \(!SHOW_SLACK\) return \{ ok: false/);
 });
 
-test('this build hides the safe and read only server list; the switches that need a yes stay', () => {
-  assert.equal(loadTs('src/shared/buildFeatures.ts').SHOW_READONLY_SERVERS, false);
-  const src = read('src/renderer/src/components/McpDefaultsSettings.tsx');
-  assert.match(src, /const TIER_ORDER: McpTier\[\] = \(\['safe-readonly', 'write', 'secret'\] as McpTier\[\]\)\s*\.filter\(\(tier\) => tier !== 'safe-readonly' \|\| SHOW_READONLY_SERVERS\);/);
-});
-
-test('this build hides the whole Default MCP servers section: none of its servers load (owner, 2026-10-01)', () => {
+test('the Default MCP servers section is gone, and no agent gets a server map Claude Code never read', () => {
   // Claude Code ignores mcpServers in the --settings file each agent starts
-  // with (probe on 2.1.287), so every switch here did nothing.
-  assert.equal(loadTs('src/shared/buildFeatures.ts').SHOW_MCP_DEFAULTS, false);
-  const settings = read('src/renderer/src/components/SettingsModal.tsx');
-  assert.match(settings, /\{SHOW_MCP_DEFAULTS && activeSection === 'Connections' && \(\s*<>\s*<McpDefaultsSettings config=\{config\} \/>/);
-  assert.equal((settings.match(/<McpDefaultsSettings /g) || []).length, 1, 'shown nowhere else');
+  // with (probe on 2.1.287), so every switch there did nothing (owner, 2026-10-01).
+  const features = loadTs('src/shared/buildFeatures.ts');
+  assert.equal(features.SHOW_MCP_DEFAULTS, undefined);
+  assert.equal(features.SHOW_READONLY_SERVERS, undefined);
+  assert.ok(!fs.existsSync(path.resolve(__dirname, '../src/renderer/src/components/McpDefaultsSettings.tsx')));
+  assert.doesNotMatch(read('src/main/hive.ts'), /buildDefaultMcpServers|\{ mcpServers \}/);
 });
 
 test('Add Agent hides import hire and its AI prompt; the button says hire (owner, 2026-09-27)', () => {

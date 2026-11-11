@@ -44,10 +44,10 @@ export type { LocalSkill, CatalogSkill } from '../main/skills';
 import type { OfficePack, PackOrigin } from '../shared/officePack';
 export type { OfficePack, PackOrigin } from '../shared/officePack';
 import type {
-  ContextRule, ContextTriggerConfig, OrgTriggerConfig, TriggerHistoryEntry, WebhookTrigger
+  ContextRule, ContextTriggerConfig, TriggerHistoryEntry, WebhookTrigger
 } from '../shared/triggers';
 export type {
-  ContextRule, ContextTriggerConfig, OrgTriggerConfig, TriggerHistoryEntry, WebhookTrigger
+  ContextRule, ContextTriggerConfig, TriggerHistoryEntry, WebhookTrigger
 } from '../shared/triggers';
 
 /** Renderer-visible integration record: the secretRef handle is redacted to a
@@ -293,9 +293,6 @@ export interface HarnessConfig {
    *  'claude' / 'claude-opus-5-5'. Mirrors src/main/config.ts. */
   godProvider?: AgentProvider;
   godModel?: string;
-  /** Per-server consent for the default MCP bundle, keyed by catalog id. Mirrors
-   *  src/main/config.ts. */
-  mcpDefaults?: { [id: string]: { enabled: boolean } };
   mailboxes?: MailboxRecord[];
   agentCapabilities?: { [agentId: string]: AgentCapabilities };
   /** The QuickBooks row's switch under Settings > Connections > Claude connectors.
@@ -517,29 +514,6 @@ export interface GHIssue {
   url: string;
   labels: string[];
   assignees: string[];
-}
-
-/** One live god-triggered ephemeral worker, as shown in the Workers tab. */
-export interface WorkerSnapshot {
-  workerId: string;
-  reqId: string;
-  name: string;
-  baseBranch: string;
-  spawnedAt: number;
-  ageMs: number;
-  idleMs: number | null;        // null = PTY already gone
-  tokensUsed: number;
-  tokenCap: number | null;      // effective cap; null = unlimited (the default)
-  hasSlack: boolean;
-  releasing: boolean;
-  status: 'releasing' | 'working';
-}
-/** A worker worktree preserved at teardown, awaiting integration + GC. */
-export interface PreservedWorktreeSnapshot {
-  workerId: string;
-  wtPath: string;
-  baseBranch: string;
-  preservedAt: number;
 }
 
 const api = {
@@ -974,14 +948,6 @@ const api = {
   /** Received and sent messages for an agent's Messages tab, newest first, redacted. */
   hiveHistory: (id: string): Promise<Array<RedactedMessage & { dir: 'in' | 'out' }>> => ipcRenderer.invoke('hive:history', id),
 
-  // ─── Ephemeral workers (P4 — Slack-triggered isolated workers) ───────────
-  /** Live ephemeral workers + worktrees preserved awaiting integration/GC. */
-  listWorkers: (): Promise<{ live: WorkerSnapshot[]; preserved: PreservedWorktreeSnapshot[]; maxWorkers: number }> =>
-    ipcRenderer.invoke('workers:list'),
-  /** Manually stop a live ephemeral worker (safety-gated teardown; work preserved). */
-  stopWorker: (workerId: string): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke('workers:stop', workerId),
-
   // ─── Semantic memory (MemPalace CLI) ─────────────────────────────────────
   memoryStatus: (): Promise<MemoryStatus> => ipcRenderer.invoke('hive:memoryStatus'),
   /** Which external tools (uv, mempalace, git, each agent engine) are actually
@@ -1118,26 +1084,6 @@ const api = {
     const listener = (_e: IpcRendererEvent, payload: { targetId: string; text: string }) => cb(payload);
     ipcRenderer.on('hive:enqueueToAgent', listener);
     return () => ipcRenderer.removeListener('hive:enqueueToAgent', listener);
-  },
-  /** A MAIN-initiated agent spawn (a temporary worker) — the renderer adds
-   *  the floor card from this descriptor since it didn't initiate the hire itself. */
-  onHiveAgentSpawned: (
-    cb: (rec: {
-      id: string; name: string; provider?: string; cwd: string;
-      command?: string; role?: string; worktreePath?: string;
-      character?: string; accent?: string;
-    }) => void
-  ): (() => void) => {
-    const listener = (_e: IpcRendererEvent, payload: Parameters<typeof cb>[0]) => cb(payload);
-    ipcRenderer.on('hive:agentSpawned', listener);
-    return () => ipcRenderer.removeListener('hive:agentSpawned', listener);
-  },
-  /** A MAIN-initiated agent archive (a temporary worker ending) — the renderer
-   *  archives the floor card since it didn't initiate the kill itself. */
-  onHiveAgentArchived: (cb: (e: { id: string }) => void): (() => void) => {
-    const listener = (_e: IpcRendererEvent, payload: { id: string }) => cb(payload);
-    ipcRenderer.on('hive:agentArchived', listener);
-    return () => ipcRenderer.removeListener('hive:agentArchived', listener);
   },
   /** Register a listener for terminal work-order handoffs (#53) — hive mail to a
    *  hookless provider that can't drain an inbox; the renderer types it into the
@@ -1618,15 +1564,8 @@ const api = {
   webhooksStatus: (): Promise<{ running: boolean; url?: string; endpoints: { id: string; url: string }[] }> =>
     ipcRenderer.invoke('webhooks:status'),
 
-  // ─── Triggers: organisation (clone-node peer messaging) ─────────────────────
-  /** PERSISTENCE ONLY — the peer transport does not exist yet, so setting this
-   *  stores the key and mode and starts nothing. */
-  getOrgTrigger: (): Promise<OrgTriggerConfig> => ipcRenderer.invoke('org:getTrigger'),
-  setOrgTrigger: (cfg: OrgTriggerConfig): Promise<OrgTriggerConfig> =>
-    ipcRenderer.invoke('org:setTrigger', cfg),
-
   // ─── Triggers: history ledger + approval gate ───────────────────────────────
-  /** The whole ledger, newest first (both directions, both sources). */
+  /** The whole ledger, newest first (both directions). */
   listTriggerHistory: (): Promise<TriggerHistoryEntry[]> =>
     ipcRenderer.invoke('triggerHistory:list'),
   /** Answer a held message. 'approved' RELEASES it to the hive (card + god
@@ -1635,9 +1574,9 @@ const api = {
    *  dispatch. Resolves to the updated row, or null when the id is gone. */
   decideTriggerHistory: (arg: { id: string; decision: 'approved' | 'rejected' }): Promise<TriggerHistoryEntry | null> =>
     ipcRenderer.invoke('triggerHistory:decide', arg),
-  /** Wipe the ledger, or just one source's half of it. */
-  clearTriggerHistory: (source?: 'webhook' | 'org'): Promise<void> =>
-    ipcRenderer.invoke('triggerHistory:clear', source),
+  /** Wipe the ledger. */
+  clearTriggerHistory: (): Promise<void> =>
+    ipcRenderer.invoke('triggerHistory:clear'),
   /** Fires whenever the ledger changes (an inbound arrived, a verdict landed, a
    *  reply was paired), so the history tab live-refreshes. */
   onTriggerHistoryUpdated: (cb: () => void): (() => void) => {

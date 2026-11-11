@@ -9,7 +9,7 @@
  *  - a GIT tab or a stray floor view saved by an older build opens on
  *    something that exists;
  *  - nothing can open the hidden IDE, whichever caller asks;
- *  - a leftover organisation key does not bring back the History tab;
+ *  - only a webhook brings the History tab;
  *  - a roster with no Michael (an old install mid-restore) still opens on the
  *    saved agent, and "open this agent's memory" does not blank the selection.
  *
@@ -42,13 +42,13 @@ test('views an older build saved open on ones this build has', () => {
   assert.deepEqual(r, { tab: 'terminal', floor: 'office' });
 });
 
-test('an org key alone does not bring back History', () => {
+test('only a webhook brings History', () => {
   const r = freshRun({ 'cth.agents': JSON.stringify([{ id: 'god', name: 'Michael', isGod: true, cwd: '/tmp/o' }]) }, `
     const st = store.getState();
-    const orgOnly = mod.triggerHistoryVisible({ ...st, webhookTriggers: [], orgTrigger: { ...st.orgTrigger, apiKey: 'org-key' } });
+    const none = mod.triggerHistoryVisible({ ...st, webhookTriggers: [] });
     const withHook = mod.triggerHistoryVisible({ ...st, webhookTriggers: [{ id: 'w1' }] });
-    return { orgOnly, withHook };`);
-  assert.equal(r.orgOnly, false);
+    return { none, withHook };`);
+  assert.equal(r.none, false);
   assert.equal(r.withHook, true, 'webhooks still show their history');
 });
 

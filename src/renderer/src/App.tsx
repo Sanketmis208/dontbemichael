@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as Rea
 import { useStore, selectedAgent, ROSTER_BOOT_HOME, ACTION_CLOCKING_IN } from '@/store/store';
 import { rosterNeedsReload } from '@/store/rosterSource';
 import type { HarnessConfig } from '@/store/config';
-import { DEFAULT_ORG_TRIGGER } from '@shared/triggers';
 import { StudioStage } from '@/scene/studio/StudioStage';
 import { TasksKanban } from '@/components/TasksKanban';
 import { PulseView } from '@/components/pulse/PulseView';
@@ -119,16 +118,14 @@ export function App() {
     window.cth.getConfig().then(c => {
       if (cancelled) return;
       setConfig(c);
-      // Mirror the triggers so Settings → Connections and the Command Center's
+      // Mirror the webhooks so Settings → Connections and the Command Center's
       // Triggers tab read one list, not two copies that drift — whichever surface
-      // saves calls these same setters and the other repaints. No extra IPC: main
-      // deep-fills both fields on every config read (withTriggerDefaults), so
-      // getConfig() already serves what listWebhooks()/getOrgTrigger() would.
-      // `c` is typed as the PRELOAD's HarnessConfig, which hasn't picked the two
-      // fields up yet (another lane's file); the renderer mirror type declares them.
+      // saves calls the same setter and the other repaints. No extra IPC: main
+      // fills the field on every config read (withTriggerDefaults).
+      // `c` is typed as the PRELOAD's HarnessConfig; the renderer mirror type
+      // declares the field.
       const withTriggers = c as HarnessConfig;
       useStore.getState().setWebhookTriggers(withTriggers.webhookTriggers ?? []);
-      useStore.getState().setOrgTrigger(withTriggers.orgTrigger ?? DEFAULT_ORG_TRIGGER);
     });
     return () => { cancelled = true; };
   }, []);

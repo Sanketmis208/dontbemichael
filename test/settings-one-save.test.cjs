@@ -42,7 +42,7 @@ test('toggles stage their change instead of writing it', () => {
   // The specific toggles that used to persist the instant you clicked them.
   // semanticMemory left with its switch: search by meaning runs whenever
   // MemPalace is installed (owner, 2026-10-19).
-  for (const key of ['strongKeepalive', 'autoMode', 'orchestratorMaySpawn']) {
+  for (const key of ['strongKeepalive', 'autoMode']) {
     // autoUpdate left with its switch: every installed build checks (owner, 2026-10-02).
     const re = new RegExp(`stage\\(\\{ ${key}:`);
     assert.match(MODAL, re, `${key} is not staged`);
@@ -219,7 +219,7 @@ test('every Settings section is a named group on the soft panel, with no small c
   assert.doesNotMatch(MODAL, /sectionHead|sectionRule/, 'the old head and rule are retired');
   assert.doesNotMatch(MODAL, /fontSize: 10, fontWeight: 600|textTransform: 'uppercase'/, 'no small caps');
   assert.doesNotMatch(MODAL, /\{\{ height: (1|2), background: 'var\(--cth-(line|ink-300)\)'/, 'no hairlines between sections');
-  assert.ok((MODAL.match(/<h3 style=\{groupName\}>/g) ?? []).length >= 12, 'each section names itself');
+  assert.ok((MODAL.match(/<h3 style=\{groupName\}>/g) ?? []).length >= 11, 'each section names itself');
   for (const f of ['MailboxesSettings', 'ClaudeConnectorsSettings', 'IntegrationsRegistry', 'ResearchPrivacySettings', 'SetupPanel', 'SettingsHeroCard']) {
     const src = fs.readFileSync(path.join(__dirname, '..', `src/renderer/src/components/${f}.tsx`), 'utf8');
     assert.match(src, /panelStyle/, `${f} sits on the soft panel`);

@@ -15,18 +15,15 @@ import {
   providerPreset,
   type AgentProvider
 } from '../shared/agentProvider';
-import { defaultMcpDefaults } from '../shared/mcpCatalog';
 import { MAX_AGENT_TOKEN_CAP } from '../shared/tokenCaps';
 import { expandTilde, normalizeHiveHome } from './fs';
 import { isHeldRename, RENAME_RETRY_MS, sleepSync, writeFileAtomic } from './atomicFile';
 import type { IntegrationRecord } from '../shared/integrations';
 import {
   DEFAULT_CONTEXT_TRIGGER,
-  DEFAULT_ORG_TRIGGER,
   DEFAULT_TRIGGER_MODE,
   DEFAULT_WEBHOOK_SCHEMA,
   type ContextTriggerConfig,
-  type OrgTriggerConfig,
   type WebhookTrigger
 } from '../shared/triggers';
 
@@ -319,16 +316,6 @@ export interface HarnessConfig {
   registeredRepos: string[];
   /** When true, new agents are spawned with --permission-mode bypassPermissions. */
   autoMode: boolean;
-  /** May the orchestrator ("Michael") spin up agents on its own?
-   *
-   *  Default FALSE. Spawning an agent is a SPEND decision, so it should not
-   *  happen unprompted. The ability itself shipped in v0.4.4 with no gate at all,
-   *  so this closes an existing default-on behaviour rather than gating a new
-   *  feature: an operator who wants it must now say so.
-   *
-   *  Off does not FAIL a queued spawn request, it declines to consume one. The
-   *  request sits in HIVE_ROOT/spawn-requests until the toggle is turned on. */
-  orchestratorMaySpawn: boolean;
   /** The command we run when spawning a new agent. */
   defaultCommand: string;
   /** Default model for newly spawned agents (e.g. 'claude-sonnet-4-6[1m]'); unset = CLI default. */
@@ -348,9 +335,9 @@ export interface HarnessConfig {
   /** The model GOD runs on. Unset falls back to the provider preset's
    *  `recommendedOrchestratorModel`, then MODEL_GOD. Default 'claude-opus-5-5'. */
   godModel?: string;
-  /** Per-server consent state for the default MCP bundle, keyed by catalog id.
-   *  Seeded from MCP_CATALOG (safe-readonly ON, write/secret OFF); the user flips
-   *  these in Settings. A server is wired into an agent only when enabled here. */
+  /** Read only: the default MCP switches an older build saved. Nothing writes
+   *  it now; the one-time Claude connectors carry-over reads its
+   *  'email-calendar' entry (emailCalendarAllowed in claudeConnectors.ts). */
   mcpDefaults?: { [id: string]: { enabled: boolean } };
   /** Mailboxes connected in Settings (docs/designs/multi-mailbox.md). Metadata
    *  only; each app password lives in the secret store under `mail:<id>`. */
@@ -439,26 +426,11 @@ export interface HarnessConfig {
    *  Code's `--max-turns` works in print mode only. A coarse runaway guard
    *  independent of the breaker. */
   maxTurns?: number;
-  /** Max concurrent god-triggered ephemeral Slack workers; extra spawn-requests
-   *  wait in the queue (natural backpressure, a resource backstop). Default 4. */
-  maxConcurrentWorkers?: number;
-  /** Minutes an ephemeral worker may produce NO output before the reaper kills it
-   *  — idle-based, never wall-clock, so an actively-working worker is never reaped.
-   *  Default 20. */
-  workerIdleTimeoutMinutes?: number;
   /** Registered integrations (Phase 2) — labeled REST endpoints workers reach through
    *  the loopback secret broker. METADATA ONLY: each record carries a `secretRef`
    *  handle, never the secret value (secrets live encrypted in a separate file via
    *  Electron safeStorage — see src/main/integrations.ts). Default []. */
   integrations?: IntegrationRecord[];
-  /** Default per-worker TOTAL-token cap (input+output+cache) applied to every
-   *  god-triggered ephemeral worker; a worker's own spawn-request `tokenCap`
-   *  overrides it. When the effective cap is exceeded the worker is reaped (its
-   *  committed work preserved) and god is informed. This is PLUMBING for a later
-   *  budget feature: per the human directive there is NO per-worker cap today, so
-   *  the default is 0 = UNLIMITED — the mechanism is wired but never throttles
-   *  unless someone explicitly sets a positive cap (per request or here). */
-  defaultWorkerTokenCap?: number;
   /** Circuit-breaker thresholds (Lane A #6.6b). Unset = conservative defaults. */
   circuitBreaker?: CircuitBreakerConfig;
   /** Company knowledge (the Knowledge Graph store). Default ON. */
@@ -539,9 +511,6 @@ export interface HarnessConfig {
   /** Inbound HTTP endpoints, one entry per caller. Replaces the legacy single
    *  webhook above; several coexist on one port, told apart by `id` in the path. */
   webhookTriggers?: WebhookTrigger[];
-  /** Peer messaging between teammates' clone nodes. Persistence + UI only today —
-   *  no transport service reads `apiKey` yet. */
-  orgTrigger?: OrgTriggerConfig;
   /** One-time guard for `migrateTriggersV1` (legacy webhook → webhookTriggers,
    *  1h → 2h compact cadence). Set once the migration has run to completion. */
   triggersMigratedV1?: boolean;
@@ -553,7 +522,6 @@ const DEFAULTS: HarnessConfig = {
   recentHives: [],
   registeredRepos: [],
   autoMode: true,
-  orchestratorMaySpawn: false,
   defaultCommand: 'claude',
   godProvider: 'claude',
   godModel: 'claude-opus-5-5',
@@ -561,13 +529,7 @@ const DEFAULTS: HarnessConfig = {
   // over the role-based tiers (modelForRole) in the spawn handler, so all agents
   // (incl. god) default to Fable 5. A per-agent model choice still overrides it.
   defaultModel: 'claude-fable-5',
-  // Seeded from the MCP catalog so the consent defaults never drift from it
-  // (safe-readonly ON, write/secret OFF).
-  mcpDefaults: defaultMcpDefaults(),
-  maxConcurrentWorkers: 4,
-  workerIdleTimeoutMinutes: 20,
   integrations: [],
-  defaultWorkerTokenCap: 0, // 0 = unlimited (human directive: NO per-worker cap)
   embeddingModel: 'minilm',
   missions: [OPS_STANDUP_MISSION],
   // On from setup (owner, 2026-10-29); a saved choice, either way, is kept.
@@ -589,7 +551,6 @@ const DEFAULTS: HarnessConfig = {
   // `withTriggerDefaults` re-copies them on every read — see the note there.
   contextTrigger: DEFAULT_CONTEXT_TRIGGER,
   webhookTriggers: [],
-  orgTrigger: DEFAULT_ORG_TRIGGER,
   triggersMigratedV1: false,
   // Company knowledge (the knowledge feature): ON by default (owner,
   // 2026-09-25). It is where company wide information, policies and rules live,
@@ -610,7 +571,7 @@ function configPath(): string {
  * patched only `compact`) arrives missing sub-keys that DEFAULTS would have
  * supplied — the consumer then reads `undefined` where it expects a number and
  * the rule never fires. Second, that same shallow merge hands the literal
- * DEFAULT_CONTEXT_TRIGGER / DEFAULT_ORG_TRIGGER instances to every config that
+ * DEFAULT_CONTEXT_TRIGGER instance to every config that
  * didn't persist them, so one caller mutating what it read would rewrite the
  * defaults for the whole process — and for every config read afterwards.
  *
@@ -624,7 +585,6 @@ function withTriggerDefaults(cfg: HarnessConfig): HarnessConfig {
       compact: { ...DEFAULT_CONTEXT_TRIGGER.compact, ...cfg.contextTrigger?.compact },
       clear: { ...DEFAULT_CONTEXT_TRIGGER.clear, ...cfg.contextTrigger?.clear }
     },
-    orgTrigger: { ...DEFAULT_ORG_TRIGGER, ...cfg.orgTrigger },
     webhookTriggers: Array.isArray(cfg.webhookTriggers)
       ? cfg.webhookTriggers.map((t) => ({ ...t }))
       : []

@@ -68,7 +68,6 @@ import {
   type AgentProvider,
   ON_SHIFT_PROMPT
 } from '../shared/agentProvider';
-import { MCP_CATALOG } from '../shared/mcpCatalog';
 import { answeredAtOf, cardConversation, cardText, openAskIndexes, raiserOf } from '../shared/askMeRouting';
 import { dueLeftovers, leftoverDueNote, leftoversToDecide } from '../shared/askLeftovers';
 import { GOT_IT, GOT_IT_STREAK, gotItStreak, keepShowingNote, NOT_NEEDED, noticeKey, noticeKindOf, skipNoticeLine } from '../shared/noticeCards';
@@ -88,7 +87,6 @@ import { HOOK_PATH_UNCHECKED, MAX_HOOK_FRAME_BYTES } from '../shared/hookEvents'
 import { TOOL_KEY_STRING_CAP } from './breaker';
 import { isOwnResearchDir, ownResearchDir, readResearchFile } from './researchNotes';
 import { resolveGodName } from '../shared/godIdentity';
-import { ALLOW_TEMP_WORKERS } from '../shared/buildFeatures';
 import { OFFICE_ROLES } from '../shared/officeRoles';
 import { APP_NAME } from '../shared/appName';
 import { isPeerAssignment, rerouteToMichael, hopDropNotice, replyHops } from '../shared/handoffRule';
@@ -107,11 +105,6 @@ import { TELEMETRY_TOKEN_HEADER } from './telemetry';
 function safeConversation(v: unknown): v is string {
   return typeof v === 'string' && /^[\w.:-]{1,120}$/.test(v);
 }
-
-/** The subset of HarnessConfig the hive consumes for the default-MCP merge.
- *  Kept as a local shape so hive.ts never imports the foundation-owned config
- *  module just for a type. */
-type McpDefaultsMap = { [id: string]: { enabled: boolean } } | undefined;
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -983,19 +976,6 @@ export class HiveManager {
     return this._runtime;
   }
 
-  /** Whether config.orchestratorMaySpawn is on, mirrored here so the prompt
-   *  builder can decide whether to tell god the spawn queue is available. Set at
-   *  bootstrap and on every config write; hive.ts deliberately does not import
-   *  the config module. */
-  private _maySpawn = false;
-  setOrchestratorMaySpawn(on: boolean): void {
-    // Never on in a build without temporary workers, whatever config says.
-    this._maySpawn = on && ALLOW_TEMP_WORKERS;
-  }
-  orchestratorMaySpawn(): boolean {
-    return this._maySpawn;
-  }
-
   // — paths —
   root(): string | null {
     const home = this.getHome();
@@ -1348,9 +1328,6 @@ export class HiveManager {
       /** The business, for a business office's prompts (name, city, type, briefing). */
       business?: PromptBusiness;
       theme?: 'light' | 'dark';
-      /** Consent state for the default-MCP bundle (W3). Threaded from the live
-       *  HarnessConfig by the caller; undefined → catalog defaults apply. */
-      mcpDefaults?: { [id: string]: { enabled: boolean } };
       /** App-resources `skills/` source dir (W3). The bundled read-only skills are
        *  copied into the agent's `.claude/skills/` per spawn; undefined or missing
        *  is a no-op (tolerated until Kevin populates the resource dir). */
@@ -1726,7 +1703,7 @@ export class HiveManager {
       rmSync(join(dir, 'settings.json'), { force: true });
       mkdirSync(dirname(settingsPath), { recursive: true });
       const writable = this.sandboxWritableDirs(meta, dir, root, opts.extraWritableDirs);
-      this.atomicWriteJson(settingsPath, this.hookSettings(shim, meta.cwd, opts.mcpDefaults, opts.theme, writable, opts.folderPolicy, stripConnectors ? [] : opts.connectors?.deny ?? [], shell.shell, opts.network, meta.isResearch ? this.researchShellWrite(dir, meta.cwd) : undefined, opts.cliVersion));
+      this.atomicWriteJson(settingsPath, this.hookSettings(shim, opts.theme, writable, opts.folderPolicy, stripConnectors ? [] : opts.connectors?.deny ?? [], shell.shell, opts.network, meta.isResearch ? this.researchShellWrite(dir, meta.cwd) : undefined, opts.cliVersion));
       this.writableAtStart.set(meta.id, writable);
       args.push('--settings', settingsPath);
       if (opts.folderPolicy?.walledMembers) this.walledAtStart.set(meta.id, opts.folderPolicy.walledMembers);
@@ -2060,7 +2037,7 @@ export class HiveManager {
     return [join(dir, 'inbox'), join(dir, 'outbox'), join(dir, 'memory'), ...(cwd ? [cwd] : [])];
   }
 
-  private hookSettings(shim: string, cwd: string, cfg: McpDefaultsMap, theme?: 'light' | 'dark', writableDirs: string[] = [], folders?: AgentFolderPolicy, connectorDeny: string[] = [], shell: HookShell = 'bash', network?: SandboxNetwork, shellWrite?: string[], cliVersion?: string | null): unknown {
+  private hookSettings(shim: string, theme?: 'light' | 'dark', writableDirs: string[] = [], folders?: AgentFolderPolicy, connectorDeny: string[] = [], shell: HookShell = 'bash', network?: SandboxNetwork, shellWrite?: string[], cliVersion?: string | null): unknown {
     // Bundled node, NOT bare `node` — see nodeLauncherPath(). Claude runs each of
     // these through a shell with a stripped PATH, where `node` is often absent.
     // On Windows that shell is PowerShell when there is no Git Bash, which can't
@@ -2072,7 +2049,6 @@ export class HiveManager {
       ...(matcher ? { matcher } : {}),
       hooks: [{ type: 'command', command: cmd, ...(process.platform === 'win32' ? { shell } : {}) }]
     });
-    const mcpServers = this.buildDefaultMcpServers(cwd, cfg);
     // #63 / TODOS: MCP servers from plugins are already blocked (--strict-mcp-config
     // / ENABLE_CLAUDEAI_MCP_SERVERS). Plugin skills, hooks and agent definitions
     // still load from the owner's ~/.claude; turn each enabled plugin off in this
@@ -2095,11 +2071,6 @@ export class HiveManager {
       // Research loads no settings file but this one (ship review pass 3).
       skipDangerousModePermissionPrompt: true,
       skipAutoPermissionPrompt: true,
-      // W3 — default skills/MCP bundle. Written into the PER-SESSION settings file
-      // only (never ~/.claude), so the user's own MCP servers are never clobbered;
-      // Claude merges this additively. Omitted entirely when empty so a settings
-      // file with no enabled servers is unchanged from before.
-      ...(Object.keys(mcpServers).length ? { mcpServers } : {}),
       ...(Object.keys(disabledPlugins).length ? { enabledPlugins: disabledPlugins } : {}),
       // The status line gets the session status JSON after every response —
       // including context_window.{total_input_tokens,context_window_size},
@@ -2213,39 +2184,6 @@ export class HiveManager {
         const raw = JSON.parse(readFileSync(p, 'utf8')) as { enabledPlugins?: unknown };
         Object.assign(out, pluginsDisabledForSession(raw.enabledPlugins));
       } catch { /* leave owner's file alone on a bad parse */ }
-    }
-    return out;
-  }
-
-  /**
-   * W3 — build the per-agent `mcpServers` map from the default catalog. Includes a
-   * server only when it's enabled (catalog ∩ consent), scopes filesystem/git to the
-   * agent cwd (never whole-disk), and namespaces every id `munder-<id>` so a server
-   * of the same name in the user's own ~/.claude is never clobbered. A write/secret
-   * server is included ONLY on an explicit `enabled:true` consent — never via a
-   * default — so a malformed/partial config can't silently arm a keyed server.
-   */
-  private buildDefaultMcpServers(
-    cwd: string,
-    cfg: McpDefaultsMap
-  ): Record<string, { command: string; args: string[]; env?: Record<string, string> }> {
-    const out: Record<string, { command: string; args: string[]; env?: Record<string, string> }> = {};
-    for (const e of MCP_CATALOG) {
-      const consented = cfg?.[e.id]?.enabled;
-      const enabled = consented ?? e.defaultEnabled;
-      if (!enabled) continue;
-      // Defense-in-depth: a write/secret server requires an EXPLICIT opt-in; it can
-      // never ride in on a default (the catalog already ships these OFF, but this
-      // guards a hand-edited/partial mcpDefaults map too).
-      if (e.tier !== 'safe-readonly' && consented !== true) continue;
-      // Replace the `<cwd>` placeholder (filesystem/git) with the agent cwd at merge
-      // time so these stay strictly workspace-scoped.
-      const args = e.spec.args.map((a) => (a === '<cwd>' ? cwd : a));
-      out[`munder-${e.id}`] = {
-        command: e.spec.command,
-        args,
-        ...(e.spec.env ? { env: e.spec.env } : {})
-      };
     }
     return out;
   }
@@ -2492,17 +2430,6 @@ export class HiveManager {
     const runtimeLine = rt
       ? `RUNNING BUILD: ${APP_NAME} v${rt.version}, ${rt.packaged ? 'packaged app' : 'local dev build'}${rt.appPath ? `, from ${rt.appPath}` : ''}. Say this version if asked which one is running, and do not assume behaviour from an older one. A local dev build inherits the launching shell's environment (umask included) where a packaged app does not, so file modes and inherited env can legitimately differ between the two. \`log.jsonl\` records an \`app-start\` event on every launch, which is how you spot a restart or a build switch.`
       : '';
-    // Item 11: god could not find the spawn queue. The mechanism has worked since
-    // v0.4.4, but nothing told him it existed — the prompt said "spawn" without
-    // saying how, COMMANDS.md and PROTOCOL.md did not mention it, and the only
-    // description lived in a source comment. So he fell back to writing a hire
-    // manifest, which needs a human to click confirm, and it looked like nothing
-    // happened. Gated on the toggle: advertising a disabled path is worse than
-    // saying nothing, and COMMANDS.md documents it either way for the case where
-    // the operator turns it on after god was already running.
-    const spawnQueueLine = meta.isGod && this.orchestratorMaySpawn()
-      ? `SPAWNING A WORKER: you can start an ephemeral worker yourself by writing ONE JSON file into ${inRoot('spawn-requests')}/<id>.json. Required: \`objective\` (what the worker must do) and \`cwd\` (the repo it runs in). Optional: \`name\`, \`command\`, \`provider\`, \`model\`, \`isolate\` (default true = its own git worktree), \`tokenCap\`, and \`slack\` ({channel, thread_ts}) to route its failures back to a thread. The harness polls that directory, spawns \`worker-<id>\`, and moves the request to \`spawn-requests/.done/\` on success or \`.failed/\` with a reason. This is the ONLY way you can spawn; a hire manifest under research/hires/ needs the human to confirm it in the UI, so it is not a route you can complete on your own. Reuse an existing agent first, as above — a worker is a fresh spend every time.`
-      : '';
     const godLine = meta.isGod
       ? 'You are the GOD / ORCHESTRATOR of this hive — your job is to ORCHESTRATE, not to implement: maintain live situational awareness and delegate the work. (1) AWARENESS — always know what is going on: keep an accurate picture of every agent (active vs archived/idle), the task board, and all in-flight work; drain your inbox continually and triage every other agent\'s requests, answering clarifications so the team runs autonomously. (2) DELEGATE — decompose work and fan it out to the hive agents via their inboxes (route messages and assign owners; do not do their jobs); do NOT take on grunt implementation yourself. Stay aware of who is already on the floor and delegate OPPORTUNISTICALLY: BEFORE you spawn anything, CHECK THE LIVE ROSTER (active agents in registry.json + their state in fleet.json) and prefer routing to an EXISTING agent that fits — above all when the request names one ("ask Pam to…", "have Jim…"), route to that agent instead of reflexively creating a new one. Reuse an idle or already-running agent whose role matches; only spawn a fresh agent when no existing one is a sensible fit, and say that you checked. One capable owner beats a duplicate. (3) OWN ONLY THE IMPORTANT, high-leverage things — task decomposition, dispatch decisions, sign-offs, conflict resolution, branch integration, and final QA — and remain the sole scribe of board.md and tasks.json (team members file what they need in the triage folder of the hive, which you work oldest first). You are otherwise fully autonomous — there is NO separate approval queue. For the genuinely critical (destructive actions, spending real money, scope changes, unresolvable conflicts), ask the human directly in your own session and let the tool-permission prompt gate the action; the human approves natively, including remotely from their phone via /remote-control. Keep the team unblocked. When you DISPATCH a task, write it as a 4-part contract so the agent can run autonomously: (1) OBJECTIVE — the concrete goal; (2) OUTPUT — the expected deliverable/format; (3) TOOLS — what to use or avoid, and any references to read instead of re-deriving; (4) BOUNDARIES — scope limits + the definition of done. Pass references (file paths, message ids, board sections), not pasted content — keep dispatches short.'
         + ` MONITOR the floor by reading ${inRoot('fleet.json')} (live per-agent tokens, cost, status, last tool, breaker level, inbox backlog) and ${inRoot('registry.json')} — note that running 'claude agents' will NOT list your hive's sibling agents. A full Claude Code command reference is at ${inRoot('COMMANDS.md')} (slash commands act ONLY on your own session; CLI commands run in your shell and can target the fleet). You periodically receive scheduler / "Heartbeat" standup requests. A scheduled run carries its job's focus for that run (what to cover at the hourly ops standup comes in its message); re-engage anyone stalled, over-budget, or breaker-armed, and keep board.md and tasks.json accurate. In tasks.json, ALWAYS set each task's "assignee" to the worker's agent id the moment you dispatch it, and NEVER clear it on status changes — a done card must still say who did the work (the human reads the board by who-did-what). Write no running "notes" on a card (house rule 8): its status, waitingOn, nextAt, ASK ME question and result say where it stands. HUMAN FEEDBACK is first-class in the ledger: when a task can only proceed with the human's input — a QUESTION to answer OR an ACTION only the human can perform (create an account, approve a purchase, provide credentials/screenshots, test on their device) — set its status to "blocked" and append the concrete ask to the card's "humanQA" array (push {"q":"...","askedAt":"<iso>","raisedBy":"<agent id>"}; raisedBy is the team member whose work needs the answer, or "god" when you raised it yourself, because the answer goes into their memory; phrase actions as clear to-dos; keep every past entry — the history documents the card's decisions). When the app tells you a team member is stuck, do what its note says: a member the app restarted needs no ask, and for one still stuck you move their work to a teammate and put one plain question on ASK ME, never mentioning terminals or a 1:1. BEFORE YOU ADD AN ASK, read the asks already open on the board (any humanQA entry with no "a" and no "dismissedAt"). An ask stays on ASK ME until the human answers it or you withdraw it, whatever the card's status, so keep one open ask per card: if the new ask changes, replaces or contradicts an open one, fold them into one ask on THAT card and withdraw the old one, and never add a different ask to a card that already has one open. To withdraw an ask, set "dismissedAt" (the time) and a short "dismissedReason" on its entry; never add a new entry to say an ask is no longer needed. Never move a card with an open ask out of "blocked", or close it, until the human has answered it or you have withdrawn it. If one answer settles several cards, ask it once and say on the others which card to answer. WRITE THE ASK SHORT AND IN MARKDOWN. The human reads it on a CARD, not in a terminal, so an ask longer than a short paragraph plus its options (roughly 700 characters) is a report, not a question — cut the narrative, keep the decision. Give the card a TITLE the owner can read at a glance: a few plain words naming the matter, under 60 characters (e.g. "Refund for Northwind Cafe"), with no ids, dates, mailbox names or bracketed notes; those go in the ask. Open with ONE **bold** sentence saying exactly what you need from them; put file paths and commands in \`backticks\`, and amounts and account names in plain text; write each link as a few words naming what opens, like [the company in HubSpot](https://...), never the bare address; when the ask is something the owner does on a website (signing in, accepting terms, paying), link straight to where they do it, with the link the team member or the email gave: only the sender's own site, never a tracking or shortened link; put choices in the ask's "options" and several questions in its "parts", never as a list in the text; leave a blank line between paragraphs (a single newline is a line break). When the ask originates in another agent's report, REWRITE it into that shape — never paste the report body in as the question, and never make the human read the investigation to find the decision. Put the background, what led to the question and why it matters, in a sentence or two in the card's "description", so the owner can read it under See full context. The harness surfaces open questions on the office floor's ASK ME board; the human's answer lands in the same entry ("a"), goes into the memory notes of whoever raised it, and arrives to you, and only you, as a REQUEST about that card (the owner talks only to you, so tell the team member yourself when you route it): route the follow-up (redelegate to the same agent or another, or ask the human again), then reply "done" with in_reply_to its id, so work continues; it stays open until you do. A card ends only as done: with a "result" when finished, or with "closedBy": "owner" and a "closedReason" when the owner decides to stop it; never delete a card. A card is "blocked" only while its question for the human is open on ASK ME; a card waiting on someone outside the office or on a teammate is "waiting", with "waitingOn" naming who in a few words (like "customer Gopi" or "Nick"), never the card\'s own person, and goes back to "doing" when they answer; a card whose one off next step is its own person\'s at a set time is "todo", with "nextAt" set to that time; scheduled routines get no card (house rule 8). "doing" means someone is working on it now. Do NOT park human questions in separate files (no HumanQuestion.md) and never sit waiting on the human in your own session. Steward the token budget.`
@@ -2580,8 +2507,7 @@ export class HiveManager {
       memoryLine,
       knowledgeLine,
       godLine,
-      spawnQueueLine,
-      meta.isGod && !this.orchestratorMaySpawn() ? NO_FIT_LINE : '',
+      meta.isGod ? NO_FIT_LINE : '',
       runtimeLine,
       slackLine,
       ctxLine,
@@ -6577,47 +6503,6 @@ export const NO_FIT_OPTIONS = `give it to an existing team member (name them; fo
  *  Replaces starting a temporary worker: the owner decides, on the ASK ME board. */
 const NO_FIT_LINE = `WHEN NO ONE FITS (this overrides anything above about spawning a fresh agent: you cannot start one): before you take on a request, check it against every team member's role (registry.json). If it is outside all of them, do NOT do it yourself and do NOT start a new agent. Put it on the owner's ASK ME board instead: add a card to tasks.json for the request with "status": "blocked" and one humanQA ask with "raisedBy": "god", written the short markdown way described above. Open with a bold sentence naming the job and why nobody on the team covers it, then give the choices in "options", with "recommended": true on the one you recommend: ${NO_FIT_OPTIONS}. When the answer arrives as a request, carry out their choice (when they pick a team member, hand the work to them and say the owner assigned it), then close the request with "done". Small jobs (a quick answer, a short reply, a lookup) are not this: do or route them as usual.`;
 
-/** PROTOCOL.md's section on starting a temporary worker. Included only in a
- *  build that allows them (ALLOW_TEMP_WORKERS); otherwise the protocol never
- *  mentions the route, so Michael has nothing to try. */
-const SPAWN_WORKER_MD = `## Spawning a worker (orchestrator)
-You can start an ephemeral worker yourself. Write ONE JSON file into \`spawn-requests/<id>.json\` in
-the hive root:
-
-\`\`\`json
-{
-  "objective": "what the worker must do (required)",
-  "cwd": "/absolute/path/to/the/repo (required)",
-  "name": "display name (optional)",
-  "command": "engine CLI (optional; defaults to the configured one)",
-  "provider": "claude | codex | cursor | antigravity | … (optional)",
-  "model": "model override (optional)",
-  "isolate": true,
-  "tokenCap": 0,
-  "slack": { "channel": "C…", "thread_ts": "…" },
-  "character": "meredith",
-  "accent": "coral"
-}
-\`\`\`
-
-The harness polls that directory, spawns \`worker-<id>\`, and moves the request to
-\`spawn-requests/.done/\` once it starts or to \`spawn-requests/.failed/\` with a reason. \`isolate\`
-defaults to true, giving the worker its own git worktree. \`slack\` routes its failures back to a
-thread. This is the ONLY spawn route you can complete on your own: a hire manifest under
-\`research/hires/\` needs the human to confirm it in the UI.
-
-\`character\` and \`accent\` set how the worker looks on the office floor, and both are optional.
-Naming a worker after a cast member already gets you that avatar, so you only need \`character\` when
-the name and the face should differ. An unrecognised value falls back rather than failing the spawn.
-
-**It can be switched off.** The operator controls this under Settings → Agents, and it is
-OFF by default, because every worker you start spends tokens nobody approved. While it is off your
-request is NOT failed or deleted, it waits in \`spawn-requests/\` and runs if the operator turns it on.
-If a request of yours has sat there without moving, that is why, and it is a decision to raise with the
-human rather than retry. Route work to an agent already on the floor first either way.
-
-`;
-
 const PROTOCOL_MD = `# Hive protocol
 
 You are one of several AI agents sharing this hive. Coordination is entirely
@@ -6741,7 +6626,7 @@ look at one agent, send it a \`query\` and read its card on the board: its \`age
 Claude Code command reference (slash = your own session only; CLI = your shell, can target the fleet)
 is in \`COMMANDS.md\` in the hive root.
 
-${ALLOW_TEMP_WORKERS ? SPAWN_WORKER_MD : ''}## Private memory
+## Private memory
 Your notes and memory are yours alone, and each other agent's are theirs: never
 open another agent's \`agents/<id>/\` folder, its notes or inbox, or the hive's git
 history. To learn what another agent knows, send it a \`query\`. The one store every

@@ -11,11 +11,10 @@ import { ProfileTab } from './ProfileTab';
 import { MemoryNotes, memorySummary } from './MemoryNotes';
 import { MarkdownPreview } from '@/markdown/MarkdownPreview';
 import { memoryView } from '@shared/memoryIndex';
-import { ALLOW_TEMP_WORKERS, SHOW_OPEN_TERMINAL, SHOW_DELIVERY_SWITCH } from '@shared/buildFeatures';
+import { SHOW_OPEN_TERMINAL, SHOW_DELIVERY_SWITCH } from '@shared/buildFeatures';
 import { TriggersTab } from './triggers/TriggersTab';
 import { TriggerHistoryTab } from './triggers/TriggerHistoryTab';
 import { TriggerCard } from './triggers/ui';
-import { WorkersTab } from './WorkersTab';
 import { acquireTerminal, disposeTerminal, resetTerminal } from './terminalPool';
 import { terminalInstanceKey } from './terminalRecovery';
 import { areLogsEqual, type LogEntry } from './activityLog';
@@ -60,7 +59,7 @@ import { fieldLabel, groupName, hint } from './fieldText';
 // TASKS and GRAPH are not tabs: they are the floor's TASKS and GRAPH views
 // (App.tsx), and a request for either switches the floor to it.
 type CCTab = 'profile' | 'capabilities' | 'terminal' | 'triggers' | 'trigger-history'
-  | 'memory' | 'workers' | 'advanced';
+  | 'memory' | 'advanced';
 
 /** Fallback denominator for the per-agent token meter when no floor token budget
  *  is configured — so the bar reads as a budget estimate (filled + remaining)
@@ -92,7 +91,6 @@ const TABS: { key: CCTab; labelKey: string; icon: Parameters<typeof Icon>[0]['na
   { key: 'triggers', labelKey: 'commandCenter.tabs.officeSchedule', icon: 'clock' },
   { key: 'trigger-history', labelKey: 'commandCenter.tabs.history', icon: 'ledger' },
   { key: 'memory', labelKey: 'commandCenter.tabs.memory', icon: 'sparkle' },
-  { key: 'workers', labelKey: 'commandCenter.tabs.workers', icon: 'gear' },
   // Last on purpose: the floor's inner workings, which an owner rarely needs.
   { key: 'advanced', labelKey: 'commandCenter.tabs.advanced', icon: 'mcp' }
 ];
@@ -115,10 +113,7 @@ export function CommandCenterPanel({ agent }: { agent: Agent }) {
   useEffect(() => {
     if (!showHistory && tab === 'trigger-history') setTab(defaultTab);
   }, [showHistory, tab, defaultTab]);
-  // WORKERS lists Michael's temporary helpers, which this build does not have
-  // (ALLOW_TEMP_WORKERS in buildFeatures.ts).
-  const visibleTabs = TABS.filter((t) =>
-    (t.key !== 'trigger-history' || showHistory) && (t.key !== 'workers' || ALLOW_TEMP_WORKERS));
+  const visibleTabs = TABS.filter((t) => t.key !== 'trigger-history' || showHistory);
 
   // External tab requests (the boss-room calendar → 'triggers'; a 'tasks'
   // request switches the floor to its TASKS view). seq-keyed so clicking again re-opens the tab even
@@ -140,7 +135,6 @@ export function CommandCenterPanel({ agent }: { agent: Agent }) {
     // Read the gate live rather than depending on it — as a dependency it would
     // re-fire a stale request the moment the tab appeared.
     if (key === 'trigger-history' && !triggerHistoryVisible(useStore.getState())) return;
-    if (key === 'workers' && !ALLOW_TEMP_WORKERS) return;
     setTab(key);
   }, [ccTabRequest]);
   // A task-detail "assign" pre-fills the Floor dispatch box and jumps to it.
@@ -241,7 +235,6 @@ export function CommandCenterPanel({ agent }: { agent: Agent }) {
           <MemoryTab godId={agent.id} who={selectedMemoryAgent ?? undefined} onWho={setSelectedMemoryAgent} />
         )}
         {tab === 'advanced' && <AdvancedTab key={advancedFocus.seq} focus={advancedFocus.card} seed={dispatchSeed} />}
-        {ALLOW_TEMP_WORKERS && tab === 'workers' && <WorkersTab />}
       </div>
     </PanelCard>
   );

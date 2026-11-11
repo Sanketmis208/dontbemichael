@@ -33,13 +33,13 @@ test('a config write notifies subscribers with the persisted config', () => {
   const seen = [];
   const off = onConfigWritten((next) => seen.push(next));
 
-  writeConfig({ orchestratorMaySpawn: true });
+  writeConfig({ strongKeepalive: true });
 
   // What subscribers end up holding is the contract; one save can legitimately
   // write more than once, so the number of notifications is not.
   assert.ok(seen.length >= 1);
   assert.deepEqual(seen[seen.length - 1], readConfig());
-  assert.equal(seen[seen.length - 1].orchestratorMaySpawn, true);
+  assert.equal(seen[seen.length - 1].strongKeepalive, true);
   off();
 });
 

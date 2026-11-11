@@ -11,18 +11,16 @@ import { useTranslation } from 'react-i18next';
 import { agentModels, type HarnessConfig } from '@/store/config';
 import { useStore } from '@/store/store';
 import {
-  CLONE_NODE_BLURB,
   DEFAULT_TRIGGER_MODE,
   DEFAULT_WEBHOOK_SCHEMA,
   TRIGGER_MODES,
-  type OrgTriggerConfig,
   type TriggerMode,
   type WebhookTrigger
 } from '@shared/triggers';
 import { SkillsTab } from './SkillsTab';
 import { clearLocalState, restoreLocalState, snapshotLocalState } from '@/store/localState';
 import { plainReasonKey } from '@/store/plainReason';
-import { ALLOW_TEMP_WORKERS, SHOW_ORG_TRIGGER, SHOW_SLACK, SHOW_MAILBOXES, SHOW_MCP_DEFAULTS, SHOW_SIMPLE_MODE_SWITCH, SHOW_SKILLS, SHOW_ARABIC_TERMINAL_SWITCH, SHOW_LANGUAGE_PICKER } from '@shared/buildFeatures';
+import { SHOW_SLACK, SHOW_MAILBOXES, SHOW_SIMPLE_MODE_SWITCH, SHOW_SKILLS, SHOW_ARABIC_TERMINAL_SWITCH, SHOW_LANGUAGE_PICKER } from '@shared/buildFeatures';
 import { WebhookSchemaEditor } from './triggers/WebhookSchemaEditor';
 import { InfoTip } from './InfoTip';
 import { KnowledgeDocList } from './KnowledgeDocList';
@@ -33,7 +31,6 @@ import { cityLine, cleanCompanyProfile, mergeEditedProfile } from '@shared/compa
 import { SetupPanel } from './SetupPanel';
 import { ClaudeSignInSettings } from './ClaudeSignInSettings';
 import { Icon } from './Icon';
-import { McpDefaultsSettings } from './McpDefaultsSettings';
 import { IntegrationsRegistry } from './IntegrationsRegistry';
 import { AiEnginesSettings } from './AiEnginesSettings';
 import {
@@ -72,8 +69,6 @@ interface TriggersApi {
   deleteWebhook: (id: string) => Promise<{ ok: boolean; error?: string }>;
   generateWebhookSecret: () => Promise<{ ok: boolean; secret?: string }>;
   webhooksStatus: () => Promise<{ running: boolean; url?: string }>;
-  getOrgTrigger: () => Promise<OrgTriggerConfig>;
-  setOrgTrigger: (cfg: OrgTriggerConfig) => Promise<{ ok: boolean; error?: string }>;
 }
 const triggersApi = (): TriggersApi => window.cth as unknown as TriggersApi;
 
@@ -345,15 +340,6 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
     setAutoModeOn(next);
     stage({ autoMode: next } as Partial<HarnessConfig>);
   };
-  // Default OFF, so an absent value must read as off. Note this is `=== true`,
-  // the mirror image of autoMode's `!== false` above, because the two defaults
-  // are opposite.
-  const [orchSpawnOn, setOrchSpawnOn] = useState<boolean>(cfgX.orchestratorMaySpawn === true);
-  const toggleOrchSpawn = async () => {
-    const next = !orchSpawnOn;
-    setOrchSpawnOn(next);
-    stage({ orchestratorMaySpawn: next } as Partial<HarnessConfig>);
-  };
   const [defaultModelSel, setDefaultModelSel] = useState<string>(cfgX.defaultModel ?? 'claude-fable-5');
   const saveDefaultModel = (id: string): void => {
     setDefaultModelSel(id);
@@ -520,13 +506,6 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [showWebhookHelp, setShowWebhookHelp] = useState(false);
 
-  // --- Organisation trigger (peer messaging; configuration only for now) ------
-  const orgTrigger = useStore((s) => s.orgTrigger);
-  const setOrgTriggerStore = useStore((s) => s.setOrgTrigger);
-  const [showOrgKey, setShowOrgKey] = useState(false);
-  const [orgBusy, setOrgBusy] = useState(false);
-  const [orgNote, setOrgNote] = useState('');
-
   // ─── Knowledge Graph (enterprise multimodal context for agents) ───────────
   const [kgDocCount, setKgDocCount] = useState(0);
   const [kgBusy, setKgBusy] = useState(false);
@@ -612,10 +591,6 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
         const list = await triggersApi().listWebhooks();
         if (alive && Array.isArray(list)) useStore.getState().setWebhookTriggers(list);
       } catch { /* keep the mirror App seeded from getConfig() */ }
-      try {
-        const org = await triggersApi().getOrgTrigger();
-        if (alive && org) useStore.getState().setOrgTrigger(org);
-      } catch { /* ditto */ }
       try {
         const s = await triggersApi().webhooksStatus();
         if (!alive) return;
@@ -765,23 +740,6 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
       setCopiedField(field);
       setTimeout(() => setCopiedField((f) => (f === field ? null : f)), 1200);
     }).catch(() => undefined);
-  };
-
-  // --- Organisation trigger handlers ---
-  /** Same contract as webhooks: mirror first (so the Triggers tab is live), then
-   *  persist. Keystroke edits pass `persist: false` and commit on blur. */
-  const applyOrg = async (next: OrgTriggerConfig, persist = true) => {
-    setOrgTriggerStore(next);
-    if (!persist) return;
-    setOrgBusy(true); setOrgNote('');
-    try {
-      const res = await triggersApi().setOrgTrigger(next);
-      if (res && res.ok === false) { setOrgNote(res.error ?? t('settings.connections.noteSaveFailed')); return; }
-      setOrgNote(t('settings.connections.noteSaved'));
-      setTimeout(() => setOrgNote(''), 1500);
-    } catch (e) {
-      setOrgNote(e instanceof Error ? e.message : String(e));
-    } finally { setOrgBusy(false); }
   };
 
   const reset = async () => {
@@ -1381,30 +1339,6 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
                         </div>
                       </div>
 
-                      {/* "Who can add agents": the switch that let Michael start
-                          temporary workers. Gone with the feature in this build
-                          (ALLOW_TEMP_WORKERS); he asks on the ASK ME board instead. */}
-                      {ALLOW_TEMP_WORKERS && (<>
-                      <div style={group}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            <span style={fieldLabel}>
-                              Who can add agents
-                            </span>
-                            <span style={hint}>
-                              {orchSpawnOn
-                                ? `${godName} can hire on his own. Every agent he starts spends tokens you did not approve.`
-                                : `Only you. ${godName} can still ask, and his request waits in the queue instead of failing.`}
-                            </span>
-                          </div>
-                          <PixelButton variant={orchSpawnOn ? 'primary' : 'secondary'} size="sm" onClick={toggleOrchSpawn}>
-                            {orchSpawnOn ? `me and ${godName}` : 'only me'}
-                          </PixelButton>
-                        </div>
-                      </div>
-                      </>)}
-
-
                       {/* Circuit breaker — the FULL unit (v0.3.4: all fields have UI) */}
                       <div style={group}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1625,15 +1559,6 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
                             )}
                           </div>
                       </div>
-                    </>
-                  )}
-
-                  {/* CONNECTIONS — everything external (MCP + Slack + webhook + REST) */}
-                  {/* Default MCP servers: hidden in this build (SHOW_MCP_DEFAULTS);
-                      Claude Code never loaded them from the settings file. */}
-                  {SHOW_MCP_DEFAULTS && activeSection === 'Connections' && (
-                    <>
-                      <McpDefaultsSettings config={config} />
                     </>
                   )}
 
@@ -2050,90 +1975,6 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
                           <span style={{ fontSize: 12, color: 'var(--cth-ink-500)' }}>{webhookNote}</span>
                         )}
                       </div>
-
-                      {/* Organisation trigger — teammates messaging this office.
-                          Persisted + mirrored; no transport reads the key yet.
-                          Hidden in this build (SHOW_ORG_TRIGGER). */}
-                      {SHOW_ORG_TRIGGER && (<>
-                      <div style={group}>
-                        <h3 style={groupName}>
-                          {t('settings.connections.organisation')}
-                        </h3>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            <span style={fieldLabel}>
-                              {t('settings.connections.orgKey')}
-                            </span>
-                            <span style={hint}>
-                              {t('settings.connections.orgKeyDesc')}
-                            </span>
-                          </div>
-                          <PixelButton
-                            variant={orgTrigger.enabled ? 'primary' : 'secondary'}
-                            size="sm"
-                            onClick={() => { void applyOrg({ ...orgTrigger, enabled: !orgTrigger.enabled }); }}
-                            disabled={orgBusy}
-                          >
-                            {orgTrigger.enabled ? t('common.on') : t('common.off')}
-                          </PixelButton>
-                        </div>
-
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                          <span style={slackLabelStyle}>{t('settings.connections.apiKey')}</span>
-                          <div style={{ display: 'flex', gap: 6 }}>
-                            <input
-                              type={showOrgKey ? 'text' : 'password'}
-                              value={orgTrigger.apiKey}
-                              onChange={(e) => { void applyOrg({ ...orgTrigger, apiKey: e.target.value }, false); }}
-                              onBlur={() => { void applyOrg(orgTrigger); }}
-                              placeholder={t('settings.connections.orgKeyPlaceholder')}
-                              className="cth-input" style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-mono)' }}
-                            />
-                            <PixelButton
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => setShowOrgKey((v) => !v)}
-                              disabled={!orgTrigger.apiKey}
-                            >
-                              {showOrgKey ? t('common.hide') : t('common.show')}
-                            </PixelButton>
-                          </div>
-                        </label>
-
-                        <span style={hint}>
-                          {CLONE_NODE_BLURB}
-                        </span>
-
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, width: 200 }}>
-                          <span style={slackLabelStyle}>{t('settings.connections.mode')}</span>
-                          <select
-                            value={orgTrigger.mode}
-                            onChange={(e) => { void applyOrg({ ...orgTrigger, mode: e.target.value as TriggerMode }); }}
-                            className="cth-input" style={slackInputStyle}
-                          >
-                            {TRIGGER_MODES.map((m) => (
-                              <option key={m.value} value={m.value}>{m.label}</option>
-                            ))}
-                          </select>
-                        </label>
-                        <span style={hint}>
-                          {TRIGGER_MODES.find((m) => m.value === orgTrigger.mode)?.blurb ?? ''}
-                        </span>
-
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                          <PixelButton variant="ghost" size="sm" onClick={() => { void applyOrg(orgTrigger); }} disabled={orgBusy}>
-                            {t('common.save')}
-                          </PixelButton>
-                          {orgNote && (
-                            <span style={{ fontSize: 12, color: 'var(--cth-ink-500)' }}>{orgNote}</span>
-                          )}
-                        </div>
-
-                        <span style={hint}>
-                          {t('settings.connections.orgConfigOnly')}
-                        </span>
-                      </div>
-                      </>)}
 
                     </>
                   )}

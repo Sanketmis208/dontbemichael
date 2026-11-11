@@ -2,7 +2,7 @@
 
 /**
  * The trigger ledger (src/main/triggerHistory.ts) is the plaintext record the
- * History tab shows for webhook and organisation messages. It is built field by
+ * History tab shows for webhook messages. It is built field by
  * field so a webhook secret or API key never reaches disk, it is capped and
  * newest first, only the owner's verdict on an entry can change, and a missing,
  * damaged or hand-edited file degrades to an empty or shorter ledger instead of
@@ -44,9 +44,9 @@ const input = (over = {}) => ({
 });
 
 test('a secret or API key on the caller\'s object is never written to the ledger', () => {
-  // Value: protects=a webhook secret or org key never lands in plaintext userData; fails_when=an entry is built by spreading the caller's object; why_new=the field by field rule is documented in the module header but nothing enforced it
+  // Value: protects=a webhook secret or API key never lands in plaintext userData; fails_when=an entry is built by spreading the caller's object; why_new=the field by field rule is documented in the module header but nothing enforced it
   const SECRET = 'whsec-DO-NOT-PERSIST';
-  const KEY = 'sk-org-DO-NOT-PERSIST';
+  const KEY = 'sk-key-DO-NOT-PERSIST';
   const returned = appendTriggerHistory(input({ secret: SECRET, apiKey: KEY, token: KEY, nested: { secret: SECRET } }));
 
   for (const field of ['secret', 'apiKey', 'token', 'nested']) {
@@ -121,18 +121,8 @@ test('updating an id that is not in the ledger returns null and changes nothing'
   assert.deepEqual(listTriggerHistory(), before);
 });
 
-test('clearing one source keeps the other, and clearing everything removes the file', () => {
-  // Value: protects=clearing webhook noise keeps the org conversation, and a full clear leaves no stale file; fails_when=clear(source) removes both halves or a full clear leaves the file; why_new=neither clear path had a test
-  appendTriggerHistory(input({ source: 'webhook', body: 'hook 1' }));
-  appendTriggerHistory(input({ source: 'org', body: 'org 1' }));
-  appendTriggerHistory(input({ source: 'webhook', body: 'hook 2' }));
-
-  clearTriggerHistory('webhook');
-  assert.deepEqual(listTriggerHistory().map((e) => e.body), ['org 1']);
-
-  clearTriggerHistory('org');
-  assert.deepEqual(listTriggerHistory(), []);
-
+test('clearing everything removes the file', () => {
+  // Value: protects=a full clear leaves no stale file; fails_when=a full clear leaves the file; why_new=the clear path had no test
   appendTriggerHistory(input());
   assert.equal(fs.existsSync(ledgerFile), true);
   clearTriggerHistory();
@@ -144,13 +134,12 @@ test('clearing an empty ledger does not throw', () => {
   // Value: protects=a request path that clears before anything was recorded; fails_when=a missing file raises; why_new=the no file case was untested
   assert.equal(fs.existsSync(ledgerFile), false);
   assert.doesNotThrow(() => clearTriggerHistory());
-  assert.doesNotThrow(() => clearTriggerHistory('org'));
   assert.deepEqual(listTriggerHistory(), []);
 });
 
 test('rows that are not valid entries are dropped and the valid ones stay', () => {
   // Value: protects=a hand edited or half written file loses only its bad rows; fails_when=one bad row empties the ledger or reaches the UI; why_new=row validation was untested
-  const good = { id: 'good', source: 'org', direction: 'outbound', body: 'kept', at: 5 };
+  const good = { id: 'good', source: 'webhook', direction: 'outbound', body: 'kept', at: 5 };
   const bad = [
     null,
     'a string',
@@ -158,6 +147,7 @@ test('rows that are not valid entries are dropped and the valid ones stay', () =
     { ...good, id: undefined },
     { ...good, id: 7 },
     { ...good, source: 'slack' },
+    { ...good, source: 'org' },
     { ...good, direction: 'sideways' },
     { ...good, body: null },
     { ...good, at: '5' }
@@ -169,7 +159,7 @@ test('rows that are not valid entries are dropped and the valid ones stay', () =
 
 test('a file that is not a list reads as an empty ledger', () => {
   // Value: protects=a valid JSON file of the wrong shape does not crash the History tab; fails_when=a non array parse result is iterated; why_new=wrong shape was untested
-  fs.writeFileSync(ledgerFile, JSON.stringify({ id: 'x', source: 'org' }), 'utf8');
+  fs.writeFileSync(ledgerFile, JSON.stringify({ id: 'x', source: 'webhook' }), 'utf8');
   assert.deepEqual(listTriggerHistory(), []);
 });
 

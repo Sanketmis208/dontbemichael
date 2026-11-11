@@ -382,12 +382,6 @@
       "mode": "模式",
       "format": "格式",
       "webhooksHint": "调用方把请求 POST 到 webhook 的 URL，密钥放在 x-md-webhook-secret 请求头中。每个 webhook 都会按自己的格式校验请求体（在上方编辑）。所有到达的内容都交给 {{godName}} 分派，他面板上的历史标签页会列出全部记录。",
-      "organisation": "组织",
-      "orgKey": "组织密钥",
-      "orgKeyDesc": "队友的安装如何找到你的实例。",
-      "apiKey": "API 密钥",
-      "orgKeyPlaceholder": "粘贴你的组织密钥",
-      "orgConfigOnly": "目前仅限配置。组织消息服务尚不存在，所以这里的密钥不会启动任何传输，它会被保存、显示在触发器标签页中，然后等待。",
       "newSecret": "已生成新密钥，请立即复制。",
       "secretFailed": "无法生成新密钥，请重试。",
       "noteSaved": "已保存",
@@ -416,7 +410,6 @@
       "terminal": "工作",
       "history": "历史",
       "memory": "记忆",
-      "workers": "工人",
       "advanced": "高级",
       "officeSchedule": "办公室日程"
     },
@@ -1001,20 +994,6 @@
     "defaultModelPlaceholder": "默认模型（提供商/模型）",
     "autoModeCaveat": "⚠ 在自动模式下，这些引擎以完整的文件系统 + shell 访问权限运行（无沙箱），就像 Claude 的绕过模式。把自动模式关掉（通用页）即可让它们先询问。与真实模型调用的端到端实测仍在等待你的密钥 / 本地 LLM。"
   },
-  "mcpDefaults": {
-    "title": "默认 MCP 服务器",
-    "desc": "这些服务器会并入每个新智能体的会话设置。安全服务器默认开启；写入/密钥类服务器在你同意前保持关闭。更改在下次生成智能体时生效，正在运行的智能体不受影响。",
-    "toggleNote": "{{id}}：{{state}}",
-    "couldNotSave": "无法保存",
-    "tiers": {
-      "safeReadonly": "安全且只读（默认开启）",
-      "write": "写入访问（需要同意）",
-      "secret": "需要密钥 / API Key（需要同意）",
-      "safeReadonlyNote": "这些服务器只读取数据，不需要密钥，且限定在智能体工作区内。它们对每个新智能体启用。",
-      "writeNote": "这些服务器可以修改工作区之外的状态。默认关闭，审核后再启用。",
-      "secretNote": "这些服务器需要 API 密钥或凭据。默认关闭，添加凭据并在同意后启用。"
-    }
-  },
   "updatesSection": {
     "title": "更新",
     "onVersion": "你当前是 v{{v}}",
@@ -1103,18 +1082,7 @@
   },
   "triggersTab": {
     "schedules": "计划任务",
-    "organisation": "组织",
-    "organisationBlurb": "让队友的办公室给你的办公室发消息。",
     "officeBlurb": "所有开启中的定时工作，包括 {{godName}} 的。要修改某项工作，请打开该成员，进入其“权限”标签页。"
-  },
-  "orgSection": {
-    "acceptMessages": "接受来自你组织的消息",
-    "key": "组织密钥",
-    "keyPlaceholder": "粘贴你的密钥",
-    "trust": "信任",
-    "settingsOnly": "目前仅限设置。组织消息服务尚不存在，所以这里的密钥不会启动任何连接，也不会发送或接收任何内容。它会保存好，等服务就绪后使用。",
-    "noKeyWarning": "此项已开启但没有设置密钥，所以目前还没有队友能联系到你。",
-    "noKey": "无密钥"
   },
   "schedulesSection": {
     "label": "做什么？",
@@ -1258,16 +1226,11 @@
     "rejectTitle": "丢弃这条消息。不发送任何内容",
     "reject": "拒绝",
     "task": "任务 {{id}}",
-    "sectionWebhooks": "Webhook",
     "sectionWebhooksBlurb": "投递到你的 webhook 端点的一切，以及 {{godName}} 回复的内容。",
-    "sectionOrg": "组织",
-    "sectionOrgBlurb": "来自队友克隆节点的消息，以及 {{godName}} 回复的内容。",
     "heldOne": "有 1 条消息被暂存，等待你的决定。",
     "heldMany": "有 {{count}} 条消息被暂存，等待你的决定。",
     "decideFailed": "没有送达。请重试。",
     "clearFailed": "无法清除。请重试。",
-    "emptyOrgTitle": "这里还没有内容，一切正常。",
-    "emptyOrgBody": "队友消息功能尚未构建。你现在可以设置组织密钥并选择模式，但在传输服务上线前，没有人的克隆节点能联系到你的。上线后，他们的消息和我们的回复都会出现在这里。",
     "emptyWebhookTitle": "还没有 webhook 消息。",
     "emptyWebhookBody": "当有内容投递到你的端点时，它会出现在这里，下面是 {{godName}} 的回复。目前还没有调用进来。在 Webhook 下添加一个端点，即可获得一个可以分发出去的 URL。",
     "clearConfirm": "删除全部 {{count}} 条消息？记录将永久消失。",
@@ -1361,30 +1324,6 @@
     "removeFailed": "无法移除",
     "uninstallFailed": "卸载失败",
     "catalogUnreachable": "无法访问目录"
-  },
-  "workersTab": {
-    "stopping": "停止中",
-    "working": "工作中",
-    "liveWorkers": "活跃工人",
-    "liveIntro": "{{godName}} 为处理 Slack 消息而启动的隔离工人，它们运行到完成、在会话线程中回复，然后自动拆除。",
-    "noneRunning": "当前没有运行中的工人。",
-    "repliesToSlack": "回复到 Slack 会话线程",
-    "stoppingEllipsis": "停止中…",
-    "stop": "停止",
-    "workerIdTitle": "工人 / PTY ID",
-    "baseBranchTitle": "工作树所基于的分支",
-    "base": "base：{{branch}}",
-    "upSinceTitle": "自生成以来的时间",
-    "up": "已运行 {{age}}",
-    "idleTitle": "自上次终端输出以来的时间",
-    "ptyGone": "PTY 已消失",
-    "idle": "空闲 {{age}}",
-    "tokensTitle": "累计令牌（输入+输出+缓存）",
-    "tokens": "令牌 {{value}}",
-    "uncapped": "无上限",
-    "preserved": "保留的工作树（{{count}}）",
-    "preservedIntro": "已完成工人的工作树中保留着未整合的工作，保留（绝不自动丢弃），并在工作合入其基础分支后自动回收。",
-    "keptAgo": "{{age}} 前保留"
   },
   "memoryGraph": {
     "refresh": "刷新",

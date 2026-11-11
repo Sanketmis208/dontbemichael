@@ -105,7 +105,7 @@ test('Settings fields are the v2 input, with its focus ring', () => {
   const modal = read('src/renderer/src/components/SettingsModal.tsx');
   const uses = (modal.match(/style=\{\{?\s*(\.\.\.)?slackInputStyle/g) ?? []).length;
   const ringed = (modal.match(/className="cth-input"\s+style=\{\{?\s*(\.\.\.)?slackInputStyle/g) ?? []).length;
-  assert.ok(uses >= 18, 'every Settings field uses the shared style');
+  assert.ok(uses >= 16, 'every Settings field uses the shared style');
   assert.equal(ringed, uses, 'every Settings field carries the cth-input class');
   assert.doesNotMatch(modal, /cth-paper-100[^\n]*\n[^\n]*border: 'none',\n\s*boxShadow: 'inset 0 0 0 1px var\(--cth-ink-100\)'/);
 });

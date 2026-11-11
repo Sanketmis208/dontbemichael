@@ -16,13 +16,9 @@ import { fieldLabel } from '../fieldText';
  * answer" — so rows are folded into EXCHANGES by `correlationId` here, in the
  * renderer, and drawn as one card per exchange with both bodies in full.
  *
- * Two sources share the ledger (webhook, org) and they are switched, not
- * stacked: this lives in a ~360px sidebar, so two full lists on one scroll
- * would bury whichever one you came for.
- *
  * The only actionable rows are inbound messages a `strict` /
  * `communication-only` trigger mode held back (`decision: 'pending'`). Those
- * float to the top of their section, because approving one dispatches real
+ * float to the top, because approving one dispatches real
  * work into the hive and a held message that scrolls out of sight is a message
  * that never gets answered.
  */
@@ -42,7 +38,7 @@ interface TriggerHistoryApi {
     id: string;
     decision: 'approved' | 'rejected';
   }) => Promise<{ ok?: boolean; error?: string } | undefined>;
-  clearTriggerHistory?: (source?: 'webhook' | 'org') => Promise<unknown>;
+  clearTriggerHistory?: () => Promise<unknown>;
 }
 
 /** Read lazily: `window.cth` is installed by preload, not by module load order. */
@@ -51,8 +47,6 @@ function api(): TriggerHistoryApi {
 }
 
 /* ─────────────────────────────── exchanges ───────────────────────────────── */
-
-type Source = 'webhook' | 'org';
 
 interface Exchange {
   key: string;
@@ -356,26 +350,12 @@ function EmptyState({ title, body }: { title: string; body: string }) {
   );
 }
 
-const SECTIONS: { key: Source; labelKey: string; blurbKey: string }[] = [
-  {
-    key: 'webhook',
-    labelKey: 'triggerHistory.sectionWebhooks',
-    blurbKey: 'triggerHistory.sectionWebhooksBlurb'
-  },
-  {
-    key: 'org',
-    labelKey: 'triggerHistory.sectionOrg',
-    blurbKey: 'triggerHistory.sectionOrgBlurb'
-  }
-];
-
 /* ──────────────────────────────── the tab ────────────────────────────────── */
 
 export function TriggerHistoryTab() {
   const { t } = useTranslation();
   const godName = useStore((s) => s.agents.find((a) => a.isGod)?.name) ?? t('common.orchestrator');
   const [entries, setEntries] = useState<TriggerHistoryEntry[]>([]);
-  const [source, setSource] = useState<Source>('webhook');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [confirmClear, setConfirmClear] = useState(false);
@@ -423,77 +403,27 @@ export function TriggerHistoryTab() {
     const call = api().clearTriggerHistory;
     setConfirmClear(false);
     if (!call) return;
-    setEntries((rows) => rows.filter((r) => r.source !== source));
-    call(source).catch(() => { setError(t('triggerHistory.clearFailed')); load(); });
-  }, [source, load, t]);
+    setEntries([]);
+    call().catch(() => { setError(t('triggerHistory.clearFailed')); load(); });
+  }, [load, t]);
 
-  const counts = useMemo(() => {
-    const c: Record<Source, { total: number; pending: number }> = {
-      webhook: { total: 0, pending: 0 },
-      org: { total: 0, pending: 0 }
-    };
-    for (const e of entries) {
-      const bucket = c[e.source];
-      if (!bucket) continue;
-      bucket.total += 1;
-      if (e.direction === 'inbound' && e.decision === 'pending') bucket.pending += 1;
-    }
-    return c;
-  }, [entries]);
-
-  const exchanges = useMemo(
-    () => buildExchanges(entries.filter((e) => e.source === source)),
-    [entries, source]
+  const pendingCount = useMemo(
+    () => entries.filter((e) => e.direction === 'inbound' && e.decision === 'pending').length,
+    [entries]
   );
 
-  const section = SECTIONS.find((s) => s.key === source) ?? SECTIONS[0];
-  const pendingCount = counts[source].pending;
+  const exchanges = useMemo(() => buildExchanges(entries), [entries]);
 
   return (
     <div style={{
       flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
       background: 'var(--cth-paper-200)'
     }}>
-      {/* Section switcher — the panel is too narrow to stack both lists. */}
-      <div style={{
-        display: 'flex', flexShrink: 0,
-        background: 'var(--cth-cream-200)', boxShadow: 'inset 0 -1px 0 var(--cth-ink-300)'
-      }}>
-        {SECTIONS.map((s) => {
-          const active = s.key === source;
-          const p = counts[s.key].pending;
-          return (
-            <button
-              key={s.key}
-              type="button"
-              onClick={() => { setSource(s.key); setConfirmClear(false); setError(null); }}
-              style={{
-                flex: 1, height: 32, padding: '0 8px', border: 'none', cursor: 'pointer',
-                background: active ? 'var(--cth-paper-200)' : 'transparent',
-                boxShadow: active ? 'inset 0 -2px 0 var(--cth-ink-900)' : 'none',
-                fontFamily: 'var(--cth-font-display)', fontSize: 10, fontWeight: 600, lineHeight: '12px',
-                color: active ? 'var(--cth-ink-900)' : 'var(--cth-ink-500)',
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-                minWidth: 0
-              }}
-            >
-              <span style={ellipsis}>{t(s.labelKey).toUpperCase()}</span>
-              {p > 0 && (
-                <span style={{
-                  ...badgeStyle('var(--cth-lemon-light)', 'var(--cth-lemon)'),
-                  padding: '2px 4px 1px'
-                }}>{p}</span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
       <div style={{
         flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden',
         padding: 8, display: 'flex', flexDirection: 'column', gap: 8
       }}>
-        <div style={{ ...muted, fontSize: 11, lineHeight: '16px' }}>{t(section.blurbKey, { godName })}</div>
+        <div style={{ ...muted, fontSize: 11, lineHeight: '16px' }}>{t('triggerHistory.sectionWebhooksBlurb', { godName })}</div>
 
         {pendingCount > 0 && (
           <div style={{
@@ -516,17 +446,10 @@ export function TriggerHistoryTab() {
         )}
 
         {exchanges.length === 0 ? (
-          source === 'org' ? (
-            <EmptyState
-              title={t('triggerHistory.emptyOrgTitle')}
-              body={t('triggerHistory.emptyOrgBody')}
-            />
-          ) : (
-            <EmptyState
-              title={t('triggerHistory.emptyWebhookTitle')}
-              body={t('triggerHistory.emptyWebhookBody', { godName })}
-            />
-          )
+          <EmptyState
+            title={t('triggerHistory.emptyWebhookTitle')}
+            body={t('triggerHistory.emptyWebhookBody', { godName })}
+          />
         ) : (
           exchanges.map((ex) => (
             <ExchangeCard
@@ -540,12 +463,12 @@ export function TriggerHistoryTab() {
           ))
         )}
 
-        {counts[source].total > 0 && (
+        {entries.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
             {confirmClear ? (
               <>
                 <div style={{ ...muted, fontSize: 11, lineHeight: '16px' }}>
-                  {t('triggerHistory.clearConfirm', { count: counts[source].total })}
+                  {t('triggerHistory.clearConfirm', { count: entries.length })}
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <PixelButton variant="destructive" size="sm" onClick={clear}>{t('triggerHistory.deleteThem')}</PixelButton>

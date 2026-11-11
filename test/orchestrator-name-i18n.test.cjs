@@ -14,7 +14,6 @@ test('the fallback name for Michael is translated', () => {
   for (const f of [
     'src/renderer/src/components/CommandCenterPanel.tsx',
     'src/renderer/src/components/SettingsModal.tsx',
-    'src/renderer/src/components/WorkersTab.tsx',
     'src/renderer/src/components/triggers/TriggerHistoryTab.tsx'
   ]) {
     const src = read(f);

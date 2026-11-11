@@ -17,7 +17,6 @@ import {
 } from '@shared/agentProvider';
 import type {
   ContextTriggerConfig,
-  OrgTriggerConfig,
   WebhookTrigger
 } from '@shared/triggers';
 import { isNewer } from '@shared/updateState';
@@ -110,9 +109,6 @@ export interface HarnessConfig {
   recentHives?: string[];
   registeredRepos: string[];
   autoMode: boolean;
-  /** May the orchestrator ("Michael") spin up agents on its own? Default FALSE,
-   *  so an absent value reads as off. Mirrors src/main/config.ts. */
-  orchestratorMaySpawn?: boolean;
   defaultCommand: string;
   /** Default model for newly spawned agents (e.g. 'claude-sonnet-4-6[1m]'); unset = CLI default. */
   defaultModel?: string;
@@ -124,9 +120,6 @@ export interface HarnessConfig {
   /** The owner's monthly Claude plan price in USD; unset uses the detected plan's (mirrors src/main/config.ts). */
   planPriceMonthly?: number;
   godModel?: string;
-  /** Per-server consent for the default MCP bundle, keyed by catalog id (mirrors
-   *  src/main/config.ts; seeded from MCP_CATALOG). */
-  mcpDefaults?: { [id: string]: { enabled: boolean } };
   /** Mailboxes connected in Settings (docs/designs/multi-mailbox.md). Metadata
    *  only; each app password lives in the secret store under `mail:<id>`. */
   mailboxes?: MailboxRecord[];
@@ -203,8 +196,6 @@ export interface HarnessConfig {
   contextTrigger?: ContextTriggerConfig;
   /** Inbound HTTP endpoints, one per caller — replaces the legacy trio above. */
   webhookTriggers?: WebhookTrigger[];
-  /** Peer messaging between teammates' clone nodes (persistence + UI only). */
-  orgTrigger?: OrgTriggerConfig;
   /** One-time guard for the main-process triggers migration; read-only here. */
   triggersMigratedV1?: boolean;
 }

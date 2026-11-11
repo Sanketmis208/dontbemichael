@@ -43,7 +43,7 @@ test('the strings that talk about the orchestrator interpolate {{godName}}', () 
   // A representative spread: settings, command centre, onboarding, triggers.
   for (const k of ['settings.connections.slackDesc', 'commandCenter.michaelDecides',
                    'onboarding.orchestrator.modelNote', 'triggerHistory.approveTitle',
-                   'workersTab.liveIntro', 'kanban.newWorkHint']) {
+                   'kanban.newWorkHint']) {
     assert.ok(k in en, `${k} vanished from en.json`);
     assert.match(text(en[k]), /\{\{godName\}\}/, `${k} does not interpolate godName`);
   }

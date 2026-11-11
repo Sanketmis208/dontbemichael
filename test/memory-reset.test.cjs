@@ -447,10 +447,7 @@ test('every reader of handled messages has its after reset behavior stated here'
     },
     'src/main/index.ts': {
       isFloorQuiet: 'a missing folder is skipped; inbox, log and terminals still judge',
-      lastCoordinationAt: 'a missing folder is skipped; inbox, outbox and notes still count',
-      archiveRequest: 'spawn requests, not member mail; untouched',
-      workerSignaledDone: 'spawn requests, not member mail; untouched',
-      processSpawnRequest: 'spawn requests, not member mail; untouched'
+      lastCoordinationAt: 'a missing folder is skipped; inbox, outbox and notes still count'
     },
     'src/main/checkedBackfill.ts': { backfillChecked: 'finds nothing to backfill from mail; marks already recorded stay' },
     'src/shared/agentPrivatePaths.ts': { privateOwnerSentDir: 'the owner\'s own mail; kept', legacyOwnerSentDir: 'the owner\'s own mail; kept' },

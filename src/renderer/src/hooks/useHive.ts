@@ -38,10 +38,6 @@ import { isTerminalPrompt } from '../../../shared/hookEvents';
 import { cutText } from '@shared/cutText';
 
 const GOD_ID = 'god';
-/** Accent palette for MAIN-spawned agents (temporary workers) — picked deterministically
- *  from the agent id so the same agent always gets the same colour. Mirrors the
- *  AddAgentModal palette. */
-const SPAWN_ACCENTS = ['coral', 'mint', 'sky', 'lemon', 'lilac', 'peach'] as const;
 const GOD_PTY = `pty-${GOD_ID}`;
 
 // Provider-agnostic PTY-quiescence idle fallback (#2e). A non-Claude bridge that
@@ -1306,61 +1302,6 @@ export function useHive(config: HarnessConfig | null): void {
       if (!msg?.targetId || !msg?.text?.trim()) return;
       useStore.getState().enqueueMessage(msg.targetId, msg.text.trim());
     });
-  }, [config?.onboardingComplete]);
-
-  // 5b) MAIN-initiated roster changes (temporary workers starting and ending). The
-  //     renderer store is only mutated by renderer-initiated hires (AddAgentModal);
-  //     a worker spawn/teardown runs in MAIN (spawnAgentCore / teardownPty, owner=null) and would otherwise
-  //     be invisible on the floor. Main broadcasts; we build/archive the card here.
-  useEffect(() => {
-    if (!config?.onboardingComplete) return;
-    const offSpawn = window.cth.onHiveAgentSpawned?.((rec) => {
-      if (!rec?.id) return;
-      // addAgent is idempotent, but bail early if the renderer already carded it.
-      if (useStore.getState().agents.some((a) => a.id === rec.id)) return;
-      // An explicit character wins; otherwise infer it from the name, which is
-      // what makes "spawn one called Meredith" land on the Meredith avatar with
-      // nothing else asked for. The explicit field covers what inference cannot
-      // express: an agent named something else that should still look like a
-      // particular character. Unknown values fall through to the inference rather
-      // than breaking the card.
-      const castMember = (q?: string) =>
-        q ? HIREABLE_CAST.find((m) => m.name === q || m.displayName.toLowerCase() === q)?.name : undefined;
-      const character =
-        castMember(rec.character?.trim().toLowerCase()) ??
-        castMember((rec.name || rec.id).toLowerCase()) ??
-        DEFAULT_CHARACTER;
-      // Accent is otherwise hashed from the worker id, which is stable but not
-      // choosable. An unrecognised accent keeps the hash.
-      const askedAccent = SPAWN_ACCENTS.find((a) => a === rec.accent?.trim().toLowerCase());
-      let h = 0;
-      for (const ch of rec.id) h = (h + ch.charCodeAt(0)) % SPAWN_ACCENTS.length;
-      const project = (rec.cwd || '').split(/[\\/]/).filter(Boolean).pop() || 'hive';
-      const agent: Agent = {
-        id: rec.id,
-        name: rec.name || rec.id,
-        character,
-        accent: askedAccent ?? SPAWN_ACCENTS[h],
-        description: rec.role || 'a fresh harness',
-        project,
-        tmuxTarget: '',
-        cwd: rec.cwd,
-        status: 'idle',
-        action: ACTION_CLOCKING_IN,
-        progress: 0,
-        currentStation: 'desk',
-        ptyId: rec.id,
-        command: rec.command,
-        provider: rec.provider as Agent['provider'],
-        isGod: false,
-        recentTextTs: Date.now()
-      };
-      useStore.getState().addAgent(agent);
-    });
-    const offArchive = window.cth.onHiveAgentArchived?.((e) => {
-      if (e?.id) useStore.getState().archiveAgent(e.id);
-    });
-    return () => { offSpawn?.(); offArchive?.(); };
   }, [config?.onboardingComplete]);
 
   // 6) Context upkeep has no clock-driven path here any more: compaction is
