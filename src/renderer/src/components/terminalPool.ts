@@ -21,6 +21,7 @@ import { Unicode11Addon } from '@xterm/addon-unicode11';
 import {
   isPathToken, linkCellRange, linkableTokens, stripPathToken
 } from '@shared/terminalPaths';
+import { createPathStatCache } from '@shared/pathStatCache';
 import {
   createTerminalRecoveryState,
   normalizePtyChunk,
@@ -859,33 +860,17 @@ export function disposeTerminal(ptyId: string): void {
 // Plain click stays with the TUI (matches VS Code's terminal convention).
 // The path string is agent output — treated as hostile: it flows only into a
 // read-only stat and a REVEAL in the file browser (never an "open with the
-// default app", which would turn a printed path into an execution), and only
-// on an explicit modifier-click. Which tokens count as paths lives in
-// @shared/terminalPaths.
-type StatResult = { exists: boolean; isFile: boolean; path: string };
-/** One stat per path for hover and click alike: an answer is kept for a few
- *  seconds (a file saved a moment later is seen on the next look), and a check
- *  already running is shared, so hovering again never stacks another one on a
- *  slow path. Main's statAbs refuses a network path without a stat
- *  (isNetworkPath in src/main/fs.ts), on hover and on click alike. */
-const STAT_TTL_MS = 10_000;
-const statCache = new Map<string, { at: number; res: StatResult | null }>();
-const statInFlight = new Map<string, Promise<StatResult | null>>();
-
-function statCached(abs: string): Promise<StatResult | null> {
-  const hit = statCache.get(abs);
-  if (hit && Date.now() - hit.at < STAT_TTL_MS) return Promise.resolve(hit.res);
-  const running = statInFlight.get(abs);
-  if (running) return running;
-  const check = window.cth.statAbs(abs).catch(() => null).then((res) => {
-    statInFlight.delete(abs);
-    if (statCache.size > 500) statCache.clear();
-    statCache.set(abs, { at: Date.now(), res });
-    return res;
-  });
-  statInFlight.set(abs, check);
-  return check;
-}
+// default app", which would turn a printed path into an execution).
+// The stat runs on a modifier-click, and also on hover for one case: a quoted
+// match with a space inside (a real "/Users/Jane/My Reports/a.md", or quoted
+// prose such as "/tmp is full, see notes.md") links whole only once the disk
+// says it is there. Main's statAbs refuses a network path without a stat
+// (isNetworkPath in src/main/fs.ts), on hover and on click alike. Which tokens
+// count as paths lives in @shared/terminalPaths; what is kept between looks,
+// and how many hover checks may run at once, in @shared/pathStatCache.
+const pathStats = createPathStatCache({
+  stat: (abs) => window.cth.statAbs(abs)
+});
 
 function resolvePathCandidate(ptyId: string, raw: string): string | null {
   const p = stripPathToken(raw);
@@ -915,7 +900,7 @@ void import('@/store/store')
  *  A miss is silent by design — the token is agent output and may simply not
  *  exist. */
 async function activatePath(abs: string): Promise<void> {
-  const res = await statCached(abs);
+  const res = await pathStats.lookForClick(abs);
   if (!res || !res.exists) return;
   const hit = res.path;
   void window.cth.revealPath(hit).catch(() => { /* file browser refused */ });
@@ -924,18 +909,12 @@ async function activatePath(abs: string): Promise<void> {
 /** Is a quoted match with a space inside known to be a real path on disk, so it
  *  links whole? Answered now, from what is already known, because the link
  *  provider must answer for the line as it is (a late answer can land on a line
- *  that has scrolled or on another hovered line). A path not seen yet counts as
- *  not on disk this time, so only the file names inside it link, and a check
- *  starts in the background; the next hover links the whole path. A path that
- *  does not resolve (no cwd yet) is never on disk, and main answers a path on
- *  another machine as not on disk without looking. */
-function quotedKnownOnDisk(ptyId: string, raw: string): boolean {
-  const abs = resolvePathCandidate(ptyId, raw);
-  if (!abs) return false;
-  const hit = statCache.get(abs);
-  if (hit && Date.now() - hit.at < STAT_TTL_MS) return !!hit.res?.exists;
-  void statCached(abs);
-  return false;
+ *  that has scrolled or on another hovered line). A path not checked yet is
+ *  undefined, so nothing in it links this time, and a check may start in the
+ *  background; a later hover knows. A path that does not resolve (no cwd yet)
+ *  is never on disk and is never checked. */
+function quotedKnownOnDisk(ptyId: string, raw: string): boolean | undefined {
+  return pathStats.knownOnDisk(resolvePathCandidate(ptyId, raw));
 }
 
 /** A buffer line's cells as linkCellRange reads them. */

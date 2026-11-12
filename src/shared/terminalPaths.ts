@@ -96,8 +96,13 @@ export function quotedNeedsCheck(raw: string): boolean {
  *
  * Synchronous on purpose: the terminal asks on hover and must answer for the
  * line as it is now. `onDisk` gets the raw match, quotes and all, and answers
- * from what is already known (the terminal starts a check in the background for
- * a path it has not seen, so the next hover links it whole).
+ * from what is already known: true (on disk, link it whole), false (not on
+ * disk, try the file names inside it) or undefined (not checked yet, link
+ * nothing in it this time). The terminal starts a check in the background for a
+ * path it has not seen, so a later hover knows. Linking nothing until then
+ * keeps a real "/Users/Jane/Q3 summary.md" from linking summary.md in the
+ * agent's folder on the first hover; the cost is that the file name inside
+ * quoted prose links one hover later. A callback that throws counts as false.
  *
  * Only a bare file name falls back, never a token with a separator: in
  * `"/Users/Jane/Q3 Reports/summary.md"` printed before the file exists, the piece
@@ -105,15 +110,16 @@ export function quotedNeedsCheck(raw: string): boolean {
  * file.
  */
 export function linkableTokens(
-  text: string, onDisk: (raw: string) => boolean
+  text: string, onDisk: (raw: string) => boolean | undefined
 ): Array<{ raw: string; index: number }> {
   const out: Array<{ raw: string; index: number }> = [];
   const re = pathTokenMatcher();
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
     const raw = m[0];
-    let whole = !quotedNeedsCheck(raw);
+    let whole: boolean | undefined = !quotedNeedsCheck(raw);
     if (!whole) { try { whole = onDisk(raw); } catch { whole = false; } }
+    if (whole === undefined) continue;
     if (whole) { out.push({ raw, index: m.index }); continue; }
     const inner = new RegExp(UNQUOTED_PATH, 'g');
     const body = raw.slice(1, -1);

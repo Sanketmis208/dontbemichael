@@ -102,7 +102,9 @@ test('quoted prose that starts with a slash links only the file name inside it',
   assert.deepEqual(tokensIn('note: "/ see notes.md"'), ['notes.md']);
   assert.deepEqual(tokensIn("note: '/ see notes.md'"), ['notes.md']);
   assert.deepEqual(tokensIn('note: `./ then open plan.md`'), ['plan.md']);
-  // a real path with spaces inside its folder names still links whole
+  // the pattern still matches a real path with spaces in its folder names
+  // whole; the provider links it whole only once the disk says it is there
+  // (linkableTokens, below)
   assert.deepEqual(tokensIn('saved "/Users/Jane/Business Reports/summary.md"'), ['/Users/Jane/Business Reports/summary.md']);
 });
 
@@ -155,6 +157,21 @@ test('the fallback links only bare file names, and each quoted match is judged o
     const realQ = `saved ${q}/srv/My Office/plan.md${q}`;
     assert.deepEqual(linkableTokens(realQ, () => true).map((t) => t.raw), [`${q}/srv/My Office/plan.md${q}`], `${q} quotes link whole when on disk`);
   }
+});
+
+test('a quoted match not checked yet links nothing, so a real spaced path never links a file of the same name elsewhere', () => {
+  // Value: protects=the first hover on "/Users/Jane/Q3 summary.md" does not link summary.md in the agent's folder, which ⌘-click would then reveal (review of #687, item 5); fails_when=an unknown answer falls back to the file names inside, or stops other matches on the line from linking; why_new=onDisk had only two answers; seam=the onDisk callback stands in for the terminal's stat cache
+  const { linkableTokens } = loadTs('src/shared/terminalPaths.ts');
+  const unknown = () => undefined;
+  assert.deepEqual(linkableTokens('saved "/Users/Jane/Q3 summary.md"', unknown), [], 'a real file with a space in its name');
+  assert.deepEqual(linkableTokens('warn: "/tmp is full, see notes.md" now', unknown), [], 'quoted prose waits one hover too');
+
+  const line = 'open src/a.ts, "/Users/Jane/Q3 summary.md" and "/tmp/x.md"';
+  assert.deepEqual(linkableTokens(line, unknown).map((t) => t.raw), ['src/a.ts', '"/tmp/x.md"'], 'other matches on the line still link');
+
+  // Once the check is back, the same line links by the answer.
+  assert.deepEqual(linkableTokens('saved "/Users/Jane/Q3 summary.md"', () => true).map((t) => t.raw), ['"/Users/Jane/Q3 summary.md"']);
+  assert.deepEqual(linkableTokens('warn: "/tmp is full, see notes.md" now', () => false).map((t) => t.raw), ['notes.md']);
 });
 
 test('quoted versions and prose do not become file paths', () => {
