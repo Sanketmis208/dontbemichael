@@ -95,14 +95,14 @@ test('time groups earlier in the year: This quarter, then Next quarter, then Lat
 });
 
 test('open lanes show a heading where the group changes; Done has none; every language has the words', () => {
-  // Value: protects=the headings and their words in three languages, no dashes; fails_when=a heading repeats per card, Done grows headings, or a language misses a group; why_new=new UI; seam=source pins (no DOM harness)
+  // Value: protects=the headings and their words, no dashes; fails_when=a heading repeats per card, Done grows headings, or a language misses a group; why_new=new UI; seam=source pins (no DOM harness)
   const kanban = read('src/renderer/src/components/TasksKanban.tsx');
   assert.match(kanban, /const group = col\.key === 'done' \|\| !dated \? null : nextGroup\(x\.nextAt, now\);/);
   assert.match(kanban, /const dated = cards\.some\(\(c\) => nextGroup\(c\.nextAt, now\) !== 'none'\);/, 'a lane with no dates has no headings');
   assert.match(kanban, /group !== nextGroup\(cards\[i - 1\]\.nextAt, now\)/);
   assert.match(kanban, /role="heading" aria-level=\{3\}/);
   const keys = ['overdue', 'today', 'tomorrow', 'thisMonth', 'thisQuarter', 'laterThisYear', 'nextQuarter', 'nextYear', 'later', 'none'];
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const g = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).kanban.group;
     for (const k of keys) {
       assert.equal(typeof g[k], 'string', `${loc} ${k}`);

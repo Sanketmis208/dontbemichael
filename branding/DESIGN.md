@@ -267,6 +267,29 @@ monitor with code, operations box, team sparkle. They sit in the department tab 
 | `team` | A new job written in the hire wizard | `#EDEBF6` | `#D8D5EA` | `#C4C0DE` | `#6C6884` |
 | `manager` | Michael | glass (§8.4) | | | `#6C5CE7` |
 
+**Wash** (owner, 2026-11-05; `docs/designs/ask-me-department-colors.md`). A department's
+lightest tint, for the chips of the Ask me department row (§7.8): `l` mixed half into `card`
+in light, and the dark `l` mixed 30% into `card` in dark (`family().wash`,
+`scene/studio/theme.ts`). Text on it keeps 4.5:1 (lowest: `ink-3` 4.79, `green-text` 4.65,
+`coral-text` 4.80 in light; `ink-3` 4.81 in dark) and the `indigo` focus ring 3:1 (4.38
+light, 4.47 dark). It was first made to fill whole Ask me cards; the owner saw that in the
+app and chose white cards with the department row instead (2026-11-05).
+
+| Department | Light wash | Dark wash |
+|---|---|---|
+| `front-desk` | `#FFF2F6` | `#3B2736` |
+| `support` | `#EEF7FF` | `#283043` |
+| `sales` | `#FFF9E6` | `#3B3530` |
+| `finance` | `#ECFAF4` | `#283A3B` |
+| `marketing` | `#FFF3EC` | `#3B2E30` |
+| `people` | `#F7F3FE` | `#2F2743` |
+| `it` | `#F0F3FB` | `#282C43` |
+| `operations` | `#EAF9FA` | `#283943` |
+| `team` | `#F6F5FB` | `#2B2743` |
+
+Three washes sit close (it and team, support and it, people and team, ΔE 2 to 3); on the
+department chips the `acc` key and the name carry the difference.
+
 **Dark derivation.** In dark mode each family is derived from its `m` value in HLS:
 `l` = L .36 S .34, `m` = L .28 S .30, `d` = L .22 S .28, `acc` = L .70 S .80 of `acc`.
 Monitors are glass in both themes (§8.3): a working screen takes `acc`, with a softer halo
@@ -544,11 +567,11 @@ opens a menu: **Office schedule** (opens Michael's Office schedule tab), **Closi
 pill never shows a closing time; the reference
 screens' "closes 6:00 PM" is sample copy (§17).
 
-### 7.4 Version chip (UpdateBadge, CliUpdateBadge)
+### 7.4 Version chip (UpdateBadge)
 
 Mono 11 px, `card` fill, `line` border, `r-sm`, a 6 px dot: `blue` when current, `green`
-with "Update ready" when a download is ready, `amber` with "Team upgrade ready" for a
-Claude Code update. Click behaves as today's badges.
+with "Update ready" when a download is ready. Click behaves as today's badges. A Claude Code
+update for the team has no chip (owner, 2026-11-05): it is Michael's card on Ask me (§7.8).
 
 ### 7.5 Needs you button
 
@@ -702,6 +725,32 @@ person's memory and routed to whoever asked), no underlined titles. The cards si
 on the stage, 12 px apart, each with a `line` ring and a soft two layer shadow so it
 stands on its own.
 
+Departments (owner, 2026-11-05; `docs/designs/ask-me-department-colors.md`): cards stay
+plain `card`. Coloring whole cards by department was built, seen in the app and set aside
+by the owner: the department row below is what helps. Every member card (questions,
+schedule changes, Work style updates, mail proposals, reports) belongs to its member's
+department; a Company foundations card to the area its question is about (the bank question
+is Finance; a question several areas share takes the asker's area when it is one of them,
+else the first), and its person chip wears that area's colors. Michael's own cards, engine
+cards and a card whose member is unknown belong to none. The department is in words too:
+the person chip's tooltip and spoken label ("Oscar, Finance"; on a foundations card
+"Finance question, from Dwight"), and the card's label.
+
+- Department row: one chip per department with a card on the board, in the order the
+  departments first appear, sticky at the top of the board on its own `card` surface (`r-xl`,
+  `line` ring, `shadow-sm`; the column has no ground, §7.6). It shows with two or more
+  departments, and stays while one is picked. Chips are the §7.20 count chip at 28 px: the
+  department wash, a 6 px `acc` key, the name and a mono count; picked is the `m` fill, a
+  2 px `acc` ring and weight 600; they wrap onto more lines when they do not fit. A 7 px `acc`
+  dot marks a department whose card arrived while another was picked, until that chip or
+  Show all is pressed. Picking one shows only that department's cards; Michael's cards,
+  engine cards and reports stay. While one is picked, a line under the chips reads "Showing
+  x of y" (y the Needs you count, x what is shown) with Show all in `indigo-text`. A pick
+  clears when its department has no card left (the newest card opens, and screen readers hear
+  "Showing every team"), when a Needs you pill or for you chip opens a hidden card, and
+  whenever the board is hidden (minimized, a person panel, another view). Hidden cards stay
+  mounted, so a half written answer survives.
+
 - Title: a few plain words naming the matter, under 60 characters. Agents are told to
   write it that way (no ids, dates, mailbox names or bracketed notes), and the card cleans
   any that still arrive (`askTitle`: opaque ids and trailing bracketed metadata go; owner,
@@ -718,7 +767,8 @@ stands on its own.
   `shadow-md`): the same header, then Michael's full question as markdown at 12.5 / 18 in
   `ink`; one row with the answer (one line that grows with the text up to 160 px, about
   eight lines, then scrolls; owner, 2026-10-01: a longer answer was hard to write;
-  placeholder "Your answer, or done if you handled it") and a primary "Reply"; "Holding up N tasks" folded under it; and
+  placeholder "Your answer, or done if you handled it"; an empty box grows to show its whole
+  placeholder, owner 2026-11-05), a quiet paperclip "Add a file" and a primary "Reply"; "Holding up N tasks" folded under it; and
   a footer with "See full context" (the ask's full background and history; owner,
   2026-10-01: it is context, not a task) and "N earlier answers". The footer shows only
   when the card holds more than the question: a background, a result, or other
@@ -744,6 +794,14 @@ stands on its own.
     Recommended tag inside at 16 px and 10 px); then its field, `.cth-input` at 30 px.
     Parts 10 px apart. Any part may be left blank; Reply settles the whole ask and the
     blank ones go to the team member through Michael.
+  - A picked option's question (its `note`, written by Michael) shows whole above the box,
+    12 / 18 `ink-2`, wrapping, never clamped, and stays while the owner types; the box then
+    reads "Your answer" (owner, 2026-11-05; `docs/designs/ask-me-answer-box.md`).
+  - Files (owner, 2026-11-05): paste a screenshot or Finder files into the box, drop files on
+    the card, or press the paperclip (34 px, `ink-3`, `neutral-soft` on hover) beside Reply.
+    Each file is the Talk to Michael chip (20 px `neutral-soft` pill, name, remove) in a row
+    under the box. A file alone answers, also an option that asks for words. Files go by path
+    with the answer as "Attached files:" lines; the answered just now card shows their names.
   - Placeholders: "Or write your own answer", "Add a note (optional)" once an option is
     picked, and "Anything else (optional)" under several questions.
 - "Holding up N tasks", when tasks wait on the answer, opens to their titles in `ink-2`
@@ -788,6 +846,21 @@ stands on its own.
   `ink-3`: "HubSpot (hubspot-login.example)". Hosts are what the browser reaches
   (lowercase, punycode for a look-alike letter).
 - Optional secondary actions Michael attached (for a broken mailbox: "Open Mailboxes").
+- **Team upgrade card** (CliUpdateNotice, owner 2026-11-05; `docs/designs/team-upgrade-card.md`):
+  when Claude Code updated underneath live agents, Michael's card on Ask me, framed like the app
+  update card: "Your team has an upgrade waiting", Michael's chip, the body (one or several
+  agents behind), Later (secondary) and Close office & reopen (primary). It counts in the Needs
+  you number and keeps All clear away. Later hides it until a newer Claude Code is installed.
+  Close office & reopen runs closing time; the card steps aside while the closing bar is up
+  and comes back on a refused start or a cancel. It leaves once every agent is on the new
+  version. No toast, no top bar chip.
+- **Folding beyond questions** (owner, 2026-11-05): mail approval, schedule change and Work
+  style update cards fold like questions and share the one open card rule; the first card
+  on the board is open until the owner picks another, and focus inside a card keeps it open.
+  Folded, the header (title row and chevron, Enter and Space) shows in a line or two: a mail
+  card "To {who}" and the subject as it stands; a schedule card what changes; a Work style
+  card why. A folded card hides its body but keeps it, so typed edits and a running review
+  survive folding. Company foundations cards stay always open (§7.27a).
 - **Mail approval cards** (MailProposalCards, docs/designs/send-on-approval.md): "{name}
   wants to send an email" with the avatar; From, To and Cc as `t-meta` lines; editable
   Subject and Message fields (`.cth-input`); one quiet line when it forwards an email or
@@ -804,6 +877,12 @@ stands on its own.
   longer uses the internet", "This keeps your private data in. One team member, Pete, can look
   things up for them, after a privacy check. Pete is off until you turn them on.", Got it and Open
   Research & privacy (primary, opens Settings on Research & privacy); either clears it for good.
+- **Started with something missing** (owner, 2026-11-10; `src/shared/degradedNotices.ts`): one
+  Report card per member whose last start was degraded (a proxy bridge that never bound, a team
+  list it couldn't read). Title row: the member's avatar and "<name> started with something
+  missing"; the body is the same sentence as the desktop notification; Got it only. It shows
+  whatever the notifications setting is. A clean start clears it; Got it hides it until the
+  sentence changes or the member starts clean.
 
 ### 7.9 Schedule request card (ScheduleRequestCards)
 
@@ -1406,8 +1485,11 @@ half written message survives the switch.
   border at 40%, never a left stripe (that stays Ask me's); avatar, title 13/600, evidence 12
   in `amber` text, primary Apply, secondary Not now, and a `green` soft "Saves about $N a
   week" chip. An applied card turns `green` soft with "Applied." and Undo. Beside them, once a
-  change was applied, Saved by your changes: "Measuring" with the first result date for 7
-  days, then mono dollars in `green` text; before any change it is not there. With nothing to
+  change was applied, Your changes: one line per change still in place (owner, 2026-11-09),
+  avatar, what it set (13/600), its result in 12 ("Saved about $N since <day>" in `green`
+  text, "Cost about $N more since <day>" in `amber` text, or `ink-3` "Measuring, first result
+  <day>" and "Too little work to tell yet") and a secondary Undo. Never one signed total and
+  never a minus sign; before any change it is not there. With nothing to
   recommend, no card: one short `t-meta` `ink-3` line under the header, "Nothing to change
   this week", or before two full weeks of work "Advice from Thu, Oct 29" (owner, 2026-10-19).
   A run suggestion, from the owner's Went wrong on a scheduled job (§7.26, Scheduled jobs;
@@ -2589,6 +2671,7 @@ Needs you rework on `design/studio-v2`, through 2026-10-01). Each row is **Fix**
 | 2026-10-26 | Web: the site catches up with 0.2.7, for owners. Tiles (§9.5): Work on a schedule says a run can be marked went wrong and Michael suggests a fix in Pulse that changes nothing until you Apply; Limits in writing says how two members split work Michael routes by. Pulse lead (§9.17): Your time shows how long the office ran and how much of that you were away. /security (§9.16): each memory note says what showed it and only the owner's own answers count as theirs; a mailbox's password goes only over an encrypted connection. |
 | 2026-10-31 | File tabs show the words of Word, Excel, PowerPoint and PDF files (§7.2); a team folder named on a card is a chip (§7.8); Access gains an Integrations group (§7.12). |
 | 2026-10-26 | Web: the customer band (§9.23), businesses already running the app, between the hero and the four questions (§9.19): eyebrow "Already running at", one card per business with its own logo in a 120 x 48 box, its name, its kind of business and a link to its site. First: TalBiz Solutions. Logos are served from the site, never the business's own site; `llms.txt` and the home JSON-LD name the same businesses. |
+| 2026-11-05 | Ask me department row: chips in each department's wash with measured contrast (§3.4), the count line and new card dot, cards kept white (§7.8); mail, schedule and Work style cards fold like questions (§7.8). |
 | 2026-11-04 | Web: the site catches up with 0.3.2 to 0.3.5, for owners. A new mailbox starts on Send on approval (§9.11, §9.20, §9.21); Office and PDF files show their words in a tab (§9.14); Real costs and the Pulse picture count only the office's own use at the plan's rate, Spent $17.48 (§9.17); Custom REST integrations given per member (§9.5, §9.16); attachments, file handover and the Get featured disclosure on /security (§9.16); the mailboxes FAQ says Only send email (§9.16). |
 
 ---

@@ -25,7 +25,7 @@ Two data planes feed one renderer:
                 │ hook payloads          │ stdin / stdout
                 └─────────┬──────────────┘
                    ┌──────┴──────────────┐
-                   │ claude / agy / codex│
+                   │ claude/codex/gemini │
                    └─────────────────────┘
 ```
 
@@ -34,8 +34,8 @@ Two data planes feed one renderer:
   typed `window.cth` bridge ([`src/preload/index.ts`](../src/preload/index.ts)), which also exposes
   sandboxed filesystem and git helpers.
 - **Hive / event plane.** `hive.ts` is the on-disk multi-agent layer; `hooks.ts` runs the hook
-  server that provider bridges POST lifecycle payloads to (`cth-hook` for Claude Code, `agy-hook`
-  for Antigravity). `memory.ts` wraps the MemPalace CLI for search by meaning. The router delivers messages, drains
+  server that provider bridges POST lifecycle payloads to (`cth-hook` for Claude Code and Codex,
+  `gemini-hook` for Gemini CLI). `memory.ts` wraps the MemPalace CLI for search by meaning. The router delivers messages, drains
   provider outboxes, the GOD agent adjudicates, and idle/inbox wakeups keep workers draining mail.
 
 ## Project structure
@@ -46,7 +46,7 @@ src/
     index.ts                 window, IPC handlers, quit guard
     pty.ts                   node-pty manager (spawn/write/resize/kill/stream)
     hive.ts                  on-disk multi-agent layer (memory, mailboxes, router)
-    hooks.ts                 hook server + provider hook shims (`cth-hook`, `agy-hook`); takes each frame's sender from its per start secret (HIVE_HOOK_SEAL, #61) and refuses frames without a valid one
+    hooks.ts                 hook server + provider hook shims (`cth-hook`, `gemini-hook`); takes each frame's sender from its per start secret (HIVE_HOOK_SEAL, #61) and refuses frames without a valid one
     hookShell.ts             the shell Claude Code runs hooks and the status line in (bash, or PowerShell on Windows
                              without Git Bash), and each hook command written for it
     memory.ts                search by meaning over company knowledge (MemPalace CLI wrapper, degrade-to-noop)
@@ -184,8 +184,7 @@ src/
                              a restart
     modelCatalog.ts / hero.ts / fetchText.ts   the remote model catalog and the Settings hero card, fetched over https and
                              cached, never fatal; fetchText.ts is the one https fetcher they share
-    analytics.ts             product analytics (PostHog), anonymous, allowlisted and governed by TELEMETRY.md; off in this
-                             build (COLLECT_USAGE_STATS)
+    doNotTrack.ts            the DO_NOT_TRACK check that stops failure reports from sending
     failureReport.ts / failureSender.ts   automatic failure reports (docs/designs/auto-report-failures.md, TELEMETRY.md):
                              failures the developers can fix in code, folded by fingerprint into failures.jsonl in the
                              app's data folder, then filed as fixed fields to the private reports repo; on in this build
@@ -215,16 +214,9 @@ src/
                              undone (rules in shared/safeClear.ts)
     terminalAtFolder.ts      opens a terminal window at a folder, per platform; off in this build (SHOW_OPEN_TERMINAL)
     worktreeDeps.ts          links the base checkout's dependencies into an isolated worktree
-    realtime.ts / realtimeActions.ts / realtimeCompletionWatcher.ts / realtimeFloorWatcher.ts / realtimeCost.ts
-                             Realtime Michael, voice over OpenAI: the token mint, the voice action spine, the completion
-                             and floor watchers, and cost helpers. Off in this build (SHOW_VOICE)
-    freeflow.ts / groq.ts    Free Flow dictation through Groq Whisper (off in this build, SHOW_VOICE), and a Groq chat
-                             helper for the VDE editor's AI assist that nothing calls today
   shared/                    code both processes use
     buildFeatures.ts         switches for surfaces hidden in this build (git, IDE, temp workers, org trigger, Skills)
     agentProvider.ts         engine presets; BUILD_ENGINES is what setup offers (Claude Code today)
-    engineCapabilities.ts    what each engine can do for an office member (yes, no or unknown, per OS where it
-                             differs) and engineGaps, what an engine lacks for a job (issue #531)
     officePack.ts / officeRoles.ts / businessProfile.ts / teamPlan.ts   Office Pack schema, show roles and the department each member sits in (departmentOf), business profile, team plan
     agentDefinition.ts       each agent's levels and outward capabilities
     mailboxes.ts             mailbox and Capabilities types, providers, and mailAccess (the one mail rule,
@@ -370,7 +362,6 @@ src/
     OfficeFolderMissing,     launch screen shown only when the office folder is missing
     CliUpdateNotice,         "team upgrade ready" title-bar chip and corner note; its click runs closing time
                              with relaunch, "later" waits for a newer version (localStorage cth.cliUpdateLaterFor)
-    ToolWaterfall,           per-agent tool-span waterfall for the observability view
     TasksKanban,             dependency-aware kanban board (the Tasks view); the owner closes a card as Done,
                              never deletes it, and a Done card shows Michael's result (hiveTasks.ts holds the card
                              types and parser)

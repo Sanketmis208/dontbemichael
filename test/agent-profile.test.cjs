@@ -75,7 +75,7 @@ test("Michael's profile says what his instructions tell him to do, his team and 
 test('strings in every language, no dashes, no literal Michael', () => {
   const flat = (o, p = '') => Object.entries(o).flatMap(([k, v]) => (v && typeof v === 'object' && !Array.isArray(v) ? flat(v, `${p}${k}.`) : [[`${p}${k}`, v]]));
   const en = JSON.parse(read('src/renderer/src/i18n/locales/en.json'));
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const d = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`));
     assert.deepEqual(flat(d.profile).map(([k]) => k).sort(), flat(en.profile).map(([k]) => k).sort(), loc);
     assert.ok(d.sidebar.profile, loc);
@@ -102,7 +102,7 @@ test("every profile can open the agent's work folder, and says so when it can't"
 test("no profile says what to send the agent: Michael decides who gets what", () => {
   const src = read('src/renderer/src/components/ProfileTab.tsx');
   assert.doesNotMatch(src, /profile\.sendFor|profile\.god\.sendFor|role\.notFor/);
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const d = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).profile;
     assert.equal(d.sendFor, undefined, loc);
     assert.equal(d.god.sendFor, undefined, loc);

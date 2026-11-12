@@ -5,7 +5,7 @@
     ".github/workflows/release.yml": ["test/release-assets.test.cjs", "test/release-mac-only.test.cjs", "test/release-notes.test.cjs"],
     "test/work-style-suggest.test.cjs": []
   },
-  "empty_lanes": [],
+  "empty_lanes": ["docs/designs/*.html"],
   "selection": {},
   "warn": [],
   "strays": {

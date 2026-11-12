@@ -2,28 +2,24 @@
  * A process-wide pool of live xterm terminals, one per ptyId.
  *
  * Why: node-pty keeps no scrollback. If we created/disposed an xterm every time
- * the user switched agents (or toggled fullscreen), the new terminal would be
+ * the user switched agents, the new terminal would be
  * empty and stay blank until the TUI happened to repaint — which is exactly the
  * "terminal vanishes until I drag the splitter" bug.
  *
  * Instead each pty gets ONE Terminal for the app's lifetime. It is opened into a
  * detached host <div> and subscribes to the pty stream once, so its buffer is
- * always populated. A view (the sidebar tab or the fullscreen overlay) simply
+ * always populated. A view (the sidebar tab) simply
  * re-parents that host element into itself when it mounts and detaches it on
  * unmount — the rendered content moves with it, so the terminal is always
  * visible immediately, no repaint required.
  */
 import { useEffect, useState } from 'react';
-import { SHOW_IDE } from '@shared/buildFeatures';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
-import { arabicJoinRanges } from '@/terminal/arabicJoiner';
-import { attachArabicSpacingFix } from '@/terminal/arabicSpacingFix';
-import { isArabicTerminalEnabled } from '@/terminal/arabicSetting';
 import {
-  classifyPathToken, isNetworkPath, isPathToken, linkCellRange, linkableTokens, stripPathToken, type PathAction
+  isNetworkPath, isPathToken, linkCellRange, linkableTokens, stripPathToken
 } from '@shared/terminalPaths';
 import {
   createTerminalRecoveryState,
@@ -91,9 +87,6 @@ export interface TerminalEntry {
    * be recognised and dropped instead of corrupting the replacement. */
   generation: number;
   webgl?: WebglAddon;
-  /** Live Arabic/RTL rendering handles, present only while it is ON. Held so
-   *  the mode can be switched off again without disposing the terminal. */
-  arabic?: { joiner: number; detachSpacing: () => void };
 }
 
 const pool = new Map<string, TerminalEntry>();
@@ -378,12 +371,7 @@ export function acquireTerminal(ptyId: string, theme?: ThemeMap, fontSize = 14):
     // automation-safe.
     // A PASTE is never a submit: the TUI drops its newlines into the input box
     // and waits for a real Enter. xterm rewrites pasted newlines to "\r", so
-    // without this a five-line paste would look like five submitted messages —
-    // and the Enter that actually sends it would then be a sixth. (TELEMETRY.md
-    // → message_sent; the paste's own Enter keystroke arrives as its own chunk
-    // and is counted there.)
-    const pasted = data.includes('\x1b[200~');
-    let submitted = false;
+    // without this a five-line paste would look like five submitted prompts.
     // Inside the paste markers a line break is pasted text. An Enter after the
     // closing marker in the same chunk (a paste and send) really submits, so it
     // is tracked by position, not for the whole chunk.
@@ -415,10 +403,7 @@ export function acquireTerminal(ptyId: string, theme?: ThemeMap, fontSize = 14):
           entry.automationBlocked = true;
           entry.automationBlockedAt = Date.now();
         }
-        if (t.length >= 2) {
-          entry.onPrompt?.(t);
-          submitted = true;
-        }
+        if (t.length >= 2) entry.onPrompt?.(t);
       } else if (ch === '\x7f' || ch === '\b') {
         entry.lineBuf = entry.lineBuf.slice(0, -1);
       } else if (ch === '\x1b') {
@@ -427,11 +412,6 @@ export function acquireTerminal(ptyId: string, theme?: ThemeMap, fontSize = 14):
         entry.lineBuf += ch;
       }
     }
-    // ONE message per input chunk, at the SUBMIT boundary — not per keystroke
-    // (that is what `pty:write` sees, and counting there would meter typing) and
-    // not per line inside a paste. This is the only place the renderer can cause
-    // an analytics event; it sends a surface name and nothing else.
-    if (submitted && !pasted) void window.cth.trackMessageSent('terminal');
     entry.inputDirty = entry.lineBuf.length > 0;
     // Re-stamped on every keystroke, so the staleness clock measures time since
     // the user last touched the draft — not since they started it.
@@ -630,12 +610,6 @@ export function dismissTerminalPicker(ptyId: string): void {
  *  rather than leave a black terminal. */
 function leaseWebglRenderer(entry: TerminalEntry): void {
   if (entry.webgl) return;
-  // Arabic mode wants the DOM renderer ON PURPOSE: rows become real text nodes,
-  // so the browser's own engine does shaping and (with the CSS in
-  // design/global.css) bidi — what the WebGL cell painter structurally cannot
-  // (xterm.js has no bidi: xtermjs/xterm.js#701). Skipping the lease IS the
-  // feature, not a fallback.
-  if (isArabicTerminalEnabled()) return;
   try {
     const webgl = new WebglAddon();
     webgl.onContextLoss(() => {
@@ -707,89 +681,6 @@ function releaseWebglRenderer(entry: TerminalEntry): void {
   entry.needsRendererRepaint = true;
 }
 
-/** Turn Arabic/RTL rendering ON for one open terminal.
- *
- *  The full recipe is documented in terminal/arabicJoiner.ts: join every Arabic
- *  phrase into one render range, and strip xterm's per-span letter-spacing from
- *  Arabic spans. MUST run after `open()` — registering a joiner on an unopened
- *  terminal throws.
- *
- *  The `cth-bidi` class is what scopes the bidi CSS in design/global.css to this
- *  terminal. PR #213 applied those rules to every .xterm on the page; they are
- *  `!important` and change span layout, so an English user who fell back to the
- *  DOM renderer (a lost WebGL lease) would have had their TUI box-drawing
- *  shifted by a feature they never enabled. */
-function enableArabicRendering(entry: TerminalEntry): void {
-  if (entry.arabic) return;
-  entry.host.classList.add('cth-bidi');
-  const joiner = entry.term.registerCharacterJoiner(arabicJoinRanges);
-  const detachSpacing = attachArabicSpacingFix(entry.host);
-  entry.arabic = { joiner, detachSpacing };
-  // Terminals open at boot, often BEFORE webfonts finish loading, so xterm
-  // measures Arabic glyphs against fallback metrics and keeps them. When the
-  // real fonts land, poke fontFamily (a self-assign) to force a re-measure and
-  // full repaint.
-  void document.fonts?.ready.then(() => {
-    if (entry.exited) return;
-    const fam = entry.term.options.fontFamily;
-    entry.term.options.fontFamily = fam;
-  });
-}
-
-/** Exactly undo the above. Every step is reversible, which is the reason the
- *  switch can be live at all — nothing here disposes the terminal. */
-function disableArabicRendering(entry: TerminalEntry): void {
-  const on = entry.arabic;
-  if (!on) return;
-  entry.arabic = undefined;
-  entry.host.classList.remove('cth-bidi');
-  try { entry.term.deregisterCharacterJoiner(on.joiner); } catch { /* already gone */ }
-  try { on.detachSpacing(); } catch { /* noop */ }
-}
-
-/** Bring every OPEN terminal in line with the current setting.
- *
- *  Called when the app language changes and when the Settings toggle is used.
- *  Without it the setting would only reach terminals opened afterwards, and a
- *  user who switched to Arabic would see the terminals they already had still
- *  rendering unshaped, left-to-right — which reads as the feature not working
- *  rather than as a scoping rule.
- *
- *  It UPGRADES IN PLACE rather than rebuilding. The office scene can be rebuilt
- *  on a language switch (a8292697) because it is derived from state we still
- *  hold; a terminal cannot, because its scrollback exists only in xterm's own
- *  buffer and the pty will not resend it — recreating one would silently eat
- *  the user's history. Dropping the WebGL lease is enough: `releaseWebglRenderer`
- *  hands painting to the DOM renderer with the buffer, the pty subscription and
- *  the scrollback all untouched, and that DOM renderer is precisely what Arabic
- *  mode needs. Going the other way re-leases WebGL on the next attach.
- *
- *  A terminal that has never been opened is skipped: it has no host in the
- *  document and no joiner to register, and `attachTerminal` reads the setting
- *  fresh when it does open. */
-export function notifyArabicTerminalChangeAll(): void {
-  const want = isArabicTerminalEnabled();
-  const open = [...pool.values()].filter((e) => e.opened && !e.exited);
-  const changed = open.filter((e) => !!e.arabic !== want);
-  for (const entry of changed) {
-    if (want) {
-      // The GPU cell painter ignores CSS and cannot do bidi, so Arabic mode
-      // needs the DOM renderer. Releasing the lease keeps the buffer.
-      releaseWebglRenderer(entry);
-      enableArabicRendering(entry);
-    } else {
-      disableArabicRendering(entry);
-      // Deliberately NOT re-leasing WebGL here: the lease is taken on attach,
-      // and taking one now for an off-screen terminal is the exact GPU-context
-      // exhaustion releaseWebglRenderer exists to avoid.
-      entry.needsRendererRepaint = true;
-    }
-    repaintTerminalAfterRendererLoss(entry);
-  }
-  console.log(`[terminal] arabic -> ${want ? 'on' : 'off'}: `
-    + `${changed.length}/${open.length} open terminal(s) switched`);
-}
-
 /** Re-parent a pty's terminal into `container`, opening xterm on first attach. */
 export function attachTerminal(entry: TerminalEntry, container: HTMLElement): void {
   container.appendChild(entry.host);
@@ -798,17 +689,6 @@ export function attachTerminal(entry: TerminalEntry, container: HTMLElement): vo
     // terminal, and xterm needs its host in the document to measure the cell.
     entry.term.open(entry.host);
     entry.opened = true;
-    // Arabic/RTL terminal support (the full recipe is documented in
-    // terminal/arabicJoiner.ts): join every Arabic phrase into one render range,
-    // and strip xterm's per-span letter-spacing from Arabic spans. MUST come
-    // after open(): registering a joiner on an unopened terminal throws.
-    //
-    // The `cth-bidi` class is what scopes the bidi CSS in design/global.css to
-    // this terminal. The PR applied those rules to every .xterm on the page;
-    // they are `!important` and change span layout, so an English user who
-    // fell back to the DOM renderer (a lost WebGL lease) would have had their
-    // TUI box-drawing shifted by a feature they never enabled.
-    if (isArabicTerminalEnabled()) enableArabicRendering(entry);
   }
   leaseWebglRenderer(entry);
   // PTY startup output can arrive before this pooled terminal subscribes.
@@ -978,13 +858,10 @@ export function disposeTerminal(ptyId: string): void {
 // metadata-only fs:statAbs IPC before acting.
 // Plain click stays with the TUI (matches VS Code's terminal convention).
 // The path string is agent output — treated as hostile: it flows only into a
-// read-only stat, the existing read pipeline, or a REVEAL (never an "open with
-// the default app", which would turn a printed path into an execution), and
-// only on an explicit modifier-click.
-//
-// v0.4.5 widened this from markdown-only to every path token. What each type
-// does lives in @shared/terminalPaths, not here — this file only knows how to
-// find tokens on a line and how to run the three verdicts.
+// read-only stat and a REVEAL in the file browser (never an "open with the
+// default app", which would turn a printed path into an execution), and only
+// on an explicit modifier-click. Which tokens count as paths lives in
+// @shared/terminalPaths.
 type StatResult = { exists: boolean; isFile: boolean; path: string };
 /** One stat per path for hover and click alike: an answer is kept for a few
  *  seconds (a file saved a moment later is seen on the next look), and a check
@@ -1027,7 +904,6 @@ function resolvePathCandidate(ptyId: string, raw: string): string | null {
 interface MdStoreShape {
   getState: () => {
     agents: Array<{ ptyId?: string; cwd: string }>;
-    openFileInIde: (absPath: string) => void;
   };
 }
 let storeApi: MdStoreShape | null = null;
@@ -1035,23 +911,13 @@ void import('@/store/store')
   .then((m) => { storeApi = (m as unknown as { useStore: MdStoreShape }).useStore; })
   .catch(() => { /* store unavailable (tests) — link provider stays inert */ });
 
-/** Act on a verified path. `reveal` also takes any directory that reaches here:
- *  the IDE needs a file. A miss is silent by design — the token is agent output
- *  and may simply not exist.
- *
- *  Both non-reveal verdicts land in the IDE. The IDE already routes by type
- *  (Monaco for source, preview for markdown, the viewer for images), so this
- *  does not need to pass the verdict along — it only needs to know whether the
- *  file is ours to open at all. */
-async function activatePath(abs: string, action: PathAction): Promise<void> {
+/** Show a verified path in the file browser (Finder on a Mac), file or folder.
+ *  A miss is silent by design — the token is agent output and may simply not
+ *  exist. */
+async function activatePath(abs: string): Promise<void> {
   const hit = await statCached(abs);
   if (!hit || !hit.exists) return;
-  // With the IDE hidden (SHOW_IDE), a file link shows the file in Finder too.
-  if (action === 'reveal' || !hit.isFile || !SHOW_IDE) {
-    void window.cth.revealPath(hit.path).catch(() => { /* file browser refused */ });
-    return;
-  }
-  storeApi?.getState().openFileInIde(hit.path);
+  void window.cth.revealPath(hit.path).catch(() => { /* file browser refused */ });
 }
 
 /** Is a quoted match with a space inside known to be a real path on disk, so it
@@ -1091,7 +957,6 @@ function registerMarkdownLinkProvider(term: Terminal, ptyId: string): void {
         for (const { raw, index } of linkableTokens(text, (raw) => quotedKnownOnDisk(ptyId, raw))) {
           const abs = resolvePathCandidate(ptyId, raw);
           if (!abs) continue;
-          const action = classifyPathToken(stripPathToken(raw));
           const span = line ? linkCellRange(cellsOf(line), index, index + raw.length, raw) : null;
           if (!span) continue;
           links!.push({
@@ -1104,7 +969,7 @@ function registerMarkdownLinkProvider(term: Terminal, ptyId: string): void {
             activate: (event: MouseEvent | undefined) => {
               // ⌘/Ctrl+click only — a plain click must keep going to the TUI.
               if (event && !(event.metaKey || event.ctrlKey)) return;
-              void activatePath(abs, action);
+              void activatePath(abs);
             }
           });
         }

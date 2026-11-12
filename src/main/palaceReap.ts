@@ -21,8 +21,7 @@
  * for the user to notice or do.
  *
  * Pure and browser-global-free so the rules are unit-testable without a palace
- * on disk. Same split as `store/focusMode.ts`: the decision lives here, the
- * `rm` lives in `memory.ts`.
+ * on disk: the decision lives here, the `rm` lives in `memory.ts`.
  */
 
 /** A palace directory entry, as far as these rules care. */

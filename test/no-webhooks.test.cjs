@@ -1,0 +1,74 @@
+'use strict';
+
+/**
+ * The inbound webhook feature is gone (owner, 2026-11-11: no use case). These
+ * pin that it stays gone: no server, no trigger ledger, no IPC channel, no
+ * Settings or History copy, and an install that once saved webhooks still opens.
+ */
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const loadTs = require('./load-ts.cjs');
+
+const root = path.resolve(__dirname, '..');
+const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+
+test('the webhook server and the trigger ledger are gone', () => {
+  // Value: protects=no public inbound surface ships; fails_when=webhook.ts or triggerHistory.ts comes back; why_new=webhooks removed 2026-11-11; seam=none
+  for (const f of ['src/main/webhook.ts', 'src/main/triggerHistory.ts', 'src/main/tunnelmole.d.ts']) {
+    assert.ok(!fs.existsSync(path.join(root, f)), `${f} is gone`);
+  }
+});
+
+test('main and preload have no webhook or trigger history channel', () => {
+  // Value: protects=the renderer cannot reach a webhook or ledger handler; fails_when=a webhook:, webhooks: or triggerHistory: channel is registered or bridged; why_new=webhooks removed 2026-11-11; seam=none
+  for (const f of ['src/main/index.ts', 'src/preload/index.ts']) {
+    assert.doesNotMatch(read(f), /['"`](webhooks?|triggerHistory):/, f);
+  }
+});
+
+test('en.json has no webhook or trigger history copy', () => {
+  // Value: protects=no Settings or History text for a feature that is gone; fails_when=the webhook keys come back; why_new=webhooks removed 2026-11-11; seam=none
+  const en = JSON.parse(read('src/renderer/src/i18n/locales/en.json'));
+  assert.equal(en.triggerHistory, undefined);
+  assert.equal(en.webhooksSection, undefined);
+  assert.equal(en.settings.connections, undefined);
+  assert.equal(en.commandCenter.tabs.history, undefined);
+  assert.doesNotMatch(JSON.stringify(en), /webhook/i);
+});
+
+test('a config.json that still holds webhook fields reads and loses them', () => {
+  // Value: protects=an older install opens and its webhook secret leaves the disk; fails_when=the old fields break the read, a legacy endpoint is rebuilt, or the old secret or webhook log stays on disk; why_new=webhook fold removed from migrateTriggersV1; seam=electron app.getPath
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'md-no-webhooks-'));
+  const electron = require.resolve('electron');
+  require.cache[electron] = { id: electron, filename: electron, loaded: true, exports: { app: { getPath: () => userData } } };
+  try {
+    fs.writeFileSync(path.join(userData, 'config.json'), JSON.stringify({
+      onboardingComplete: true,
+      notifications: false,
+      webhookEnabled: true,
+      webhookSecret: 'abc123secret',
+      webhookPort: 4000
+    }));
+    fs.writeFileSync(path.join(userData, 'trigger-history.json'), '[]');
+    const { readConfig } = loadTs('src/main/config.ts');
+    const cfg = readConfig();
+    assert.equal(cfg.onboardingComplete, true);
+    assert.equal(cfg.notifications, false);
+    assert.equal(cfg.webhookTriggers, undefined, 'no endpoint is rebuilt from the old secret');
+    const saved = JSON.parse(fs.readFileSync(path.join(userData, 'config.json'), 'utf8'));
+    // The old webhook secret and settings leave the file, and the webhook log goes.
+    for (const k of ['webhookEnabled', 'webhookSecret', 'webhookPort', 'webhookTriggers']) {
+      assert.equal(k in saved, false, `${k} is removed from config.json`);
+      assert.equal(k in cfg, false, `${k} is not handed to the app`);
+    }
+    assert.doesNotMatch(fs.readFileSync(path.join(userData, 'config.json'), 'utf8'), /abc123secret/);
+    assert.equal(fs.existsSync(path.join(userData, 'trigger-history.json')), false, 'the webhook log is deleted');
+  } finally {
+    delete require.cache[electron];
+    fs.rmSync(userData, { recursive: true, force: true });
+  }
+});

@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { useResolvedGodName } from '@/hooks/useResolvedGodName';
 import type { AgentProvider } from '@shared/agentProvider';
 import { ENGINE_INSTALL_PTY, ENGINE_SIGNIN_PTY, engineSetupPhase, engineSetupPhaseOpensOffice, type EngineSetupStatus } from '@shared/engineSetup';
-import { useRtl } from '@/i18n/useDirection';
 import { Icon, type IconName } from './Icon';
 import { InfoTip } from './InfoTip';
 import { PixelButton } from './PixelButton';
@@ -323,9 +322,8 @@ const TONES = {
 function Row({ icon, glyph, tone, label, status, info, bad, dim, children }: {
   icon?: IconName; glyph?: ReactNode; tone: keyof typeof TONES; label: string; status?: string; info?: ReactNode; bad?: boolean; dim?: boolean; children?: ReactNode;
 }) {
-  const rtl = useRtl();
   const shown = icon
-    ? <Icon name={icon} size={0.875} style={icon === 'arrow-right' && rtl ? { transform: 'scaleX(-1)' } : undefined} />
+    ? <Icon name={icon} size={0.875} />
     : glyph;
   return (
     <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: 14 }}>

@@ -1,7 +1,7 @@
 'use strict';
 
-// getText (src/main/fetchText.ts) reads bodies from URLs some callers scrape off
-// third-party pages (skills.ts). A huge or endless body must stop at the cap
+// getText (src/main/fetchText.ts) reads bodies for its callers (the hero
+// payload and the model catalog). A huge or endless body must stop at the cap
 // instead of filling memory; multi-byte text under the cap must arrive whole.
 // https.request is stubbed, so nothing here touches the network.
 

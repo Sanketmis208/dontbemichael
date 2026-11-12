@@ -4,6 +4,8 @@ import type { MailProposal, ProposalDecision } from '@shared/mailProposals';
 import { useStore } from '@/store/store';
 import { useHarnessConfig } from '@/hooks/useHarnessConfig';
 import { AgentAvatar } from './AgentAvatar';
+import type { MemberLook } from './askMeFilter';
+import { ALWAYS_OPEN, FoldBody, FoldHeader, foldCardClass, foldCardStyle, type FoldControl } from './AskCardFold';
 import { GrowingTextarea } from './GrowingTextarea';
 import { PixelButton } from './PixelButton';
 import { emailHref, parseEmailHref } from '@shared/emailLink';
@@ -15,8 +17,18 @@ import { EmailChip } from '@/markdown/EmailChip';
  * Ask for changes (with a note) or Don't send. The team member sends the
  * approved version; the app keeps it, so nothing changes after the owner's yes.
  */
-export function MailProposalCards({ proposals, refresh }: { proposals: MailProposal[]; refresh: () => void }) {
-  return <>{proposals.map((p) => <ProposalCard key={p.id} p={p} refresh={refresh} />)}</>;
+export function MailProposalCards({ proposals, refresh, look, hiddenIds, fold }: {
+  proposals: MailProposal[];
+  refresh: () => void;
+  /** Each member's department look (docs/designs/ask-me-department-colors.md). */
+  look?: (agentId: string) => MemberLook | undefined;
+  /** Proposals the board's department filter hides: kept mounted, so typed
+   *  edits survive, and drawn nowhere. */
+  hiddenIds?: ReadonlySet<string>;
+  /** Folding under the board's one open card rule; open when not given. */
+  fold?: (id: string) => FoldControl;
+}) {
+  return <>{proposals.map((p) => <ProposalCard key={p.id} p={p} refresh={refresh} look={look?.(p.agentId)} hide={!!hiddenIds?.has(p.id)} fold={fold?.(p.id) ?? ALWAYS_OPEN} />)}</>;
 }
 
 /** Wraps text in a bidi isolate (FSI ... PDI) for use inside a translated line. */
@@ -32,7 +44,7 @@ const field: CSSProperties = {
 const label: CSSProperties = { fontSize: 11, fontWeight: 600, color: 'var(--cth-ink-3)' };
 const meta: CSSProperties = { fontSize: 11.5, lineHeight: '16px', color: 'var(--cth-ink-2)', overflowWrap: 'anywhere' };
 
-function ProposalCard({ p, refresh }: { p: MailProposal; refresh: () => void }) {
+function ProposalCard({ p, refresh, look: lk, hide, fold: f }: { p: MailProposal; refresh: () => void; look?: MemberLook; hide: boolean; fold: FoldControl }) {
   // From the reply's thread record; a card filed while the server was out of reach has none.
   const replyHref = p.thread?.inReplyTo ? emailHref({ mailbox: p.mailbox, messageId: p.thread.inReplyTo }) : null;
   const replying = replyHref ? parseEmailHref(replyHref) : null;
@@ -69,17 +81,19 @@ function ProposalCard({ p, refresh }: { p: MailProposal; refresh: () => void }) 
 
   return (
     <section
-      aria-label={t('askMe.mailTitle', { name })}
-      style={{
-        position: 'relative', flexShrink: 0, padding: '12px 14px', borderRadius: 'var(--cth-r-xl)',
-        background: 'var(--cth-card)', boxShadow: 'inset 0 0 0 1px var(--cth-line), var(--cth-shadow-sm)',
-        display: 'flex', flexDirection: 'column', gap: 8, fontFamily: 'var(--cth-font-ui)'
-      }}
+      aria-label={lk ? `${t('askMe.mailTitle', { name })}, ${lk.dept}` : t('askMe.mailTitle', { name })}
+      data-askme-hidden={hide || undefined}
+      className={foldCardClass(f.open)}
+      style={foldCardStyle(f.open, hide)}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 600, lineHeight: '17px', color: 'var(--cth-ink)' }}>
-        <AgentAvatar id={p.agentId} name={name} size={17} />
-        {t('askMe.mailTitle', { name })}
-      </div>
+      {/* Folded: who it goes to and the subject as it stands (owner, 2026-11-05). */}
+      <FoldHeader open={f.open} toggle={f.toggle} summary={<>{t('askMe.mailTo', { to: isolate(p.to) })}<br />{subject}</>} title={
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 600, lineHeight: '17px', color: 'var(--cth-ink)' }}>
+          <AgentAvatar id={p.agentId} name={name} size={17} />
+          {t('askMe.mailTitle', { name })}
+        </div>
+      } />
+      <FoldBody open={f.open} pin={f.pin}>
       <div style={meta}>
         {/* Addresses isolated, so they read left to right inside an Arabic line. */}
         <div>{t('askMe.mailFrom', { from: isolate(from) })}</div>
@@ -142,6 +156,7 @@ function ProposalCard({ p, refresh }: { p: MailProposal; refresh: () => void }) 
           </>
         )}
       </div>
+      </FoldBody>
     </section>
   );
 }

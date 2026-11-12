@@ -7,11 +7,9 @@ import { RESEARCH_CHARACTER } from '@/scene/office/cast';
 
 /** "Restore team" — respawn every worker from the previous session.
  *
- *  Lives in a hook so the restore banner and focus mode can both mount it
- *  without the button (and the list of restorable agents) vanishing in one of
- *  them. Both mount points share the
- *  progress state below, so a restore kicked off from one view shows as running
- *  in the other and can't be double-started. */
+ *  Lives in a hook so the app and the restore banner can both mount it. Both
+ *  mount points share the progress state below, so a restore kicked off from
+ *  one shows as running in the other and can't be double-started. */
 
 let restoring = false;
 let note: string | null = null;
@@ -20,8 +18,8 @@ let note: string | null = null;
  *  remember making. */
 let autoRestoring = false;
 /** Latched the moment the automatic restore starts. Module-level, not per
- *  component: `useRestoreTeam` is mounted from both the floor strip and the
- *  fullscreen rail, and without this each of them would kick off its own. */
+ *  component: `useRestoreTeam` is mounted in more than one place, and without
+ *  this each of them would kick off its own. */
 let autoStarted = false;
 const listeners = new Set<() => void>();
 
@@ -148,7 +146,7 @@ export function useRestoreTeam(config?: HarnessConfig | null): RestoreTeamState 
             isolate: false,
             // Continue the worker's prior CLI session if one was recorded — the
             // main process picks the provider's resume flag (Claude --resume,
-            // agy --conversation) and for Claude reattaches the transcript. The
+            // codex resume) and for Claude reattaches the transcript. The
             // agent id is preserved across restart, so its registry entry,
             // memory.md and inbox reattach by id. No-op without a recorded session.
             resume: true,
@@ -172,10 +170,6 @@ export function useRestoreTeam(config?: HarnessConfig | null): RestoreTeamState 
                 // as a plain base-cwd agent going forward (a future restore won't keep
                 // re-probing a dead path).
                 worktreePath: worktreeGone ? undefined : a.worktreePath,
-                // Crush spawns bare (no positional protocol) and hands the seed back
-                // here; useHive types it after boot. Re-seeding a resumed worker is
-                // idempotent (it just re-reads its inbox per protocol). (ondev-b)
-                seedPrompt: res.seedPrompt,
                 carrying: undefined,
                 currentStation: 'desk',
                 recentTextTs: Date.now()

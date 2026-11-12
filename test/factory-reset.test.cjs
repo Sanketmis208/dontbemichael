@@ -109,10 +109,8 @@ test('every app data file the main process names is erased by a reset or kept on
   }
   assert.ok(names.size >= 10, 'the scan finds the app data files');
   // Files reached through a helper or a variable, which the scan can't see.
-  for (const n of ['pastes', 'updater.log', 'last-run-version', 'telemetry-install-id', 'telemetry-last-version']) names.add(n);
+  for (const n of ['pastes', 'updater.log', 'last-run-version']) names.add(n);
   assert.match(fs.readFileSync(path.join(dir, 'pastes.ts'), 'utf8'), /return join\(userData, 'pastes'\);/);
-  assert.match(fs.readFileSync(path.join(dir, 'analytics.ts'), 'utf8'), /join\(stateDir, 'telemetry-install-id'\)/);
-  assert.match(fs.readFileSync(path.join(dir, 'analytics.ts'), 'utf8'), /const VERSION_STAMP_FILE = 'telemetry-last-version';/);
   for (const n of names) assert.ok(APP_DATA_ENTRIES.includes(n) || APP_DATA_KEPT.includes(n), `${n} is neither erased nor kept`);
 });
 
@@ -193,7 +191,6 @@ test('app:resetAll erases the office data before it resets the config', () => {
   assert.match(body, /\n  stopForReset\('reset'\);\n/, 'every stop, before anything is erased');
   assert.ok(body.indexOf("stopForReset('reset')") < erase);
   const helper = src.slice(src.indexOf('function stopForReset('), src.indexOf("ipcMain.handle('app:resetAll'"));
-  assert.ok(helper.indexOf('hive.stopAllProxyBridges()') > 0 && helper.indexOf('stopWebhookServer()') > 0, 'proxy sidecars and the webhook server stop, as on quit');
   for (const call of ['clearMissionTimers()', 'hive.stopRouter()', 'hookServer.stop()', 'memoryTidy.stop()', 'ptyManager.killAll()', 'integrationBroker.stop()', 'mailService.closeAll()']) {
     assert.ok(helper.includes(call), `the shared stops include ${call}`);
   }

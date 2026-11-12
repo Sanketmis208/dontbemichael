@@ -23,8 +23,7 @@ const { writeConfig, readConfig, onConfigWritten, setAgentTokenCap, resetConfig 
 
 test.after(() => fs.rmSync(userData, { recursive: true, force: true }));
 
-// A real app has a config on disk and reads it at start-up, which settles the
-// one-shot migration. Do the same first, so no test below races it.
+// A real app has a config on disk and reads it at start-up. Do the same first.
 writeConfig({});
 readConfig();
 
@@ -33,13 +32,13 @@ test('a config write notifies subscribers with the persisted config', () => {
   const seen = [];
   const off = onConfigWritten((next) => seen.push(next));
 
-  writeConfig({ orchestratorMaySpawn: true });
+  writeConfig({ strongKeepalive: true });
 
   // What subscribers end up holding is the contract; one save can legitimately
   // write more than once, so the number of notifications is not.
   assert.ok(seen.length >= 1);
   assert.deepEqual(seen[seen.length - 1], readConfig());
-  assert.equal(seen[seen.length - 1].orchestratorMaySpawn, true);
+  assert.equal(seen[seen.length - 1].strongKeepalive, true);
   off();
 });
 
@@ -99,12 +98,12 @@ test('a listener that throws neither fails the write nor starves the next listen
 
 // The window fills one copy of the config from both a read and this
 // announcement, so a screen must never get a fuller answer from one than the
-// other. Saving part of a setting is where that would show.
+// other. A save carrying a retired compact schedule is where that would show.
 test('subscribers receive the same shape a config read returns', () => {
   const seen = [];
   const off = onConfigWritten((next) => seen.push(next));
 
-  writeConfig({ contextTrigger: { compact: { enabled: true } } });
+  writeConfig({ missions: [{ id: 'compact-maintenance', label: 'Auto-compact (maintenance)', intervalMs: 7_200_000, to: '', body: '', enabled: true, kind: 'compact' }] });
 
   assert.deepEqual(seen[seen.length - 1], readConfig());
   off();

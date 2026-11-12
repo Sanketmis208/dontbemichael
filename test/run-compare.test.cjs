@@ -86,6 +86,15 @@ test('the reply gives at most three short changes and a reason; nothing to chang
   assert.equal(R.cleanNote('x'.repeat(400)).length, R.NOTE_MAX + 1);
 });
 
+test('a long note is cut to its limit, never through an emoji', () => {
+  // Value: protects=a note kept from a comparison never ends in a broken character; fails_when=the cut is a plain slice and lands between the two halves of an emoji; why_new=the note is the model's own text and can hold an emoji at the cut; seam=none
+  const lone = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+  const cut = R.cleanNote(`${'a'.repeat(299)}😀 tail`);
+  assert.ok(!lone.test(cut), 'no half emoji before the ellipsis');
+  assert.equal(cut, `${'a'.repeat(299)}…`);
+  assert.equal(R.cleanNote(`${'a'.repeat(298)}😀 tail`), `${'a'.repeat(298)}😀…`, 'an emoji that fits is kept whole');
+});
+
 test('the call is isolated on Michael\'s engine, and members\' sessions come from the private record only', () => {
   // Value: protects=D4 and the trust finding; fails_when=the call keeps a transcript or pasted text, has tools or hooks, or sessions are read from hive/log.jsonl; why_new=architecture finding 1, D4; seam=source; no_claim=Claude Code honoring the flags (hiddenClaude tests)
   const src = read('src/main/index.ts');
@@ -108,7 +117,7 @@ test('Edit agent opened the normal way is as before; a suggestion only fills the
   const review = read('src/renderer/src/components/JobChangeReview.tsx');
   assert.match(review, /const \[typed, setTyped\] = useState\(p\.initialTyped \?\? ''\);/);
   assert.equal(review.split('initialTyped').length - 1, 2, 'it only seeds the box');
-  assert.match(review, /const \[state, setState\] = useState<State>\(\{ at: p\.autoRun \? 'working' : 'idle' \}\);/, 'nothing runs unless autoRun, which a suggestion never sets');
+  assert.match(review, /const \[state, setState\] = useState<State>\(p\.initialResult \? \{ at: 'ok', ok: p\.initialResult\.ok, from: p\.initialResult\.from \} : \{ at: p\.autoRun \? 'working' : 'idle' \}\);/, 'nothing runs unless autoRun, which a suggestion never sets');
   const store = read('src/renderer/src/store/store.ts');
   assert.match(store, /\.\.\.\(opts\?\.change \? \{ change: opts\.change \} : \{\}\)/);
 });
@@ -117,7 +126,7 @@ test('Pulse keeps its cards and their Apply, Undo and Not now; the suggestion ca
   // Value: protects=existing Pulse behavior; fails_when=the new card replaces or breaks the schedule and model cards; why_new=D6; seam=source; no_claim=the rendered view
   const view = read('src/renderer/src/components/pulse/PulseView.tsx');
   assert.match(view, /const r = await window\.cth\.pulseApply\(a\.id, a\.change\);/);
-  assert.match(view, /const r = await window\.cth\.pulseUndo\(item\.appliedId\);/);
+  assert.match(view, /const r = await window\.cth\.pulseUndo\(appliedId\);/);
   assert.match(view, /const notNow = async \(a: Advice\): Promise<void> => \{ await window\.cth\.pulseDismiss\(a\.id\); await load\(\); \};/);
   assert.match(view, /<Section title=\{t\('pulse\.recommendations'\)\}[^\n]*\n\s*\{\/\* Run comparisons[^\n]*\*\/\}\n\s*<RunSuggestions onShown=\{setRunCards\} \/>/);
   const cards = read('src/renderer/src/components/pulse/RunSuggestions.tsx');
@@ -135,14 +144,9 @@ test('the jobs list offers Went wrong on Claude members\' finished runs and says
   assert.match(src, /\{!claude && <InfoTip text=\{t\('runCompare\.claudeOnly'\)\}/);
 });
 
-test('the strings exist in every language, name Michael by godName, and have no dashes', () => {
-  // Value: protects=the owner reads every line in their language; fails_when=a key is missing or a dash slips in; why_new=new strings; seam=none
-  const en = JSON.parse(read('src/renderer/src/i18n/locales/en.json')).runCompare;
-  for (const loc of ['ar', 'zh-CN']) {
-    const d = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).runCompare;
-    assert.deepEqual(Object.keys(d).sort(), Object.keys(en).sort(), loc);
-  }
-  for (const loc of ['en', 'ar', 'zh-CN']) {
+test('the strings name Michael by godName, and have no dashes', () => {
+  // Value: protects=the owner reads every line with Michael's real name; fails_when=a dash or a literal Michael slips in; why_new=new strings; seam=none
+  for (const loc of ['en']) {
     for (const v of Object.values(JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).runCompare)) {
       assert.doesNotMatch(v, /[–—]| - /, `${loc}: ${v}`);
       assert.doesNotMatch(v, /Michael/, 'by godName');

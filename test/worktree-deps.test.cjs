@@ -329,20 +329,6 @@ test('wires dependency linking into successful isolated worktree creation', () =
   assert.match(successBranch, /await linkWorktreeDeps\(origCwd, wtPath\)/);
 });
 
-test('removes linked dependencies before worker retention checks', () => {
-  const indexSource = fs.readFileSync(path.join(__dirname, '..', 'src/main/index.ts'), 'utf8');
-  const activeSource = indexSource
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .split('\n')
-    .filter((line) => !line.trimStart().startsWith('//'))
-    .join('\n');
-
-  const beforeRetention = activeSource.slice(0, activeSource.indexOf('const work = await worktreeHasUnintegratedWork'));
-  assert.match(beforeRetention, /await unlinkWorktreeDeps\(origCwd, wtPath\)/);
-  const beforeGc = activeSource.slice(0, activeSource.indexOf('safe = await worktreeIsGcSafe'));
-  assert.match(beforeGc, /await unlinkWorktreeDeps\(e\.origCwd, e\.wtPath\)/);
-});
-
 test('uses a Windows junction for the directory link', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'src/main/worktreeDeps.ts'), 'utf8');
 

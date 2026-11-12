@@ -137,7 +137,7 @@ function keystrokeHandler() {
     exited: false, inputLocked: false, lineBuf: '', automationBlocked: false, automationBlockedAt: 0,
     automationSettleUntil: 0, inputDirty: false, inputDirtyAt: 0, onPrompt: (t) => prompts.push(t)
   };
-  const window = { cth: { writePty: () => {}, trackMessageSent: async () => {} } };
+  const window = { cth: { writePty: () => {} } };
   const onData = new Function('entry', 'window', 'watchOnlyData', 'releasePickerBlock', 'opensInteractiveTerminalUi', 'ptyId',
     `${js}\nreturn onData;`)(entry, window, (d) => d, (e) => { e.automationBlocked = false; }, opensInteractiveTerminalUi, 'pty1');
   const block = () => terminalAutomationBlock({

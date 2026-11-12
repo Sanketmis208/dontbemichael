@@ -10,7 +10,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { readFileSync } = require('node:fs');
+const { readFileSync, existsSync } = require('node:fs');
 const { execFileSync } = require('node:child_process');
 const loadTs = require('./load-ts.cjs');
 
@@ -90,7 +90,7 @@ test('a status main already had when the window opened makes the card', () => {
 });
 
 test('Ask me shows the card from Michael, and no popup offers Later or Restart over the office', () => {
-  // Value: protects=the card is on the board under Michael's name, and the corner popup is gone; fails_when=the card is unmounted, loses Michael's chip, or UpdateToast offers the restart again; why_new=new behavior; seam=source pin; no_claim=the look (live check in the dev app)
+  // Value: protects=the card is on the board under Michael's name, and the corner popup is gone; fails_when=the card is unmounted, loses Michael's chip, or a corner popup offers the restart again; why_new=new behavior; seam=source pin; no_claim=the look (live check in the dev app)
   const ask = read('src/renderer/src/components/AskMeTab.tsx');
   assert.match(ask, /<EngineSetupCard status=\{engineCard \? engineSetup : null\} \/>\s*<UpdateCard update=\{update\} later=\{updateLater\} \/>/);
   const card = read('src/renderer/src/components/UpdateCard.tsx');
@@ -98,9 +98,8 @@ test('Ask me shows the card from Michael, and no popup offers Later or Restart o
   assert.match(card, /onClick=\{\(\) => putOffUpdate\(update\.version\)\}>\{t\('updateToast\.later'\)\}/);
   assert.match(card, /window\.cth\.updateRestartAndInstall\(\)/);
   assert.doesNotMatch(card, /hiveAddTask|hivePatchTask|hiveSend/, 'nothing goes in tasks.json or to an agent');
-  const toast = read('src/renderer/src/components/UpdateToast.tsx');
-  assert.doesNotMatch(toast, /updateRestartAndInstall|updateToast\.later|updateToast\.restart|cth-toast/);
-  assert.match(toast, /<ReleaseDrop /, 'the authored release page still opens');
+  assert.ok(!existsSync(path.join(root, 'src/renderer/src/components/UpdateToast.tsx')), 'no corner update popup');
+  assert.doesNotMatch(read('src/renderer/src/App.tsx'), /UpdateToast/);
 });
 
 test('the words on the card have no dashes', () => {

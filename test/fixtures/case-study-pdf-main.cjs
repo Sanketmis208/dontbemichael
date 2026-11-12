@@ -1,7 +1,7 @@
 'use strict';
 // Electron main for case-study-pdf.electron.test.cjs: prints each page the
-// test wrote and reports its page count, its member cards and, for Arabic, its
-// layout. A phone-*.html page is the web page at phone width: it reports its
+// test wrote and reports its page count, its member cards and its strip's
+// direction. A phone-*.html page is the web page at phone width: it reports its
 // width only.
 const { app, BrowserWindow } = require('electron');
 const fs = require('node:fs');
@@ -24,7 +24,6 @@ app.whenReady().then(async () => {
       const h1 = document.querySelector('.headline');
       const kids = h1 ? [...h1.children].map((c) => c.className || 'words') : [];
       return {
-        dir: document.documentElement.dir,
         rows: document.querySelectorAll('.m-card').length,
         scrollWidth: document.documentElement.scrollWidth,
         viewWidth: window.innerWidth,

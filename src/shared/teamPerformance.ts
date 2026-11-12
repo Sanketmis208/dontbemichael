@@ -383,13 +383,24 @@ export function planHeadroom(r: PlanReading | null): { usedPct: number; resetsAt
   return { usedPct: r.usedPct, resetsAt: r.resetsAt, runsOutAt: runsOutAt < r.resetsAt ? runsOutAt : null };
 }
 
-/** D16: measured saving of one applied change for its member: (cost per piece
+/** What one applied change saved: still measuring for its first 7 days, too
+ *  little to tell, or dollars (negative when it cost more). */
+export type ChangeSaving = { state: 'measuring'; firstAt: number } | { state: 'thin' } | { state: 'measured'; usd: number };
+
+/** The day after a YYYY-MM-DD key, and whole days between two keys (noon
+ *  based, so a DST change never loses or doubles a day). */
+const dayNum = (key: string): number => Math.round(new Date(`${key}T12:00:00`).getTime() / 86_400_000);
+const nextDay = (key: string): string => dayKey(new Date(`${key}T12:00:00`).getTime() + 86_400_000);
+
+/** D16: measured saving of one model change for its member: (cost per piece
  *  in the 14 days before minus cost per piece since) times pieces since, at API
- *  prices. Measuring for the first 7 days; zero or negative is reported as is.
+ *  prices. Measuring for the first 7 days; thin under MIN_PIECES on either
+ *  side (owner, 2026-11-09: 10 pieces read as a $62 verdict); zero or negative
+ *  is reported as is.
  *  `until`: when the member's next change was applied; this one is measured only
  *  up to that day, so two changes never count the same work (Codex review,
  *  2026-10-16). */
-export function measuredSaving(days: MemberDay[], appliedAt: number, now: number, until?: number): { state: 'measuring'; firstAt: number } | { state: 'measured'; usd: number } {
+export function measuredSaving(days: MemberDay[], appliedAt: number, now: number, until?: number): ChangeSaving {
   const firstAt = appliedAt + 7 * 86_400_000;
   if (now < firstAt) return { state: 'measuring', firstAt };
   const appliedDay = dayKey(appliedAt);
@@ -397,14 +408,41 @@ export function measuredSaving(days: MemberDay[], appliedAt: number, now: number
   const before = days.filter((d) => d.day >= beforeFrom && d.day < appliedDay);
   const lastDay = until === undefined ? null : dayKey(until);
   const after = days.filter((d) => d.day > appliedDay && (lastDay === null || d.day <= lastDay));
-  const per = (ds: MemberDay[]): number | null => {
-    const p = ds.reduce((s, d) => s + piecesOf(d), 0);
-    return p > 0 ? ds.reduce((s, d) => s + d.usd, 0) / p : null;
-  };
-  const b = per(before), a = per(after);
-  const since = after.reduce((s, d) => s + piecesOf(d), 0);
-  if (b === null || a === null) return { state: 'measured', usd: 0 };
+  const pieces = (ds: MemberDay[]): number => ds.reduce((s, d) => s + piecesOf(d), 0);
+  const pb = pieces(before), since = pieces(after);
+  if (pb < MIN_PIECES || since < MIN_PIECES) return { state: 'thin' };
+  const b = before.reduce((s, d) => s + d.usd, 0) / pb;
+  const a = after.reduce((s, d) => s + d.usd, 0) / since;
   return { state: 'measured', usd: (b - a) * since };
+}
+
+/** Fewer whole days than this before a schedule change, and it is not judged. */
+export const MIN_BEFORE_DAYS = 7;
+
+/** D16 for a schedule change (owner, 2026-11-09): measured by the day, never
+ *  by the piece. Running a schedule less often lowers how many runs do work,
+ *  so cost per piece rose even when the spend fell. What the member's
+ *  scheduled runs cost a day in the 14 days before (from its first record
+ *  there), minus a day since, times the days since, at API prices. Whole days
+ *  only: the change's own day and today are left out. Thin under
+ *  MIN_BEFORE_DAYS before or no whole day since. `until` as measuredSaving. */
+export function measuredScheduleSaving(days: MemberDay[], appliedAt: number, now: number, until?: number): ChangeSaving {
+  const firstAt = appliedAt + 7 * 86_400_000;
+  if (now < firstAt) return { state: 'measuring', firstAt };
+  const appliedDay = dayKey(appliedAt);
+  const today = dayKey(now);
+  const recorded = days.filter((d) => d.day >= dayKey(appliedAt - 14 * 86_400_000) && d.day < appliedDay).map((d) => d.day).sort();
+  if (!recorded.length) return { state: 'thin' };
+  const beforeDays = dayNum(appliedDay) - dayNum(recorded[0]);
+  const afterFrom = nextDay(appliedDay);
+  const nextChangeEnd = until === undefined ? today : nextDay(dayKey(until));
+  const afterTo = nextChangeEnd < today ? nextChangeEnd : today; // exclusive
+  const afterDays = dayNum(afterTo) - dayNum(afterFrom);
+  if (beforeDays < MIN_BEFORE_DAYS || afterDays < 1) return { state: 'thin' };
+  const runUsd = (from: string, to: string): number => days.filter((d) => d.day >= from && d.day < to).reduce((s, d) => s + d.runUsd, 0);
+  const perDayBefore = runUsd(recorded[0], appliedDay) / beforeDays;
+  const perDayAfter = runUsd(afterFrom, afterTo) / afterDays;
+  return { state: 'measured', usd: (perDayBefore - perDayAfter) * afterDays };
 }
 
 /** A Team at work callout (owner, 2026-10-15, proposal 3). */

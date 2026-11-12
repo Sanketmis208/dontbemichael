@@ -52,21 +52,16 @@ directories:
 files:
   - out/**
   - package.json
-  # v0.3.4: shipped so the voice get_app_info tool can read release notes.
-  - CHANGELOG.md
   - "!**/*.{md,map,ts,tsx}"
   - "!**/{.eslintrc,.prettierrc,tsconfig*.json,electron.vite.config.*}"
 
-# Ship the standalone Slack reply helper as a plain file under the app's
-# resources dir (process.resourcesPath). It runs under `node`, NOT inside the
-# asar, so the office worker can invoke `node <resources>/md-slack-reply.cjs`.
+# Plain files under the app's resources dir (process.resourcesPath), outside
+# the asar, so agents can run them with the bundled node.
 extraResources:
   # MIT requires the copyright and permission notice in every copy, including
   # the packaged app, so LICENSE ships in Contents/Resources.
   - from: LICENSE
     to: LICENSE
-  - from: resources/md-slack-reply.cjs
-    to: md-slack-reply.cjs
   # md-mail: the MCP server team members use for mail (docs/designs/multi-mailbox.md).
   # Claude Code starts it with the bundled node, outside the asar.
   - from: resources/md-mail-mcp.cjs
@@ -115,10 +110,6 @@ mac:
     NSDownloadsFolderUsageDescription: "Your team in Don't Be Michael may work with files in your Downloads."
     NSRemovableVolumesUsageDescription: "Your team in Don't Be Michael may work with files on external drives."
     NSNetworkVolumesUsageDescription: "Your team in Don't Be Michael may work with files on network drives."
-    # The microphone is used by two opt-in, off-by-default voice features: Free
-    # Flow dictation (Groq transcription) and Realtime Michael (live voice chat
-    # with the orchestrator via OpenAI). Mic access only happens while one is on.
-    NSMicrophoneUsageDescription: "Don't Be Michael uses your microphone only for its optional voice features: Free Flow dictation (transcribed by Groq) and talking to Michael in real time (streamed to OpenAI). The mic is off unless you turn one of these on."
   # Hardened runtime + entitlements so the spawned `claude` agents inherit this
   # app's TCC responsibility (one grant covers them all) and node-pty can load.
   hardenedRuntime: true

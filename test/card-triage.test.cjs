@@ -26,15 +26,13 @@ const read = (p) => fs.readFileSync(path.resolve(__dirname, '..', p), 'utf8');
 
 const card = (id, extra = {}) => ({ id, title: id, status: 'todo', dependsOn: [], priority: 3, createdAt: '2026-10-11T00:00:00Z', ...extra });
 
-test('the owner never sees a card in triage: board, Ask me, floor and voice all read the owner ledger', () => {
-  // Value: protects=a team member's raw card reaches the owner only after Michael releases it; fails_when=any owner read path returns triage cards; why_new=triage is new; seam=ownerLedger plus the three main read paths
+test('the owner never sees a card in triage: board, Ask me and floor read the owner ledger', () => {
+  // Value: protects=a team member's raw card reaches the owner only after Michael releases it; fails_when=any owner read path returns triage cards; why_new=triage is new; seam=ownerLedger plus the main read path
   const raw = { tasks: [card('a', { status: 'triage', humanQA: [{ q: '1. What? 2. When?', raisedBy: 'nick' }] }), card('b', { status: 'blocked' })] };
   assert.deepEqual(ownerLedger(raw).tasks.map((t) => t.id), ['b']);
   assert.equal(ownerLedger(null), null);
   const main = read('src/main/index.ts');
   assert.match(main, /ipcMain\.handle\('hive:tasks', \(\) => ownerLedger\(hive\.tasks\(\)\)\);/);
-  assert.match(main, /  hiveTasks: \(\) => ownerLedger\(hive\.tasks\(\)\),/, 'voice tools');
-  assert.match(main, /  tasks: \(\) => ownerLedger\(hive\.tasks\(\)\),\n  ptys:/, 'voice floor updates');
 });
 
 test('Michael is shown every triage card first each turn, and the owner cannot move one', async (t) => {
@@ -91,8 +89,6 @@ test('a Done card an agent reopens goes back to Done and Michael is told; the ow
   assert.equal(hive.ownerMoveTask('d2', 'todo', 'Marked done by mistake'), true);
   hive.refreshOwnerRequests();
   assert.equal(hive.tasks().tasks[1].status, 'todo');
-  // Voice cannot reopen; it points to the board.
-  assert.match(read('src/main/realtimeActions.ts'), /is done\. To reopen it, open the card on the board and give a short reason\./);
   const kanban = read('src/renderer/src/components/TasksKanban.tsx');
   assert.match(kanban, /if \(task\.status === 'done' && next !== 'done'\) \{ setReopening\(true\); return; \}/);
   assert.match(kanban, /disabled=\{!why\.trim\(\)\} onClick=\{\(\) => \{ onReopen\(why\.trim\(\)\);/);
@@ -145,8 +141,8 @@ test('the Done guard covers cards that end after the first tick, and the app\'s 
   assert.deepEqual(subjects.filter((s) => s.startsWith('DONE CARD PUT BACK')).sort(), ['DONE CARD PUT BACK: card a', 'DONE CARD PUT BACK: card b']);
 });
 
-test('the owner cannot close a card still in triage, and the owner search and webhook never show triage', async (t) => {
-  // Value: protects=a triage card stays Michael's until he releases it, on every owner path; fails_when=close lacks the triage guard, search reads raw tasks.json, or the webhook returns "triage"; why_new=review 2026-10-12 found those three paths; seam=none
+test('the owner cannot close a card still in triage, and the owner search never shows triage', async (t) => {
+  // Value: protects=a triage card stays Michael's until he releases it, on every owner path; fails_when=close lacks the triage guard or search reads raw tasks.json; why_new=review 2026-10-12 found those paths; seam=none
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'md-triage-close-'));
   t.after(() => fs.rmSync(home, { recursive: true, force: true }));
   const hive = new HiveManager(() => home);
@@ -156,7 +152,6 @@ test('the owner cannot close a card still in triage, and the owner search and we
   assert.equal(hive.tasks().tasks[0].status, 'triage');
   const main = read('src/main/index.ts');
   assert.match(main, /const text = source === 'tasks\.json' \? JSON\.stringify\(ownerLedger\(hive\.tasks\(\)\), null, 2\) : readFileSync\(path, 'utf8'\);/);
-  assert.match(main, /return \{ status: t\.status === 'triage' \? 'todo' : t\.status, title: t\.title, result: t\.result \};/);
 });
 
 

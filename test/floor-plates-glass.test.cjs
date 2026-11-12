@@ -43,5 +43,4 @@ test('monitors are frameless glass: clear when idle, tinted and scrolling at wor
 test('the HR department is called HR', () => {
   const en = JSON.parse(read('src/renderer/src/i18n/locales/en.json'));
   assert.equal(en.studio.dept.people, 'HR');
-  for (const loc of ['ar', 'zh-CN']) assert.ok(JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).studio.dept.people, loc);
 });

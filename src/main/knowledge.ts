@@ -5,7 +5,7 @@
  * `resources/kg.cjs` (see docs/design/knowledge-graph.md).
  *
  * All heavy lifting lives in the pure-JS `kg-core.cjs` sidecar (no native deps),
- * required the same way `slack.ts` requires `slack-trigger.cjs`. Mirrors the
+ * required at runtime from out/main. Mirrors the
  * MemoryManager surface (`active()` / `env()` / `status()`) so it slots into the
  * existing spawn-injection flow.
  */
@@ -16,7 +16,7 @@ import { readConfig } from './config';
 import { extractDocumentText, type DocExtraction } from './docText';
 import { extractDocumentTextApart } from './docTextProcess';
 
-// Pure-JS core, copied to out/main at build (like slack-trigger.cjs) and shipped
+// Pure-JS core, copied to out/main at build and shipped
 // to process.resourcesPath for the agent CLI (electron-builder extraResources).
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const core = require('./kg-core.cjs') as KgCore;

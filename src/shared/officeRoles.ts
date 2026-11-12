@@ -25,8 +25,6 @@ export const OFFICE_ROLES = {
   darryl: { role: 'Inventory & Shipping', folder: 'Inventory' }
 } as const;
 
-export type OfficeRoleCharacter = keyof typeof OFFICE_ROLES;
-
 /** The departments the studio seats people in; `team` is the general pod. */
 export type OfficeDepartment = 'front-desk' | 'support' | 'sales' | 'finance' | 'marketing' | 'people' | 'it' | 'operations' | 'team';
 

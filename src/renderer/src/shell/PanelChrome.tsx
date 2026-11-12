@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { useStore, actionText, type Agent } from '@/store/store';
 import { useDockCentered } from '@/hooks/useCenter';
 import { PixelBadge, type StatusKind } from '@/components/PixelBadge';
-import { useRtl } from '@/i18n/useDirection';
 import { isComposingKey } from '@shared/imeGuard';
 import { PersonAvatar } from '@/scene/office/props';
 import { Icon } from '@/components/Icon';
@@ -158,7 +157,7 @@ function PencilGlyph() {
 
 /**
  * Underline tabs (DESIGN.md 7.11), with the ARIA tabs keyboard model: arrows
- * move between tabs (mirrored in RTL), Home and End jump to the ends, and only
+ * move between tabs, Home and End jump to the ends, and only
  * the selected tab is in the Tab order. Scrolls sideways when the panel is too
  * narrow for every label: the mouse wheel moves the row, and an edge fades out
  * while tabs are hidden past it, since the scrollbar itself is hidden.
@@ -167,11 +166,10 @@ export function PanelTabs<K extends string>({ tabs, current, onChange }: {
   tabs: { key: K; label: string }[]; current: K; onChange: (k: K) => void;
 }) {
   const stripRef = useRef<HTMLDivElement>(null);
-  const rtl = useRtl();
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     const i = tabs.findIndex((tab) => tab.key === current);
-    const forward = rtl ? 'ArrowLeft' : 'ArrowRight';
-    const back = rtl ? 'ArrowRight' : 'ArrowLeft';
+    const forward = 'ArrowRight';
+    const back = 'ArrowLeft';
     let next = -1;
     if (e.key === forward) next = (i + 1) % tabs.length;
     else if (e.key === back) next = (i - 1 + tabs.length) % tabs.length;
@@ -185,8 +183,7 @@ export function PanelTabs<K extends string>({ tabs, current, onChange }: {
   useEffect(() => {
     stripRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [current]);
-  // Which physical edges have tabs hidden past them. scrollLeft runs 0 to
-  // negative in RTL, so the distance from the start is its absolute value.
+  // Which edges have tabs hidden past them.
   const [hidden, setHidden] = useState({ left: false, right: false });
   const tabKeys = tabs.map((tab) => tab.key).join(' ');
   useEffect(() => {
@@ -194,10 +191,10 @@ export function PanelTabs<K extends string>({ tabs, current, onChange }: {
     if (!el) return;
     const measure = () => {
       const max = el.scrollWidth - el.clientWidth;
-      const fromStart = Math.abs(el.scrollLeft);
+      const fromStart = el.scrollLeft;
       const start = max > 1 && fromStart > 1;
       const end = max > 1 && fromStart < max - 1;
-      const next = rtl ? { left: end, right: start } : { left: start, right: end };
+      const next = { left: start, right: end };
       setHidden((was) => (was.left === next.left && was.right === next.right ? was : next));
     };
     // A plain mouse wheel only scrolls vertically; turn it sideways while the
@@ -206,7 +203,7 @@ export function PanelTabs<K extends string>({ tabs, current, onChange }: {
       if (e.ctrlKey || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
       if (el.scrollWidth - el.clientWidth <= 1) return;
       e.preventDefault();
-      el.scrollLeft += rtl ? -e.deltaY : e.deltaY;
+      el.scrollLeft += e.deltaY;
     };
     measure();
     el.addEventListener('scroll', measure, { passive: true });
@@ -221,7 +218,7 @@ export function PanelTabs<K extends string>({ tabs, current, onChange }: {
       el.removeEventListener('wheel', onWheel);
       ro.disconnect();
     };
-  }, [rtl, tabKeys]);
+  }, [tabKeys]);
   const fade = hidden.left || hidden.right
     ? `linear-gradient(to right, ${hidden.left ? 'transparent, #000 28px' : '#000'}, ${hidden.right ? '#000 calc(100% - 28px), transparent' : '#000'})`
     : undefined;

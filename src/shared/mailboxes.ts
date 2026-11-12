@@ -205,7 +205,6 @@ export function guessServers(address: string): { imap: MailServer; smtp: MailSer
 }
 
 export interface MailAccessConfig {
-  mcpDefaults?: { [id: string]: { enabled: boolean } };
   mailboxes?: MailboxRecord[];
   agentCapabilities?: { [agentId: string]: AgentCapabilities };
 }

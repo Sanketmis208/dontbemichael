@@ -8,6 +8,9 @@ import brandMark from '@brandkit/logo/mark/struck-m-light.svg?url';
 import './design/global.css';
 import './i18n';
 
+// The code arrived and runs: main stops waiting to load it again (bootWatchdog.ts).
+window.cth?.rendererStarted?.();
+
 const favicon = document.createElement('link');
 favicon.rel = 'icon';
 favicon.type = 'image/svg+xml';

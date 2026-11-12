@@ -48,7 +48,7 @@ test('the tool detail and its clock are live-only: never saved, never a reason t
   const store = read('src/renderer/src/store/store.ts');
   assert.match(store, /'lastPrompt', 'actionDetail', 'actionAt'/, 'volatile: a tool call does not rewrite localStorage');
   assert.equal((store.match(/actionDetail, actionAt, \.\.\.rest/g) || []).length, 2, 'stripped from both saved rosters');
-  assert.match(store, /'seedPrompt' \| 'actionDetail' \| 'actionAt'>/);
+  assert.match(store, /'contextLimit' \| 'actionDetail' \| 'actionAt'>/);
 });
 
 test('the clock restarts on hook events only, never from the terminal parser', () => {
@@ -59,7 +59,8 @@ test('the clock restarts on hook events only, never from the terminal parser', (
   // Hook-event idle patches only (updateAgent(e.agentId, ...)); the silence
   // watchdog's guess (updateAgent(a.id, ...)) leaves the detail and clock alone.
   const idleSets = hive.match(/updateAgent\(e\.agentId, \{ status: 'idle', action: 'idle', carrying: undefined[^}]*\}/g) || [];
-  assert.equal(idleSets.length, 3, 'PostInvocation, Stop and the idle Notification');
+  // Antigravity's PostInvocation idle went with it (owner, 2026-11-11).
+  assert.equal(idleSets.length, 2, 'Stop and the idle Notification');
   for (const p of idleSets) assert.match(p, /actionDetail: undefined, actionAt: Date\.now\(\)/, p);
   // Value: protects=a compacting or prompt-parked agent never shows the last tool's detail or its old clock; fails_when=the compact or at-prompt hook patch stops clearing them; why_new=only the idle patches were checked; seam=none
   for (const re of [
@@ -100,18 +101,8 @@ test('a finished tool call leaves the row: its detail clears and the clock resta
   // Value: protects=the owner never judges an agent by a tool call that already ended; fails_when=PostToolUse keeps the previous actionDetail; why_new=review run 2 pass B (red team); seam=none
   const hive = read('src/renderer/src/hooks/useHive.ts');
   assert.match(hive, /e\.event === 'PostToolUse' \|\| e\.event === 'PostToolUseFailure' \|\| e\.event === 'PostToolBatch' \|\| e\.event === 'UserPromptSubmit'[\s\S]{0,400}updateAgent\(e\.agentId, \{ status: 'working', actionDetail: undefined, actionAt: Date\.now\(\) \}\)/);
-  assert.match(hive, /action: 'thinking', actionDetail: undefined, actionAt: Date\.now\(\)/);
   // Value: protects=a finished tool is not named as still running; fails_when=PostToolUse with nothing running keeps "using <tool>"; why_new=TODOS "Row still names a finished tool"; seam=source pin
   assert.match(hive, /else if \(toolEnded && !breakerArmed\) updateAgent\(e\.agentId, \{ action: 'thinking' \}\);/);
-});
-
-test('the non-English "terminal ended" hint names the buttons as they appear on screen', () => {
-  // Value: protects=a Chinese or Arabic owner is pointed at labels that exist; fails_when=the hint translates the English-only button names; why_new=review run 2 pass B; seam=none
-  for (const lang of ['zh-CN', 'ar']) {
-    const d = JSON.parse(read(`src/renderer/src/i18n/locales/${lang}.json`));
-    assert.ok(d.closingTime.michaelEnded.includes(d.quit.cancelBack), lang);
-    assert.ok(d.closingTime.michaelEnded.includes(d.quit.forceQuit), lang);
-  }
 });
 
 test('a tool call\'s detail and clock stay in memory: no save, and never in the saved roster (run for real)', () => {
@@ -155,7 +146,7 @@ test('quitting starts closing time on the floor, with no dialog (owner, 2026-09-
   // Force quit loses unsaved work, so it asks once.
   const bar = read('src/renderer/src/components/ClosingTimeBar.tsx');
   assert.match(bar, /onClick=\{\(\) => setConfirmForce\(true\)\}>\{t\('quit\.forceQuit'\)\}/);
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const d = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`));
     for (const k of ['title', 'starting', 'left', 'leftPlural', 'hideWho', 'confirmForce', 'keepClosing', 'tryAgain']) assert.ok(d.closingBar[k], `${loc}: closingBar.${k}`);
   }

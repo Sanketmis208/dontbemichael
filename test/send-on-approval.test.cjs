@@ -170,7 +170,7 @@ test('the Access tab saves Send on approval, and the flag stays in step for olde
   assert.match(tab, /const sendingOptions = \(\['send', 'approval', 'draft'\] as const\)\.map\(\(m\) => \(\{ value: m, label: sendingLabel\(m\) \}\)\);/);
   assert.match(tab, /const sendingLabel = \(m: SendingMode\): string => t\(SENDING_LABEL_KEY\[m\]\);/);
   assert.deepEqual(Object.entries(loadTs('src/renderer/src/components/sendingLabels.ts').SENDING_LABEL_KEY), [['send', 'capabilities.canSend'], ['approval', 'capabilities.sendOnApproval'], ['draft', 'capabilities.draftOnly']]);
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const l = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`));
     for (const k of ['sendOnApproval', 'sendOnApprovalDesc']) assert.ok(l.capabilities[k], `${loc} capabilities.${k}`);
     for (const k of ['mailTitle', 'mailFrom', 'mailTo', 'mailCc', 'mailSubject', 'mailBody', 'mailChanges', 'mailDecline', 'mailNote', 'mailSendNote', 'mailCancel']) assert.ok(l.askMe[k], `${loc} askMe.${k}`);
@@ -295,7 +295,7 @@ test('the card offers the tick only when the agent offered it, and the Access ta
   assert.match(read('resources/md-mail-mcp.cjs'), /offer_standing: \{ type: 'string'/);
   assert.match(read('resources/md-mail-mcp.cjs'), /standing: \{ type: 'string'/);
   assert.match(read('src/main/hooks.ts'), /\[input\.proposal, input\.standing\]\.find/);
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const l = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`));
     assert.ok(l.askMe.mailStanding && l.capabilities.standingTitle && l.capabilities.standingLast && l.capabilities.standingRevoke, loc);
   }

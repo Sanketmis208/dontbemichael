@@ -1,7 +1,7 @@
 'use strict';
 
-// getText (src/main/fetchText.ts) follows redirects for callers that fetch URLs
-// scraped from third-party pages (skills.ts). A loop there must fail, not spin
+// getText (src/main/fetchText.ts) follows redirects for its callers (the hero
+// payload and the model catalog). A loop there must fail, not spin
 // forever, and a relative Location must resolve against the URL that sent it.
 // https.request is stubbed, so nothing here touches the network.
 

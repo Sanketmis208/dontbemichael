@@ -226,6 +226,39 @@ function tableText(table: CopyNode): string {
   return rows.join('\n');
 }
 
+/** The info word of a fenced block that holds the exact text to post or send
+ *  (copy-document.md, Post box): members put a draft's postable text in one,
+ *  and the tab shows it as a box with its own Copy. */
+export const POST_LANG = 'post';
+
+/** Whether a fenced block's language class marks it as the text to post. */
+export function isPostLang(className: unknown): boolean {
+  const list = Array.isArray(className) ? className : typeof className === 'string' ? className.split(/\s+/) : [];
+  return list.some((c) => String(c).toLowerCase() === `language-${POST_LANG}`);
+}
+
+/** The paragraphs of a post box: blank lines part them, a single line break
+ *  stays a line break inside one. */
+export function postParagraphs(text: string): string[][] {
+  return text.replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '').split(/\n[ \t]*\n+/).map((p) => p.split('\n'));
+}
+
+/** What a post box's Copy puts on the clipboard: the text exactly as written
+ *  (hashtags, line breaks and links as they are, for LinkedIn or X), and the
+ *  same paragraphs as plain HTML for a rich editor. */
+export function postCopy(text: string): CopyData {
+  const paras = postParagraphs(text);
+  const plain = paras.map((lines) => lines.join('\n')).join('\n\n');
+  return { text: plain, html: paras.map((lines) => `<p>${lines.map(escapeHtml).join('<br>')}</p>`).join('') };
+}
+
+/** The header Copy on a page with exactly one post box takes that box, since
+ *  the rest of a draft is notes for the owner; with none or several it takes
+ *  the whole page, as before. */
+export function onePost(postTexts: readonly string[]): CopyData | null {
+  return postTexts.length === 1 ? postCopy(postTexts[0]) : null;
+}
+
 /** The rendered page or a selection's clone as clean HTML and clean text. */
 export function cleanCopy(root: CopyNode): CopyData {
   const container = root.nodeType === 1 || root.nodeType === 11 ? root : virtual('#document-fragment', [root]);

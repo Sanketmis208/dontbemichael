@@ -4,7 +4,7 @@
  * --cth-* tokens. Department families come from tokens.ts; dark twins are
  * derived from them by rule so the two can never drift.
  */
-import { departments, type DepartmentName } from '@/design/tokens';
+import { cardSurface, departments, type DepartmentName } from '@/design/tokens';
 
 export interface SceneTokens {
   rim: string; rimOp: number;
@@ -81,7 +81,18 @@ export function sceneTokens(dark: boolean): SceneTokens {
   return dark ? DARK : LIGHT;
 }
 
-export interface Family { l: string; m: string; d: string; acc: string; lit: string; litM: string }
+/** `wash` is the department's light card fill (an Ask me card in its
+ *  department, docs/designs/ask-me-department-colors.md): `l` mixed into the
+ *  theme's `card` (half in light, 30% in dark), light enough that every card
+ *  text token keeps 4.5:1. */
+export interface Family { l: string; m: string; d: string; acc: string; lit: string; litM: string; wash: string }
+
+/** `a` moved `t` of the way to `b`, per channel. */
+function mix(a: string, b: string, t: number): string {
+  const ch = (hex: string, i: number) => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
+  const to = (v: number) => Math.round(v).toString(16).padStart(2, '0').toUpperCase();
+  return `#${[0, 1, 2].map((i) => to(ch(a, i) * (1 - t) + ch(b, i) * t)).join('')}`;
+}
 
 function hls(hex: string, L: number, S: number): string {
   const r = parseInt(hex.slice(1, 3), 16) / 255;
@@ -117,6 +128,7 @@ function hls(hex: string, L: number, S: number): string {
  *  screen colors, which stay light in both themes so a working screen glows. */
 export function family(dept: DepartmentName, dark: boolean): Family {
   const c = departments[dept];
-  if (!dark) return { ...c, lit: c.l, litM: c.m };
-  return { l: hls(c.m, 0.36, 0.34), m: hls(c.m, 0.28, 0.3), d: hls(c.m, 0.22, 0.28), acc: hls(c.acc, 0.7, 0.8), lit: c.l, litM: c.m };
+  if (!dark) return { ...c, lit: c.l, litM: c.m, wash: mix(c.l, cardSurface.light, 0.5) };
+  const l = hls(c.m, 0.36, 0.34);
+  return { l, m: hls(c.m, 0.28, 0.3), d: hls(c.m, 0.22, 0.28), acc: hls(c.acc, 0.7, 0.8), lit: c.l, litM: c.m, wash: mix(cardSurface.dark, l, 0.3) };
 }

@@ -31,7 +31,7 @@ export async function loadHero(
   }
 
   try {
-    const body = await getText(HERO_URL, { timeoutMs: 8000 });
+    const body = await getText(HERO_URL, { timeoutMs: 8000, deadlineMs: 15_000 });
     // Parse the JSON and the SHAPE separately: valid JSON that is not a hero
     // payload must still degrade to defaults rather than render as undefined.
     const hero = parseHeroPayload(JSON.parse(body));

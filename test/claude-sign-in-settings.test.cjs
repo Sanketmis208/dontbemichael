@@ -73,8 +73,8 @@ test('a new sign in restarts the running Claude terminals, and an owner stop che
 });
 
 test('the new words exist in every language, with no dashes', () => {
-  // Value: protects=no raw key or English fallback in Chinese or Arabic, and the no dashes copy rule; fails_when=a locale misses one of the new strings or uses a dash; why_new=new strings; seam=none
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  // Value: protects=no raw key on screen, and the no dashes copy rule; fails_when=a locale misses one of the new strings or uses a dash; why_new=new strings; seam=none
+  for (const loc of ['en']) {
     const j = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`));
     const words = [j.settings.claudeSignIn.title, j.settings.claudeSignIn.tip, j.engineSetup.changeKey, j.engineSetup.useAccount, j.officeStop.changeSignIn, j.officeStop.creditKeyInfo];
     for (const w of words) {

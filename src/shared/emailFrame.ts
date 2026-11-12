@@ -3,9 +3,8 @@
  * DD2, R2): the email as sent, on a white sheet, with nothing able to run,
  * navigate or reach the network.
  *
- * Three controls, the release drop's set (shared/releaseDrop.ts): the frame's
- * `sandbox="allow-popups"` (no scripts, no same origin, no forms, no top
- * navigation), the CSP below (`default-src 'none'`, pictures only as `data:`),
+ * Three controls: the frame's `sandbox="allow-popups"` (no scripts, no same
+ * origin, no forms, no top navigation), the CSP below (`default-src 'none'`, pictures only as `data:`),
  * and main refusing every navigation of a frame (index.ts). The rewriting here
  * is the fourth, cheap one: tags that navigate (`<meta http-equiv>`, `<base>`)
  * go, and a link opens in a new window, which main hands to the browser.
@@ -104,7 +103,7 @@ export function buildEmailFrame(input: FrameInput): string {
 
 /** Whether a frame inside the app window may go to `url` (main's
  *  `will-frame-navigate`). The window's own page is ruled by `will-navigate`;
- *  a frame (the email tab, a release drop) only ever shows its own `srcdoc`,
+ *  a frame (the email tab) only ever shows its own `srcdoc`,
  *  so a link, a form or a refresh inside one never loads a page there. */
 export function frameNavigationAllowed(url: string, isMainFrame: boolean): boolean {
   if (isMainFrame) return true;

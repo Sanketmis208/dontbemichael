@@ -638,7 +638,7 @@ test('screens: Add a mailbox greys what it can\'t do, the owner side and Setting
   assert.match(card, /\{p\.forward && <div>\{t\('askMe\.mailForwards'\)\}<\/div>\}/);
   assert.match(card, /t\('askMe\.mailAttaches', \{ count: p\.attachFrom!\.length \}\)/);
   assert.match(read('src/main/index.ts'), /const line = `sends only from \$\{address\}: \$\{sendingWords\(grant\.sending\)\}`;/, 'the focus check knows the grant');
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const l = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`));
     for (const k of ['sendOnlyPaused', 'alsoSendsFromHere', 'sendOnlyUse', 'inboxSendOnly', 'inboxNobody', 'addSendOnly']) {
       assert.ok(l.capabilities[k], `${loc} capabilities.${k}`);
@@ -733,7 +733,7 @@ test('the owner sees a Send only member\'s recent sends on its Access tab, and S
   const settings = read('src/renderer/src/components/MailboxesSettings.tsx');
   assert.match(settings, /sendersFrom\(config\.agentCapabilities, mailboxId\)\.filter\(\(x\) => current\(x\.agentId\)\)/);
   assert.match(settings, /const current = \(id: string\): boolean => agents\.some\(\(a\) => a\.id === id\) \|\| useStore\.getState\(\)\.restorableAgents\.some\(\(a\) => a\.id === id\);/);
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const c = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).capabilities;
     for (const k of ['recentSends', 'recentSend']) {
       assert.equal(typeof c[k], 'string', `${loc} ${k}`);

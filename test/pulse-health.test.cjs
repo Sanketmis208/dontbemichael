@@ -21,31 +21,20 @@ function clock() {
   return { now: () => now, add: (ms) => { now += ms; } };
 }
 
-test('a batch that read points logs one line; a pass that read nothing logs none; the view says what flowed', () => {
-  // Value: protects=the health readout's numbers and the batch log line; fails_when=an empty pass logs every 30 s, or the view loses the last batch, the failed writes or the refused frames; why_new=T9; seam=none; no_claim=the processor's own fold (pulse-telemetry tests)
+test('a batch that read points logs one line; a pass that read nothing logs none', () => {
+  // Value: protects=the batch log line; fails_when=an empty pass logs every 30 s, or a batch that read points logs nothing; why_new=T9; seam=none; no_claim=the processor's own fold (pulse-telemetry tests)
   const c = clock();
   const h = new PulseHealth(c.now);
-  assert.deepEqual(h.view('/office', {}, new Map()), { lastBatch: null, eventsPerBatch: 0, lastPointAt: null, failedWrites: {}, refusedFrames: {}, stalled: false });
-
   h.point('/office');
-  const pointAt = c.now();
   c.add(20_000);
   assert.equal(h.batch(30, 4), '[pulse] batch: 30 points in 4 ms');
-  const at = c.now();
   c.add(30_000);
   assert.equal(h.batch(0, 1), null, 'nothing read, nothing logged');
   assert.equal(h.batch(10, 2), '[pulse] batch: 10 points in 2 ms');
-
-  const v = h.view('/office', { '2026-10-16': 3 }, new Map([['god', 2], ['unknown', 1]]));
-  assert.deepEqual(v.lastBatch, { at: at + 30_000, events: 10, ms: 2 });
-  assert.equal(v.eventsPerBatch, 20, 'average of the batches that read something');
-  assert.equal(v.lastPointAt, pointAt);
-  assert.deepEqual(v.failedWrites, { '2026-10-16': 3 });
-  assert.deepEqual(v.refusedFrames, { god: 2, unknown: 1 }, 'a plain object the window can read');
-  assert.equal(v.stalled, false);
+  assert.equal(h.stalled('/office'), false);
 });
 
-test('points unread for 5 minutes warn once; a batch clears it and a new stall warns again; the view keeps the last batch', () => {
+test('points unread for 5 minutes warn once; a batch clears it and a new stall warns again', () => {
   // Value: protects=the single stall warning; fails_when=a stall warns every tick, never warns, or a recovered processor stays stalled; why_new=T9; seam=none; no_claim=why the processor stalled (the tick's own error line)
   const c = clock();
   const h = new PulseHealth(c.now);
@@ -63,12 +52,10 @@ test('points unread for 5 minutes warn once; a batch clears it and a new stall w
   assert.equal(warnings.length, 1, 'ten minutes of ticks, one warning');
   assert.match(warnings[0], /^\[pulse\] processor stalled: points have waited 5 min unread/);
   assert.ok(warnings[0].includes(new Date(last).toISOString()), 'it says which numbers Pulse still shows');
-  const v = h.view('/office', {}, new Map());
-  assert.equal(v.stalled, true);
-  assert.deepEqual(v.lastBatch, { at: last, events: 5, ms: 1 }, 'the last numbers stay');
+  assert.equal(h.stalled('/office'), true);
 
   assert.ok(h.batch(12, 3), 'it recovers');
-  assert.equal(h.view('/office', {}, new Map()).stalled, false);
+  assert.equal(h.stalled('/office'), false);
   assert.equal(h.stallWarning('/office'), null);
 
   h.point('/office');
@@ -125,14 +112,12 @@ test('the store tells the readout of each point it queues, and counts failed wri
   assert.deepEqual(store.failureDays('/office'), [dayKey(ts)]);
 });
 
-test('main serves telemetry:health, every processor pass is noted, and the 30 s tick warns on a stall', () => {
-  // Value: protects=the wiring of the readout; fails_when=a pass skips the health note, rejectedFrames or failed writes are not read, or the stall check is gone; why_new=T9; seam=source pins on index.ts and the preload; no_claim=the IPC round trip itself
+test('every processor pass is noted, and the 30 s tick warns on a stall', () => {
+  // Value: protects=the wiring of the health notes; fails_when=a pass skips the health note or the stall check is gone; why_new=T9; seam=source pins on index.ts
   const src = read('src/main/index.ts');
   assert.match(src, /pulseTelemetry\.onRecord = \(office\) => pulseHealth\.point\(office\);/);
   assert.match(src, /const n = pulseProcessor\.tick\(office\);\s*const line = pulseHealth\.batch\(n, Date\.now\(\) - started\);\s*if \(line\) console\.log\(line\);/);
   assert.equal(src.match(/pulseProcessor\.tick\(/g).length, 1, 'every pass goes through pulseTick');
-  assert.match(src, /ipcMain\.handle\('telemetry:health', \(\) => \{[\s\S]{0,200}pulseHealth\.view\(office, office \? pulseTelemetry\.failedWrites\(office\) : \{\}, hookServer\.rejectedFrames\(\)\)/);
   const timer = src.slice(src.indexOf('pulseTickTimer = setInterval('), src.indexOf('}, 30_000);', src.indexOf('pulseTickTimer = setInterval(')));
   assert.match(timer, /const stalled = pulseHealth\.stallWarning\(office\);\s*if \(stalled\) console\.warn\(stalled\);/);
-  assert.match(read('src/preload/index.ts'), /telemetryHealth: \(\): Promise<PulseHealthView> => ipcRenderer\.invoke\('telemetry:health'\)/);
 });

@@ -36,10 +36,6 @@ function hasScheme(href: string): boolean {
   return /^[a-z][a-z0-9+.-]*:/i.test(href);
 }
 
-export function isRelativeMd(href: string): boolean {
-  return !hasScheme(href) && /\.(md|markdown)(#.*)?$/i.test(href);
-}
-
 /**
  * Workspace-relative path for a markdown `<img src>`, or null when the source is
  * not a local image we may load.
@@ -79,26 +75,6 @@ export function resolveLocalImageRel(baseRel: string | undefined, src: string | 
   const rooted = clean.startsWith('/');
   const rel = resolveRel(rooted ? undefined : baseRel, clean);
   return rel || null;
-}
-
-/** Workspace-relative path a `.md` link opens, or null when it isn't one. Like
- *  an image src, the href arrives percent-encoded and a leading `/` means the
- *  workspace root. The check runs on the cleaned path, so nothing after `?` or
- *  inside an encoded part can pass another file off as a `.md` link, and each
- *  segment is decoded on its own, so an encoded `/` can't add a path step. */
-export function resolveMdLinkRel(baseRel: string | undefined, href: string): string | null {
-  const raw = href.split('#')[0].split('?')[0];
-  if (hasScheme(raw)) return null;
-  const segs: string[] = [];
-  for (const seg of raw.split('/')) {
-    let s = seg;
-    try { s = decodeURIComponent(seg); } catch { /* a stray % stays as written */ }
-    if (/[\\/]/.test(s)) return null;
-    segs.push(s);
-  }
-  const clean = segs.join('/');
-  if (hasScheme(clean) || !/\.(md|markdown)$/i.test(clean)) return null;
-  return resolveRel(clean.startsWith('/') ? undefined : baseRel, clean);
 }
 
 // ─── Named links (docs/designs/named-links.md) ──────────────────────────────

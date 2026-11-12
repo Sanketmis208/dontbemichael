@@ -100,7 +100,7 @@ test('teardown resets telemetry when it forgets breaker state', () => {
   // Bounded to the teardown block: an unbounded slice would also match the call
   // if it were moved into any later function in the file.
   const start = activeSource.indexOf('breaker.forget(agentId)');
-  const end = activeSource.indexOf('hive.stopProxyBridge(agentId)', start);
+  const end = activeSource.indexOf('hive.setArchived(agentId, true)', start);
   assert.ok(start !== -1 && end > start, 'teardown block not found in index.ts');
   const afterBreakerReset = activeSource.slice(start, end);
 

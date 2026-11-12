@@ -244,10 +244,17 @@ The view never folds the 400,000 row ledger: it reads the processor's rollups.
 
 | Rule | Shown when (last 14 days) | One click does |
 |---|---|---|
-| Run less often | 10 or more runs and 70% or more found nothing to do | an interval schedule: interval x 2; a times or weekly schedule: opens the schedule editor with the suggestion written out ("about half as often"), since no clean halving exists |
+| Run less often | 10 or more runs and 70% or more found nothing to do | an interval schedule: interval x 2, but never past the cache hour (owner, 2026-11-09): from under an hour it goes up to the hour at most, and from the hour itself there is no suggestion; a times or weekly schedule: opens the schedule editor with the suggestion written out ("about half as often"), since no clean halving exists |
 | Run more often | 10 or more runs, 90% or more did work, and median work count per run up 30% or more this week over last | an interval schedule: interval / 2, never below 15 minutes; a times or weekly schedule: opens the schedule editor with the suggestion written out |
 | Try a cheaper model | Claude member on the top tier (ladder below), 20 or more pieces of work, 10 or more mail decisions, kept as is 90% or more, no reopens; members without 10 mail decisions get no cheaper model advice (not enough quality evidence) | next tier down in the same provider; never for Michael |
 | Try a stronger model | 10 or more decisions and kept as is under 60%, or 3 or more reopens | next tier up in the same provider; Michael included |
+
+
+The cache hour: each run rereads the member's context, and Claude keeps it in the prompt
+cache for about an hour. Inside the hour a reread costs cents; past it every run pays full
+price. Michael's hourly standup cost $0.07 a run that found nothing; at every 2 hours,
+$1.44, so halving the runs cost more and the owner undid it, only to be offered it again.
+The saving is the share of runs dropped (warm to warm, or cold to cold).
 
 - Each recommendation shows its numbers ("Toby: 14 runs, 12 found nothing to do").
 - **Early patterns** (owner, 2026-10-19): before 14 live days the same four rules run on the
@@ -1143,7 +1150,7 @@ Step 0: 4/10. Focus: all 7 passes (owner, D1).
   FEATURE              | LOADING          | EMPTY                          | ERROR                              | SUCCESS             | PARTIAL
   ---------------------|------------------|--------------------------------|------------------------------------|---------------------|------------------------------
   Ways to save         | last snapshot    | "Nothing to change this week." | hidden (store unavailable message) | amber soft cards    | days with gaps left out (D15)
-  Saved by your changes| last snapshot    | "Apply a suggestion to start"  | hidden                             | $ amount, since     | "Measuring, first result <d>"
+  Your changes         | last snapshot    | "Apply a suggestion to start"  | hidden                             | a line per change   | "Measuring, first result <d>"
   What got done        | last snapshot    | zeros with "Collecting since"  | "Pulse numbers are unavailable"    | 4 tiles             | gap notice above the tiles
   Team tiles           | last snapshot    | "Your office is empty" + Hire  | per tile "Could not load"          | tiles               | "Too few to compare yet"
   Office row           | last snapshot    | zeros                          | per section message                | bar, ring, numbers  | ring hidden on an API key
@@ -1203,6 +1210,13 @@ action or opens a member); motion none needed; premium without shadows yes.
 - D16 (7A): Saved by your changes is measured: (cost per piece in the 14 days before the
   change minus cost per piece since) x pieces since, at API prices, labelled "about";
   "Measuring, first result <date>" for the first 7 days; zero or negative says so.
+  Revised 2026-11-09 (owner: "Saved −$49.53" meant nothing to a business owner): the card is
+  Your changes, one line per change still in place with its own Undo, never summed. A
+  schedule change is measured by its runs' cost a day (before, from the first record in the
+  14 days, minus since, times whole days since; the change's day and today left out), since
+  running less often lowers the runs that do work and so raised cost per piece even when
+  spend fell. A model change keeps cost per piece. Fewer than 7 days before a schedule
+  change, or under 5 pieces on either side of a model change: "Too little work to tell yet".
 - D17: the final reference mockup was updated to match every decision.
 
 ## Approved Mockups
