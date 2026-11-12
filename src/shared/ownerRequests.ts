@@ -459,9 +459,9 @@ export function askAsList(entry: { q?: unknown; askedAt?: unknown; options?: unk
 
 type AskText = { q?: unknown; askedAt?: unknown; options?: unknown; parts?: unknown; noEmail?: unknown; noSource?: unknown; noSearch?: unknown; kind?: unknown; sources?: unknown };
 
-/** Every question and option label of an ask, as one text, and each part's
- *  question with its own option labels. */
-function askWords(entry: AskText): { text: string; labels: string[]; parts: Array<{ q: string; labels: string[] }> } {
+/** An ask's questions, as one text (the top question and each part's), and
+ *  each question with its own option labels. */
+function askWords(entry: AskText): { text: string; parts: Array<{ q: string; labels: string[] }> } {
   const parts: Array<{ q: string; labels: string[] }> = [];
   const labelsOf = (opts: unknown): string[] => {
     const out: string[] = [];
@@ -473,7 +473,7 @@ function askWords(entry: AskText): { text: string; labels: string[]; parts: Arra
     const q = p && typeof (p as { q?: unknown }).q === 'string' ? (p as { q: string }).q : '';
     parts.push({ q, labels: labelsOf((p as { options?: unknown })?.options) });
   }
-  return { text: parts.map((p) => p.q).join('\n'), labels: parts.flatMap((p) => p.labels), parts };
+  return { text: parts.map((p) => p.q).join('\n'), parts };
 }
 
 const askedSince = (entry: AskText, since: number): boolean => {
@@ -589,9 +589,16 @@ export function askClaimsUnsearched(entry: AskText | null | undefined): boolean 
   return CLAIMS_NOTHING_FOUND.some((re) => re.test(text));
 }
 
-/** A word that sends. "post" counts as a verb only where a verb stands: at the
- *  start of the label or after "and" or "then" ("Draft the post" is a noun). */
-const SEND_VERB = String.raw`(?:\b(?:send|publish)\w*|\bgo(?:es)? out|(?:^|\b(?:and|then),? )post\w*)\b`;
+/** A word that sends. "post" is a noun after a determiner ("Draft the post")
+ *  and a verb everywhere else ("Yes, post it", "OK to post"). */
+const SEND_VERB = String.raw`(?:\b(?:send|publish)\w*|\bgo(?:es)? out|(?<!\b(?:the|a|an|this|that|my|your|our|their|its) )\bpost(?:s|ed|ing)?(?!-))\b`;
+/** Words that say no. */
+const NEG = String.raw`(?:don['’]?t|doesn['’]?t|do not|does not|won['’]?t|will not|never|without|no need(?: for \w+)?(?: to)?)`;
+/** A send that has not happened yet: after before, until, instead of or a
+ *  no, within two words, with no comma or "and" between ("Before it goes
+ *  out", "Not ready to send"). "Ready to post" alone is a send, and so is
+ *  "Don't wait, send" or "don't wait and send". */
+const SEND_HELD = String.raw`(?<!\b(?:before|until|till|unless|instead of|not|${NEG})(?: (?!(?:and|then|but|or|so|just|now)\b)[\w'’]+){0,2} )`;
 const WITH_CHANGES = String.raw`with (my |your |the )?(changes|edits)\b`;
 /** What leaves the office when the owner approves it with changes. */
 const OUTBOUND = String.raw`(?:reply|email|e-mail|post|quote|message|draft|letter|invoice|newsletter)`;
@@ -599,27 +606,38 @@ const OUTBOUND = String.raw`(?:reply|email|e-mail|post|quote|message|draft|lette
  *  the office (a reply, an email, a post, a quote, an invoice), so "Approve
  *  the rota with my changes" is not a send. A send back to someone ("Send it
  *  back to Pam with my edits") counts too: the label can't say whether that
- *  someone is in the office or out of it, so it says it comes back if it does. */
-const CHANGE_SENDS = new RegExp(String.raw`${SEND_VERB}[^.]*\b${WITH_CHANGES}|\bapprove the ${OUTBOUND} ${WITH_CHANGES}|\b(edit|change)\w* (it |them )?(and|then) (send|post|publish)`, 'i');
+ *  someone is in the office or out of it, so it says it comes back if it does.
+ *  The scan stops 300 characters on, so a long label costs little. */
+const CHANGE_SENDS = new RegExp(String.raw`${SEND_VERB}[^.]{0,300}?\b${WITH_CHANGES}|\bapprove the ${OUTBOUND} ${WITH_CHANGES}|\b(edit|change)\w* (it |them )?(and|then) (send|post|publish)`, 'i');
 /** "Approve with my changes" or "Approve it with my changes": a send when the
- *  question it answers, or the ask it is part of, names something that leaves
- *  the office. For "Approve the new rota?" the label can't say what goes out,
- *  and nothing does. */
+ *  question it answers names something that leaves the office, or names
+ *  nothing and the ask it is part of does. For "Approve the new rota?" the
+ *  label can't say what goes out, and nothing does. */
 const APPROVE_BARE = new RegExp(String.raw`\bapprove( it)? ${WITH_CHANGES}`, 'i');
-const OUTBOUND_ASK = new RegExp(String.raw`\b${OUTBOUND}s?\b|\brepl(y|ies)\b`, 'i');
+/** A question about something that leaves the office. Not "the draft rota" or
+ *  "the post-holiday schedule". */
+const OUTBOUND_ASK = /\b(?:reply|email|e-mail|quote|message|letter|invoice|newsletter)s?\b|\bposts?\b(?!-)|\brepl(y|ies)\b/i;
+/** A question that names its own thing ("Approve the new rota?", "Pam's
+ *  rota?"), so the top question does not speak for it. "Send it?" names
+ *  nothing. */
+const NAMES_A_THING = /\b(?:the|a|an|this|that|these|those|my|your|our|their|his|her|its) [a-z]|\b[a-z]+['’]s [a-z]/i;
 const COMES_BACK = String.raw`(show me (it )?again|comes? back|for (another|a) look|review it)`;
 const CHANGE_COMES_BACK = new RegExp(String.raw`\b${COMES_BACK}\b`, 'i');
-/** A denial within four words before coming back: "don't show me again", "I
- *  don’t need it to come back", "no need for another look". The window stops at
- *  "until", "before", "till" and "unless", so "it won't go out until you show me
- *  again" is not a denial. A "without" farther back than that ("...without the
- *  discount line, show me again first") is out of reach, so it counts as being
- *  about the change, not the look. */
-const CHANGE_DENIED = new RegExp(String.raw`\b(don['’]?t|doesn['’]?t|do not|does not|won['’]?t|will not|never|without|no need( for \w+)?( to)?)( (?!(?:until|before|till|unless)\b)\w+){0,4} ${COMES_BACK}`, 'i');
+/** A no within four words before coming back: "don't show me again", "I don’t
+ *  need it to come back", "don't wait until I review it". The words must run
+ *  without a comma, so in "...without the discount line, show me again first"
+ *  the comma ends it and the "without" is about the change, not the look. */
+const CHANGE_DENIAL = new RegExp(String.raw`\b${NEG}((?: [\w'’]+){0,4}?) ${COMES_BACK}`, 'gi');
+/** A send held for the look between the no and the look: "it won't go out
+ *  until you show me again", "don't post till I review it". */
+const HELD_FOR_LOOK = /\b(?:go(?:es)? out|send\w*|post(?:s|ed|ing)?|publish\w*|leaves?)\b.*\b(?:until|before|till|unless)\b/i;
+const changeDenied = (label: string): boolean =>
+  [...label.matchAll(CHANGE_DENIAL)].some((m) => !HELD_FOR_LOOK.test(m[1]));
 /** Coming back after the send: a send word, then "then" and the look, so it
  *  went out first. A look before the send ("Fix it, then show me again, then
- *  send") is the look rule 10 asks for. */
-const CHANGE_AFTER_SEND = new RegExp(String.raw`${SEND_VERB}[^.]*?\b(then|afterwards|after that),? ${COMES_BACK}`, 'i');
+ *  send") is the look rule 10 asks for, and so is a send not made yet ("Before
+ *  it goes out, redo it with my edits, then show me again"). */
+const CHANGE_AFTER_SEND = new RegExp(String.raw`${SEND_HELD}${SEND_VERB}[^.]{0,300}?\b(then|afterwards|after that),? ${COMES_BACK}`, 'i');
 /** A send back to someone ("Send it back to Pam"), which comes back by itself
  *  when it then says it shows the owner again. */
 const SENDS_BACK = /\bsend (it |them )?back\b/i;
@@ -632,12 +650,11 @@ const SENDS_BACK = /\bsend (it |them )?back\b/i;
 export function askChangeSends(entry: AskText | null | undefined, since: number): boolean {
   if (!entry || !askedSince(entry, since)) return false;
   const { parts } = askWords(entry);
-  // A part's question, or the ask's own, which sets what every part is about.
-  const outbound = (q: string): boolean => OUTBOUND_ASK.test(q) || OUTBOUND_ASK.test(parts[0].q);
+  const outbound = (q: string): boolean => OUTBOUND_ASK.test(q) || (!NAMES_A_THING.test(q) && OUTBOUND_ASK.test(parts[0].q));
   return parts.some(({ q, labels }) => labels.some((l) => {
     const sends = CHANGE_SENDS.test(l) || (APPROVE_BARE.test(l) && outbound(q));
     if (!sends) return false;
-    return !CHANGE_COMES_BACK.test(l) || CHANGE_DENIED.test(l) || (CHANGE_AFTER_SEND.test(l) && !SENDS_BACK.test(l));
+    return !CHANGE_COMES_BACK.test(l) || changeDenied(l) || (CHANGE_AFTER_SEND.test(l) && !SENDS_BACK.test(l));
   }));
 }
 

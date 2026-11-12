@@ -192,6 +192,46 @@ test('re-review of #686, smaller items: a chat in another part, a bare approve, 
   assert.equal(opt('Send it back to Pam with my edits, then show me again'), false);
 });
 
+test('re-review of #686 at d23b3cf9: post as a verb, a no before a wait, and a send not made yet', () => {
+  // Value: protects=the three labels main flagged are flagged again, and the look asked for before anything goes out passes (re-review at d23b3cf9); fails_when=post partway into a label stops sending, "don't wait until I review it" stops being a denial, or a send after before, not or until reads as sent first; why_new=re-review of #686; seam=none
+  const at = '2026-11-05T20:10:00Z';
+  const opt = (label) => R.askChangeSends({ q: 'x', askedAt: at, options: [{ label }] }, SINCE);
+  // 1. "post" sends unless a determiner makes it a noun.
+  for (const label of ['Yes, post it with my changes', 'Please post it with my changes', 'OK to post with my edits', 'Approve, post with my changes',
+    'Ready to post with my changes, then show me again']) assert.equal(opt(label), true, label);
+  assert.equal(opt('Draft the post with my changes'), false, 'the post is a noun');
+  assert.equal(opt('Postpone it with my changes'), false, 'postpone is not post');
+  // 2. A no before a wait is a denial, unless a going out word sits between them.
+  assert.equal(opt("Send with my changes, don't wait until I review it"), true);
+  assert.equal(opt('Send now with my edits, no need to hold it till you show me again'), true);
+  assert.equal(opt("Send with my changes, but it won't go out until you show me again"), false, 'still a wait');
+  assert.equal(opt("Send with my changes, don't post till I review it"), false, 'still a wait');
+  assert.equal(opt('Send with my changes, not before you show me again'), false, 'a bare not is no denial');
+  // The comma ends the denial's words; "and" does not.
+  assert.equal(opt('Send it with my changes without the discount line and show me again first'), true);
+  // 3. A send not made yet leaves the look first.
+  for (const label of ['Before sending, update it with my changes, then show me again', 'Before it goes out, redo it with my edits, then show me again',
+    'Not ready to send: update it with my changes, then show me again']) assert.equal(opt(label), false, label);
+  for (const label of ["Don't wait, send with my changes, then show me again", "Don't wait and send with my changes, then show me again"])
+    assert.equal(opt(label), true, `${label}: the no is about the wait`);
+});
+
+test('re-review of #686 at d23b3cf9, smaller items: question words, a part that names its own thing, and a bounded scan', () => {
+  // Value: protects=a bare approve counts only where something goes out, and a long label stays cheap; fails_when=a draft rota or a post-holiday schedule reads as outgoing, the top question speaks for a part that names its own thing, or a long label scans for each send word to its end; why_new=re-review of #686; seam=none
+  const at = '2026-11-05T20:10:00Z';
+  const answer = (q, label, parts) => R.askChangeSends({ q, askedAt: at, options: [{ label }], ...(parts ? { parts } : {}) }, SINCE);
+  assert.equal(answer('**Approve the draft rota?**', 'Approve with my changes'), false);
+  assert.equal(answer('**Approve the post-holiday schedule?**', 'Approve with my changes'), false);
+  assert.equal(answer('**Approve the new post for LinkedIn?**', 'Approve with my changes'), true, 'a post goes out');
+  const top = '**Approve the reply to Dana?**';
+  assert.equal(R.askChangeSends({ q: top, askedAt: at, parts: [{ q: 'Approve the new rota?', options: [{ label: 'Approve with my changes' }] }] }, SINCE), false, 'the part names its own thing');
+  assert.equal(R.askChangeSends({ q: top, askedAt: at, parts: [{ q: 'Send it?', options: [{ label: 'Approve with my changes' }] }] }, SINCE), true, 'the part names nothing');
+  assert.equal(answer('x', `Send it ${'and '.repeat(80)}with my changes`), false, 'the changes are too far from the send');
+  const t0 = process.hrtime.bigint();
+  assert.equal(answer('x', `${'send it then '.repeat(20_000)}show me again`), false);
+  assert.ok(Number(process.hrtime.bigint() - t0) / 1e6 < 500, 'a long label with many sends is cheap');
+});
+
 test('both reach Michael\'s tidy list each turn, with what to do', () => {
   // Value: protects=Michael is told until he fixes the card; fails_when=asksToTidy drops either check or its line; why_new=owner 2026-11-05; seam=none
   const card = { id: 'dwight-willcox-five-companies', title: 'HubSpot partner manager asks about five companies', status: 'blocked', assignee: 'dwight', humanQA: [willCox] };

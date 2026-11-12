@@ -39,9 +39,9 @@
 
 ### What the two card checks still can't read
 
-**What:** Three wordings the email link check and the change option check read by words alone and get wrong: "Go ahead with my changes" (an inside approval or a send, the label can't say), "Send it back to Pam with my edits" (flagged, since the label can't say whether Pam is in the office), and a chat named in another sentence of the same question ("Approve the reply? It's in the Slack thread." is flagged; per sentence would instead miss "Approve the reply to Will Cox's message? Pam flagged it in Slack.").
+**What:** Four wordings the email link check and the change option check read by words alone and get wrong: "Go ahead with my changes" (an inside approval or a send, the label can't say), "Send it back to Pam with my edits" (flagged, since the label can't say whether Pam is in the office), a chat named in another sentence of the same question ("Approve the reply to Will Cox's message? Pam flagged it in Slack." passes, since the chat switch reads the whole question; per sentence would instead flag "Approve the reply? It's in the Slack thread."), and our own team's mail named with a possessive ("Approve Dwight's email for Acme?", "the office's email policy" are flagged; "noEmail" covers them).
 
-**Why:** Both checks are a backstop to Michael's rules, read English words only, and have no way to know who a name is or what a draft is for. Left from the re-review of #686 (2026-11-08); the rest of that list is fixed.
+**Why:** Both checks are a backstop to Michael's rules, read English words only, and have no way to know who a name is or what a draft is for. Left from the re-reviews of #686 (2026-11-08 and 2026-11-09); the rest of those lists is fixed.
 
 **Effort:** S
 **Priority:** P3
