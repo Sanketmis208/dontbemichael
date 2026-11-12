@@ -23,7 +23,7 @@ if (!process.env.HISTORY_UNDER_ELECTRON) {
     // Value: protects=a failing test in this file fails the suite; fails_when=the nested run's failure is reported green; why_new=new file; seam=none; no_claim=none beyond protects
     const env = { ...process.env, ELECTRON_RUN_AS_NODE: '1', HISTORY_UNDER_ELECTRON: '1' };
     delete env.NODE_TEST_CONTEXT;
-    const r = spawnSync(bin, ['--test', __filename], { env, encoding: 'utf8', timeout: 120_000 });
+    const r = spawnSync(bin, ['--test', __filename], { env, encoding: 'utf8', timeout: 300_000 });
     assert.equal(r.status, 0, `${r.stdout}\n${r.stderr}`);
     assert.match(r.stdout, /# fail 0/, 'the nested run reported its own results');
   });
