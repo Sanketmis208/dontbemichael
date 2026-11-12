@@ -381,13 +381,11 @@ idea? [Open an issue](https://github.com/agentvivekkumar/dontbemichael/issues).
 
 ## License
 
-The **source code** is licensed under the **MIT License**. See [`LICENSE`](./LICENSE). The original
-copyright notice of Munder Difflin, the project this grew out of, is kept in `LICENSE`, as the
-MIT license requires.
+The **source code** is licensed under the **MIT License**. See [`LICENSE`](./LICENSE).
 
 *Don't Be Michael* is not affiliated with NBC, *The Office*, or Dunder Mifflin.
 
 ## Acknowledgements
 
-- [Munder Difflin](https://github.com/chaitanyagiri/munder-difflin) by Chaitanya Giri and its contributors, the open-source project this product grew out of.
+- [Munder Difflin](https://github.com/chaitanyagiri/munder-difflin) by Chaitanya Giri, for the inspiration. Don't Be Michael is a complete rewrite, built from the ground up so AI agents can run the everyday work of a small business.
 - [xterm.js](https://xtermjs.org/) · [node-pty](https://github.com/microsoft/node-pty) · [electron-vite](https://electron-vite.org/) · [CodeMirror](https://codemirror.net/) for the libraries this is built on.
