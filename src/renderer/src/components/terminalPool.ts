@@ -19,7 +19,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import {
-  isNetworkPath, isPathToken, linkCellRange, linkableTokens, stripPathToken
+  isPathToken, linkCellRange, linkableTokens, stripPathToken
 } from '@shared/terminalPaths';
 import {
   createTerminalRecoveryState,
@@ -866,13 +866,13 @@ type StatResult = { exists: boolean; isFile: boolean; path: string };
 /** One stat per path for hover and click alike: an answer is kept for a few
  *  seconds (a file saved a moment later is seen on the next look), and a check
  *  already running is shared, so hovering again never stacks another one on a
- *  slow path. A network path is never stat'ed (isNetworkPath). */
+ *  slow path. Main's statAbs refuses a network path without a stat
+ *  (isNetworkPath in src/main/fs.ts), on hover and on click alike. */
 const STAT_TTL_MS = 10_000;
 const statCache = new Map<string, { at: number; res: StatResult | null }>();
 const statInFlight = new Map<string, Promise<StatResult | null>>();
 
 function statCached(abs: string): Promise<StatResult | null> {
-  if (isNetworkPath(abs)) return Promise.resolve(null);
   const hit = statCache.get(abs);
   if (hit && Date.now() - hit.at < STAT_TTL_MS) return Promise.resolve(hit.res);
   const running = statInFlight.get(abs);
@@ -915,9 +915,10 @@ void import('@/store/store')
  *  A miss is silent by design — the token is agent output and may simply not
  *  exist. */
 async function activatePath(abs: string): Promise<void> {
-  const hit = await statCached(abs);
-  if (!hit || !hit.exists) return;
-  void window.cth.revealPath(hit.path).catch(() => { /* file browser refused */ });
+  const res = await statCached(abs);
+  if (!res || !res.exists) return;
+  const hit = res.path;
+  void window.cth.revealPath(hit).catch(() => { /* file browser refused */ });
 }
 
 /** Is a quoted match with a space inside known to be a real path on disk, so it
@@ -926,10 +927,11 @@ async function activatePath(abs: string): Promise<void> {
  *  that has scrolled or on another hovered line). A path not seen yet counts as
  *  not on disk this time, so only the file names inside it link, and a check
  *  starts in the background; the next hover links the whole path. A path that
- *  does not resolve (no cwd yet) or names another machine is never on disk. */
+ *  does not resolve (no cwd yet) is never on disk, and main answers a path on
+ *  another machine as not on disk without looking. */
 function quotedKnownOnDisk(ptyId: string, raw: string): boolean {
   const abs = resolvePathCandidate(ptyId, raw);
-  if (!abs || isNetworkPath(abs)) return false;
+  if (!abs) return false;
   const hit = statCache.get(abs);
   if (hit && Date.now() - hit.at < STAT_TTL_MS) return !!hit.res?.exists;
   void statCached(abs);

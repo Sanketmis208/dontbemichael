@@ -78,19 +78,6 @@ export function pathTokenMatcher(): RegExp {
   return new RegExp(PATH_TOKEN_RE.source, 'g');
 }
 
-/**
- * A path that names another machine: a UNC share (`//host/share`, `\\host\share`),
- * a Windows device or long path (`\\?\`, `\\.\`), or macOS's automounted network
- * folders (`/net/host`, `/Network/`). Even a stat of one reaches out: Windows opens
- * an SMB connection that can send the user's NTLM hash, and macOS autofs contacts
- * the host. Terminal text is agent output, which can carry text from untrusted
- * mail or web pages, so such a path is never stat'ed, on hover or on click.
- */
-export function isNetworkPath(p: string): boolean {
-  const s = String(p ?? '').trim();
-  return /^[\\/]{2}/.test(s) || /^\/(net|network)(\/|$)/i.test(s);
-}
-
 /** A match in its quotes with a space inside: a real path with spaces in a
  *  folder name ("/Users/Jane/My Reports/summary.md") or quoted prose that starts
  *  with a folder ("/tmp is full, see notes.md"). No pattern can tell them apart;

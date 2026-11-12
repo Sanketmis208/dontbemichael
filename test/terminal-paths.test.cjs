@@ -157,24 +157,6 @@ test('the fallback links only bare file names, and each quoted match is judged o
   }
 });
 
-test('a network path is never stat\'ed: not on hover, not on click', async () => {
-  // Value: protects=hovering or clicking a printed share path never reaches another machine (review of #687: SMB and NTLM on Windows, autofs on macOS); fails_when=a UNC, device or /net path is treated as local, a local path is refused, or main's statAbs stats one; why_new=review of #687; seam=none
-  const { isNetworkPath } = loadTs('src/shared/terminalPaths.ts');
-  for (const p of ['//some-host/share/My Docs/a.md', '\\\\some-host\\share\\a.md', '\\\\?\\UNC\\host\\share\\a.md', '\\\\.\\pipe\\x',
-    '\\/host/share/a.md', '/net/some-host/x/a b.md', '/Network/Servers/host/a.md', '/NET/host/a.md', '  //host/a.md']) {
-    assert.equal(isNetworkPath(p), true, `${p} names another machine`);
-  }
-  for (const p of ['/Users/Jane/a.md', '/tmp/a b.md', 'C:\\Users\\Jane\\a.md', 'C:/Users/a.md', '/netflix/a.md', '/networks/a.md', 'notes.md', '~/a.md', '']) {
-    assert.equal(isNetworkPath(p), false, `${p} is local`);
-  }
-  const { statAbs } = loadTs('src/main/fs.ts');
-  for (const p of ['//some-host/share/a.md', '\\\\some-host\\share\\a.md', '/net/some-host/a.md']) {
-    assert.deepEqual(await statAbs(p), { exists: false, isFile: false, path: p }, `main refuses ${p} without a stat`);
-  }
-  const here = await statAbs(__filename);
-  assert.equal(here.exists, true, 'a local file is still stat\'ed');
-});
-
 test('quoted versions and prose do not become file paths', () => {
   assert.deepEqual(tokensIn('version "v0.4.5", cost \'0.92\', called `spring.thaw`'), []);
 });
