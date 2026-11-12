@@ -110,10 +110,6 @@ mac:
     NSDownloadsFolderUsageDescription: "Your team in Don't Be Michael may work with files in your Downloads."
     NSRemovableVolumesUsageDescription: "Your team in Don't Be Michael may work with files on external drives."
     NSNetworkVolumesUsageDescription: "Your team in Don't Be Michael may work with files on network drives."
-    # The microphone is used by two opt-in, off-by-default voice features: Free
-    # Flow dictation (Groq transcription) and Realtime Michael (live voice chat
-    # with the orchestrator via OpenAI). Mic access only happens while one is on.
-    NSMicrophoneUsageDescription: "Don't Be Michael uses your microphone only for its optional voice features: Free Flow dictation (transcribed by Groq) and talking to Michael in real time (streamed to OpenAI). The mic is off unless you turn one of these on."
   # Hardened runtime + entitlements so the spawned `claude` agents inherit this
   # app's TCC responsibility (one grant covers them all) and node-pty can load.
   hardenedRuntime: true
