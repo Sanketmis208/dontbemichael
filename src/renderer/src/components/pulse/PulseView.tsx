@@ -14,7 +14,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { PulseView as PulseData } from '@shared/pulseView';
+import type { PulseView as PulseData, SavedChange } from '@shared/pulseView';
 import type { Advice, AdviceKind, EarlyWatch } from '@shared/teamAdvice';
 import type { LearnedNote } from '@shared/teamLearning';
 import type { OrganizedList, OrganizedRow } from '@shared/organizedRecord';
@@ -34,7 +34,6 @@ import { AgentAvatar } from '../AgentAvatar';
 import { InfoTip } from '../InfoTip';
 import { PixelButton } from '../PixelButton';
 import { RunSuggestions } from './RunSuggestions';
-import { caseLangOf } from '@shared/caseStudy';
 import { Icon, type IconName } from '../Icon';
 import { useDialog } from '@/shell/useDialog';
 import { godNameNow } from '@/i18n';
@@ -279,7 +278,7 @@ export function PulseView() {
     if (casePrep === 'ready') { setCaseOpen(true); return; }
     if (casePrep === 'preparing') return;
     setCasePrep('preparing');
-    const p = await window.cth.caseStudyPrepare({ lang: caseLangOf(i18n.language), period: 'last-30', showName: true }).catch(() => null);
+    const p = await window.cth.caseStudyPrepare({ period: 'last-30', showName: true }).catch(() => null);
     if (!p) { setCasePrep('idle'); return; }
     setCasePrep(p.state);
     if (p.state === 'ready') setCaseOpen(true);
@@ -366,11 +365,13 @@ export function PulseView() {
       await load();
     } finally { setBusy(null); }
   };
-  const undo = async (item: { advice: Advice; appliedId: number }): Promise<void> => {
-    const r = await window.cth.pulseUndo(item.appliedId);
+  // From the just applied card or a line under Your changes; either way the
+  // same change, so both go once it is undone.
+  const undo = async (appliedId: number): Promise<void> => {
+    const r = await window.cth.pulseUndo(appliedId);
     if (!r.ok) { setNotice(t('pulse.staleUndo')); return; }
     if (r.kind === 'model') updateAgent(r.agentId, { model: r.to ?? undefined });
-    setApplied((list) => list.filter((x) => x.appliedId !== item.appliedId));
+    setApplied((list) => list.filter((x) => x.appliedId !== appliedId));
     setNotice(t('pulse.undone'));
     await load();
   };
@@ -439,8 +440,25 @@ export function PulseView() {
     // Emails sent names how many went out approved without edits, only once any were sent (owner, 2026-10-19).
     const outcomeLabel = (o: Outcome): string => t(o.kind === 'sent' && o.total === 0 ? 'pulse.outcome.sentNone' : `pulse.outcome.${o.kind}`, { sub: o.sub ?? 0 });
     const outcomeAria = (o: Outcome): string => `${outcomeLabel(o)}: ${o.by.map((b) => `${nameOf(b.agentId)} ${b.count}`).join(', ')}`;
-    // Saved by your changes shows only once a change was applied (owner, 2026-10-15).
-    const savedShown = view.saved.state !== 'none';
+    // Your changes shows only once a change was applied (owner, 2026-10-15),
+    // one line per change (owner, 2026-11-09). An older main's single total is not shown.
+    const savedChanges = view.saved.state === 'changes' && Array.isArray(view.saved.changes) ? view.saved.changes : [];
+    const savedShown = savedChanges.length > 0;
+    const changeWhat = (c: SavedChange): string => {
+      const name = nameOf(c.agentId);
+      if (c.change.kind === 'model') return t('pulse.changeModel', { name, model: c.change.toLabel });
+      const job = jobOf(c.change.missionId);
+      return t(job ? 'pulse.changeSchedule' : 'pulse.changeScheduleAny', { name, job, to: every(c.change.toMs, t) });
+    };
+    const changeResult = (c: SavedChange): { text: string; tone: 'saved' | 'more' | 'quiet' } => {
+      const r = c.result, day = fmtDay(c.at);
+      if (r.state === 'measuring') return { text: t('pulse.changeMeasuring', { day: fmtDay(r.firstAt) }), tone: 'quiet' };
+      if (r.state === 'thin') return { text: t('pulse.changeThin'), tone: 'quiet' };
+      const cents = Math.round(r.usd * 100);
+      if (cents > 0) return { text: t('pulse.changeSaved', { usd: money(r.usd), day }), tone: 'saved' };
+      if (cents < 0) return { text: t('pulse.changeCostMore', { usd: money(-r.usd), day }), tone: 'more' };
+      return { text: t('pulse.changeSame', { day }), tone: 'quiet' };
+    };
     // What the shown suggestions would save a week together, for the folded bar.
     const adviceSaves = shownAdvice.slice(0, Math.max(0, 3 - applied.length)).reduce((sum, a) => sum + (a.savesPerWeek !== null && a.savesPerWeek > 0 ? a.savesPerWeek : 0), 0);
     const noAdvice = shownAdvice.length === 0 && applied.length === 0;
@@ -694,7 +712,7 @@ export function PulseView() {
             {applied.map((x) => (
               <div key={`a-${x.appliedId}`} style={{ background: 'var(--cth-green-soft)', borderRadius: 'var(--cth-r-xl)', boxShadow: 'inset 0 0 0 1px color-mix(in srgb, var(--cth-green) 35%, transparent)', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{t('pulse.applied')} {x.text}</div>
-                <div><PixelButton variant="secondary" size="sm" onClick={() => { void undo(x); }}>{t('pulse.undo')}</PixelButton></div>
+                <div><PixelButton variant="secondary" size="sm" onClick={() => { void undo(x.appliedId); }}>{t('pulse.undo')}</PixelButton></div>
               </div>
             ))}
             {shownAdvice.slice(0, Math.max(0, 3 - applied.length)).map((a) => {
@@ -720,10 +738,25 @@ export function PulseView() {
                 </div>
               );
             })}
-            {savedShown && <div style={{ ...card, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 4, justifyContent: 'center' }}>
-              <div style={label}>{t('pulse.savedByChanges')}<InfoTip text={t('pulse.savedTip')} /></div>
-              {view.saved.state === 'measuring' && <><div style={{ fontSize: 22, fontWeight: 600 }}>{t('pulse.measuring')}</div><div style={{ fontSize: 11, color: 'var(--cth-ink-3)' }}>{t('pulse.firstResult', { day: fmtDay(view.saved.firstAt) })}</div></>}
-              {view.saved.state === 'measured' && <><div style={{ ...mono, fontSize: 22, fontWeight: 600, color: view.saved.usd >= 0 ? 'var(--cth-green-text)' : 'var(--cth-ink)' }}>{view.saved.usd < 0 ? '−' : ''}{money(Math.abs(view.saved.usd))}</div><div style={{ fontSize: 11, color: 'var(--cth-ink-3)' }}>{t(view.saved.usd < 0 ? 'pulse.costMore' : 'pulse.since', { day: fmtDay(view.saved.since) })}</div></>}
+            {/* Your changes (D16, owner 2026-11-09): one line per change still
+                in place, what it did in words, and its own Undo. Never one
+                signed total: "Saved −$49" hid which change to keep. */}
+            {savedShown && <div role="group" aria-label={t('pulse.yourChanges')} style={{ ...card, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={label}>{t('pulse.yourChanges')}<InfoTip text={t('pulse.savedTip')} /></div>
+              {savedChanges.map((c) => {
+                const what = changeWhat(c);
+                const res = changeResult(c);
+                return (
+                  <div key={c.appliedId} role="group" aria-label={`${what} ${res.text}`} style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    <AgentAvatar id={c.agentId} name={nameOf(c.agentId)} size={22} />
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, lineHeight: '18px' }}>{what}</div>
+                      <div style={{ fontSize: 12, lineHeight: '17px', fontWeight: res.tone === 'quiet' ? 400 : 600, color: res.tone === 'saved' ? 'var(--cth-green-text)' : res.tone === 'more' ? 'var(--cth-amber-text)' : 'var(--cth-ink-3)' }}>{res.text}</div>
+                    </div>
+                    <PixelButton variant="secondary" size="sm" onClick={() => { void undo(c.appliedId); }}>{t('pulse.undo')}</PixelButton>
+                  </div>
+                );
+              })}
             </div>}
           </div>}
         </Section>

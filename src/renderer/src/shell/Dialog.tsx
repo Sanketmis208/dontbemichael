@@ -31,7 +31,7 @@ export function Dialog({ title, onClose, busy = false, width = 520, footer, chil
   /** Take the window's full height (less the backdrop's padding) instead of
    *  sizing to the content, for a dialog built around a long text box. */
   fill?: boolean;
-  /** 'end' sits the dialog on the right edge (left in RTL), over the panel it
+  /** 'end' sits the dialog on the right edge, over the panel it
    *  edits, instead of in the middle of the window. */
   align?: 'center' | 'end';
   /** Lay the dialog exactly over this element (its box, kept in step as it

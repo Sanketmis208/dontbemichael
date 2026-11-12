@@ -23,7 +23,6 @@ import { sweepStaleTemps, writeFileAtomic } from './atomicFile';
 import {
   type IntegrationRecord,
   validateIntegrationRecord,
-  authTypeNeedsSecret,
   secretRefFor,
   INTEGRATION_ID_TAKEN
 } from '../shared/integrations';
@@ -40,15 +39,6 @@ export function listRecords(): IntegrationRecord[] {
 /** Look up one record by id. */
 export function getRecord(id: string): IntegrationRecord | undefined {
   return listRecords().find((r) => r.id === id);
-}
-
-/** Ids of integrations a worker may use right now (enabled, and — for secret auth —
- *  actually holding a stored secret). This is the default capability scope granted to
- *  every ephemeral worker. */
-export function enabledIds(): string[] {
-  return listRecords()
-    .filter((r) => r.enabled && (!authTypeNeedsSecret(r.authType) || hasSecret(r.secretRef)))
-    .map((r) => r.id);
 }
 
 /** Create or replace a record (validated). Stamps createdAt/updatedAt; preserves the

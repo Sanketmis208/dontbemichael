@@ -4,13 +4,23 @@
  *
  * No electron or node imports.
  */
-import type { PulseSnapshot } from './teamPerformance';
+import type { ChangeSaving, PulseSnapshot } from './teamPerformance';
 import type { Advice, EarlyWatch } from './teamAdvice';
 import type { KeptSafe } from './pulseSafety';
 import type { Learning } from './teamLearning';
 import type { FoundationsPulse } from './foundations';
 
 export interface AppliedChange { id: number; adviceId: string; agentId: string; kind: string; before: unknown; after: unknown; at: number; undoneAt: number | null }
+
+/** One applied change still in place and what it saved (D16). `appliedId`
+ *  is what Undo takes. */
+export interface SavedChange {
+  appliedId: number;
+  agentId: string;
+  at: number;
+  change: { kind: 'schedule'; missionId: string; toMs: number } | { kind: 'model'; to: string | null; toLabel: string };
+  result: ChangeSaving;
+}
 
 /** Compare (owner, 2026-10-16): the span before, measured by the same snapshot
  *  code as the period, up to the same day (D7, D9). */
@@ -41,7 +51,9 @@ export interface PulseView {
   foundations?: FoundationsPulse;
   /** When suggestions start (14 days after the first record), or null once they can show. */
   adviceFrom: string | null;
-  saved: { state: 'none' } | { state: 'measuring'; firstAt: number } | { state: 'measured'; usd: number; since: number };
+  /** Every change still in place, each measured on its own (owner,
+   *  2026-11-09: one signed total hid which change to keep or undo). */
+  saved: { state: 'none' } | { state: 'changes'; changes: SavedChange[] };
   headroom: { usedPct: number; resetsAt: number; runsOutAt: number | null } | null;
   applied: AppliedChange[];
   /** Each member's value per week for the last four weeks, oldest first. */

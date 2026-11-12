@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelButton } from './PixelButton';
-import { Toggle, MiniButton, Disclosure } from './triggers/ui';
+import { MiniButton, Disclosure } from './triggers/ui';
 import { InfoTip } from './InfoTip';
 import { AddMailboxDialog } from './AddMailboxDialog';
 import { useHarnessConfig } from '@/hooks/useHarnessConfig';

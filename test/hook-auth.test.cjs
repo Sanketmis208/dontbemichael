@@ -165,12 +165,13 @@ test('every engine bridge sends the secret, and the spawn hands it over without 
     assert.ok(start >= 0, name);
     return hiveSrc.slice(start, hiveSrc.indexOf('\n`;', start));
   };
-  for (const name of ['HOOK_SHIM', 'AGY_HOOK_SHIM', 'PROXY_BRIDGE_SHIM', 'GEMINI_HOOK_SHIM', 'GROK_HOOK_SHIM']) {
+  // The Claude shim (Codex runs it too) and the Gemini shim are the bridges
+  // left (Pi's went with Pi; Antigravity, Grok, OpenCode and the proxy with the
+  // other engines, owner 2026-11-11).
+  for (const name of ['HOOK_SHIM', 'GEMINI_HOOK_SHIM']) {
     assert.match(shimBody(name), /hook_token[:= ]+process\.env\.HIVE_HOOK_SEAL/, name);
   }
-  // Pi and OpenCode post from their in-process plugins.
-  assert.equal((hiveSrc.match(/payload\.hook_token = process\.env\.HIVE_HOOK_SEAL \|\| null;/g) || []).length >= 4, true, 'Claude shim, pi, opencode and the proxy emit');
-  assert.match(hiveSrc, /HIVE_HOOK_SEAL: this\.hookTokens\.get\(agentId\) \?\? ''/, 'the proxy sidecar gets its agent\'s secret');
+  assert.match(hiveSrc, /payload\.hook_token = process\.env\.HIVE_HOOK_SEAL \|\| null;/, 'the Claude shim emits');
 
   const { home, hive } = office(t);
   const inj = await hive.ensureAgent({ id: 'pam', name: 'Pam', provider: 'claude', cwd: home });

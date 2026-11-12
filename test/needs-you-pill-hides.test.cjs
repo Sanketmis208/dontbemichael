@@ -31,10 +31,20 @@ test('the pill hides exactly while the column shows', () => {
   assert.match(read('src/renderer/src/App.tsx'), /const columnView = floorView === 'office' \|\| floorView === 'file';/);
 });
 
+test('with nothing waiting, the pill shows on the office only', () => {
+  // Value: protects=the quiet "Nothing needs you" stays off every tab but the office, and an ask or a report always shows (owner, 2026-11-11); fails_when=the quiet pill shows on Tasks, Pulse or a file, hides on the office, or a waiting ask is hidden by the new rule; why_new=owner 2026-11-11; seam=pure; no_claim=the rendered top bar (pinned below)
+  for (const view of ['tasks', 'pulse', 'who-talks', 'file', 'case-study']) {
+    assert.equal(pillHidden('closed', view, true), true, `quiet on ${view}`);
+  }
+  assert.equal(pillHidden('closed', 'office', true), false, 'quiet on the office still shows');
+  assert.equal(pillHidden('board', 'office', true), true, 'the column rule still applies on the office');
+  for (const view of ['tasks', 'pulse', 'office']) assert.equal(pillHidden('closed', view, false), false, `something waits on ${view}`);
+});
+
 test('the pill eases out of the layout and back, its screen reader line stays, and focus waits for it', () => {
   // Value: protects=D2 (the gap closes), smooth hiding (owner, 2026-11-05: "it should smooth animate"), E1 (a new ask is still announced) and E2 (focus lands on the pill once back); fails_when=the hidden pill keeps its space, jumps instead of easing, stays reachable while hidden, loses the live region, or focus is asked before the pill exists; why_new=owner 2026-11-05; seam=source pins (the easing was measured in Electron)
   const bar = read('src/renderer/src/shell/TopBar.tsx');
-  assert.match(bar, /const hidden = useStore\(\(s\) => pillHidden\(s\.rightColumn, s\.floorView\)\);/);
+  assert.match(bar, /const nothingWaits = state === 'quiet' && reports === 0;\s*const hidden = useStore\(\(s\) => pillHidden\(s\.rightColumn, s\.floorView, nothingWaits\)\);/);
   assert.match(bar, /const slot = \(body: ReactNode\) => \(<>\{live\}/, 'every state keeps the live region beside the pill');
   assert.match(bar, /className="cth-pill-slot"\s*data-hidden=\{hidden \|\| undefined\}/);
   assert.match(bar, /<span className="cth-pill-face" style=\{\{ display: 'inline-flex' \}\}>\{body\}<\/span>/, 'the fade is its own layer');

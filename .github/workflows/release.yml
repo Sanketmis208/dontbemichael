@@ -56,11 +56,6 @@ jobs:
       - name: Compile (electron-vite → out/)
         run: npm run build
         env:
-          # Anonymous product analytics (TELEMETRY.md). The PostHog project key
-          # is public/write-only, but only official release builds inject it —
-          # forks without the secret compile with '' and analytics no-ops.
-          POSTHOG_KEY: ${{ secrets.POSTHOG_KEY }}
-          POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
           # Automatic failure reports (docs/designs/auto-report-failures.md): a
           # fine grained key that can write issues in the private reports repo
           # only. Mac and Windows both get it; forks build without it.

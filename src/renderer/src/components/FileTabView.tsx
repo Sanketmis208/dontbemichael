@@ -16,7 +16,7 @@ import type { FileTab } from '@/store/fileTabs';
 import { PixelButton } from './PixelButton';
 import { EmailTabView } from './EmailTabView';
 import { CSV_ROW_LIMIT, parseDelimited } from './delimited';
-import { cleanCopy, copyPicture, encodeShownPicture, escapeHtml, tableCopy, type CopyData, type CopyResult } from './fileTabCopy';
+import { cleanCopy, onePost, copyPicture, encodeShownPicture, escapeHtml, tableCopy, type CopyData, type CopyResult } from './fileTabCopy';
 
 type Read =
   | { status: 'reading' }
@@ -51,6 +51,10 @@ function FileTabBody({ tab }: { tab: FileTab }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opened]);
   const [copy, setCopy] = useState<'idle' | 'busy' | 'done' | 'error'>('idle');
+  // The post boxes the page shows (PostBox): with exactly one, the header Copy
+  // takes that box and says so.
+  const [posts, setPosts] = useState(0);
+  const postTexts = (): string[] => Array.from(scroller.current?.querySelectorAll<HTMLElement>('[data-post-text]') ?? []).map((el) => el.dataset.postText ?? '');
   const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const mounted = useRef(true);
   const agents = useStore((s) => s.agents);
@@ -85,6 +89,8 @@ function FileTabBody({ tab }: { tab: FileTab }) {
     };
   }, [tab.id, tab.who]);
 
+  useEffect(() => { setPosts(postTexts().length); }, [read]);
+
   useEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; clearTimeout(copyTimer.current); };
@@ -104,7 +110,7 @@ function FileTabBody({ tab }: { tab: FileTab }) {
         });
       } else {
         let data: CopyData = { text: read.text ?? '' };
-        if ((kind === 'markdown' || kind === 'document') && scroller.current) data = cleanCopy(scroller.current);
+        if ((kind === 'markdown' || kind === 'document') && scroller.current) data = onePost(postTexts()) ?? cleanCopy(scroller.current);
         else if (kind === 'csv') {
           const rows = parseDelimited(read.text ?? '', extensionOf(tab.id) === 'tsv' ? '\t' : ',');
           if (rows && rows.length) data = tableCopy(rows);
@@ -206,7 +212,7 @@ function FileTabBody({ tab }: { tab: FileTab }) {
           <PixelButton variant="secondary" size="sm" onClick={() => void copyTab()} disabled={copy === 'busy'}>
             {/* All three words share one cell, so the button keeps the widest one's width. */}
             <span style={{ display: 'inline-grid' }}>
-              {[t('fileTab.copy'), t('fileTab.copied'), t('fileTab.copyFailed')].map((w, i) => (
+              {[t(posts === 1 ? 'fileTab.copyPost' : 'fileTab.copy'), t('fileTab.copied'), t('fileTab.copyFailed')].map((w, i) => (
                 <span key={i} style={{ gridArea: '1 / 1', visibility: i === (copy === 'done' ? 1 : copy === 'error' ? 2 : 0) ? 'visible' : 'hidden' }}>{w}</span>
               ))}
             </span>

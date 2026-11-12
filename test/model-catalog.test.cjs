@@ -14,7 +14,7 @@ const {
 
 /** Exactly what each picker offers, as `[id, label]` pairs — the providers
  *  whose full list no other test pins (provider-config.test.cjs pins
- *  codex/grok/kimi/gemini/custom).
+ *  codex/gemini).
  *
  *  This started as the record of what the hardcoded TypeScript arrays offered
  *  before they moved into JSON, and it keeps that job: the ids here are the
@@ -35,78 +35,7 @@ const SHIPPED = {
     ["claude-sonnet-4-6", "Sonnet 4.6"],
     ["claude-sonnet-4-6[1m]", "Sonnet 4.6 · 1M"],
     ["claude-haiku-4-5-20251001", "Haiku 4.5"]
-  ],
-  antigravity: [
-    [undefined, "CLI default"],
-    ["Gemini 3.1 Pro (High)", "Gemini 3.1 Pro · High"],
-    ["Gemini 3.1 Pro (Low)", "Gemini 3.1 Pro · Low"],
-    ["Gemini 3.7 Flash (High)", "Gemini 3.7 Flash · High"],
-    ["Gemini 3.7 Flash (Medium)", "Gemini 3.7 Flash · Med"],
-    ["Gemini 3.7 Flash (Low)", "Gemini 3.7 Flash · Low"],
-    ["Gemini 3.5 Flash (High)", "Gemini 3.5 Flash · High"],
-    ["Gemini 3.5 Flash (Medium)", "Gemini 3.5 Flash · Med"],
-    ["Gemini 3.5 Flash (Low)", "Gemini 3.5 Flash · Low"],
-    ["Claude Sonnet 4.6 (Thinking)", "Claude Sonnet 4.6"],
-    ["Claude Opus 4.6 (Thinking)", "Claude Opus 4.6"],
-    ["GPT-OSS 120B (Medium)", "GPT-OSS 120B"]
-  ],
-  qwen: [
-    [undefined, "default"],
-    ["qwen3-coder-plus", "Qwen3 Coder Plus"],
-    ["qwen3-coder", "Qwen3 Coder"],
-    ["qwen-max", "Qwen Max"]
-  ],
-  opencode: [
-    [undefined, "CLI default"],
-    ["anthropic/claude-sonnet-4-5", "Claude Sonnet 4.5 (Anthropic)"],
-    ["anthropic/claude-haiku-4-5", "Claude Haiku 4.5 (Anthropic)"],
-    ["openai/gpt-5", "GPT-5 (OpenAI)"],
-    ["openai/gpt-5-mini", "GPT-5 mini (OpenAI)"],
-    ["openrouter/anthropic/claude-sonnet-4.5", "Claude Sonnet 4.5 (OpenRouter)"],
-    ["google/gemini-2.5-pro", "Gemini 2.5 Pro (Google)"],
-    ["local/llama3", "Local · OpenAI-compatible (set base-URL)"]
-  ],
-  crush: [
-    [undefined, "Crush default (config)"],
-    ["anthropic/claude-sonnet-4-5", "Claude Sonnet 4.5 (Anthropic)"],
-    ["anthropic/claude-opus-4-1", "Claude Opus (Anthropic)"],
-    ["openai/gpt-4o", "GPT-4o (OpenAI)"],
-    ["openai/o3", "o3 (OpenAI)"],
-    ["gemini/gemini-2.5-pro", "Gemini 2.5 Pro"],
-    ["openrouter/auto", "OpenRouter (auto)"],
-    ["openai/local", "Local · OpenAI-compatible (set base-URL)"]
-  ],
-  pi: [
-    [undefined, "default"],
-    ["anthropic/claude-sonnet-4-5", "Claude Sonnet 4.5 (Anthropic)"],
-    ["anthropic/claude-opus-4-1", "Claude Opus (Anthropic)"],
-    ["openai/gpt-5", "GPT-5 (OpenAI)"],
-    ["google/gemini-2.5-pro", "Gemini 2.5 Pro (Google)"],
-    ["groq/llama-3.3-70b", "Llama 3.3 70B (Groq)"],
-    ["local/llama3", "Local · OpenAI-compatible (set base-URL)"]
-  ],
-  copilot: [
-    [undefined, "default (Claude Sonnet 4.5)"],
-    ["auto", "Auto (Copilot picks)"],
-    ["claude-sonnet-4.5", "Claude Sonnet 4.5"],
-    ["claude-sonnet-4", "Claude Sonnet 4"],
-    ["gpt-5.4", "GPT-5.4"],
-    ["gpt-5", "GPT-5"]
-  ],
-  cursor: [
-    [undefined, "CLI default (auto)"],
-    ["auto", "Auto"],
-    ["gpt-5.6-luna-high", "GPT-5.6 Luna 1M High (cheap)"],
-    ["gpt-5.6-sol-medium", "GPT-5.6 Sol 1M"],
-    ["gpt-5.6-sol-high", "GPT-5.6 Sol 1M High"],
-    ["gemini-3.7-flash-high", "Gemini 3.7 Flash"],
-    ["claude-fable-5-1-thinking-high", "Fable 5.1 1M Thinking (no ZDR)"],
-    ["composer-2.5", "Composer 2.5"],
-    ["composer-2.5-fast", "Composer 2.5 Fast"],
-    ["gpt-5.2", "GPT-5.2"],
-    ["claude-opus-4-8-high", "Opus 4.8 1M"],
-    ["claude-sonnet-5-thinking-high", "Sonnet 5 1M Thinking"]
-  ],
+  ]
 };
 
 /** A stand-in catalog: the real one is deliberately all-unbounded (the port had
@@ -149,8 +78,7 @@ test('the catalog is the schema config.ts expects', () => {
   assert.equal(catalog.version, 1);
   assert.deepEqual(
     Object.keys(catalog.providers).sort(),
-    ['antigravity', 'claude', 'copilot', 'codex', 'crush', 'cursor', 'custom',
-      'gemini', 'grok', 'kimi', 'opencode', 'pi', 'qwen'].sort()
+    ['claude', 'codex', 'gemini'].sort()
   );
 });
 
@@ -189,9 +117,10 @@ test('a version the filter cannot read hides nothing', () => {
   assert.deepEqual(ids(modelsForProviderAtVersion('claude', '', BOUNDED)), ids(BOUNDED.claude));
 });
 
-test('an unknown provider falls back to the Claude list, custom to nothing', () => {
+test('an unknown provider falls back to the Claude list', () => {
   assert.deepEqual(modelsForProvider('not-a-provider'), modelsForProvider('claude'));
-  assert.deepEqual(modelsForProvider('custom'), []);
+  // A removed engine is no different (owner, 2026-11-11).
+  assert.deepEqual(modelsForProvider('custom'), modelsForProvider('claude'));
 });
 
 test('the filter reads the version the app was built with', () => {

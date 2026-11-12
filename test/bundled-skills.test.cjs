@@ -75,7 +75,7 @@ test('Codex restarts refresh bundled skills, preserve existing skills and keep w
 });
 
 test('only Codex receives the private skill copy and every provider leaves the user working folder untouched', async (t) => {
-  for (const provider of ['codex', 'claude', 'gemini', 'custom']) {
+  for (const provider of ['codex', 'claude', 'gemini']) {
     await t.test(provider, async (t) => {
       const { cwd, source, hive, start } = setup(t);
       fs.writeFileSync(path.join(cwd, 'sales.csv'), 'total\n665\n');

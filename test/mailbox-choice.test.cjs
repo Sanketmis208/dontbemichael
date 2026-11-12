@@ -50,7 +50,7 @@ test('a greyed row dims its name, never the reason the owner has to read', () =>
 test('one word for one idea in every language, and no dashes', () => {
   // Value: protects=the choice and the lines after it use the same words; fails_when=a language lacks a string, or watches or checks come back in English; why_new=owner 2026-10-30, D1; seam=none; no_claim=quality of the Chinese and Arabic
   const keys = ['addMailboxUse', 'addIt', 'addHow', 'addWatch', 'addSendOnly', 'addReadsDesc', 'addSendsDesc', 'addSendOnlyNobody', 'addWatchMoves', 'addWatchTaken', 'addSendOnlyTaken', 'addMailboxBothUsed', 'inboxWatches', 'inboxSendOnly', 'inboxNobody', 'sendOnlyPaused', 'removeWatchedSure', 'moveMailbox', 'sendOnlyUse'];
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const c = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).capabilities;
     assert.equal(c.addMailboxInfo, undefined, loc);
     for (const k of keys) {

@@ -34,19 +34,20 @@ test('the panel filters what it shows, not what main reports', () => {
   assert.match(main, /return toolCatalog\(\)\.map\(/, 'tools:status keeps the full catalog');
 });
 
-test('Agents & Models hides the API keys panel while no offered engine reads it', () => {
-  const { showByokSettings, BUILD_ENGINES } = loadTs('src/shared/agentProvider.ts');
-  assert.deepEqual([...BUILD_ENGINES], ['claude']);
-  assert.equal(showByokSettings(), false, 'Claude Code uses its own login');
-  assert.equal(showByokSettings(['claude', 'opencode']), true, 'it comes back when a build offers OpenCode');
+test('Agents & Models has no API keys panel: no kept engine reads one', () => {
+  // Value: protects=the other engines' API keys panel stays gone with them; fails_when=the panel or its switch comes back; why_new=owner 2026-11-11, only Claude, Gemini and ChatGPT; seam=source pins; no_claim=a rendered Settings
+  const P = loadTs('src/shared/agentProvider.ts');
+  assert.deepEqual([...P.BUILD_ENGINES], ['claude']);
+  assert.equal('showByokSettings' in P, false);
+  assert.equal(fs.existsSync(path.resolve(__dirname, '../src/renderer/src/components/AiEnginesSettings.tsx')), false);
   const modal = fs.readFileSync(path.resolve(__dirname, '../src/renderer/src/components/SettingsModal.tsx'), 'utf8');
-  assert.match(modal, /\{showByokSettings\(\) && \(\s*<>\s*<AiEnginesSettings config=\{config\} \/>/);
+  assert.doesNotMatch(modal, /AiEnginesSettings|showByokSettings/);
   assert.match(modal, /settings\.agentsModels\.maxTurns/, 'Max turns stays (owner, 2026-09-25)');
 });
 
 test('Agents & Models and Autonomy & Budgets are one Agents tab (owner, 2026-10-01)', () => {
   const modal = fs.readFileSync(path.resolve(__dirname, '..', 'src/renderer/src/components/SettingsModal.tsx'), 'utf8');
-  assert.match(modal, /const NAV_SECTIONS: Section\[\] = \['General', 'Company profile', 'Prerequisites', 'Agents', 'Skills', 'Connections', 'Research & privacy', 'Voice', 'Memory & Knowledge'\];/);
+  assert.match(modal, /const VISIBLE_SECTIONS: Section\[\] = \['General', 'Company profile', 'Prerequisites', 'Agents', 'Connections', 'Research & privacy', 'Memory & Knowledge'\];/);
   assert.doesNotMatch(modal, /'Autonomy & Budgets'|'Agents & Models'/);
   // One tab, in this order: the model, autonomy, the circuit breaker, then max turns.
   const tab = modal.slice(modal.indexOf("{activeSection === 'Agents' && ("), modal.indexOf("{/* MEMORY & KNOWLEDGE */}"));
@@ -54,11 +55,9 @@ test('Agents & Models and Autonomy & Budgets are one Agents tab (owner, 2026-10-
   assert.ok(at("t('settings.agentsModels.defaultModel')") < at("t('settings.autonomy.autonomy')"));
   assert.ok(at("t('settings.autonomy.autonomy')") < at("t('settings.autonomy.breaker')"));
   assert.ok(at("t('settings.autonomy.breaker')") < at("t('settings.agentsModels.maxTurns')"));
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const nav = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', `src/renderer/src/i18n/locales/${loc}.json`), 'utf8')).settings.nav;
     assert.ok(nav.agents, `${loc}: Agents label`);
     assert.equal(nav.autonomyBudgets, undefined, `${loc}: no second tab label`);
   }
-  // Agents are told where the owner turns hiring on (hive.ts).
-  assert.match(fs.readFileSync(path.resolve(__dirname, '..', 'src/main/hive.ts'), 'utf8'), /under Settings → Agents, and it is/);
 });

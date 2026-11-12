@@ -10,7 +10,7 @@
  *   carries developer_instructions with role and house rules.
  * - Codex resume after editing work style updates the config.toml with the new text.
  * - Gemini CLI spawn delivers the protocol seed via -i and re-injects on compaction/resume.
- * - Engines without a native system channel (Gemini, Grok, Crush, etc.) receive protocol
+ * - Engines without a native system channel (Gemini) receive protocol
  *   re-injection via HookServer additionalContext on compaction and resume.
  */
 const test = require('node:test');
@@ -187,57 +187,6 @@ test('Gemini CLI spawn delivers full protocol via -i and re-injects on compact/r
   const afterResumeContext = afterResumePromptRes?.hookSpecificOutput?.additionalContext ?? '';
   assert.ok(!afterResumeContext.includes('HOUSE RULES'),
     'Gemini must not repeat protocol on subsequent prompts after resume');
-});
-
-test('Engine with no system channel re-injects protocol on SessionStart compact and resume', async (t) => {
-  const home = tmpHome();
-  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
-
-  const hive = new HiveManager(() => home);
-  const cwd = path.join(home, 'biz', 'grok');
-  fs.mkdirSync(cwd, { recursive: true });
-
-  await hive.ensureAgent({
-    id: 'grok-1',
-    name: 'Creed',
-    provider: 'grok',
-    cwd
-  });
-
-  const server = new HookServer(hive, () => null, () => ({}), undefined, undefined);
-
-  // 1. SessionStart with source: "compact" re-injects protocol into additionalContext
-  const compactRes = server.handle({
-    agent_id: 'grok-1',
-    hook_event_name: 'SessionStart',
-    source: 'compact',
-    session_id: 'sess-1'
-  });
-  const compactContext = compactRes?.hookSpecificOutput?.additionalContext;
-  assert.ok(compactContext, 'SessionStart on compact must return additionalContext');
-  assert.ok(compactContext.includes('You are "Creed"'), 'additionalContext must include agent identity');
-  assert.ok(compactContext.includes('HOUSE RULES'), 'additionalContext must include house rules');
-
-  // 2. SessionStart with source: "resume" re-injects protocol into additionalContext
-  const resumeRes = server.handle({
-    agent_id: 'grok-1',
-    hook_event_name: 'SessionStart',
-    source: 'resume',
-    session_id: 'sess-2'
-  });
-  const resumeContext = resumeRes?.hookSpecificOutput?.additionalContext;
-  assert.ok(resumeContext, 'SessionStart on resume must return additionalContext');
-  assert.ok(resumeContext.includes('You are "Creed"'), 'additionalContext on resume must include agent identity');
-
-  // 3. Normal SessionStart (not compact or resume) does not re-inject protocol
-  const normalRes = server.handle({
-    agent_id: 'grok-1',
-    hook_event_name: 'SessionStart',
-    source: 'startup',
-    session_id: 'sess-3'
-  });
-  const normalContext = normalRes?.hookSpecificOutput?.additionalContext ?? '';
-  assert.ok(!normalContext.includes('HOUSE RULES'), 'normal SessionStart must not duplicate the protocol');
 });
 
 test('Engines with native system-level instructions do not re-inject on SessionStart compact', async (t) => {

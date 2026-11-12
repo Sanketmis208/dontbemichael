@@ -231,6 +231,57 @@ test('with no window to restart them, Michael is told the member is stuck', asyn
   assert.match(inbox[0].body, /the app could not restart Pam/);
 });
 
+test('Michael stuck on a prompt is restarted too, and the owner hears only if it comes back', async (t) => {
+  // Value: protects=the office never waits all night on Michael's prompt, and he is never told about himself; fails_when=Michael is skipped again, gets a note about his own restart, is restarted in a loop, or the owner is not told a restart failed; why_new=2026-11-09 (Michael sat ten hours on a prompt); seam=HookServer.restartStuck
+  const { hive, server } = await office(t);
+  server.getCompanyProfile = () => 'Acme Dental, a clinic in Austin.';
+  let clock = 1_000_000;
+  server.now = () => clock;
+  const restarted = [];
+  const notices = [];
+  server.restartStuck = (id) => { restarted.push(id); return true; };
+  server.notify = (id, body) => { notices.push([id, body]); return true; };
+  const prompt = { agent_id: 'god', session_id: 's', hook_event_name: 'Notification', notification_type: 'permission_prompt', message: 'Claude needs your permission to use Bash' };
+  await server.handle(prompt);
+  assert.deepEqual(restarted, ['god']);
+  let inbox = hive.inbox('god');
+  assert.equal(inbox.length, 1, 'only the carry on note');
+  assert.match(inbox[0].subject, /You were restarted/);
+  await server.handle({ agent_id: 'god', session_id: 's2', hook_event_name: 'SessionStart', source: 'resume' });
+  assert.equal(hive.inbox('god').length, 1, 'no note to Michael about his own restart');
+  assert.deepEqual(notices, []);
+  // Back before he moved on: no second restart, one notice to the owner.
+  clock += 10 * 60_000;
+  await server.handle(prompt);
+  await server.handle(prompt);
+  assert.deepEqual(restarted, ['god']);
+  const H = loadTs('src/main/hooks.ts');
+  assert.deepEqual(notices, [['god', H.MICHAEL_STUCK_RESTARTED]]);
+  assert.equal(hive.inbox('god').length, 1, 'nothing relayed to himself');
+  // Working again: the owner hears that too.
+  await server.handle({ agent_id: 'god', session_id: 's2', hook_event_name: 'PostToolUse', tool_name: 'Read' });
+  assert.deepEqual(notices.at(-1), ['god', H.MICHAEL_WORKING_AGAIN]);
+  for (const line of [H.MICHAEL_STUCK_RESTARTED, H.MICHAEL_STUCK_NO_RESTART, H.MICHAEL_WORKING_AGAIN]) {
+    assert.doesNotMatch(line, /[–—]|terminal|prompt|1:1/i);
+  }
+});
+
+test('with auto mode off, Michael\'s prompt is left for the owner, never restarted', async (t) => {
+  // Value: protects=an owner who turned auto mode off answers Michael's prompts and never sees him restarted mid ask; fails_when=Michael is restarted or the owner gets a stuck notice while auto mode is off, or a member stops being restarted; why_new=ship adversarial review 2026-11-09; seam=HookServer.getConfig
+  const { server } = await office(t);
+  const cfg = server.getConfig();
+  server.getConfig = () => ({ ...cfg, autoMode: false });
+  const restarted = [];
+  const notices = [];
+  server.restartStuck = (id) => { restarted.push(id); return true; };
+  server.notify = (id, body) => { notices.push([id, body]); return true; };
+  await server.handle({ agent_id: 'god', session_id: 's', hook_event_name: 'Notification', notification_type: 'permission_prompt', message: 'Claude needs your permission to use Bash' });
+  assert.deepEqual(restarted, []);
+  assert.deepEqual(notices, []);
+  await server.handle({ agent_id: 'pam', session_id: 's', hook_event_name: 'Notification', notification_type: 'permission_prompt', message: 'needs your permission' });
+  assert.deepEqual(restarted, ['pam'], 'members are still restarted');
+});
+
 test("Michael's own prompts are not relayed to himself", async (t) => {
   const { hive, server } = await office(t);
   await server.handle({ agent_id: 'god', session_id: 's', hook_event_name: 'Notification', notification_type: 'permission_prompt', message: 'needs your permission' });
@@ -256,7 +307,7 @@ test("outside 1:1 the owner only watches: keys, paste, drop and IME are dropped,
 });
 
 test('team member panels lock input and swap the message box for the bar outside 1:1', () => {
-  for (const f of ['src/renderer/src/components/AgentDetailPanel.tsx', 'src/renderer/src/components/FullscreenTerminal.tsx']) {
+  for (const f of ['src/renderer/src/components/AgentDetailPanel.tsx']) {
     const src = read(f);
     assert.match(src, /inputLocked=\{!agent\.onHold\}/, f);
     assert.match(src, /\{agent\.onHold \? <><OneOnOneLine agent=\{agent\} \/><MessageQueueComposer agent=\{agent\} \/><\/> : <OwnerViaMichaelBar agent=\{agent\} \/>\}/, f);
@@ -278,7 +329,7 @@ test('team member panels lock input and swap the message box for the bar outside
 });
 
 test('new strings exist in every language, Michael by godName', () => {
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const d = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).ownerVia;
     for (const k of ['watching', 'aboutPrefix', 'explain', 'stuck', 'message', 'talk', 'holdFailed', 'inOneOnOne', 'inOneOnOneNote', 'endOneOnOne']) assert.ok(d?.[k], `${loc} ${k}`);
     assert.match(d.message, /\{\{godName\}\}/);
@@ -309,10 +360,10 @@ test('the stuck bar keys on the team member prompt marker, and the Michael prefi
   assert.match(read('src/renderer/src/hooks/useHive.ts'), /\{ status: 'waiting', action: ACTION_AT_PROMPT[ ,]/);
 });
 
-test('agent panel tabs: messages, schedules, then the technical ones', () => {
+test('agent panel tabs: messages, schedules, then the technical one', () => {
   const tabs = read('src/renderer/src/components/SidebarTabs.tsx');
   const order = [...tabs.matchAll(/\{ key: '(\w+)',/g)].map((m) => m[1]);
-  assert.deepEqual(order, ['profile', 'capabilities', 'messages', 'memory', 'terminal', 'git', 'traces']);
+  assert.deepEqual(order, ['profile', 'capabilities', 'messages', 'memory', 'terminal']);
 });
 
 // Pre-landing review, 2026-09-25: in 1:1 the owner is at that terminal.

@@ -57,12 +57,11 @@ test('dark mode and focus: readable step numbers and force quit, focus rings on 
   assert.match(read('src/renderer/src/shell/BottomBar.tsx'), /if \(isComposingKey\(e\)\) return;\n\s*if \(e\.key === 'Enter' && !e\.shiftKey\)/, 'IME Enter never sends a half typed message');
 });
 
-test('top bar buttons speak the app language; the release notes backdrop needs a full click', () => {
-  // Value: protects=screen readers in Arabic and Chinese, and no dismiss on a drag; fails_when=English aria or mousedown dismiss return; why_new=core review; seam=none
+test('top bar buttons speak the app language', () => {
+  // Value: protects=screen reader labels come from the language file; fails_when=a literal aria label returns; why_new=core review; seam=none
   const top = read('src/renderer/src/shell/TopBar.tsx');
   assert.doesNotMatch(top, /aria="(Toggle dark mode|Settings|Toggle focus mode)"/);
   assert.match(top, /aria-label=\{label\}/);
-  assert.match(read('src/renderer/src/components/ReleaseDrop.tsx'), /\{\.\.\.backdrop\}/);
 });
 
 test('a paste attaches a screenshot or Finder files, and leaves text (even with an image) as text', () => {
@@ -104,9 +103,9 @@ test('Closing time in the clock menu quits like Cmd-Q', () => {
 test('Settings fields are the v2 input, with its focus ring', () => {
   // Value: protects=Settings inputs match setup and the hire wizard and show focus; fails_when=a field drops the cth-input class or the old cream fill comes back; why_new=review pass 3; seam=none
   const modal = read('src/renderer/src/components/SettingsModal.tsx');
-  const uses = (modal.match(/style=\{\{?\s*(\.\.\.)?slackInputStyle/g) ?? []).length;
-  const ringed = (modal.match(/className="cth-input"\s+style=\{\{?\s*(\.\.\.)?slackInputStyle/g) ?? []).length;
-  assert.ok(uses >= 21, 'every Settings field uses the shared style');
+  const uses = (modal.match(/style=\{\{?\s*(\.\.\.)?fieldInputStyle/g) ?? []).length;
+  const ringed = (modal.match(/className="cth-input"\s+style=\{\{?\s*(\.\.\.)?fieldInputStyle/g) ?? []).length;
+  assert.ok(uses >= 6, 'every Settings field uses the shared style');
   assert.equal(ringed, uses, 'every Settings field carries the cth-input class');
   assert.doesNotMatch(modal, /cth-paper-100[^\n]*\n[^\n]*border: 'none',\n\s*boxShadow: 'inset 0 0 0 1px var\(--cth-ink-100\)'/);
 });

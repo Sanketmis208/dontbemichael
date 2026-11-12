@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useStore } from '@/store/store';
 import { useResolvedGodName } from '@/hooks/useResolvedGodName';
-import { useRtl } from '@/i18n/useDirection';
 import { gist, localDay, messageView, verbKey, type ThreadRow } from '@shared/messageView';
 
 type HistoryMessage = Awaited<ReturnType<Window['cth']['hiveHistory']>>[number];
@@ -27,7 +26,6 @@ const hairline = '1px solid var(--cth-ink-100)';
 
 export function ThreadsPanel({ agentId }: ThreadsPanelProps) {
   const { t, i18n } = useTranslation();
-  const rtl = useRtl();
   const godName = useResolvedGodName();
   const agents = useStore((s) => s.agents);
   const self = agents.find((a) => a.id === agentId);
@@ -106,11 +104,11 @@ export function ThreadsPanel({ agentId }: ThreadsPanelProps) {
     return (
       // One ink-100 hairline between rows (DESIGN.md §7.10); see .cth-thread-row.
       <li key={thread.conversation} style={{ padding: '10px 0' }} className="cth-thread-row">
-        <p dir={rtl ? 'auto' : undefined} style={{ margin: 0, fontSize: 14, lineHeight: '20px', color: 'var(--cth-ink-900)', wordBreak: 'break-word' }}>
+        <p style={{ margin: 0, fontSize: 14, lineHeight: '20px', color: 'var(--cth-ink-900)', wordBreak: 'break-word' }}>
           <span style={{ fontWeight: 600 }}>{said(thread.first)}</span>: {gist(thread.first)}
         </p>
         {thread.latest && !isOpen && (
-          <p dir={rtl ? 'auto' : undefined} style={{ margin: '4px 0 0', fontSize: 14, lineHeight: '20px', color: 'var(--cth-ink-700)', wordBreak: 'break-word' }}>
+          <p style={{ margin: '4px 0 0', fontSize: 14, lineHeight: '20px', color: 'var(--cth-ink-700)', wordBreak: 'break-word' }}>
             <span aria-hidden style={{ color: 'var(--cth-ink-500)' }}>↳ </span>
             <span style={{ fontWeight: 600 }}>{said(thread.latest)}</span>: {gist({ subject: '', body: thread.latest.body || thread.latest.subject })}
           </p>
@@ -120,7 +118,7 @@ export function ThreadsPanel({ agentId }: ThreadsPanelProps) {
             {thread.messages.map((m) => (
               <li key={m.id}>
                 <div style={{ fontSize: 13, lineHeight: '18px', color: 'var(--cth-ink-500)' }}>{[said(m), time(m.created_at)].filter(Boolean).join(' · ')}</div>
-                <div dir={rtl ? 'auto' : undefined} style={{ fontSize: 14, lineHeight: '20px', color: 'var(--cth-ink-900)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', marginTop: 2 }}>
+                <div style={{ fontSize: 14, lineHeight: '20px', color: 'var(--cth-ink-900)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', marginTop: 2 }}>
                   {m.body || m.subject}
                 </div>
               </li>
@@ -182,7 +180,7 @@ export function ThreadsPanel({ agentId }: ThreadsPanelProps) {
           {showNotices && (
             <ul style={{ listStyle: 'none', margin: '8px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
               {view.notices.messages.map((m) => (
-                <li key={m.id} dir={rtl ? 'auto' : undefined} style={{ fontSize: 13, lineHeight: '18px', color: 'var(--cth-ink-700)' }}>
+                <li key={m.id} style={{ fontSize: 13, lineHeight: '18px', color: 'var(--cth-ink-700)' }}>
                   <span style={{ color: 'var(--cth-ink-500)' }}>{dayLabel(localDay(m.created_at))} {time(m.created_at)} · </span>
                   {gist(m, 120)}
                 </li>

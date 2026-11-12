@@ -206,7 +206,7 @@ test('wiring: a beat each minute, the handoff at session start, undo through the
   const hooks = read('src/main/hooks.ts');
   assert.match(hooks, /const handoffText = event === 'SessionStart' && p\.source === 'clear' && agentId \? \(this\.hive\.takeHandoff\?\.\(agentId\) \?\? null\) : null;/);
   assert.match(read('src/renderer/src/components/AgentDetailPanel.tsx'), /<ClearedBanner agentId=\{agent\.id\} name=\{agent\.name\} \/>/);
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const d = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`));
     assert.ok(d.clearedBanner.bringBack && d.clearedBanner.text, loc);
     assert.doesNotMatch(JSON.stringify(d.clearedBanner), /[–—]/, loc);

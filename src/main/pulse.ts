@@ -16,7 +16,7 @@
 import type Database from 'better-sqlite3';
 import type { ScheduledMission } from '../shared/missions';
 import {
-  compareFrom, dayKey, keptAsIs, measuredSaving, MIN_DECISIONS, periodRange, planHeadroom, previousRange, pulseSnapshot, reopensSince,
+  compareFrom, dayKey, keptAsIs, measuredSaving, measuredScheduleSaving, MIN_DECISIONS, periodRange, planHeadroom, previousRange, pulseSnapshot, reopensSince,
   type AskFact, type DayRange, type Period, type PlanReading, type PulseSnapshot
 } from '../shared/teamPerformance';
 import { adviceFor, earlyWatch, visibleAdvice, ADVICE_WINDOW_MS, EARLY_SCALE, type Advice, type Dismissal, type EarlyMode, type EarlyWatch, type LadderModel, type MemberModelFact, type MissionFact } from '../shared/teamAdvice';
@@ -65,7 +65,7 @@ export interface PulseDeps {
 }
 
 export type { AppliedChange, PulseView } from '../shared/pulseView';
-import type { AppliedChange, PulseView } from '../shared/pulseView';
+import type { AppliedChange, PulseView, SavedChange } from '../shared/pulseView';
 
 /** Window lengths by Claude Code's rate limit names. */
 function windowMs(name: string): number {
@@ -516,23 +516,27 @@ export class PulseService {
     return out;
   }
 
-  /** D16: measured savings of every change still in place. */
+  /** D16: every change still in place, each measured on its own, newest
+   *  first: a schedule change by its runs' cost a day, a model change by cost
+   *  per piece (owner, 2026-11-09). Never summed: the owner keeps or undoes
+   *  one change at a time. */
   private saved(office: string, applied: AppliedChange[]): PulseView['saved'] {
     const live = applied.filter((a) => a.undoneAt === null);
     if (!live.length) return { state: 'none' };
     const now = this.now();
-    let usd = 0, measuring: number | null = null;
-    for (const a of live) {
+    const ladder = this.d.ladder();
+    const changes: SavedChange[] = live.map((a) => {
       const days = this.d.processor.days(office, dayKey(a.at - ADVICE_WINDOW_MS)).filter((x) => x.agentId === a.agentId);
       // Up to this member's next change still in place, so changes never overlap.
       const next = live.filter((b) => b.agentId === a.agentId && b.at > a.at).reduce<number | undefined>((m, b) => (m === undefined || b.at < m ? b.at : m), undefined);
-      const r = measuredSaving(days, a.at, now, next);
-      if (r.state === 'measuring') measuring = Math.min(measuring ?? r.firstAt, r.firstAt);
-      else usd += r.usd;
-    }
-    const measuredAny = live.some((a) => now >= a.at + 7 * 86_400_000);
-    if (!measuredAny && measuring !== null) return { state: 'measuring', firstAt: measuring };
-    return { state: 'measured', usd, since: Math.min(...live.map((a) => a.at)) };
+      if (a.kind === 'schedule') {
+        const after = a.after as { missionId: string; intervalMs: number };
+        return { appliedId: a.id, agentId: a.agentId, at: a.at, change: { kind: 'schedule', missionId: after.missionId, toMs: after.intervalMs }, result: measuredScheduleSaving(days, a.at, now, next) };
+      }
+      const to = (a.after as { model: string | null }).model;
+      return { appliedId: a.id, agentId: a.agentId, at: a.at, change: { kind: 'model', to, toLabel: ladder.find((m) => m.id === to)?.label ?? to ?? '' }, result: measuredSaving(days, a.at, now, next) };
+    });
+    return { state: 'changes', changes: changes.sort((x, y) => y.at - x.at) };
   }
 
   private record(office: string, adviceId: string, agentId: string, kind: string, before: unknown, after: unknown): number {

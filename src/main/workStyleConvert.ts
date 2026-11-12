@@ -115,6 +115,8 @@ export interface ReviseRequest {
    *  drop takes out exactly that line (eng Arch 2). */
   handoffList?: Array<{ toId: string; scope: string; line: string; toTitle?: string }>;
   askHome?: boolean;
+  /** An app update (WORK_STYLE_UPDATES), not the owner's own change. */
+  update?: boolean;
 }
 
 /** Why a change could not be worked out, so the box says what to do instead
@@ -175,7 +177,8 @@ export function readReviseRequest(v: unknown): ReviseRequest | null {
     ...(explanation ? { explanation } : {}),
     ...(teammates.length ? { teammates } : {}),
     ...(handoffList.length ? { handoffList } : {}),
-    ...(o.askHome === true ? { askHome: true } : {})
+    ...(o.askHome === true ? { askHome: true } : {}),
+    ...(o.update === true ? { update: true } : {})
   };
 }
 
@@ -208,7 +211,8 @@ export async function reviseWorkStyle(
     explanation: req.explanation,
     teammates: req.teammates,
     handoffList: req.handoffList,
-    askHome: req.askHome
+    askHome: req.askHome,
+    ...(req.update ? { update: true, routing: bound.lines } : {})
   };
   try {
     const result = await runHiddenModel(toRevisePrompt(input), {

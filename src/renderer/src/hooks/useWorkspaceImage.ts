@@ -14,9 +14,8 @@
  *
  * The catch — and the reason every consumer must go through this hook — is that
  * a blob URL is a document-scoped registration that is NOT garbage collected
- * when the <img> disappears. The IDE opens and closes image tabs, and a markdown
- * report can hold a dozen screenshots; without an explicit revoke, every open
- * would strand its bytes for the lifetime of the window. The effect cleanup here
+ * when the <img> disappears. A markdown report can hold a dozen screenshots;
+ * without an explicit revoke, every open would strand its bytes for the lifetime of the window. The effect cleanup here
  * is the only revoke site, so "mounted" and "URL alive" are the same interval by
  * construction.
  *

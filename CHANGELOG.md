@@ -6,6 +6,62 @@ All notable changes to this project are documented here. The format is based on
 
 Don't Be Michael keeps its own version line, starting at 0.0.1.
 
+## [0.3.8] (2026-11-11)
+
+### Added
+- **All clear has something to say.** Once every question is answered, Needs you shows one quiet line for your answers and one tip from Michael drawn from your office: the biggest weekly saving Pulse can apply in one click, or a connector you switched on that no team member uses yet. With neither, it shows what the team did today. Not now hides a tip for a week.
+- A draft's text to post is a box with its own Copy, and the file tab's Copy takes only that text.
+
+### Changed
+- Pulse's Your changes shows each change you applied on its own line, with what it set, about how much it saves or costs and its own Undo, in place of one signed total.
+- Run less never moves a schedule past the hour the prompt cache lasts, where every run would cost more.
+- Ask me cards keep their sources under See full context, skip a file the question already shows, and link a record where the question names it.
+- A team member that started with something missing shows a report card on Ask me, whatever the notifications setting.
+- The app is English only, and setup and hiring offer Claude Code. Codex and Gemini stay in the code but are not offered.
+- The hire link preview says the servers a hire names are not turned on.
+
+### Removed
+- Voice: Talk to Michael by voice and dictation. The Mac app no longer asks for the microphone.
+- Webhooks, Slack, the History tab, the Skills page, the code editor, git views, focus mode, temporary helpers, the organisation trigger, release drops, usage stats and traces.
+- Arabic and Simplified Chinese, right to left layout and the terminal's Arabic mode.
+- Every AI engine but Claude Code, Codex and Gemini. A team member, Michael or the default command saved on another engine moves to Claude Code, keeping its name, job, memory and folders.
+- The Compact on a schedule switch, which did nothing since Claude Code compacts by itself.
+- Saving the prompts you type to team members. Prompts an older version saved are deleted, and old webhook secrets leave your settings.
+
+### Fixed
+- The office floor never invents activity for real team members while the team starts or is stopped.
+- Nothing needs you shows on the office only, and each question's own answer box grows as you type.
+- A window whose code never starts is loaded again, up to three times.
+- A cut or slow download from the internet ends within its time limit, release notes included (#701, with thanks to @amartya1523).
+- Text cut to fit never ends in half an emoji (#703, with thanks to @Phantom-TA).
+
+## [0.3.7] (2026-11-09)
+
+### Added
+- **Ask me cards show what they rest on.** The pages, records, posts, emails and files behind a card sit as chips under its question, each web chip showing the site it really opens, and a card that says nothing was found shows where the team looked. Michael's replies and standups link what they name the same way.
+- **Focus on one department.** A row of department chips on Ask me shows one team's cards at a time, keeps Michael's own cards in view, says how many others wait and marks a team whose new card arrives. Email approvals, schedule changes and Work style updates fold like questions, one card open at a time.
+- **Answer a question with a file:** paste a screenshot, drop files on the card or use the paperclip.
+- **A job update is worked into the member's own job.** The card shows exactly which lines it adds, changes and removes, colours each changed word, says when nothing changes, and asks you when a duty would clash with the job or make the role broader or narrower.
+
+### Changed
+- Each team member works within its role: it does its part of a mixed job, hands Michael the rest, and gives back work outside its role untouched. When work needs a fact it doesn't have, it asks every teammate whose role could know before Michael.
+- Records follow roles. Sales keeps the customer list, Marketing the customers you may reference, Finance who owes whom. When no one's role covers a job, Michael asks you to give it to someone, hire or drop it, with links, and never does a team member's work himself unless he is alone.
+- A customer's complaint or praise, and a new customer, supplier or debt, reach Michael, who passes it to the role that keeps that record.
+- Company foundations hold your rules and where things live, not lists that change every week. Current customers, who owes whom and the supplier list move into the records of the roles that keep them.
+- When Claude Code updates under your team, Michael says so on Ask me with Close office and reopen, or Later, in place of a chip in the corner.
+- Michael stuck on a permission prompt is restarted by the app, and you hear about it only if it happens again. With auto mode off, his prompts stay for you to answer.
+- A team member whose safe setup could not be written does not start, and says so, in place of starting without it.
+- Team members save files only in their own folders. A Codex or Gemini team member writes only its own folder and the hand off folder.
+
+### Fixed
+- The office's own files are never written, moved or read through a link or a special file a team member left, and an unreadable team list is never saved over.
+- On Windows, a team member's shell command that names another member's folder is refused.
+- The source checks reach older open cards, and an old setting no longer silences them.
+- Knowledge search finds a plural or a tense from the word it comes from, and a passage starts on a whole word (#684, with thanks to @Sanketmis208).
+- A leftover question and a Got it read the task board the way it is kept (#692, with thanks to @Sanketmis208).
+- A team folder with a long path keeps its connection to the app (#691, with thanks to @amartya1523).
+- Non Latin text from git is never cut in half (#700, with thanks to @amartya1523).
+
 ## [0.3.6] (2026-11-05)
 
 ### Added

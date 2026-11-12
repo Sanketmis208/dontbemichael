@@ -68,15 +68,7 @@ test('agent written statuses and headings named like prototype members stay plai
 });
 
 test('the activity caption and the model key lookup read own keys only', () => {
-  // Value: protects=an agent caption "constructor" and a model prefix "constructor/x" find nothing; fails_when=OFFICE_WORDS or PREFIX_BACKEND go back to a plain index; why_new=renderer store and main index cannot load here; seam=none; no_claim=behavior (source assertions; the helper is tested above)
+  // Value: protects=an agent caption "constructor" finds nothing; fails_when=OFFICE_WORDS goes back to a plain index; why_new=renderer store cannot load here; seam=none; no_claim=behavior (source assertions; the helper is tested above)
+  // The model key lookup (PREFIX_BACKEND) went with the API keys for other engines (owner, 2026-11-11).
   assert.match(read('src/renderer/src/store/store.ts'), /const said = ownValue\(OFFICE_WORDS, plain\);/);
-  assert.match(read('src/main/index.ts'), /const scoped = ownValue\(PREFIX_BACKEND, prefix\);/);
-});
-
-test('saving or clearing an engine key accepts only the known backends', () => {
-  // Value: protects=a backend named "constructor" or "toString" is refused as unknown, not saved as apikey:constructor; fails_when=providerKey:set or providerKey:clear go back to `in BACKEND_KEY_ENV`; why_new=the a8dc657 sweep missed these two; seam=none; no_claim=behavior (source assertions; main index cannot load here, the helper is tested above)
-  const src = read('src/main/index.ts');
-  assert.match(src, /typeof p\.backend !== 'string' \|\| !ownValue\(BACKEND_KEY_ENV, p\.backend\)/);
-  assert.match(src, /typeof backend !== 'string' \|\| !ownValue\(BACKEND_KEY_ENV, backend\)/);
-  assert.doesNotMatch(src, /\bin BACKEND_KEY_ENV\b/);
 });

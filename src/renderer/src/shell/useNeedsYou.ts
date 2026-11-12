@@ -10,6 +10,8 @@ import { openReportIndexes } from '@shared/askMeRouting';
 import { silentCards, type SilentEpisode } from '@shared/silentEngine';
 import { foundationAsk, isSettled, isSnoozed, type FoundationsView } from '@shared/foundations';
 import { updateCardShown, updateNeed, type UpdateNeed } from '@shared/updateState';
+import { cliUpdateToastVisible, type CliUpdateStatus } from '@shared/cliUpdate';
+import type { DegradedNotice } from '@shared/degradedNotices';
 
 const POLL_MS = 5000;
 
@@ -48,6 +50,13 @@ export interface NeedsYouFeed {
   update: UpdateNeed | null;
   /** The version the owner put off with Later, until the app starts again. */
   updateLater: string | null;
+  /** Claude Code updated underneath the team: live agents still run the older
+   *  version (src/shared/cliUpdate.ts). Michael's team upgrade card on Ask me
+   *  (docs/designs/team-upgrade-card.md); null when nobody is behind. */
+  cliUpdate: CliUpdateStatus | null;
+  /** The installed Claude Code version the owner put off with Later: the card
+   *  stays off until a newer one is installed (owner D2, 2026-11-05). */
+  cliUpdateLater: string | null;
   /** A case study prepared in the background waits for the owner to open it:
    *  Michael's card on Ask me (CaseStudyCard), until opened or put off. */
   caseStudyWaiting: boolean;
@@ -62,12 +71,22 @@ export interface NeedsYouFeed {
   researchNotice: boolean;
   /** The one time card for an owner who had company knowledge off (a report). */
   knowledgeNotice: boolean;
+  /** Members that started with something missing (shared/degradedNotices.ts):
+   *  one report card each, never coral, never in `count`. */
+  degraded: DegradedNotice[];
   /** Company foundations as the foundation cards read them (answers, drafts,
    *  Not now); null until read or from an older main. */
   foundations: FoundationsView | null;
 }
 
-let feed: NeedsYouFeed = { status: 'unknown', tasks: [], requests: [], ownerRequests: [], offers: [], proposals: [], engineSetup: null, stop: null, silent: [], update: null, updateLater: null, caseStudyWaiting: false, count: 0, reports: 0, researchNotice: false, knowledgeNotice: false, foundations: null };
+/** The installed Claude Code version the owner said Later to, kept in the
+ *  `cth.` renderer memory so it outlives a restart: Claude Code ships several
+ *  times a week, and a card that returns every morning gets ignored. */
+const CLI_LATER_KEY = 'cth.cliUpdateLaterFor';
+function readCliLater(): string | null {
+  try { return window.localStorage.getItem(CLI_LATER_KEY); } catch { return null; }
+}
+let feed: NeedsYouFeed = { status: 'unknown', tasks: [], requests: [], ownerRequests: [], offers: [], proposals: [], engineSetup: null, stop: null, silent: [], update: null, updateLater: null, cliUpdate: null, cliUpdateLater: readCliLater(), caseStudyWaiting: false, count: 0, reports: 0, researchNotice: false, knowledgeNotice: false, degraded: [], foundations: null };
 // The offers need the team and the packs, which this module does not import;
 // the app hands it the reader at start (App.tsx).
 let offersSource: (() => Promise<WorkStyleOffer[]>) | null = null;
@@ -114,7 +133,7 @@ let taskReads = 0;
 let requestReads = 0;
 let ownerReads = 0;
 
-function publish(next: Partial<Pick<NeedsYouFeed, 'status' | 'tasks' | 'requests' | 'ownerRequests' | 'offers' | 'proposals' | 'engineSetup' | 'stop' | 'silent' | 'researchNotice' | 'knowledgeNotice' | 'foundations' | 'update' | 'updateLater' | 'caseStudyWaiting'>>): void {
+function publish(next: Partial<Pick<NeedsYouFeed, 'status' | 'tasks' | 'requests' | 'ownerRequests' | 'offers' | 'proposals' | 'engineSetup' | 'stop' | 'silent' | 'researchNotice' | 'knowledgeNotice' | 'degraded' | 'foundations' | 'update' | 'updateLater' | 'cliUpdate' | 'cliUpdateLater' | 'caseStudyWaiting'>>): void {
   // A poll that brings nothing new changes nothing, so nobody re-renders.
   const changed = (Object.keys(next) as Array<keyof typeof next>).some((k) => JSON.stringify(next[k]) !== JSON.stringify(feed[k]));
   if (!changed) return;
@@ -123,7 +142,7 @@ function publish(next: Partial<Pick<NeedsYouFeed, 'status' | 'tasks' | 'requests
   feed = {
     ...merged,
     count: merged.tasks.reduce((n, t) => n + shownQuestions(t, merged.foundations).length, 0) + merged.requests.length + merged.offers.length + merged.proposals.length,
-    reports: merged.tasks.reduce((n, t) => n + openReportIndexes(t.humanQA).length, 0) + (merged.researchNotice ? 1 : 0) + (merged.knowledgeNotice ? 1 : 0)
+    reports: merged.tasks.reduce((n, t) => n + openReportIndexes(t.humanQA).length, 0) + (merged.researchNotice ? 1 : 0) + (merged.knowledgeNotice ? 1 : 0) + merged.degraded.length
   };
   // One more while Michael cannot start for want of his engine (get-michael-ready.md),
   // unless a sign in stop already says so: one problem, one card (eng R3).
@@ -134,6 +153,7 @@ function publish(next: Partial<Pick<NeedsYouFeed, 'status' | 'tasks' | 'requests
   const silent = silentCards(merged.silent).length;
   if (silent) feed = { ...feed, count: feed.count + silent };
   if (updateCardShown(merged.update, merged.updateLater)) feed = { ...feed, count: feed.count + 1 };
+  if (cliUpdateToastVisible(merged.cliUpdate, merged.cliUpdateLater)) feed = { ...feed, count: feed.count + 1 };
   if (merged.caseStudyWaiting) feed = { ...feed, count: feed.count + 1 };
   for (const l of [...listeners]) l();
   // Ready after Michael could not start: hand the terminals that could not
@@ -228,9 +248,11 @@ export function setupCardShown(f: Pick<NeedsYouFeed, 'engineSetup' | 'stop'>): b
 
 let offStop: (() => void) | null = null;
 let offSilent: (() => void) | null = null;
+let offDegraded: (() => void) | null = null;
 let offFoundations: (() => void) | null = null;
 let offUpdate: (() => void) | null = null;
 let offCaseStudy: (() => void) | null = null;
+let offCli: (() => void) | null = null;
 let caseStudyReads = 0;
 /** Whether main holds a prepared case study the owner has not opened yet. */
 function readCaseStudy(): void {
@@ -250,6 +272,21 @@ function takeUpdate(s: unknown): void {
  *  starts again. The title bar badge and Settings still offer it. */
 export function putOffUpdate(version: string): void {
   publish({ updateLater: version });
+}
+
+/** Later on Michael's team upgrade card: off Ask me until a newer Claude Code
+ *  is installed (owner D2, 2026-11-05). Nothing else offers it meanwhile. */
+export function putOffCliUpdate(version: string): void {
+  try { window.localStorage.setItem(CLI_LATER_KEY, version); } catch { /* this session only */ }
+  publish({ cliUpdateLater: version });
+}
+/** Whether a status push has landed: the start up read fills the status only
+ *  before one, so a late read never puts back an older status. */
+let cliPushed = false;
+function takeCliUpdate(s: CliUpdateStatus | null): void {
+  cliPushed = true;
+  // A null push (everyone caught up) replaces the status: the card leaves.
+  publish({ cliUpdate: s ?? null });
 }
 function readStop(): void {
   void window.cth.officeBreakView?.()
@@ -272,6 +309,8 @@ export function subscribeNeedsYou(listener: () => void): () => void {
     offStop = window.cth.onOfficeBreak?.((v) => publish({ stop: v ?? null })) ?? null;
     void window.cth.silentList?.().then((list) => publish({ silent: Array.isArray(list) ? list : [] })).catch(() => { /* keep the last value */ });
     offSilent = window.cth.onSilentChanged?.((list) => publish({ silent: list })) ?? null;
+    void window.cth.degradedNotices?.().then((list) => publish({ degraded: Array.isArray(list) ? list : [] })).catch(() => { /* keep the last value */ });
+    offDegraded = window.cth.onDegradedChanged?.((list) => publish({ degraded: list })) ?? null;
     offFoundations = window.cth.onFoundationsChanged?.(() => readFoundations()) ?? null;
     // Main may have found the update before this window listened: read the
     // last status once, then follow each push. A push that lands first wins
@@ -280,6 +319,10 @@ export function subscribeNeedsYou(listener: () => void): () => void {
     void window.cth.updateCurrent?.().then((cur) => { if (!feed.update) takeUpdate(cur); }).catch(() => { /* nothing to show */ });
     readCaseStudy();
     offCaseStudy = window.cth.onCaseStudyWaiting?.(readCaseStudy) ?? null;
+    // The team upgrade: follow each push; read the last status once in case
+    // main found it before this window listened.
+    offCli = window.cth.onCliUpdateStatus?.(takeCliUpdate) ?? null;
+    void window.cth.cliUpdateCurrent?.().then((cur) => { if (!cliPushed) publish({ cliUpdate: cur ?? null }); }).catch(() => { /* the push still works */ });
   }
   return () => {
     listeners.delete(listener);
@@ -296,12 +339,16 @@ export function subscribeNeedsYou(listener: () => void): () => void {
       offStop = null;
       offSilent?.();
       offSilent = null;
+      offDegraded?.();
+      offDegraded = null;
       offFoundations?.();
       offFoundations = null;
       offUpdate?.();
       offUpdate = null;
       offCaseStudy?.();
       offCaseStudy = null;
+      offCli?.();
+      offCli = null;
     }
   };
 }

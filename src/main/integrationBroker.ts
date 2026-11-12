@@ -10,8 +10,7 @@
  * upstream auth header, forwards to the integration's baseUrl, and streams the response
  * back. The worker uses the integration WITHOUT EVER SEEING the credential.
  *
- * Generalizes the existing src/main/slack.ts `SlackReplyServer` (a loopback broker that
- * posts Slack replies without the agent seeing the bot token) to an N-integration proxy.
+ * A loopback broker for N integrations: an agent reaches each one without seeing its token.
  *
  * DEPENDENCY-FREE of electron by design: `getRecord` + `getSecret` are injected, so this
  * module is unit-testable under plain node. The secret is materialized ONLY here, at
@@ -119,7 +118,7 @@ export interface IntegrationBrokerDeps {
   replayBodyMax?: number;
 }
 
-/** True for IPv4 loopback (127.0.0.0/8) and IPv6 ::1 (incl. v4-mapped). Mirrors slack.ts. */
+/** True for IPv4 loopback (127.0.0.0/8) and IPv6 ::1 (incl. v4-mapped).  */
 function isLoopback(addr: string): boolean {
   const a = addr.replace(/^::ffff:/, '');
   return a === '::1' || a.startsWith('127.');

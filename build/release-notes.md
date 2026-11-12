@@ -1,4 +1,4 @@
-- **Needs you** shows what only you can do.
-- **Open questions** come back when they matter.
-- Documents link the file and email they came from.
-- Word documents keep headings, lists and tables.
+- **A lighter app.** Voice, webhooks, Slack and unused engines are gone.
+- Pulse lists each change you applied, with its own Undo.
+- All clear offers one tip or what the team did today.
+- The prompts you type are no longer saved.

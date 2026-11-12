@@ -43,6 +43,19 @@ test('run less often: 10 runs and 70% found nothing; an interval doubles, a time
   assert.equal(A.adviceFor({ ...base, missions: [mission], runs: runs(10, 6) }).length, 0, '60% is under 70%');
 });
 
+test('run less never moves a schedule past the cache hour (owner, 2026-11-09)', () => {
+  // Value: protects=run-less staying inside the prompt cache hour; fails_when=an hourly schedule is told to run every 2h (Michael's standup: $0.07 a run warm, $1.44 cold, so it cost more), a 45 minute one goes past the hour, or the saving is still counted as half; why_new=the owner applied, saw it cost more, undid it, and got the same suggestion again; seam=none; no_claim=the cache length on an API key (shorter there, so this only holds back a saving)
+  const at = (ms) => A.adviceFor({ ...base, missions: [{ ...mission, intervalMs: ms }], runs: runs(14, 12) });
+  assert.deepEqual(at(H), [], 'hourly: doubling would make every run cold');
+  assert.deepEqual(at(45 * 60_000)[0].change, { kind: 'interval', fromMs: 45 * 60_000, toMs: H }, 'up to the hour, not past it');
+  const runUsdPerWeek = (14 * 0.5) / 2;
+  assert.ok(Math.abs(at(45 * 60_000)[0].savesPerWeek - runUsdPerWeek * 0.25) < 1e-9, 'a quarter fewer runs saves a quarter');
+  assert.deepEqual(at(30 * 60_000)[0].change, { kind: 'interval', fromMs: 30 * 60_000, toMs: H });
+  assert.deepEqual(at(2 * H)[0].change, { kind: 'interval', fromMs: 2 * H, toMs: 4 * H }, 'already past the hour: every run is cold either way, so it still halves');
+  assert.ok(Math.abs(at(2 * H)[0].savesPerWeek - runUsdPerWeek / 2) < 1e-9);
+  assert.deepEqual(A.adviceFor({ ...base, missions: [{ ...mission, intervalMs: H, timed: true }], runs: runs(14, 12) })[0].change, { kind: 'editor', direction: 'less' }, 'a timed schedule still opens the editor');
+});
+
 test('runs on a day whose records could not be saved are left out (D15)', () => {
   // Value: protects=no advice from missing data; fails_when=gap days still count; why_new=D15; seam=none; no_claim=none beyond protects
   const rs = runs(14, 12);

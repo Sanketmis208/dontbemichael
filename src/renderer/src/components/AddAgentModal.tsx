@@ -6,14 +6,13 @@ import { PixelButton } from './PixelButton';
 import { SpritePortrait } from './SpritePortrait';
 import { Icon } from './Icon';
 import { ProviderLogo } from './ProviderLogo';
-import { InfoTip } from './InfoTip';
 import { Dialog } from '@/shell/Dialog';
 import { useStore, type Agent, ACTION_CLOCKING_IN } from '@/store/store';
-import { OFFICE_CAST, CAST_BY_NAME, CAST_GROUPS, DEFAULT_CHARACTER, HIREABLE_CAST, type OfficeCharacterName } from '@/scene/office/cast';
+import { CAST_BY_NAME, CAST_GROUPS, DEFAULT_CHARACTER, HIREABLE_CAST, type OfficeCharacterName } from '@/scene/office/cast';
 import { type AccentColorName } from '@/design/tokens';
 import type { HireManifest } from '@shared/hire';
 import { hireQueueProgress } from '@shared/hireQueue';
-import { MCP_CATALOG } from '@shared/mcpCatalog';
+import { mcpCatalogEntry } from '@shared/mcpCatalog';
 import {
   type AgentProvider,
   type HarnessConfig,
@@ -60,7 +59,6 @@ import { roleLabel, plainFallback } from '@shared/workStyleText';
 import { jobFingerprint, type JobChangeEntry } from '@shared/jobChange';
 import { JobChangeReview, type ReviseOk, type ReviseRun } from './JobChangeReview';
 import { Field, JobParts, Panel, fieldLabel, jobPartsFold, readBody } from './fieldText';
-import { useRtl } from '@/i18n/useDirection';
 import { useResolvedGodName } from '@/hooks/useResolvedGodName';
 import { SHOW_IMPORT_HIRE, SHOW_ENGINE_PICKER, SHOW_MAILBOXES } from '@shared/buildFeatures';
 import { seedStarterJobs } from '@/shell/seedStarterJobs';
@@ -134,7 +132,6 @@ export interface AddAgentModalProps {
 
 export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModalProps) {
   const { t: tr } = useTranslation();
-  const rtl = useRtl();
   const godName = useResolvedGodName();
   const addAgent = useStore(s => s.addAgent);
   const updateAgent = useStore(s => s.updateAgent);
@@ -193,9 +190,13 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
   // "Clone" instead (owner, 2026-10-03: no second Dwight, and a calmer grid).
   const onTeam = useMemo(() => new Set(agents.filter((a) => !a.archived && a.character).map((a) => a.character as string)), [agents]);
   const castGroups = CAST_GROUPS.map((g) => g.members as string[]);
+  // A hire link from Michael's card (dbm:hire/<card>) starts on that cast
+  // member when they are free (owner, CEO review D6).
+  const linkPick = useStore((s) => s.addAgentPick);
+  const picked = linkPick && HIREABLE_CAST.some((m) => m.name === linkPick) && !onTeam.has(linkPick) ? (linkPick as OfficeCharacterName) : null;
   const firstCharacter = pendingHire?.character
     ? knownCharacter(pendingHire.character)
-    : (characterForName(pendingHire?.name ?? '') ?? (firstFreeCharacter(DEFAULT_CHARACTER, onTeam, castGroups) as OfficeCharacterName));
+    : (picked ?? characterForName(pendingHire?.name ?? '') ?? (firstFreeCharacter(DEFAULT_CHARACTER, onTeam, castGroups) as OfficeCharacterName));
   const [step, setStep] = useState<Step>(pendingHire ? 'role' : 'who');
   const [character, setCharacter] = useState<OfficeCharacterName>(firstCharacter);
   const [name, setName] = useState(pendingHire?.name ?? CAST_BY_NAME[firstCharacter].displayName);
@@ -450,7 +451,6 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
   // The instant rules always count, live on every edit, so a job whose what to
   // send reads like a teammate's is flagged even before or after the AI check.
   const overlapNames = [...new Set([...(verdict?.overlapsWith ?? []), ...ruleOverlaps])];
-  const cleared = !!verdict && (overlapNames.length === 0 || !!binding);
 
   const [bindMode, setBindMode] = useState<'mailbox' | 'topic' | 'connection' | null>(null);
   const [topic, setTopic] = useState('');
@@ -664,7 +664,7 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
         // A hire manifest may carry validated capability tags (routing hints).
         capabilities: hireMeta?.capabilities
       }
-    }).catch((e: unknown) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e), cwd: undefined, seedPrompt: undefined }));
+    }).catch((e: unknown) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e), cwd: undefined }));
     if (!spawnRes.ok) {
       // Give back what the failed hire was holding.
       releaseBindingAccess();
@@ -695,7 +695,6 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
       command: command.trim(),
       provider,
       model,
-      seedPrompt: spawnRes.seedPrompt,
       recentTextTs: Date.now()
     };
     addAgent(agent);
@@ -758,7 +757,7 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
   }, [cards, listAll, character, config.businessType]);
 
   return (
-    // Must sit above focus mode and its file overlays (250/280).
+    // Must sit above the task overlays (280).
     <Dialog
       title={tr('addAgent.title')}
       onClose={close}
@@ -826,22 +825,16 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
                 {hireMeta.skills.filter((s) => !RESEARCH_ONLY_SKILLS.includes(s)).map((s) => <code key={s} style={codeChip('mint')}>{s}</code>)}
               </span>
             )}
-            {hireMeta.mcpServers && hireMeta.mcpServers.length > 0 && (() => {
-              const safe = hireMeta.mcpServers!.filter((mid) => MCP_CATALOG.find((e) => e.id === mid)?.tier === 'safe-readonly');
-              const consent = hireMeta.mcpServers!.filter((mid) => MCP_CATALOG.find((e) => e.id === mid)?.tier !== 'safe-readonly');
-              return (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 2 }}>
-                  {safe.length > 0 && <span style={chipRow}><span style={{ fontSize: 12 }}>{tr('addAgent.mcpSafe')}:</span>{safe.map((mid) => <code key={mid} style={codeChip('sky')}>{mid}</code>)}</span>}
-                  {consent.length > 0 && (
-                    <span style={chipRow}>
-                      <span style={{ fontSize: 12 }}>{tr('addAgent.mcpConsent')}:</span>
-                      {consent.map((mid) => <code key={mid} style={codeChip('paprika')}>{mid}</code>)}
-                      <span style={{ fontSize: 11.5, color: 'var(--cth-ink-2)' }}>{tr('addAgent.mcpEnableInSettings')}</span>
-                    </span>
-                  )}
-                </div>
-              );
-            })()}
+            {hireMeta.mcpServers && hireMeta.mcpServers.length > 0 && (
+              // Named by the hire, never started: the app runs no MCP servers.
+              // A write or secret one keeps its warning colour.
+              <span style={chipRow}>
+                <span style={{ fontSize: 12 }}>{tr('addAgent.mcpNotStarted')}</span>
+                {hireMeta.mcpServers.map((mid) => (
+                  <code key={mid} style={codeChip(mcpCatalogEntry(mid)?.tier === 'safe-readonly' ? 'sky' : 'paprika')}>{mid}</code>
+                ))}
+              </span>
+            )}
           </div>
         )}
 
@@ -1038,7 +1031,7 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
                   {/* The job on its soft panel, as in Edit agent (app-style-rollout.md T1). */}
                   <Panel>
                   <ReadRow label={tr('jobChange.handles', { name: hireWho })} info={tr('addAgent.roleHelp', { godName, name: hireWho })}>
-                    <div dir={rtl ? 'auto' : undefined} style={readBody(false)}>{routing}</div>
+                    <div style={readBody(false)}>{routing}</div>
                   </ReadRow>
                   <ReadRow label={tr('jobChange.howWorks', { name: hireWho })} info={tr('jobChange.howWorksInfo', { name: hireWho })}>
                     <JobParts plain={plain} folded={!plainAll} />

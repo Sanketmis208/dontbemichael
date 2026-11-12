@@ -11,12 +11,10 @@ import { disposeTerminal } from './terminalPool';
 import { SidebarTabs } from './SidebarTabs';
 import { ThreadsPanel } from './ThreadsPanel';
 import { ProfileTab } from './ProfileTab';
-import { ToolWaterfall } from './ToolWaterfall';
 import { AgentControlStrip } from './AgentControlStrip';
 import { ClearedBanner } from './ClearedBanner';
 import { EditAgentModal } from './EditAgentModal';
-import { GitTab } from './GitTab';
-import { SHOW_TRACES, SHOW_FOCUS_MODE, SHOW_GIT, SHOW_IDE, SHOW_CLOSE_AGENT, SHOW_OPEN_TERMINAL } from '@shared/buildFeatures';
+import { SHOW_CLOSE_AGENT, SHOW_OPEN_TERMINAL } from '@shared/buildFeatures';
 import { Icon } from './Icon';
 import { useStore, type Agent } from '@/store/store';
 import { releaseBindingsOf } from '@/shell/releaseBindings';
@@ -51,17 +49,9 @@ export function AgentDetailPanel({ agent }: AgentDetailPanelProps) {
 
   const archiveAgent = useStore(s => s.archiveAgent);
   const updateAgent = useStore(s => s.updateAgent);
-  const setFullscreen = useStore(s => s.setFullscreen);
-  const fullscreenAgentId = useStore(s => s.fullscreenAgentId);
   const sidebarTab = useStore(s => s.sidebarTab);
   const setSidebarTab = useStore(s => s.setSidebarTab);
   const isReal = !!agent.ptyId;
-  // While this agent is shown in the fullscreen overlay, the fullscreen view
-  // owns the pty (it sizes it to fill the screen). Keeping the embedded terminal
-  // mounted too means two xterms fight over the pty's cols/rows — which corrupts
-  // the display and breaks scrolling. So we unmount the embedded one here; it
-  // re-mounts and re-fits when fullscreen closes.
-  const isFullscreenedHere = fullscreenAgentId === agent.id;
 
   const onPtyStream = usePtyParser(agent.id);
 
@@ -105,21 +95,13 @@ export function AgentDetailPanel({ agent }: AgentDetailPanelProps) {
 
   return (
     <PanelCard>
-      {/* Design v2 header (branding/DESIGN.md 7.10). The IDE, Open terminal and
+      {/* Design v2 header (branding/DESIGN.md 7.10). The Open terminal and
           close buttons stay behind their build flags, beside Edit. */}
       <PanelHeader
         agent={agent}
         role={roleOf(agent)}
         onEdit={() => setEditOpen(true)}
         extra={<>
-          {SHOW_IDE && (
-            <PixelButton variant="secondary" size="md" onClick={() => useStore.getState().setIdeOpen(true, agent.id)}>
-              <span className="cth-tip cth-tip-wrap" data-tip={t('agentDetail.ideTip', { project: agent.project })} aria-label={t('agentDetail.openIde')}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                <Icon name="code" />{t('agentDetail.ide')}
-              </span>
-            </PixelButton>
-          )}
           {SHOW_OPEN_TERMINAL && (
             <PixelButton variant="secondary" size="md" onClick={openTerminal} disabled={openTerminalState === 'opening'}>
               <span className="cth-tip cth-tip-wrap" data-tip={t('agentDetail.terminalTip', { cwd: agent.cwd })} aria-label={t('agentDetail.openTerminalAria')}
@@ -163,11 +145,6 @@ export function AgentDetailPanel({ agent }: AgentDetailPanelProps) {
       <div data-panel-body data-tab={sidebarTab} style={{ flex: 1, minHeight: 0, display: 'flex' }}>
         {sidebarTab === 'terminal' && (
           isReal && agent.ptyId ? (
-            isFullscreenedHere ? (
-              <EmptyTab title={t('agentDetail.inFullscreen')}>
-                {t('agentDetail.fullscreenDesc')}
-              </EmptyTab>
-            ) : (
             <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
               <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
                 <PtyTerminalView
@@ -179,10 +156,7 @@ export function AgentDetailPanel({ agent }: AgentDetailPanelProps) {
                     if (t.trim().toLowerCase() === '/clear') {
                       updateAgent(agent.id, { contextTokens: 0, contextLimit: undefined, progress: 0 });
                     }
-                    void window.cth.historyAdd({ agentId: agent.id, cwd: agent.cwd, text: t });
                   }}
-                  onToggleFullscreen={SHOW_FOCUS_MODE ? () => setFullscreen(agent.id) : undefined}
-                  fullscreen={false}
                   embedded
                   // Team members take work from Michael; the owner types to
                   // one only in 1:1 (docs/designs/owner-talks-via-michael.md).
@@ -191,16 +165,11 @@ export function AgentDetailPanel({ agent }: AgentDetailPanelProps) {
               </div>
               {agent.onHold ? <><OneOnOneLine agent={agent} /><MessageQueueComposer agent={agent} /></> : <OwnerViaMichaelBar agent={agent} />}
             </div>
-            )
           ) : (
             <EmptyTab title={t('agentDetail.noPty')}>
               {t('agentDetail.noPtyDesc')}
             </EmptyTab>
           )
-        )}
-
-        {SHOW_GIT && sidebarTab === 'git' && (
-          <GitTab cwd={agent.cwd} />
         )}
 
         {sidebarTab === 'profile' && (
@@ -217,10 +186,6 @@ export function AgentDetailPanel({ agent }: AgentDetailPanelProps) {
 
         {sidebarTab === 'memory' && (
           <MemoryTab key={agent.id} godId={agent.id} ownOnly />
-        )}
-
-        {SHOW_TRACES && sidebarTab === 'traces' && (
-          <ToolWaterfall agentId={agent.id} />
         )}
       </div>
 

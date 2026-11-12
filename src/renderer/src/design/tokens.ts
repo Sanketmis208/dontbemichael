@@ -16,6 +16,10 @@ export const departments = {
 } as const;
 export type DepartmentName = keyof typeof departments;
 
+/** The `card` surface in each theme (tokens.css `--cth-card`), for colors code
+ *  mixes into it, such as a department's card wash. Keep in step with tokens.css. */
+export const cardSurface = { light: '#FFFFFF', dark: '#1F1E2B' } as const;
+
 /** The accent names a person can carry (Agent.accent). */
 export type AccentColorName =
   | 'coral' | 'mint' | 'sky' | 'lemon' | 'lilac' | 'peach';

@@ -129,7 +129,7 @@ test('the top bar has a hard to miss Report a problem button and no Beta; Settin
   // Value: protects=the button sits where Beta was, is clickable (not a drag handle), carries the public warning for keyboard and screen readers and says when it failed; fails_when=it moves out of the nodrag span, loses aria-description, or Beta returns; why_new=R1, R3, P1, F1; seam=none; no_claim=the look (hand check)
   const bar = read('src/renderer/src/shell/TopBar.tsx');
   const at = (needle) => bar.indexOf(needle);
-  assert.ok(at('<span className="cth-titlebar-nodrag"') < at('<UpdateBadge />') && at('<UpdateBadge />') < at('<ReportProblemButton />') && at('<ReportProblemButton />') < at('<CliUpdateBadge />'),
+  assert.ok(at('<span className="cth-titlebar-nodrag"') < at('<UpdateBadge />') && at('<UpdateBadge />') < at('<ReportProblemButton />') && at('<ReportProblemButton />') < at('<OfficeBreakChip />'),
     'after the version chip, inside the drag free span');
   const button = bar.slice(at('function ReportProblemButton'), at('function IconButton'));
   assert.match(button, /title=\{tip\}\s+aria-description=\{tip\}/);
@@ -146,7 +146,7 @@ test('the top bar has a hard to miss Report a problem button and no Beta; Settin
   assert.match(hero, /settingsHero\.whatsNew/);
   assert.match(hero, /settingsHero\.starOnGitHub/);
   assert.equal(fs.existsSync(path.resolve(__dirname, '..', 'src/renderer/src/components/BetaPill.tsx')), false);
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const d = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`));
     // Dashes in these strings are no-dashes.test.cjs's job.
     assert.ok(d.shell.reportProblem && d.shell.reportProblemTip && d.shell.reportProblemFailed, loc);

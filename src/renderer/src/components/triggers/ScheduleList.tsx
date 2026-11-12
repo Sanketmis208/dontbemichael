@@ -17,7 +17,6 @@ import { effectiveWorkStyle } from '@shared/michaelWorkStyle';
 import { remainingStarterMissions, starterSuggestionsFor, type StarterSuggestion } from '@shared/starterJobs';
 import type { OfficePack } from '@shared/officePack';
 import { agentMailboxes } from '@shared/mailboxes';
-import { useRtl } from '@/i18n/useDirection';
 import i18n from '@/i18n';
 import { groupName, panelStyle } from '../fieldText';
 
@@ -141,11 +140,9 @@ function FocusField({ value, onChange, conflict, hint, autoFocus }: {
   value: string; onChange: (v: string) => void; conflict: string | null; hint?: string; autoFocus?: boolean;
 }) {
   const { t } = useTranslation();
-  const rtl = useRtl();
   return (
     <Field label={t('schedulesSection.focus')}>
       <textarea
-        dir={rtl ? 'auto' : undefined}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         rows={3}
@@ -259,7 +256,6 @@ interface RowProps {
 
 function ScheduleRow({ mission, nameOf, readOnly, last, ownerName, noEmail, focusOwner }: RowProps) {
   const { t, i18n } = useTranslation();
-  const rtl = useRtl();
   const godName = useResolvedGodName();
   const [open, setOpen] = useState(false);
   const [label, setLabel] = useState(mission.label);
@@ -273,7 +269,7 @@ function ScheduleRow({ mission, nameOf, readOnly, last, ownerName, noEmail, focu
   const [focus, setFocus] = useState(startFocus);
   const [focusTouched, setFocusTouched] = useState(false);
   const [saved, setSaved] = useState(false);
-  const { busy, failed, setFailed, run } = useSaveOp();
+  const { busy, failed, run } = useSaveOp();
   const focusCheck = useFocusCheck(focusOwner ?? { name: ownerName, workStyle: '', jobs: [] });
   const [confirming, setConfirming] = useState(false);
   // Run now (docs/designs/schedule-run-now.md): its own state, so a failed run
@@ -371,7 +367,7 @@ function ScheduleRow({ mission, nameOf, readOnly, last, ownerName, noEmail, focu
   const cancelDelete = () => { setConfirming(false); setTimeout(() => deleteRef.current?.focus(), 0); };
 
   const headerStyle = {
-    flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, textAlign: rtl ? 'right' : 'left',
+    flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left',
     // Read only rows line up with the name above them; editable rows keep
     // room for the disclosure sign.
     padding: readOnly ? '8px 0' : '8px 4px', border: 'none', background: 'transparent'
@@ -451,7 +447,6 @@ function ScheduleRow({ mission, nameOf, readOnly, last, ownerName, noEmail, focu
           {heartbeat && (
             <Field label={t('schedulesSection.prompt')}>
               <textarea
-                dir={rtl ? 'auto' : undefined}
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
                 rows={4}

@@ -1,9 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useStore, selectedAgent, ROSTER_BOOT_HOME, ACTION_CLOCKING_IN } from '@/store/store';
 import { rosterNeedsReload } from '@/store/rosterSource';
-import { startMockLoop, stopMockLoop } from '@/store/mockEvents';
 import type { HarnessConfig } from '@/store/config';
-import { DEFAULT_ORG_TRIGGER } from '@shared/triggers';
 import { StudioStage } from '@/scene/studio/StudioStage';
 import { TasksKanban } from '@/components/TasksKanban';
 import { PulseView } from '@/components/pulse/PulseView';
@@ -13,9 +11,7 @@ import { NeedsYouRail, RAIL_W } from '@/shell/NeedsYouRail';
 import { MemoryGraphPanel } from '@/components/MemoryGraphPanel';
 import { useHive } from '@/hooks/useHive';
 import { useGodNameSync } from '@/i18n/useGodNameSync';
-import { useDirectionSync } from '@/i18n/useDirection';
 import { useCopyLinkLabelSync } from '@/i18n/useCopyLinkLabelSync';
-import { useArabicTerminalSync } from '@/terminal/useArabicTerminalSync';
 import { AgentDetailPanel } from '@/components/AgentDetailPanel';
 import { AddAgentModal } from '@/components/AddAgentModal';
 import { MichaelBooting } from '@/components/MichaelBooting';
@@ -23,9 +19,7 @@ import { TeamClockingIn } from '@/components/TeamClockingIn';
 import { OnboardingWizard } from '@/components/OnboardingWizard';
 import { OfficeFolderMissing } from '@/components/OfficeFolderMissing';
 import { ClosingTimeBar, type ClosingTimeState } from '@/components/ClosingTimeBar';
-import { CompletionToast } from '@/realtime/CompletionToast';
-import { UpdateToast } from '@/components/UpdateToast';
-import { CliUpdateToast } from '@/components/CliUpdateNotice';
+import { setCloseAndReopen } from '@/components/CliUpdateNotice';
 import { CaseStudyEvents } from '@/components/pulse/CaseStudyEvents';
 import { SettingsModal, type Section as SettingsSection, type SettingsPlace } from '@/components/SettingsModal';
 import type { PlaceGroup } from '@shared/settingsPlaces';
@@ -33,11 +27,7 @@ import { MichaelStopped } from '@/components/MichaelStopped';
 import { PixelButton } from '@/components/PixelButton';
 import { SidebarSplitter } from '@/components/SidebarSplitter';
 import { acquireTerminal } from '@/components/terminalPool';
-import { FullscreenTerminal } from '@/components/FullscreenTerminal';
 import { TaskDetailOverlay } from '@/components/TaskDetailOverlay';
-import { IdePanel } from '@/ide/IdePanel';
-import { SHOW_IDE } from '@shared/buildFeatures';
-import { useHoldOptionToTalk } from '@/freeflow/holdOption';
 import { useTranslation } from 'react-i18next';
 import { TopBar, NeedsYouStrip } from '@/shell/TopBar';
 import { setDialogsSuspended } from '@/shell/useDialog';
@@ -60,12 +50,8 @@ declare const __APP_VERSION__: string;
 export function App() {
   // Point every {{godName}} string at the orchestrator's real, renameable name.
   useGodNameSync();
-  // Mirror the document only for a user who has picked an RTL app language.
-  useDirectionSync();
   // Give main the right-click "Copy link address" label in the app language.
   useCopyLinkLabelSync();
-  // Let terminals that are ALREADY open follow a language switch too.
-  useArabicTerminalSync();
   const agent = useStore(selectedAgent);
   const agents = useStore(s => s.agents);
   const agentCount = agents.length;
@@ -73,15 +59,12 @@ export function App() {
   const setAddAgentOpen = useStore(s => s.setAddAgentOpen);
   const clearPendingHires = useStore(s => s.clearPendingHires);
   const godStatus = useStore(s => s.godStatus);
-  const fullscreenAgentId = useStore(s => s.fullscreenAgentId);
   const { t } = useTranslation();
   const rightColumn = useStore(s => s.rightColumn);
   const sidebarWidth = useStore(s => s.sidebarWidth);
   const columnMinimized = useStore(s => s.columnMinimized);
   const panelWide = useStore(s => s.panelWide);
   const setSidebarWidth = useStore(s => s.setSidebarWidth);
-  const ideOpen = useStore(s => s.ideOpen);
-  const setIdeOpen = useStore(s => s.setIdeOpen);
   const floorView = useStore(s => s.floorView);
   const caseStudyOpen = useStore(s => s.caseStudyOpen);
   const godId = useStore(s => s.agents.find((a) => a.isGod)?.id) ?? 'god';
@@ -129,37 +112,9 @@ export function App() {
     window.cth.getConfig().then(c => {
       if (cancelled) return;
       setConfig(c);
-      // Mirror the Free Flow flag into the store so the composer mic button shows
-      // only when enabled (Settings keeps this in sync on save).
-      useStore.getState().setFreeflowEnabled(!!c.freeflowEnabled);
-      // Mirror boolean key-presence ONLY (never the key value) so the composer can
-      // show the voice button disabled-with-tooltip when Free Flow is on but no
-      // Groq key is set (Settings keeps this in sync on save).
-      useStore.getState().setHasGroqKey(!!c.groqApiKey);
-      // Mirror the triggers so Settings → Connections and the Command Center's
-      // Triggers tab read one list, not two copies that drift — whichever surface
-      // saves calls these same setters and the other repaints. No extra IPC: main
-      // deep-fills both fields on every config read (withTriggerDefaults), so
-      // getConfig() already serves what listWebhooks()/getOrgTrigger() would.
-      // `c` is typed as the PRELOAD's HarnessConfig, which hasn't picked the two
-      // fields up yet (another lane's file); the renderer mirror type declares them.
-      const withTriggers = c as HarnessConfig;
-      useStore.getState().setWebhookTriggers(withTriggers.webhookTriggers ?? []);
-      useStore.getState().setOrgTrigger(withTriggers.orgTrigger ?? DEFAULT_ORG_TRIGGER);
-    });
-    // Mirror BYOK OpenAI key presence (boolean only; the key never leaves main) so the
-    // Realtime Michael voice toggle can gate on it. Lives in the secret broker, not
-    // config — so fetch it rather than derive from c.
-    window.cth.realtimeHasOpenAiKey().then(has => {
-      if (!cancelled) useStore.getState().setHasOpenAiKey(has);
     });
     return () => { cancelled = true; };
   }, []);
-
-  // Free Flow entry point B — hold-Option (⌥) to talk. In-renderer push-to-talk
-  // for whichever agent the user is viewing; gated on the flag, terminal-safe
-  // (solo-hold threshold, aborts on any other key). See freeflow/holdOption.ts.
-  useHoldOptionToTalk();
 
   // Config subscription — the copy loaded above would otherwise go stale the
   // moment anything saves a setting.
@@ -252,6 +207,13 @@ export function App() {
     setClosingOpen(true);
     return startClosingTime({ relaunch: true });
   };
+  // Michael's team upgrade card on Ask me reaches it here, registered once
+  // (docs/designs/team-upgrade-card.md); the ref keeps the latest closure.
+  const closeOfficeAndReopenRef = useRef(closeOfficeAndReopen);
+  closeOfficeAndReopenRef.current = closeOfficeAndReopen;
+  useEffect(() => { setCloseAndReopen(() => closeOfficeAndReopenRef.current()); }, []);
+  // The card steps aside while the closing bar is up, and is back after a cancel.
+  useEffect(() => { useStore.setState({ officeClosing: closingOpen }); }, [closingOpen]);
   const cancelClosingTime = () => {
     void window.cth.cancelClosingTime();
     setClosing(null);
@@ -278,24 +240,6 @@ export function App() {
     for (const a of agents) if (a.ptyId) acquireTerminal(a.ptyId);
   }, [agents]);
 
-  // Synthetic demo loop — CAGED (#5B). It must never animate alongside a live
-  // hive (it would fire fake envelope handoffs and step seeded agents). Run it
-  // only as an explicit showcase (VITE_CTH_DEMO=1 in dev) or on a genuinely
-  // empty floor, and stop it the instant the first real PTY agent appears
-  // (Michael always spawns, so in normal operation it effectively never runs).
-  useEffect(() => {
-    if (!config?.onboardingComplete) return;
-    const DEMO = import.meta.env.DEV && import.meta.env.VITE_CTH_DEMO === '1';
-    const evaluate = () => {
-      const hasLive = useStore.getState().agents.some((a) => a.ptyId);
-      if (DEMO || !hasLive) startMockLoop();
-      else stopMockLoop();
-    };
-    evaluate();
-    const unsub = useStore.subscribe(evaluate);
-    return () => { unsub(); stopMockLoop(); };
-  }, [config?.onboardingComplete]);
-
   // Reconcile restored agents against the PTYs still alive in the main process.
   // After a renderer reload (e.g. the laptop slept and Vite reloaded the page),
   // this keeps agents whose process survived and drops any that truly died.
@@ -315,20 +259,6 @@ export function App() {
     }).catch(() => { /* ignore — keep restored agents as-is */ });
     return () => { cancelled = true; };
   }, [config?.onboardingComplete]);
-
-  // Re-apply the persisted focus-mode preference as the roster fills in.
-  //
-  // Not a one-shot at store construction: at launch every restored agent still
-  // carries the PREVIOUS session's PTY id, so the reconcile above prunes the lot
-  // and correctly drops focus mode to null before god has respawned. The
-  // preference therefore has to be re-checked once agents with live terminals
-  // actually exist. `restoreFocusMode` is a no-op unless the preference is on and
-  // focus mode is currently off, so re-running it on every roster change is safe
-  // and pressing Esc stays sticky.
-  useEffect(() => {
-    if (!config?.onboardingComplete) return;
-    useStore.getState().restoreFocusMode();
-  }, [config?.onboardingComplete, agents]);
 
   // The right column (docs/designs/needs-you-empty-state.md): while anything
   // waits on the owner it is open and cannot be closed; only when nothing at
@@ -528,12 +458,7 @@ export function App() {
       width: '100vw', height: '100vh',
       overflow: 'hidden', background: 'var(--cth-bg)'
     }}>
-      {/* Toasts: voice completions, app updates, Claude Code updates. Each one
-          positions itself and renders null until it has something to say. */}
-      <CompletionToast />
-      <UpdateToast />
       <CaseStudyEvents />
-      <CliUpdateToast onCloseAndReopen={closeOfficeAndReopen} />
 
       {/* Design v2 shell (branding/DESIGN.md 5.2): top bar, the stage with the
           bottom bar floating over it, and the right column. No agent strip and
@@ -701,8 +626,6 @@ export function App() {
       )}
 
 
-      {fullscreenAgentId && <FullscreenTerminal config={config} />}
-      {SHOW_IDE && ideOpen && <IdePanel />}
       <TaskDetailOverlay />
     </div>
   );

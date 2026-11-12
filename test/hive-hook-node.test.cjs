@@ -70,7 +70,7 @@ function walk(dir, out = []) {
 /** Sweep every config an installer wrote for commands that invoke one of our
  *  shims. Path-agnostic on purpose, so a new installer cannot be missed. */
 function hookCommandsUnder(home) {
-  const shim = /(cth-hook\.cjs|agy-hook\.cjs|grok-hook\.cjs|gemini-hook\.cjs)/;
+  const shim = /(cth-hook\.cjs|gemini-hook\.cjs)/;
   const found = [];
   for (const file of walk(home)) {
     let text;
@@ -197,8 +197,8 @@ test('every hook installer routes through the launcher — none left on bare nod
   const hive = new HiveManager(() => home);
   await hive.ensureAgent({ id: 'a1', name: 'A', provider: 'claude', cwd: home });
 
-  // agy and grok install into the USER's home. Redirect it, and refuse to run
-  // rather than write into the developer's real ~/.gemini / ~/.grok.
+  // Redirect the USER's home, and refuse to run rather than let an installer
+  // write into the developer's real home.
   const realHome = process.env.HOME;
   const realProfile = process.env.USERPROFILE;
   process.env.HOME = home;
@@ -209,19 +209,17 @@ test('every hook installer routes through the launcher — none left on bare nod
   });
   assert.equal(os.homedir(), home, 'home redirect failed — aborting before touching the real home');
 
-  hive.installAgyHooks();
-  hive.installGrokHooks();
   hive.installGeminiHooks(path.join(home, 'hive/agents/a1'));
   hive.installCodexHooks(path.join(home, 'hive/agents/a1'), 'a1');
 
   const launcher = launcherIn(home);
   const commands = hookCommandsUnder(home);
-  // claude (Stop/statusLine/…) + agy + grok + codex.
-  assert.ok(commands.length >= 4, `expected commands from all installers, got ${commands.length}`);
+  // claude (Stop/statusLine/…) + gemini + codex.
+  assert.ok(commands.length >= 3, `expected commands from all installers, got ${commands.length}`);
   const bare = commands.filter((c) => !usesLauncher(c, launcher));
   assert.deepEqual(bare, [], 'these hook commands would exit 127 wherever node is not on the bare PATH');
 
-  for (const shim of ['agy-hook.cjs', 'grok-hook.cjs', 'gemini-hook.cjs']) {
+  for (const shim of ['gemini-hook.cjs']) {
     assert.ok(commands.some((c) => c.includes(shim)), `${shim} installer produced no command`);
   }
 });
@@ -332,7 +330,7 @@ test('Windows Codex hook commands survive a hive path containing spaces', { ...w
   }
 });
 
-test('POSIX Gemini and Antigravity hooks survive a hive path containing spaces', { skip: !POSIX }, async (t) => {
+test('POSIX Gemini hooks survive a hive path containing spaces', { skip: !POSIX }, async (t) => {
   // Keep the socket short enough for macOS sun_path while retaining a literal
   // space in the user-selected harness root.
   const base = fs.mkdtempSync('/tmp/md-provider-space-');
@@ -352,12 +350,9 @@ test('POSIX Gemini and Antigravity hooks survive a hive path containing spaces',
 
   const hive = new HiveManager(() => harness);
   hive.ensureHive();
-  hive.installAgyHooks();
   hive.installGeminiHooks(path.join(harness, 'hive/agents/a1'));
 
-  const commands = hookCommandsUnder(home);
   const providerCommands = [
-    ['antigravity', commands.find((candidate) => candidate.includes('agy-hook.cjs'))],
     ['gemini', hookCommandsUnder(harness).find((candidate) => candidate.includes('gemini-hook.cjs'))]
   ];
 
@@ -387,7 +382,7 @@ test('POSIX Gemini and Antigravity hooks survive a hive path containing spaces',
     assert.equal(result.code, 0, `${provider} command failed: ${command}\n${result.stderr}`);
   }
   await new Promise((resolve) => setTimeout(resolve, 300));
-  assert.equal(received.length, 2, 'both provider hook shims must reach HIVE_SOCK');
+  assert.equal(received.length, 1, 'the Gemini hook shim must reach HIVE_SOCK');
 });
 
 test('Codex rollouts remain isolated and are visible under the standard scan roots', (t) => {

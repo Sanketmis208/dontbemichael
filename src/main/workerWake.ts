@@ -34,10 +34,6 @@
  * No electron import — unit-testable (mirrors ControlRegistry).
  */
 
-/** The exact nudge the renderer's inbox-wake loop would have typed. */
-export const WORKER_WAKE_NUDGE =
-  'You have new hive inbox message(s) — read your inbox, act on them now, and move handled ones to inbox/.done/. Act autonomously; only message god if you genuinely need a decision.';
-
 /** No PTY output for this long = genuinely idle (renderer QUIESCE_IDLE_MS). */
 export const WORKER_WAKE_IDLE_MS = 12_000;
 /** Never nudge inside the boot sequence (renderer BOOT_GRACE_MS). */

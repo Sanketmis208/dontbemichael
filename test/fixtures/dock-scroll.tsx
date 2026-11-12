@@ -5,7 +5,7 @@ import { MichaelDock, type DockView } from '../../src/renderer/src/shell/Michael
 import { useStore } from '../../src/renderer/src/store/store';
 import { sendToMichael } from '../../src/renderer/src/shell/ownerSend';
 import { NO_FOLD } from '../../src/renderer/src/shell/dockFold';
-import i18n, { directionFor } from '../../src/renderer/src/i18n';
+import i18n from '../../src/renderer/src/i18n';
 import type { DockItem, OwnerDock } from '../../src/shared/ownerRequests';
 import '../../src/renderer/src/design/tokens.css';
 import '../../src/renderer/src/design/global.css';
@@ -101,7 +101,7 @@ function Fixture() {
       <button onClick={() => append(true)}>Deliver notes</button>{' '}
       <button onClick={() => useStore.getState().setDock(true, 'q4')}>Go to question 4</button>{' '}
       <button onClick={() => document.documentElement.dataset.cthTheme = document.documentElement.dataset.cthTheme === 'dark' ? 'light' : 'dark'}>Theme</button>{' '}
-      {['en', 'ar', 'zh-CN'].map((lng) => <button key={lng} onClick={() => language(lng)}>{lng}</button>)}
+      {['en'].map((lng) => <button key={lng} onClick={() => language(lng)}>{lng}</button>)}
     </div>
     <div ref={composer} style={{ position: 'absolute', bottom: 40, insetInlineStart: 40, width: 400 }}>
       <MichaelDock key={version} dock={dock} refresh={() => {}} godId="god" onFillComposer={(s) => useStore.getState().setDraft('god', s)} onReply={() => {}} composerRef={composer} view={view} />
@@ -171,7 +171,6 @@ function append(notes = false) {
 }
 async function language(lng: string) {
   await i18n.changeLanguage(lng);
-  document.documentElement.dir = directionFor(lng);
 }
 
 Object.assign(window, { dockTest: { reset, append, list, bottom, jump, settle, until, scrollTo, update, language, sendToMichael } });
@@ -403,7 +402,7 @@ async function runDockTests() {
   check(fileOpened, 'file opening still reaches main boundary');
   passed.push('file verdict and file opening');
 
-  for (const lng of ['en', 'zh-CN', 'ar']) {
+  for (const lng of ['en']) {
     await language(lng);
     for (const count of [1, 2, 3, 11, 100]) check(!i18n.t('dock.newReplies', { count }).includes('dock.'), `${lng} plural category resolves`);
     for (const theme of ['light', 'dark']) {
@@ -419,7 +418,7 @@ async function runDockTests() {
   }
   await language('en'); document.documentElement.dataset.cthTheme = 'light';
   reset(); await settle(); await pause(); append(); await settle();
-  passed.push('all locales, RTL, both themes and focus ring');
+  passed.push('English, both themes and focus ring');
   return passed;
 }
 Object.assign(window, { runDockTests });

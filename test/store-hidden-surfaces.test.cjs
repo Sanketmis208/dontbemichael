@@ -9,7 +9,6 @@
  *  - a GIT tab or a stray floor view saved by an older build opens on
  *    something that exists;
  *  - nothing can open the hidden IDE, whichever caller asks;
- *  - a leftover organisation key does not bring back the History tab;
  *  - a roster with no Michael (an old install mid-restore) still opens on the
  *    saved agent, and "open this agent's memory" does not blank the selection.
  *
@@ -40,23 +39,6 @@ test('views an older build saved open on ones this build has', () => {
     const s = store.getState();
     return { tab: s.sidebarTab, floor: s.floorView };`);
   assert.deepEqual(r, { tab: 'terminal', floor: 'office' });
-});
-
-test('nothing opens the hidden IDE, and an org key alone does not bring back History', () => {
-  const r = freshRun({ 'cth.agents': JSON.stringify([{ id: 'god', name: 'Michael', isGod: true, cwd: '/tmp/o' }]) }, `
-    const s = store.getState();
-    s.setIdeOpen(true, 'god');
-    const afterOpen = { open: store.getState().ideOpen, agent: store.getState().ideAgentId };
-    store.getState().openFileInIde('/tmp/o/menu.md');
-    const afterFile = { open: store.getState().ideOpen, file: store.getState().ideInitialFile };
-    const st = store.getState();
-    const orgOnly = mod.triggerHistoryVisible({ ...st, webhookTriggers: [], orgTrigger: { ...st.orgTrigger, apiKey: 'org-key' } });
-    const withHook = mod.triggerHistoryVisible({ ...st, webhookTriggers: [{ id: 'w1' }] });
-    return { afterOpen, afterFile, orgOnly, withHook };`);
-  assert.deepEqual(r.afterOpen, { open: false, agent: null });
-  assert.deepEqual(r.afterFile, { open: false, file: null });
-  assert.equal(r.orgOnly, false);
-  assert.equal(r.withHook, true, 'webhooks still show their history');
 });
 
 test('with no Michael on the roster, launch keeps the saved agent and a memory jump keeps it too', () => {

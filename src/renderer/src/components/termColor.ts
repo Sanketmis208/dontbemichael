@@ -3,8 +3,7 @@
  *
  * Free of xterm and of every browser global on purpose, so the parsing rules are
  * unit-testable. `terminalPool.ts` itself cannot be loaded in a test: it imports
- * xterm, which touches `self`. Same reasoning as `hooks/queueDelivery.ts` and
- * `store/focusMode.ts`.
+ * xterm, which touches `self`. Same reasoning as `hooks/queueDelivery.ts`.
  */
 
 /**

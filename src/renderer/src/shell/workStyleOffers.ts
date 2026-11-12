@@ -41,23 +41,28 @@ export async function readWorkStyleOffers(): Promise<WorkStyleOffer[]> {
 /** The owner's decision, Keep mine or Use it (after adoptWorkStyleOffer
  *  saved the job): recorded once, so the offer never returns. */
 export async function decideWorkStyleOffer(offer: WorkStyleOffer, choice: 'use' | 'keep'): Promise<void> {
-  decidedHere[decisionId(offer.key, offer.agentId)] = choice;
+  // Every update the card merged is decided at once (eng review E1).
+  const ids = (offer.keys?.length ? offer.keys : [offer.key]).map((k) => decisionId(k, offer.agentId));
+  for (const id of ids) decidedHere[id] = choice;
   const config = await window.cth.getConfig() as { workStyleUpdatesDecided?: Record<string, 'use' | 'keep'> };
-  await window.cth.updateConfig({ workStyleUpdatesDecided: { ...(config.workStyleUpdatesDecided ?? {}), [decisionId(offer.key, offer.agentId)]: choice } });
+  await window.cth.updateConfig({ workStyleUpdatesDecided: { ...(config.workStyleUpdatesDecided ?? {}), ...Object.fromEntries(ids.map((id) => [id, choice])) } });
 }
 
 /**
- * "Use it" in the preview: the new text with the owner's changes reapplied, as
- * the preview showed it (eng D7). The role line is the new default's unless
- * the changes moved duties; the previous job is kept for Undo. Refused when
- * the member's job changed since the preview began (A3).
+ * "Use it" on the card: the member's own job with the update's duties worked
+ * in, exactly as the card showed it (owner, CEO review D3, 2026-11-07). The
+ * role line and title stay the member's own unless the duties moved; the
+ * previous job is kept for Undo. Refused when the member's job changed since
+ * the analysis began (A3).
  */
 export async function adoptWorkStyleOffer(offer: WorkStyleOffer, revised: RevisedJob, from: string): Promise<'applied' | 'moved' | 'failed'> {
   const agent = useStore.getState().agents.find((a) => a.id === offer.agentId);
   if (!agent) return 'failed';
   if (jobBase(agent) !== from) return 'moved';
-  const split = splitAgentRole(offer.description);
-  const patch = applyJob(agent, { ...revised, handles: revised.handles ?? split.roleDescription }, { title: split.role, now: new Date().toISOString() });
+  // The member's own role line and title stay unless the analysis changed
+  // the duties: an update never puts the pack's back (eng review A2).
+  const own = splitAgentRole(agent.description ?? '');
+  const patch = applyJob(agent, { ...revised, handles: revised.handles ?? own.roleDescription }, { title: own.role, now: new Date().toISOString() });
   // The registry role first: Michael routes by it. If it can't be saved,
   // nothing changes and the decision isn't recorded, so the offer stays.
   const role = await window.cth.hivePatchAgentRole(offer.agentId, patch.description).catch(() => null);

@@ -24,11 +24,9 @@
  * Runs in the Electron main process (macOS only lets this process into
  * ~/Documents, which is why it isn't a cron job).
  */
-import {
-  existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, copyFileSync,
-  renameSync, rmSync, appendFileSync, openSync, fsyncSync, closeSync
-} from 'node:fs';
+import { existsSync, readdirSync, mkdirSync, renameSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
+import { appendHiveFile, emptyHiveFile, readHiveText, writeHiveFile } from './hiveFile';
 import { runHiddenModel, type HiddenModelEngine } from './hiddenModel';
 import {
   INDEX_BUDGET_TOKENS, INDEX_PRUNE_AT, applyOps, archiveLines, entriesBlock, entriesWithEvidence, estimateTokens,
@@ -82,9 +80,9 @@ export interface TidyResult {
 /** A held notes file whose notes are now elsewhere (the index or the inbox):
  *  removed, or emptied when it can't be (Windows can hold a file open), so no
  *  pass ever reads the same notes back twice. */
-function dropHeld(file: string): void {
+function dropHeld(root: string, file: string): void {
   try { rmSync(file, { force: true }); } catch {
-    try { writeFileSync(file, '', 'utf8'); } catch { /* left as is */ }
+    try { emptyHiveFile(root, file); } catch { /* left as is */ }
   }
 }
 
@@ -165,7 +163,10 @@ export class MemoryTidy {
   }
 
   private async tidyAgent(home: string, id: string, force: boolean): Promise<TidyResult | null> {
-    const dir = join(home, 'hive', 'agents', id);
+    // The member's own folder, which its shell writes too: every write here
+    // goes through hiveFile.ts, and only plain files are read (readText).
+    const root = join(home, 'hive');
+    const dir = join(root, 'agents', id);
     const indexPath = join(dir, 'memory.md');
     const memDir = join(dir, 'memory');
     const inboxPath = join(memDir, 'inbox.md');
@@ -173,7 +174,11 @@ export class MemoryTidy {
     // Notes held by a pass that crashed go back into the inbox first.
     const stranded = join(memDir, 'inbox.processing.md');
     if (existsSync(stranded)) {
-      try { appendFileSync(inboxPath, '\n' + readFileSync(stranded, 'utf8')); dropHeld(stranded); } catch { /* next pass */ }
+      try {
+        const text = readText(stranded);
+        if (text !== null) appendHiveFile(root, inboxPath, '\n' + text);
+        dropHeld(root, stranded);
+      } catch { /* next pass */ }
     }
     let owned: OwnerNote[] = [];
     try { owned = this.ownerNotes()?.pending(id) ?? []; } catch { /* filed next pass */ }
@@ -195,7 +200,7 @@ export class MemoryTidy {
     if (!due) {
       // An empty older file just becomes an empty index, no model call needed.
       if (!isIndex && existsSync(indexPath)) {
-        try { atomicWrite(indexPath, renderIndex(this.nameOf(id), id, [])); } catch { /* next pass */ }
+        try { atomicWrite(root, indexPath, renderIndex(this.nameOf(id), id, [])); } catch { /* next pass */ }
       }
       return null;
     }
@@ -212,9 +217,9 @@ export class MemoryTidy {
     }
     const restore = () => {
       if (!held) return;
-      try { appendFileSync(inboxPath, (existsSync(inboxPath) ? '\n' : '') + held); }
+      try { appendHiveFile(root, inboxPath, (existsSync(inboxPath) ? '\n' : '') + held); }
       catch { return; /* the processing file stays; the next pass reads it back below */ }
-      dropHeld(processing);
+      dropHeld(root, processing);
     };
 
     const today = localDay(new Date().toISOString());
@@ -241,22 +246,18 @@ export class MemoryTidy {
     try {
       const stamp = utcStamp();
       if (existsSync(indexPath)) {
-        const backup = join(home, 'hive', 'backups', stamp, id, 'memory.md');
-        mkdirSync(dirname(backup), { recursive: true });
-        copyFileSync(indexPath, backup);
+        copyBackup(root, indexPath, join(root, 'backups', stamp, id, 'memory.md'));
       }
       if (outcome.procedures.length) mkdirSync(join(memDir, 'procedures'), { recursive: true });
       // A procedure being replaced is backed up beside the index, never lost.
       for (const p of outcome.procedures) {
         const file = join(memDir, 'procedures', `${p.slug}.md`);
         if (!existsSync(file)) continue;
-        const backup = join(home, 'hive', 'backups', stamp, id, 'procedures', `${p.slug}.md`);
-        mkdirSync(dirname(backup), { recursive: true });
-        copyFileSync(file, backup);
+        copyBackup(root, file, join(root, 'backups', stamp, id, 'procedures', `${p.slug}.md`));
       }
-      for (const p of outcome.procedures) atomicWrite(join(memDir, 'procedures', `${p.slug}.md`), p.content);
-      if (outcome.archived.length) appendFileSync(join(memDir, 'archive.md'), archiveLines(outcome.archived, today) + '\n');
-      atomicWrite(indexPath, renderIndex(this.nameOf(id), id, outcome.entries));
+      for (const p of outcome.procedures) atomicWrite(root, join(memDir, 'procedures', `${p.slug}.md`), p.content);
+      if (outcome.archived.length) appendHiveFile(root, join(memDir, 'archive.md'), archiveLines(outcome.archived, today) + '\n');
+      atomicWrite(root, indexPath, renderIndex(this.nameOf(id), id, outcome.entries));
     } catch (e) {
       restore();
       return this.abort(id, 'write-failed', String(e));
@@ -266,8 +267,8 @@ export class MemoryTidy {
     // next pass.
     if (outcome.added.length) { try { this.onAdded(id, outcome.added); } catch { /* the notes stand; only the count misses them */ } }
     if (owned.length) { try { this.ownerNotes()?.filed(owned.map((n) => n.id)); } catch { /* read again next pass; a repeat is merged */ } }
-    try { writeFileSync(statePath, JSON.stringify({ lastTidyAt: Date.now() }), 'utf8'); } catch { /* tidied again sooner */ }
-    dropHeld(processing);
+    try { writeHiveFile(root, statePath, JSON.stringify({ lastTidyAt: Date.now() })); } catch { /* tidied again sooner */ }
+    dropHeld(root, processing);
 
     const tokens = estimateTokens(entriesBlock(outcome.entries));
     const droppedCount = Object.keys(dropped).length;
@@ -328,27 +329,30 @@ export function extractJson(text: string): unknown {
   try { return JSON.parse(text.slice(start, end + 1)); } catch { return undefined; }
 }
 
-/** A file's text, '' when there is no file, null when it can't be read. */
+/** A file's text, '' when there is no file, null when it can't be read or is
+ *  not a plain file (a link the member's shell put there is never followed). */
 function readText(path: string): string | null {
-  try { return existsSync(path) ? readFileSync(path, 'utf8') : ''; } catch { return null; }
+  return readHiveText(path);
 }
 
 function readState(path: string): { lastTidyAt?: number } {
-  try { return JSON.parse(readFileSync(path, 'utf8')) as { lastTidyAt?: number }; } catch { return {}; }
+  try { return JSON.parse(readText(path) || '{}') as { lastTidyAt?: number }; } catch { return {}; }
 }
 
 function utcStamp(): string {
   return new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
 }
 
-/** Write atomically: temp sibling, fsync, rename over the target. */
-function atomicWrite(path: string, text: string): void {
+/** Write atomically: temp sibling, fsync, rename over the target, and never
+ *  through a link in the member's folder (hiveFile.ts). */
+function atomicWrite(root: string, path: string, text: string): void {
   mkdirSync(dirname(path), { recursive: true });
-  const tmp = `${path}.tmp-${Math.random().toString(36).slice(2, 10)}`;
-  writeFileSync(tmp, text, 'utf8');
-  try {
-    const fd = openSync(tmp, 'r+');
-    try { fsyncSync(fd); } finally { closeSync(fd); }
-  } catch { /* fsync is best-effort; rename is the durability guarantee */ }
-  renameSync(tmp, path);
+  writeHiveFile(root, path, text);
+}
+
+/** Copy a memory file into the hive's backups, only when it is a plain file. */
+function copyBackup(root: string, from: string, to: string): void {
+  const text = readText(from);
+  if (text === null) throw new Error(`not backed up: ${from} is not a plain file`);
+  atomicWrite(root, to, text);
 }

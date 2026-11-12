@@ -91,3 +91,17 @@ test('a probe that fails takes the answer for its own install, and never another
   fs.writeFileSync(broken, '#!/bin/sh\nexit 3\n', { mode: 0o755 });
   assert.equal(await claudeCliVersion(broken), null, 'another install stays unread');
 });
+
+test('a Claude Code that knows it keeps file tools to the agent\'s own folders; an older one is not given the key', async () => {
+  // Value: protects=file tools write only in the agent's working folders on a Claude Code that takes the setting, and an older one still starts; fails_when=blockWritesOutsideWorkingDirectories is left out for a version at or above its floor, or written for one below it or an unread one (an unknown key stops the start); why_new=owner 2026-11-09 file tools unwalled outside the office; seam=real ensureAgent and the settings file it writes; no_claim=the exact first release that took it
+  const { WRITE_BLOCK_CLI_FLOOR, takesWriteBlock } = loadTs('src/shared/modelCliFloor.ts');
+  assert.equal(WRITE_BLOCK_CLI_FLOOR, '2.1.317');
+  assert.equal((await settingsFor('2.1.317')).permissions.blockWritesOutsideWorkingDirectories, true);
+  assert.equal((await settingsFor('2.1.321')).permissions.blockWritesOutsideWorkingDirectories, true);
+  for (const v of ['2.1.309', '2.1.316', null, 'not a version']) {
+    assert.equal(takesWriteBlock(v), false, String(v));
+  }
+  const old = await settingsFor('2.1.309');
+  assert.equal(old.permissions.blockWritesOutsideWorkingDirectories, undefined);
+  assert.ok(old.permissions.additionalDirectories.length, 'the rest of the permissions stay');
+});

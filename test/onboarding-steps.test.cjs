@@ -21,9 +21,7 @@ const orderMatch = wizard.match(/const ORDERED_STEPS = \[([^\]]+)\]/);
 const ORDER = orderMatch ? [...orderMatch[1].matchAll(/'([a-z]+)'/g)].map((m) => m[1]) : [];
 
 const STEP_RE = {
-  en: /^Step (\d+) of (\d+) · /,
-  'zh-CN': /^第 (\d+) 步，共 (\d+) 步 · /,
-  ar: /^الخطوة (\d+) من (\d+) · /
+  en: /^Step (\d+) of (\d+) · /
 };
 
 test('the wizard step order can be read from the component', () => {

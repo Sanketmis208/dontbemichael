@@ -31,27 +31,27 @@ const willCox = {
 };
 
 test('an ask about an email with no link to it is flagged until the link is there', () => {
-  // Value: protects=the owner can open the email an ask is about (owner, 2026-11-05); fails_when=an ask naming a thread or a reply passes with no email link, or one with a link or marked noEmail is flagged; why_new=the Will Cox card; seam=none
-  assert.equal(R.askMissesEmailLink(willCox, SINCE), true, 'the Will Cox card');
+  // Value: protects=the owner can open the email an ask is about (owner, 2026-11-05), now through the source check (ask-me-source-links.md); fails_when=an ask naming a thread or a reply passes with no email link, or one with a link or marked noEmail is flagged; why_new=the Will Cox card; seam=none
+  assert.equal(R.askMissesSource(willCox, SINCE), true, 'the Will Cox card');
   const linked = { ...willCox, q: willCox.q.replace('on his thread', 'on [his thread](email:vikram-moblize-it/%3Cabc%40hubspot.com%3E)') };
-  assert.equal(R.askMissesEmailLink(linked, SINCE), false);
-  assert.equal(R.askMissesEmailLink({ ...willCox, noEmail: true }, SINCE), false, 'about email in general');
-  assert.equal(R.askMissesEmailLink({ ...willCox, askedAt: '2026-11-01T10:00:00Z' }, SINCE), false, 'an older ask keeps its look');
-  assert.equal(R.askMissesEmailLink({ q: '**Approve the price change for Northwind?**', askedAt: '2026-11-05T20:10:00Z' }, SINCE), false, 'no email named');
+  assert.equal(R.askMissesSource(linked, SINCE), false);
+  assert.equal(R.askMissesSource({ ...willCox, noEmail: true }, SINCE), false, 'about email in general');
+  assert.equal(R.askMissesSource({ ...willCox, askedAt: '2026-11-01T10:00:00Z' }, SINCE), false, 'an older ask keeps its look');
+  assert.equal(R.askMissesSource({ q: '**Approve the price change for Northwind?**', askedAt: '2026-11-05T20:10:00Z' }, SINCE), false, 'no email named');
   // Ship review, 2026-11-05: what counts, and what must not nag every turn.
   const at = '2026-11-05T20:10:00Z';
-  assert.equal(R.askMissesEmailLink({ q: '**Approve the reply to Will Cox?** Pam sends it.', askedAt: at }, SINCE), true, 'a reply is about a message someone sent');
-  assert.equal(R.askMissesEmailLink({ q: '**Send the quote email to Northwind?**', askedAt: at }, SINCE), false, 'new outbound mail has no original');
-  assert.equal(R.askMissesEmailLink({ q: '**Approve the price change?** Oscar wrote the report.', askedAt: at }, SINCE), false, 'a bare "wrote" is not an email');
-  assert.equal(R.askMissesEmailLink({ q: '**Turn on Email on Pam\'s Access tab?**', askedAt: at }, SINCE), false, 'a setting');
-  assert.equal(R.askMissesEmailLink({ kind: 'foundation', q: 'Inbox triage ran without our brand voice; her email tone is unknown.', askedAt: at }, SINCE), false, 'a foundation question');
-  assert.equal(R.askMissesEmailLink({ q: '**Approve the reply?** (email: dana@x.com)', askedAt: at }, SINCE), true, 'an address is not a link');
+  assert.equal(R.askMissesSource({ q: '**Approve the reply to Will Cox?** Pam sends it.', askedAt: at }, SINCE), true, 'a reply is about a message someone sent');
+  assert.equal(R.askMissesSource({ q: '**Send the quote email to Northwind?**', askedAt: at }, SINCE), false, 'new outbound mail has no original');
+  assert.equal(R.askMissesSource({ q: '**Approve the price change?** Oscar wrote the report.', askedAt: at }, SINCE), false, 'a bare "wrote" is not an email');
+  assert.equal(R.askMissesSource({ q: '**Turn on Email on Pam\'s Access tab?**', askedAt: at }, SINCE), false, 'a setting');
+  assert.equal(R.askMissesSource({ kind: 'foundation', q: 'Inbox triage ran without our brand voice; her email tone is unknown.', askedAt: at }, SINCE), false, 'a foundation question');
+  assert.equal(R.askMissesSource({ q: '**Approve the reply?** (email: dana@x.com)', askedAt: at }, SINCE), true, 'an address is not a link');
 });
 
 test('the email link check reads possessive and verb forms, and leaves chat threads alone', () => {
   // Value: protects=the owner can open the email an ask is about, however Michael words it (TODOS, 2026-11-05); fails_when=a possessive, verb or "message X sent" form passes with no link, or a Slack thread or an email setting is flagged; why_new=ship review pass 2; seam=none
   const at = '2026-11-05T20:10:00Z';
-  const ask = (q) => R.askMissesEmailLink({ q, askedAt: at }, SINCE);
+  const ask = (q) => R.askMissesSource({ q, askedAt: at }, SINCE);
   assert.equal(ask("**Approve our answer to Will's email?**"), true, 'a possessive');
   assert.equal(ask('**Approve our answer to Will’s email?**'), true, 'a possessive with a curly quote');
   assert.equal(ask("**OK to offer the client's message a discount?**"), true, 'a possessive message');
@@ -98,7 +98,7 @@ test('the change option check reads approve and send then show, and a negation o
 test('review of #686: what main caught still counts, and the wordings the rules allow pass', () => {
   // Value: protects=the wider checks catch no less than main and flag nothing the rules allow; fails_when=a plain "teams" or "chat" switches the email check off, a long denial slips past, or an own draft, "let's", a helper verb, a note, a send back to a member or an inside approval is flagged; why_new=review of #686; seam=none
   const at = '2026-11-05T20:10:00Z';
-  const ask = (q) => R.askMissesEmailLink({ q, askedAt: at }, SINCE);
+  const ask = (q) => R.askMissesSource({ q, askedAt: at }, SINCE);
   const opt = (label) => R.askChangeSends({ q: 'x', askedAt: at, options: [{ label }] }, SINCE);
   // 1. Caught on main, and still caught.
   assert.equal(ask('**Approve the reply to Dana?** Both teams signed off.'), true, 'teams is an ordinary word');
@@ -127,7 +127,7 @@ test('review of #686: what main caught still counts, and the wordings the rules 
 test('re-review of #686: a look before the send, a wait until the look, and our own mail pass', () => {
   // Value: protects=the wider checks flag nothing main let pass (re-review at 255b88f1); fails_when=a look before the send reads as after it, "post" the noun sends, "won't go out until you show me again" reads as a denial, or our own outgoing mail, a time word, a pronoun or a passive "emailed" reads as an email someone sent; why_new=re-review of #686; seam=none
   const at = '2026-11-05T20:10:00Z';
-  const ask = (q, parts) => R.askMissesEmailLink({ q, askedAt: at, ...(parts ? { parts } : {}) }, SINCE);
+  const ask = (q, parts) => R.askMissesSource({ q, askedAt: at, ...(parts ? { parts } : {}) }, SINCE);
   const opt = (label, q = 'x') => R.askChangeSends({ q, askedAt: at, options: [{ label }] }, SINCE);
   // 1. The order: only a look after a send that goes out is flagged.
   assert.equal(opt('Draft the post with my changes, then show me again'), false, 'post is a noun here');
@@ -167,8 +167,8 @@ test('re-review of #686, smaller items: a chat in another part, a bare approve, 
   const at = '2026-11-05T20:10:00Z';
   // The chat switch reads per question.
   const parts = [{ q: 'Pam flagged it in Slack. Is it urgent?', options: [{ label: 'Yes' }] }];
-  assert.equal(R.askMissesEmailLink({ q: "**Approve the reply to Will Cox's message?**", askedAt: at, parts }, SINCE), true, 'the chat is in another part');
-  assert.equal(R.askMissesEmailLink({ q: '**Approve the reply in the Slack thread?**', askedAt: at, parts }, SINCE), false, 'the chat is in the same part');
+  assert.equal(R.askMissesSource({ q: "**Approve the reply to Will Cox's message?**", askedAt: at, parts }, SINCE), true, 'the chat is in another part');
+  assert.equal(R.askMissesSource({ q: '**Approve the reply in the Slack thread?**', askedAt: at, parts }, SINCE), false, 'the chat is in the same part');
   // A bare approve with changes.
   const answer = (q, label, extra = {}) => R.askChangeSends({ q, askedAt: at, options: [{ label }], ...extra }, SINCE);
   assert.equal(answer('**Approve the new rota?**', 'Approve with my changes'), false, 'nothing leaves the office');
@@ -196,9 +196,9 @@ test('both reach Michael\'s tidy list each turn, with what to do', () => {
   // Value: protects=Michael is told until he fixes the card; fails_when=asksToTidy drops either check or its line; why_new=owner 2026-11-05; seam=none
   const card = { id: 'dwight-willcox-five-companies', title: 'HubSpot partner manager asks about five companies', status: 'blocked', assignee: 'dwight', humanQA: [willCox] };
   const stuck = R.asksToTidy([card], Infinity, SINCE);
-  assert.deepEqual(stuck.map((c) => c.issue).sort(), ['change-sends', 'no-email-link']);
+  assert.deepEqual(stuck.map((c) => c.issue).sort(), ['change-sends', 'no-source']);
   const said = R.stuckCardsContext(stuck);
-  assert.match(said, /ASKS ABOUT AN EMAIL WITH NO LINK TO IT\. [^\n]*Ask the team member who read that email for its link/);
+  assert.match(said, /ASKS AND REPORTS ABOUT SOMETHING OUTSIDE THE OFFICE WITH NO LINK TO IT\. [^\n]*Ask the team member who read it for its link/);
   assert.match(said, /CHANGE OPTIONS THAT SEND WITHOUT ANOTHER LOOK\. House rule 10/);
   assert.deepEqual(R.asksToTidy([card]), [], 'no start, no check');
 });
@@ -208,6 +208,6 @@ test('members link the email in messages too, and Michael asks for a missing lin
   const hive = read('src/main/hive.ts');
   assert.ok(hive.includes('When a filing or a message to ${michael} is about an email you read (a reply to approve, what a sender asked), put that email\'s link from your mail read'));
   assert.ok(hive.includes('even when a teammate does the rest of the work'));
-  assert.ok(hive.includes("when the report or filing you have lacks it, ask the team member who read the email for it before the ask goes on Ask me"));
+  assert.ok(hive.includes("when the report or filing you have lacks one, ask the team member who read it for it before the card goes on Ask me"), 'now through sources (ask-me-source-links.md)');
   assert.match(hive, /asksToTidy\(tasks, this\.askListSince\(\), this\.leftoversSince\(\)\)/);
 });

@@ -278,7 +278,7 @@ test('Edit agent sends the split, checks in change mode, asks where numbers live
 test('the new strings exist in every language, with no dashes', () => {
   // Value: protects=three locales and the no-dash rule; fails_when=a key is missing or a dash slips in; why_new=new strings; seam=none
   const keys = ['explain', 'explainTitle', 'explainPlaceholder', 'back', 'goesToGroup', 'goesTo', 'noLongerGoesTo', 'noAccess', 'openAccess', 'homeFolder', 'homeTools', 'homeOff', 'homeOffLabel'];
-  for (const lang of ['en', 'ar', 'zh-CN']) {
+  for (const lang of ['en']) {
     const l = JSON.parse(read(`src/renderer/src/i18n/locales/${lang}.json`));
     for (const k of keys) {
       assert.ok(l.jobChange[k], `${lang} jobChange.${k}`);

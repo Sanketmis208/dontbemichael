@@ -12,12 +12,26 @@ const fs = require('node:fs');
 const path = require('node:path');
 const loadTs = require('./load-ts.cjs');
 
-const { parsePlace, placeHref, placeWords, placeLinkRule, PLACE_SECTIONS } = loadTs('src/shared/settingsPlaces.ts');
+const { parsePlace, placeHref, placeLinkRule, PLACE_SECTIONS } = loadTs('src/shared/settingsPlaces.ts');
 const { spotPlaces, remarkSettingsLinks } = loadTs('src/renderer/src/markdown/remarkSettingsLinks.ts');
 const { placeUrlTransform } = loadTs('src/renderer/src/markdown/placeUrl.ts');
 const { createMailboxNotes, newlyHeld, mailboxAddedNote, grantNote, GRANT_NOTE_FALLBACK_MS } = loadTs('src/main/mailboxNotes.ts');
 const { unheldMailboxesLine } = loadTs('src/shared/agentAccess.ts');
 const read = (p) => fs.readFileSync(path.resolve(__dirname, '..', p), 'utf8');
+
+test('Michael\'s No fit card links: a member\'s job and Add agent with a card', () => {
+  // Value: protects=the card links the owner chose (CEO review D6, eng E3); fails_when=a form stops parsing, round tripping, or drops out of Michael's link rule; why_new=new forms 2026-11-07; seam=none; no_claim=the renderer opening the screen
+  assert.deepEqual(parsePlace('dbm:member/oscar/job'), { kind: 'member', agentId: 'oscar', card: 'job' });
+  assert.deepEqual(parsePlace('dbm:hire'), { kind: 'hire' });
+  assert.deepEqual(parsePlace('dbm:hire/oscar'), { kind: 'hire', card: 'oscar' });
+  for (const bad of ['dbm:hire/Oscar', 'dbm:hire/../x', 'dbm:hire/oscar/now', 'dbm:member/oscar/jobs', 'dbm:member/../x/job'])
+    assert.equal(parsePlace(bad), null, bad);
+  for (const href of ['dbm:member/oscar/job', 'dbm:hire', 'dbm:hire/dwight'])
+    assert.equal(placeHref(parsePlace(href)), href, 'round trip');
+  const rule = placeLinkRule();
+  assert.match(rule, /dbm:member\/<their id>\/job/);
+  assert.match(rule, /dbm:hire\/<card>/);
+});
 
 test('a dbm: link names only our own places; anything else is words', () => {
   // Value: protects=only real, visible places become buttons; fails_when=an unknown or hidden place parses or a member id carries a path; why_new=new link scheme; seam=none; no_claim=none beyond protects
@@ -30,8 +44,7 @@ test('a dbm: link names only our own places; anything else is words', () => {
     assert.equal(parsePlace(bad), null, String(bad));
   for (const href of ['dbm:settings/research-privacy', 'dbm:settings/connections/claude-connectors', 'dbm:settings/connections/mailboxes/add', 'dbm:member/oscar/access/email'])
     assert.equal(placeHref(parsePlace(href)), href, 'round trip');
-  assert.equal(placeWords({ kind: 'settings', section: 'Connections', group: 'mailboxes' }), 'Settings, Connections, Mailboxes');
-  assert.ok(!Object.values(PLACE_SECTIONS).includes('Voice'), 'Voice is hidden in this build');
+  assert.ok(!Object.values(PLACE_SECTIONS).includes('Voice'), 'there is no Voice section');
   assert.ok(!Object.values(PLACE_SECTIONS).includes('Skills'), 'Skills is hidden in this build');
 });
 
@@ -218,5 +231,5 @@ test('wiring: a button opens Settings at the group or a member\'s Access tab at 
   assert.match(caps, /<div ref=\{emailRef\} data-email-group/);
   assert.match(read('src/renderer/src/markdown/PlaceChip.tsx'), /useStore\.getState\(\)\.openAgentEmail\(place\.agentId\)/);
   assert.match(read('src/renderer/src/components/FileChip.tsx'), /fileChip=\{paths\.length \? fileChip : undefined\} placeLinks folderTeam=\{team\} \/>/, 'agent text spots words; documents do not');
-  for (const loc of ['en', 'ar', 'zh-CN']) assert.ok(JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).markdown.openPlace.includes('{{place}}'), loc);
+  for (const loc of ['en']) assert.ok(JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).markdown.openPlace.includes('{{place}}'), loc);
 });

@@ -1,8 +1,7 @@
 /**
  * The side panel splitter's width rules (SidebarSplitter.tsx), kept free of
- * React so tests load them directly. The panel widens toward the office floor:
- * leftward in a left to right window, rightward in Arabic, where it sits on
- * the left.
+ * React so tests load them directly. The panel widens toward the office floor,
+ * leftward.
  */
 
 export interface SplitterLimits { min: number; max: number; viewportWidth: number }
@@ -20,13 +19,13 @@ function clamp(width: number, limits: SplitterLimits): number {
 }
 
 /** The width after a drag from `startX` to `x`. */
-export function dragWidth(startWidth: number, startX: number, x: number, limits: SplitterLimits, rtl: boolean): number {
-  return clamp(startWidth + (rtl ? x - startX : startX - x), limits);
+export function dragWidth(startWidth: number, startX: number, x: number, limits: SplitterLimits): number {
+  return clamp(startWidth + (startX - x), limits);
 }
 
 /** The width after an arrow key, or undefined for any other key. */
-export function keyWidth(key: string, width: number, limits: SplitterLimits, rtl: boolean): number | undefined {
+export function keyWidth(key: string, width: number, limits: SplitterLimits): number | undefined {
   if (key !== 'ArrowLeft' && key !== 'ArrowRight') return undefined;
-  const towardFloor = rtl ? key === 'ArrowRight' : key === 'ArrowLeft';
+  const towardFloor = key === 'ArrowLeft';
   return clamp(width + (towardFloor ? KEY_STEP : -KEY_STEP), limits);
 }

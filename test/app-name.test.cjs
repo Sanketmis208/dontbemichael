@@ -49,7 +49,7 @@ test('window titles use the name', () => {
 
 test('the privacy prompts macOS shows say the new name, with no dashes', () => {
   const prompts = [...builder.matchAll(/^\s+NS\w+UsageDescription: "(.*)"$/gm)].map((m) => m[1]);
-  assert.ok(prompts.length >= 6);
+  assert.ok(prompts.length >= 5); // the microphone prompt went with voice (2026-11-11)
   for (const p of prompts) {
     assert.ok(p.includes(APP_NAME), p);
     assert.doesNotMatch(p, /Munder Difflin|[-–—]/, p);

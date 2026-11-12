@@ -4,26 +4,34 @@
  * reach, and only this class writes it. Members reach it through the hive
  * route `foundations`; the owner through the foundation card.
  *
- *   member ─(answer + source | gap | draft)─► handle()
+ *   member ─(answer + source | gap | draft | retired kept)─► handle()
  *     ├─ source checked: an owner message the app kept as sent to the sender, or a file in the
- *     │  office folders; Michael's confirmation; anything else, what a member says the
- *     │  owner taught it included, goes to Michael
+ *     │  office folders; a connected system the member really reaches (only for where a
+ *     │  record lives or a fact copied from it); Michael's confirmation; anything else,
+ *     │  what a member says the owner taught it included, goes to Michael
  *     ├─ fill only empty, owner wins, cap, a clash goes to Michael
  *     ├─ a gap kept once per question, the first one told to Michael
  *     ├─ foundations.json ─► telemetry event (harness.db, Pulse)
  *     ├─ company profile kept in step (owner wins)
  *     └─ publish soon ─► the Company foundations copy in company knowledge
+ *
+ *   hourly check ─► lists past their shelf life; retired questions an office answered
+ *     (told to Michael once, kept until the keeper takes them over); system answers whose
+ *     member lost the system (told to Michael once, who asks the owner)
  */
 import { closeSync, copyFileSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, realpathSync, statSync } from 'node:fs';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { privateRoot } from '../shared/agentPrivatePaths';
 import { writeFileAtomic } from './atomicFile';
 import {
-  FIT_PICTURES, FIT_TEXT_MAX, FOLDER_REF, FOUNDATION_FILE_TAG, FOUNDATION_QUESTIONS, FOUNDATIONS_TAG, FOUNDATIONS_TITLE, SEEN_ITEM_MAX, SEEN_LATER_MS, capFor, cleanRecord, emptyRecord, fileAnswerLine, folderAnswerLine, isExpired, isFoundationId, isFoundationsDoc, isLater, isListQuestion, isSettled, itemKey, joinListLines, listState, oneLine, questionOf, questionVersion, questionsFor, renderFoundations,
+  FIT_PICTURES, FIT_TEXT_MAX, FOLDER_REF, FOUNDATION_FILE_TAG, FOUNDATION_QUESTIONS, FOUNDATIONS_TAG, FOUNDATIONS_TITLE, RETIRED_IDS, SEEN_ITEM_MAX, SEEN_LATER_MS, capFor, systemAnswerable, cleanRecord, emptyRecord, fileAnswerLine, folderAnswerLine, isExpired, isFoundationId, isFoundationsDoc, isLater, isListQuestion, isSettled, itemKey, joinListLines, listState, oneLine, questionOf, questionVersion, questionsFor, renderFoundations,
   type Coverage, type FoundationAnswer, type FoundationId, type FoundationJob, type FoundationPast, type FoundationSourceKind, type FoundationsRecord, type FoundationsView, type SeenItem
 } from '../shared/foundations';
 import { IMAGES, type DocExtraction } from './docText';
 import type { FileFitCheck } from './fileFitCheck';
+
+/** An answer's ref when a connected system gave it (decision 5). */
+const SYSTEM_REF = 'system:';
 
 /** The profile facts the foundations share (one set of facts, eng finding 6). */
 export interface ProfileFacts { hours?: string; fiscalYearStartMonth?: number }
@@ -73,6 +81,11 @@ export interface FoundationsDeps {
   /** Reports sent to Michael since `sinceMs` by the team members whose job
    *  uses the question, newest first (docs/designs/foundation-answers-stay-open.md, R7). */
   reportsFor?: (id: FoundationId, sinceMs: number) => Array<{ from: string; subject: string; at: number }>;
+  /** Whether this member can reach a connected system by that name, from its
+   *  real access (decision 5: the app checks the grant, not the member's word). */
+  holdsSystem?: (agentId: string, name: string) => boolean;
+  /** Whether a note to Michael can be delivered now (the hive is running). */
+  canTell?: () => boolean;
 }
 
 /** How far back the reports note looks, and how many it lists (R7). */
@@ -83,9 +96,6 @@ const EXPIRY_CHECK_MS = 3_600_000;
 
 /** The coverage of a whole list, saved today. */
 type CoverageDecision = { ok: true; coverage: Coverage; remaining: SeenItem[] } | { ok: false };
-
-/** What the owner can do with a seen item on a list card (design review D4, D7). */
-export type SeenAction = 'notOurs' | 'undoNotOurs' | 'later' | 'undoLater';
 
 /** Why a file added on a card was not taken; each has its own card line. */
 export type AddFileError = 'unknown' | 'no-office' | 'no-file' | 'unreadable' | 'picture-type' | 'picture-engine' | 'misfit' | 'unchecked';
@@ -169,6 +179,8 @@ export interface FoundationPayload {
   item?: unknown;
   /** From Michael relaying the owner: the owner said it is the whole list. */
   complete?: unknown;
+  /** "kept": the member whose role keeps a retired list took it over (decision 6). */
+  retired?: unknown;
   draft?: unknown;
   source?: unknown;
 }
@@ -376,6 +388,8 @@ export class Foundations {
     if (!force && now - this.expiryCheckedAt < EXPIRY_CHECK_MS) return 0;
     this.expiryCheckedAt = now;
     if (!this.file()) return 0;
+    this.checkRetired();
+    this.checkSystems();
     let rec = this.read();
     const done: FoundationId[] = [];
     for (const id of Object.keys(rec.answers) as FoundationId[]) {
@@ -401,6 +415,56 @@ export class Foundations {
       this.reportsNote(id, 'passed its shelf life and is partly known again');
     }
     return done.length;
+  }
+
+  /**
+   * Retired questions an office answered (decision 6): one note to Michael
+   * each, with the answer's text and any seen items, so he hands the list to
+   * the member whose role keeps it. The answer stays until that member says it
+   * took it over; members' sections no longer carry it.
+   */
+  private checkRetired(): void {
+    if (this.d.canTell && !this.d.canTell()) return;
+    let rec = this.read();
+    const due = RETIRED_IDS.filter((id) => rec.answers[id] && !rec.answers[id]!.retiredNoticeAt);
+    if (!due.length) return;
+    const at = this.iso();
+    for (const id of due) {
+      const a = rec.answers[id]!;
+      rec = { ...rec, answers: { ...rec.answers, [id]: { ...a, retiredNoticeAt: at } } };
+    }
+    this.save(rec);
+    for (const id of due) {
+      const a = rec.answers[id]!;
+      const seen = (rec.seen?.[id] ?? []).map((s) => s.item);
+      this.toMichael('Foundation list retired', `"${FOUNDATION_QUESTIONS[id].text}" (${id}) is no longer a company foundations question: the list now lives with the member whose role keeps it. The office's answer was: ${a.text}${seen.length ? `\nSeen by the team but not yet on it: ${seen.join('; ')}.` : ''}\n\nHand it to the member whose role covers that list and ask them to write it into their record (one row per item, source "${a.source === 'owner' || a.source === 'profile' ? "the owner's foundation answer" : `the foundation answer from ${this.nameOf(a.by)}`}", ${day(a.at)}), or to point it at a connected system that already holds it. When they have, they send "foundations" a message with "foundation": {"question": "${id}", "retired": "kept"}. If no member's role covers it, use When no one fits. Withdraw any open foundation card for it.`);
+    }
+  }
+
+  /**
+   * Answers a connected system gave (decision 5) whose member can no longer
+   * reach that system: one note to Michael each, to ask the owner once whether
+   * the office still keeps the record there (decision 4). A lapsed sign in
+   * keeps the grant, so it never comes here.
+   */
+  private checkSystems(): void {
+    if (!this.d.holdsSystem || (this.d.canTell && !this.d.canTell())) return;
+    let rec = this.read();
+    const gone: FoundationId[] = [];
+    for (const id of Object.keys(rec.answers) as FoundationId[]) {
+      const a = rec.answers[id];
+      if (!a?.ref?.startsWith(SYSTEM_REF) || a.systemGoneAt) continue;
+      if (!this.d.holdsSystem(a.by, a.ref.slice(SYSTEM_REF.length))) gone.push(id);
+    }
+    if (!gone.length) return;
+    const at = this.iso();
+    for (const id of gone) rec = { ...rec, answers: { ...rec.answers, [id]: { ...rec.answers[id]!, systemGoneAt: at } } };
+    this.save(rec);
+    for (const id of gone) {
+      const a = rec.answers[id]!;
+      const system = a.ref!.slice(SYSTEM_REF.length);
+      this.toMichael('Foundation system no longer reached', `"${FOUNDATION_QUESTIONS[id].text}" (${id}) says: ${a.text}. That came from ${system}, which ${this.nameOf(a.by)} can no longer reach. Raise one card on Ask me asking the owner whether ${system} is still where the office keeps this. If yes, the answer stays and nobody keeps a copy. If no, hand the record back to the member whose role keeps it, starting from its file as of when it moved to ${system}, and send the new answer to "foundations".`);
+    }
   }
 
   /** R7: when a list changes or reopens, one note to Michael naming the
@@ -626,6 +690,7 @@ export class Foundations {
     const id = p.question;
     if (!isFoundationId(id)) return `No company foundations question "${String(id ?? '')}". Use an id from your COMPANY FOUNDATIONS context, in square brackets after each question.`;
     const q = FOUNDATION_QUESTIONS[id].text;
+    if (p.retired === 'kept') return this.retiredKept(from, id);
     if (typeof p.gap === 'string' || typeof p.item === 'string') return this.gap(from, id, typeof p.gap === 'string' ? p.gap : '', p.item, p.source);
     // A draft comes only from the member the owner asked, or Michael (draft()).
     if (typeof p.draft === 'string') return this.draft(from, id, p.draft);
@@ -641,10 +706,14 @@ export class Foundations {
     if (!text) return `Nothing saved for "${q}": send "answer", "gap" or "draft" in "foundation".`;
     if (text.length > capFor(id)) return `Not saved: keep the answer to "${q}" under ${capFor(id)} characters. For more, save it to a file in the office folders and answer with its full path.`;
     const src = (p.source && typeof p.source === 'object' ? p.source : {}) as Record<string, unknown>;
+    if (typeof src.system === 'string') {
+      if (!systemAnswerable(id)) return `Not saved: "${q}" is not something a connected system holds; answer it from the owner's words or an office file.`;
+      if (!this.d.holdsSystem?.(from, src.system)) return `Not saved: you cannot reach ${src.system.slice(0, 60)}, so it can't be the source. Ask the member who can, or send a gap.`;
+    }
     const level = this.level(from, src);
     if (!level) {
       if (typeof src.outside !== 'string' && typeof src.taught !== 'string' && typeof src.owner !== 'string' && typeof src.confirmed !== 'string' && typeof src.file !== 'string') {
-        return `Not saved: an answer needs its source, "source": {"owner": "<id of the owner's message>"} or {"file": "<full path of the office file>"}, {"taught": "<what the owner told you and when>"} for what the owner taught you through ${this.michaelName()}, or {"outside": "<where it came from>"} for anything from outside the office.`;
+        return `Not saved: an answer needs its source, "source": {"owner": "<id of the owner's message>"} or {"file": "<full path of the office file>"}, {"system": "<the connected system's name>"} for where a record lives or a fact copied from a system you can reach, {"taught": "<what the owner told you and when>"} for what the owner taught you through ${this.michaelName()}, or {"outside": "<where it came from>"} for anything from outside the office.`;
       }
       this.toMichael('Foundation answer to check', `${this.nameOf(from)} offers this answer to "${q}" (${id}), from ${this.describe(from, src)}: ${text}\n\nIt comes from outside the office or from a source the app could not check, so it waits for you. If it is right, send it to "foundations" with "foundation": {"question": "${id}", "answer": "<the answer>", "source": {"confirmed": "<why you trust it>"}}; otherwise leave it.`);
       return `Sent to ${this.michaelName()} to check first, because the app could not check where it came from.`;
@@ -666,7 +735,7 @@ export class Foundations {
       return `A different answer to "${q}" is already recorded, so it stays and ${this.michaelName()} decides.`;
     }
     const source: FoundationSourceKind = level;
-    const ref = typeof src.owner === 'string' ? src.owner : typeof src.file === 'string' ? src.file : undefined;
+    const ref = typeof src.owner === 'string' ? src.owner : typeof src.file === 'string' ? src.file : typeof src.system === 'string' ? `${SYSTEM_REF}${oneLine(src.system).slice(0, 60)}` : undefined;
     this.save(this.withAnswer(rec, id, { text, by: from, source, at: this.iso(), ...(ref ? { ref } : {}), ...(list ? this.coverageFields(id, whole ? 'complete' : 'known') : {}) }, from, whole ? { seen: [] } : {}));
     this.toProfile(id, text, level === 'owner');
     this.publishSoon();
@@ -687,7 +756,23 @@ export class Foundations {
     if (typeof src.owner === 'string' && src.owner && this.d.ownerSaid?.(src.owner, from)) return isMichael ? 'owner' : 'taught';
     if (typeof src.confirmed === 'string' && src.confirmed.trim() && isMichael) return 'michael';
     if (typeof src.file === 'string' && isAbsolute(src.file) && this.d.inOffice?.(src.file, from)) return 'file';
+    // A connected system the member really reaches (checked in handle) ranks
+    // with an office file: the owner's answer still wins.
+    if (typeof src.system === 'string' && src.system.trim() && this.d.holdsSystem?.(from, src.system)) return 'file';
     return null;
+  }
+
+  /** The member whose role keeps a retired list says it took it over. */
+  private retiredKept(from: string, id: FoundationId): string {
+    const q = FOUNDATION_QUESTIONS[id].text;
+    if (!questionOf(id).retired) return `"${q}" is not a retired question.`;
+    const rec = this.read();
+    const a = rec.answers[id];
+    if (!a) return `"${q}" had no answer to take over.`;
+    if (a.retiredKeptBy) return `"${q}" was already taken over by ${this.nameOf(a.retiredKeptBy)}.`;
+    this.save({ ...rec, answers: { ...rec.answers, [id]: { ...a, retiredKeptBy: from, retiredKeptAt: this.iso() } } });
+    this.publishSoon();
+    return `Recorded: you keep what "${q}" held now.`;
   }
 
   private describe(from: string, src: Record<string, unknown>): string {
@@ -695,6 +780,7 @@ export class Foundations {
     if (typeof src.taught === 'string') return `what ${this.nameOf(from)} says the owner taught it (${src.taught.slice(0, 200)})`;
     if (typeof src.owner === 'string') return `a message said to be the owner's (${src.owner.slice(0, 60)}), which the app has no record of reaching them`;
     if (typeof src.file === 'string') return `the file ${src.file.slice(0, 200)}`;
+    if (typeof src.system === 'string') return `the connected system ${src.system.slice(0, 60)}`;
     if (typeof src.confirmed === 'string') return 'a confirmation only you can give';
     return 'no source';
   }

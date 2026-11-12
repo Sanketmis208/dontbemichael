@@ -7,7 +7,6 @@ import { useHarnessConfig } from '@/hooks/useHarnessConfig';
 import { useStore, type Agent } from '@/store/store';
 import { type EmailCapability, type SendingMode, asSendingMode, mailboxHolder, sendersFrom, sendingMode } from '@shared/mailboxes';
 import { SENDING_LABEL_KEY } from './sendingLabels';
-import { useRtl } from '@/i18n/useDirection';
 import type { StandingApproval } from '@shared/mailProposals';
 import { missionsFor } from '@shared/missions';
 import { quickbooksCapability, type QuickBooksCapability } from '@shared/quickbooks';
@@ -568,10 +567,8 @@ export function RadioRows({ label, value, options, onChange, inline = false }: {
 }) {
   const at = options.findIndex((o) => o.value === value);
   const usable = options.filter((o) => !o.disabled);
-  // Side by side choices run right to left in Arabic, so the arrows mirror.
-  const rtl = useRtl();
-  const forward = inline && rtl ? 'ArrowLeft' : 'ArrowRight';
-  const back = inline && rtl ? 'ArrowRight' : 'ArrowLeft';
+  const forward = 'ArrowRight';
+  const back = 'ArrowLeft';
   const onKey = (e: KeyboardEvent<HTMLDivElement>): void => {
     const step = e.key === 'ArrowDown' || e.key === forward ? 1 : e.key === 'ArrowUp' || e.key === back ? -1 : 0;
     if (!step || usable.length === 0) return;

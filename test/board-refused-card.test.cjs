@@ -16,7 +16,7 @@ const main = fs.readFileSync(path.join(__dirname, '..', 'src', 'main', 'index.ts
 
 test('a First task that cannot go on the board is reported as not done, and the owner is told', () => {
   // Value: protects=the words the owner typed; fails_when=the handler answers ok, as it does when there is nothing to send, so the caller drops them; why_new=review of a strict board read; seam=source pin for the handler
-  const handler = main.slice(main.indexOf("ipcMain.handle('hive:firstTask'"), main.indexOf("ipcMain.handle('hive:addTask'"));
+  const handler = main.slice(main.indexOf("ipcMain.handle('hive:firstTask'"), main.indexOf('/** The digest an answer is recorded by'));
   const retry = handler.slice(handler.indexOf('first.card.id = `${first.card.id}-'));
   assert.match(retry, /if \(!hive\.addTask\(first\.card\)\) \{\n\s+ownerToast\(michaelName\(\), /);
   assert.match(retry, /return \{ ok: false, error: 'the board cannot be read' \};/);

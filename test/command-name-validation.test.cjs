@@ -3,19 +3,17 @@
 /**
  * Engine command-name validation.
  *
- * The engine `command` on a spawn request is untrusted input (orchestrator LLM
- * output, or anything that can write HIVE_ROOT/spawn-requests). Its first token
+ * An engine `command` can be untrusted input (it can come from a saved agent
+ * record or config that something other than the owner wrote). Its first token
  * becomes the executable NAME, and a resolver may interpolate that name into a
  * shell PATH lookup (`$SHELL -ilc "… which <it> …"` on POSIX, `where <it>` on
  * Windows). So only a PLAIN command name is resolved; anything else is refused.
  *
- * The predicate is `isSafeCommandName`, applied at three sites:
+ * The predicate is `isSafeCommandName`, applied at two sites:
  *   1. resolveCommand (shellEnv.ts) — refuses to hand a non-plain name to which;
- *   2. resolveCommandUncached (pty.ts) — the same, and drops shell:true on `where`;
- *   3. the spawn-request intake (index.ts) — refuses a bin that is neither a plain
- *      name nor an absolute path, before any resolution.
+ *   2. resolveCommandUncached (pty.ts) — the same, and drops shell:true on `where`.
  *
- * These tests pin the predicate AND that each of the three sites actually calls
+ * These tests pin the predicate AND that each site actually calls
  * it — a predicate that is correct but never invoked would leave the boundary
  * open while every unit test stayed green.
  */
@@ -25,7 +23,6 @@ const assert = require('node:assert/strict');
 const loadTs = require('./load-ts.cjs');
 
 const { isSafeCommandName } = loadTs('src/main/shellEnv.ts');
-const { buildWorkerLaunch } = loadTs('src/main/workerLaunch.ts');
 
 test('legit engine binary names are accepted', () => {
   for (const name of ['claude', 'codex', 'grok', 'kimi', 'agy', 'qwen', 'opencode',
@@ -61,23 +58,13 @@ test('a path is NOT a plain command name (the resolver early-returns paths befor
   assert.equal(isSafeCommandName('a\\b'), false);
 });
 
-test('the tokenizer still yields a non-plain bin, so the allowlist is load-bearing', () => {
-  // buildWorkerLaunch is pure tokenization; it does NOT validate. The guard at the
-  // spawn-request call site (index.ts) is what rejects a non-plain bin. If this
-  // ever changes so bin comes back constrained, revisit whether the call-site
-  // guard is still needed — but do not remove it on the strength of the tokenizer.
-  const l = buildWorkerLaunch({ requestCommand: 'claude;rest', autoMode: false });
-  assert.equal(l.bin, 'claude;rest');
-  assert.equal(isSafeCommandName(l.bin), false);
-});
-
-// ── each of the three sites actually calls the predicate ─────────────────────
+// ── each site actually calls the predicate ───────────────────────────────────
 // A predicate that passes every unit test still leaves the boundary open if a
-// site forgets to call it. The three sites are the two resolvers (shellEnv.ts and
-// pty.ts) and the spawn-request intake (index.ts). Two of those import electron
-// and cannot load under plain node, so their wiring is asserted against source
-// text — the pattern the rest of this suite uses for main-process wiring. The
-// resolver that CAN load is checked behaviourally.
+// site forgets to call it. The sites are the two resolvers (shellEnv.ts and
+// pty.ts). pty.ts imports electron and cannot load under plain node, so its
+// wiring is asserted against source text — the pattern the rest of this suite
+// uses for main-process wiring. The resolver that CAN load is checked
+// behaviourally.
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -113,14 +100,4 @@ test('pty.ts resolver validates before which/where', () => {
   const guardAt = src.indexOf('if (!isSafeCommandName(command)) return { path: command, found: false };');
   const whichAt = src.indexOf('captureFromLoginShell(`which ${command}`)');
   assert.ok(guardAt > 0 && whichAt > guardAt, 'the guard must precede the `which` interpolation');
-});
-
-test('index.ts validates the bin at the spawn-request intake', () => {
-  const src = readSrc('src/main/index.ts');
-  // The spawn path rejects a bin that is neither a plain name nor an absolute path,
-  // and it does so BEFORE isCommandAvailable(bin) (which itself calls the resolver).
-  assert.match(src, /if \(!isSafeCommandName\(bin\) && !isAbsolute\(bin\)\) \{/);
-  const guardAt = src.indexOf('if (!isSafeCommandName(bin) && !isAbsolute(bin)) {');
-  const availAt = src.indexOf('if (!ptyManager.isCommandAvailable(bin))');
-  assert.ok(guardAt > 0 && availAt > guardAt, 'the guard must precede isCommandAvailable(bin)');
 });
