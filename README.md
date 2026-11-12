@@ -41,9 +41,9 @@ runs on your computer.
 > brings you only the calls that need you.
 
 > [!TIP]
-> **New in 0.3.7: Ask me cards show the pages and files they rest on.**
-> Department chips focus Ask me on one team. In 0.3.6, anything your team finds for you reaches
-> Needs you.
+> **New in 0.3.8: a lighter app.** Features owners never used are gone, and when nothing needs you,
+> Michael offers one tip from your office. In 0.3.7, Ask me cards show the pages and files they
+> rest on.
 
 ## Contents
 
@@ -367,9 +367,10 @@ If `node-pty` fails to load after an Electron upgrade, run `npm install` again.
 
 Setup offers only Claude Code, signed in with a Claude account or an Anthropic API key. The code
 still carries presets for two other agent CLIs (Codex, the ChatGPT engine, and Gemini CLI),
-but this build doesn't offer them. A team member saved on any other engine moves to Claude Code. Some developer features are switched off because business
-owners don't use them: git views, the built in code editor, temporary helper agents, voice, the
-Skills page in Settings (skills keep working), and opening a Terminal in an agent's folder. Each one has a switch in
+but this build doesn't offer them. A team member saved on any other engine moves to Claude Code. The app is in English only.
+Features business owners didn't use were removed in 0.3.8: voice, webhooks, Slack, git views, the
+built in code editor, temporary helper agents and the Skills page (skills keep working). A few
+developer controls, such as opening a Terminal in an agent's folder, are switched off in
 [`src/shared/buildFeatures.ts`](./src/shared/buildFeatures.ts).
 
 ## Contributing
