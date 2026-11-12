@@ -80,7 +80,7 @@ test('one Panel and one Field for every form screen, Edit agent and the hire wiz
 test('Access, Command Center and Office schedule groups are soft panels, on white tab bodies', () => {
   // Value: protects=AS2 to AS4 on TriggerCard's three screens (F1) and R1, a panel never sits on a tinted body; fails_when=the ring or white fill comes back, the fold goes, or a Command Center body turns tinted again; why_new=T2 of app-style-rollout.md; seam=none; no_claim=source pins, not rendered
   const ui = read('src/renderer/src/components/triggers/ui.tsx');
-  const card = ui.slice(ui.indexOf('export function TriggerCard('), ui.indexOf('export function SubCard('));
+  const card = ui.slice(ui.indexOf('export function TriggerCard('), ui.indexOf('/* ──────────────────────────── interval picker'));
   assert.match(card, /background: panelStyle\.background, borderRadius: panelStyle\.borderRadius/);
   assert.doesNotMatch(card, /boxShadow|borderTop|var\(--cth-card\)/, 'no ring, no rule, no white fill');
   assert.match(card, /<span style=\{\{ \.\.\.groupName, display: 'block' \}\}>\{title\}<\/span>/);
@@ -105,19 +105,17 @@ test('the schedule editor, company profile and Add a mailbox use the shared fiel
   const mail = read('src/renderer/src/components/AddMailboxDialog.tsx');
   assert.match(mail, /import \{ Field, Panel, hint \} from '\.\/fieldText';/);
   assert.doesNotMatch(mail, /function Field\(/, 'no copy of its own');
-  for (const loc of ['en', 'ar', 'zh-CN']) {
+  for (const loc of ['en']) {
     const w = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).companyProfile.required;
     assert.ok(w && !/[—–]| - /.test(w), `${loc} required`);
   }
 });
 
-test('every named section uses the group name: Profile, Command Center, Git, Pulse, Workers and the jobs list', () => {
+test('every named section uses the group name: Profile, Command Center, Pulse and the jobs list', () => {
   // Value: protects=AS3 on T5's screens; fails_when=a section name goes back to 10 to 13 px grey or small caps; why_new=T5 of app-style-rollout.md; seam=none; no_claim=source pins, not rendered
   const c = (f) => read(`src/renderer/src/components/${f}.tsx`);
   assert.match(c('ProfileTab'), /<h3 style=\{\{ \.\.\.groupName, margin: '0 0 8px' \}\}>/);
   assert.match(c('CommandCenterPanel'), /<h3 style=\{\{ \.\.\.groupName, marginBottom: 6 \}\}>\{title\}<\/h3>/);
-  assert.match(c('GitTab'), /<h3 style=\{\{ \.\.\.groupName, padding: '10px 10px 4px' \}\}>\{title\}<\/h3>/);
   assert.match(c('pulse/PulseView'), /<h2 style=\{\{ \.\.\.groupName, display: 'flex', gap: 6, alignItems: 'center' \}\}>/);
-  assert.match(c('WorkersTab'), /const sectionHead: React\.CSSProperties = groupName;/);
   assert.match(c('ScheduledJobs'), /const sectionStyle: CSSProperties = groupName;/);
 });

@@ -56,10 +56,6 @@ test('the input array is never mutated in place', () => {
   assert.notEqual(result, input);
 });
 
-test('a provider with no auto-mode flag (custom) is left alone', () => {
-  assert.deepEqual(argsWithAutoModeFlag(['--foo'], true, 'custom'), ['--foo']);
-});
-
 test('codex\'s multi-token auto flag is applied the same way as Claude\'s two-token flag', () => {
   assert.deepEqual(
     argsWithAutoModeFlag(['--model', 'gpt-5.6-sol'], true, 'codex'),

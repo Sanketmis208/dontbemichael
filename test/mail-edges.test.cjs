@@ -14,7 +14,7 @@ const loadTs = require('./load-ts.cjs');
 const {
   PROVIDER_PRESETS, guessServers, mailboxIdFor, secretRefForMailbox, mailAccess, agentMailboxes, mailToolsJustAttached
 } = loadTs('src/shared/mailboxes.ts');
-const { emailCalendarAllowed } = loadTs('src/shared/mcpCatalog.ts');
+const { emailCalendarAllowed } = loadTs('src/shared/claudeConnectors.ts');
 const { MailService, MailError, handleMailRequest, classifyMailError, saveMailbox, removeMailbox, setAgentCapabilities, cannotStoreReason } = loadTs('src/main/mail.ts');
 
 const server = { host: 'h', port: 993, secure: true };

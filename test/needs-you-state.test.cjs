@@ -31,8 +31,8 @@ function runStore(body) {
   return JSON.parse(execFileSync(process.execPath, ['-e', script], { cwd: path.resolve(__dirname, '..'), encoding: 'utf8' }));
 }
 
-test('the right column: closed at launch, a person or a tab shows the panel, Ask me shows the board, close closes; focus mode stays shut', () => {
-  // Value: protects=the right column shows nothing, the board or a person exactly as the owner asked; fails_when=select, openAgentMemory or requestCommandCenterTab set the wrong column, 'human' starts bumping a tab, the launch default reopens the board, or a SHOW_FOCUS_MODE guard goes; why_new=rewritten on rightColumn (eng R5), keeping every check of the needsYouOpen version; seam=none
+test('the right column: closed at launch, a person or a tab shows the panel, Ask me shows the board, close closes', () => {
+  // Value: protects=the right column shows nothing, the board or a person exactly as the owner asked; fails_when=select, openAgentMemory or requestCommandCenterTab set the wrong column, 'human' starts bumping a tab, or the launch default reopens the board; why_new=rewritten on rightColumn (eng R5), keeping every check of the needsYouOpen version; seam=none
   const r = runStore(`
     out.atLaunch = s().rightColumn;
     s().select('pam');
@@ -59,17 +59,6 @@ test('the right column: closed at launch, a person or a tab shows the panel, Ask
   assert.equal(r.afterClose, 'closed', 'intended change: closing collapses the column, not back to the board (D6)');
   assert.deepEqual(r.afterOpen, ['board', { seq: 1, taskId: 't1' }], 'a for you chip opens the board at its ask (D11)');
   assert.deepEqual(r.afterOpenAgain, { seq: 2 }, 'each open asks for focus again (D10)');
-  // Focus mode stays shut in this build, even with a saved preference.
-  const f = runStore(`
-    out.atLaunch = s().fullscreenAgentId;
-    s().setFullscreen('pam');
-    out.afterSet = s().fullscreenAgentId;
-    s().restoreFocusMode();
-    out.afterRestore = s().fullscreenAgentId;
-    s().setFullscreen(null);
-    out.afterClear = s().fullscreenAgentId;
-  `);
-  assert.deepEqual([f.atLaunch, f.afterSet, f.afterRestore, f.afterClear], [null, null, null, null], 'focus mode never opens');
 });
 
 /**

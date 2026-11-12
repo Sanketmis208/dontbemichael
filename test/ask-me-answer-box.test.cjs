@@ -30,7 +30,7 @@ test('an empty box grows to its whole hint, measured on a hidden copy', () => {
 test('a picked option\'s question stays above the box, whole', () => {
   // Value: protects=owner D2: the question stays readable while typing, never clamped; fails_when=it goes back into the placeholder or gets a line clamp; why_new=new; seam=source pin; no_claim=the look
   const src = read('src/renderer/src/components/AskMeTab.tsx');
-  assert.match(src, /\{pickedNote && \(\s*<div dir=\{rtl \? 'auto' : undefined\} data-askme-note style=\{\{[^}]*whiteSpace: 'pre-wrap'/);
+  assert.match(src, /\{pickedNote && \(\s*<div data-askme-note style=\{\{[^}]*whiteSpace: 'pre-wrap'/);
   assert.doesNotMatch(src.slice(src.indexOf('data-askme-note'), src.indexOf('data-askme-note') + 300), /WebkitLineClamp/);
   assert.match(src, /pickedNote \? translate\('askMe\.yourAnswer'\)/, 'the box itself says Your answer');
 });
@@ -66,8 +66,8 @@ test('Michael asks for a file to be attached on the card, never saved and named'
 });
 
 test('the paperclip label exists in every language, with no dashes', () => {
-  // Value: protects=copy in en, ar and zh-CN; fails_when=a locale lacks it or a dash slips in; why_new=new copy; seam=none; no_claim=translation quality
-  for (const loc of ['en', 'ar', 'zh-CN']) {
+  // Value: protects=the paperclip copy; fails_when=a locale lacks it or a dash slips in; why_new=new copy; seam=none; no_claim=translation quality
+  for (const loc of ['en']) {
     const askMe = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).askMe;
     assert.equal(typeof askMe.addFile, 'string', loc);
     assert.doesNotMatch(askMe.addFile, /[–—]| - /);

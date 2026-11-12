@@ -40,8 +40,7 @@ test('every --cth token the renderer uses is defined', () => {
 });
 
 // #6E1423 is a dark red with no dark theme value: on the dark card it sits near
-// 1.4:1, so the public webhook warning and the office folder error in Settings
-// all but vanished. Warning text takes --cth-coral-text, which has both.
+// 1.4:1, so the office folder error in Settings all but vanished. Warning text takes --cth-coral-text, which has both.
 test('no warning text is drawn in the light only #6E1423', () => {
   const hits = [];
   for (const f of sourceFiles(RENDERER)) {

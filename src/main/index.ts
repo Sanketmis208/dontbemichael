@@ -1,6 +1,5 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, net, powerMonitor, powerSaveBlocker, screen, shell, Notification } from 'electron';
 import { ownerLedger } from '../shared/taskLedger';
-import { ownValue } from '../shared/ownValue';
 import { cutText } from '../shared/cutText';
 import { MAX_NAMES } from '../shared/askFiles';
 import { copyableLink, DEFAULT_COPY_LINK_LABEL, menuLabel } from '../shared/linkMenu';
@@ -8,16 +7,15 @@ import { readCodexContext } from './codexUsage';
 import { execFile, spawn } from 'node:child_process';
 import {
   rmSync, existsSync, readFileSync, readdirSync, statSync, writeFileSync,
-  unlinkSync, mkdirSync, renameSync, createWriteStream, copyFileSync, lstatSync,
+  unlinkSync, mkdirSync, renameSync, lstatSync,
   readlinkSync, symlinkSync, realpathSync, chmodSync, watch as watchFs
 } from 'node:fs';
 import { promises as fsPromises } from 'node:fs';
-import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
+import { randomBytes, createHash } from 'node:crypto';
 import { join, resolve, sep, basename, dirname, isAbsolute } from 'node:path';
 import { homedir, tmpdir, constants as osConstants } from 'node:os';
-import { request as httpsRequest } from 'node:https';
 import { PtyManager, type ProcessLaunch, type SpawnOptions } from './pty';
-import { resolveCommand as resolveCliCommand, isSafeCommandName, userShellPath, userShellDoNotTrack } from './shellEnv';
+import { resolveCommand as resolveCliCommand, userShellPath, userShellDoNotTrack } from './shellEnv';
 import { buildPtyEnv } from './ptyEnv';
 import { isSameOrInside } from './pathInside';
 import { extractDocumentTextApart } from './docTextProcess';
@@ -40,14 +38,13 @@ import { agentAccessSummary } from '../shared/agentAccess';
 import { decodeCaseLogo, drawCaseSvg } from './caseLogoImage';
 import { RESEARCH_DESK_DIR, RESEARCH_ID, RESEARCH_NAME, RESEARCH_WORK_STYLE } from '../shared/research';
 import { initAutoUpdater, abortPendingRestart } from './updater';
-import { RealtimeFloorWatcher } from './realtimeFloorWatcher';
 import {
   readConfig, damagedConfigCopy, writeConfig, setAgentTokenCap, resetConfig, onConfigWritten, ensureHarnessHome, ensureClaudePermissionsAccepted, approveClaudeApiKey,
-  modelForRole, OPS_STANDUP_MISSION, OPS_STANDUP_BUILT_IN_BODIES, OPS_STANDUP_FOCUS, OPS_STANDUP_BUILT_IN_FOCUSES, HEARTBEAT_MISSION, heartbeatMessage, COMPACT_MAINTENANCE_MISSION, FOUNDATIONS_CHECK_MISSION, FOUNDATIONS_CHECK_BUILT_IN_FOCUSES, FOUNDATIONS_CHECK_FOCUS, type HarnessConfig, type ScheduledMission
+  modelForRole, OPS_STANDUP_MISSION, OPS_STANDUP_BUILT_IN_BODIES, OPS_STANDUP_FOCUS, OPS_STANDUP_BUILT_IN_FOCUSES, HEARTBEAT_MISSION, heartbeatMessage, FOUNDATIONS_CHECK_MISSION, FOUNDATIONS_CHECK_BUILT_IN_FOCUSES, FOUNDATIONS_CHECK_FOCUS, type HarnessConfig, type ScheduledMission
 } from './config';
 import { terminalLaunches } from './terminalAtFolder';
-import { listDir, readFileText, readFileBinary, writeFileText, statAbs, expandTilde, askFileVerdict, askFileByName, askFileRootsFor, resolveAskFileRoots, readAskFile, isPackageDir, type AskFileAgent } from './fs';
-import { answerMessages, cardConversation, mergeHumanQA, MICHAEL_ID, raiserOf } from '../shared/askMeRouting';
+import { readFileBinary, statAbs, expandTilde, askFileVerdict, askFileByName, askFileRootsFor, resolveAskFileRoots, readAskFile, isPackageDir, type AskFileAgent } from './fs';
+import { cardConversation, mergeHumanQA, MICHAEL_ID } from '../shared/askMeRouting';
 import { FIRST_TASK_EDITED_MAX, firstTaskCard, firstTaskCardFromText } from '../shared/firstTask';
 import { answerKey, catchUpRequests, OwnerAnswerRetry, ownerWorkOrder } from '../shared/ownerRequests';
 import {
@@ -66,12 +63,8 @@ import {
 } from '../shared/missions';
 import { MICHAEL_WORK_STYLE } from '../shared/michaelWorkStyle';
 import { makeScheduleRequests } from './scheduleRequests';
-import {
-  getBranch, getStatus, getLog, getBranches, getAheadBehind, isRepo, getDiff, mainRepoRoot,
-  addWorktree, removeWorktree, worktreeHasUnintegratedWork, worktreeIsGcSafe,
-  getLogGraph, getCommitFiles, getFileAtRev, compareRefs, listWorktrees, checkoutRef
-} from './git';
-import { linkWorktreeDeps, unlinkWorktreeDeps } from './worktreeDeps';
+import { getBranch, isRepo, addWorktree, removeWorktree } from './git';
+import { linkWorktreeDeps } from './worktreeDeps';
 import { HiveManager, type AgentMeta, type HiveMessage, type HiveTask } from './hive';
 import { HookServer, type PlanSignal } from './hooks';
 import { OfficeBreak, type OfficeBreakState } from './officeBreak';
@@ -103,27 +96,9 @@ import { backfilled, runBackfill } from './pulseBackfill';
 import { readTeamMemory } from './teamMemory';
 import { readClaudePlan } from './claudeAccount';
 import { planPrice, PLAN_LABELS, PLAN_PRICES } from '../shared/claudePlan';
-import { claudeProjectsRoot, projectDir, projectDirs, readAgentUsage, readContextTokens, seedSessionTranscript, resolveSessionCwd } from './transcript';
-import { listIssues, listCIRuns } from './github';
-import { SlackWebhookServer, SlackReplyServer, postSlackReply, type SlackEventFile } from './slack';
-import {
-  WebhookServer,
-  type WebhookDispatch, type WebhookEndpointRef, type WebhookInbound, type WebhookTaskStatus
-} from './webhook';
-import {
-  classifyInboundKind, isAutoAllowed,
-  AUTO_COMPACT_WINDOW_TOKENS, DEFAULT_CONTEXT_TRIGGER, DEFAULT_ORG_TRIGGER, DEFAULT_TRIGGER_MODE, DEFAULT_WEBHOOK_SCHEMA,
-  type ContextRule, type ContextTriggerConfig, type InboundKind, type OrgTriggerConfig,
-  type TriggerHistoryEntry, type TriggerMode, type WebhookTrigger
-} from '../shared/triggers';
-import {
-  appendTriggerHistory, clearTriggerHistory, listTriggerHistory, updateTriggerHistory
-} from './triggerHistory';
-import { transcribeWithGroq, DEFAULT_GROQ_MODEL } from './freeflow';
-import { registerRealtimeIpc } from './realtime';
-import { registerRealtimeActionIpc } from './realtimeActions';
-import { initCompletionWatcher } from './realtimeCompletionWatcher';
-import type { TaskCard, InboxMessage } from './realtimeCompletionWatcher';
+import { claudeProjectsRoot, projectDir, projectDirs, readContextTokens, seedSessionTranscript, resolveSessionCwd } from './transcript';
+import { listIssues } from './github';
+import { AUTO_COMPACT_WINDOW_TOKENS } from '../shared/triggers';
 import { TelemetryCollector } from './telemetry';
 import { CostLedgerTotals } from './costLifetime';
 import { RUN_COMPARE_MODEL, RUN_COMPARE_TIMEOUT_MS, RunCompare } from './runCompare';
@@ -132,7 +107,7 @@ import { CASE_DRAFT_TIMEOUT_MS, CaseStudyService, caseInput, savePaths } from '.
 import { readSiteLogo } from './siteLogo';
 import type { CaseFont } from '../shared/caseStudy';
 import { CostLedgerStore } from './costLedger';
-import { analytics, dntSet, isRendererMessageSurface } from './analytics';
+import { dntSet } from './doNotTrack';
 import { createFailureReporter, FLUSH_MS } from './failureReport';
 import { breakerArm, crashContextFor, loopAgentContext, loopAgentDetail } from '../shared/failureReport';
 import { createFailureSender, SEND_EVERY_MS } from './failureSender';
@@ -141,7 +116,6 @@ import { createFailureSender, SEND_EVERY_MS } from './failureSender';
  *  release CI from FAILURE_REPORT_KEY, '' in every other build. */
 declare const __REPORT_KEY__: string;
 import { writeFileAtomic } from './atomicFile';
-import type { SpawnFailReason } from './analytics';
 import { IntegrationBroker } from './integrationBroker';
 import * as integrations from './integrations';
 import { MailService, handleMailRequest, saveMailbox, removeMailbox, setAgentCapabilities, setSendOnly, cannotStoreReason, classifyMailError, type AddMailboxInput } from './mail';
@@ -155,21 +129,19 @@ import { terminalOverflowEvent } from '../shared/terminalOverflow';
 import { PROVIDER_PRESETS, grantPaused, hasMailTools, mailAccess, mailboxAddress, secretRefForMailbox, sendOnlyGrant, sendingFor, sendingMode, sendingWords, type SendingMode } from '../shared/mailboxes';
 import { levelFor } from '../shared/agentDefinition';
 import { claudeBinFor, readClaudeMcpList } from './claudeMcpList';
-import { INTEGRATIONS_MCP_SERVER, connectorCarryOver, isEmailCalendarKey, isMailConnectorKey, isQuickBooksKey, renamedKeys, spawnConnectorPlan, usableConnectors, type SpawnConnectorPlan } from '../shared/claudeConnectors';
+import { INTEGRATIONS_MCP_SERVER, connectorCarryOver, emailCalendarAllowed, isEmailCalendarKey, isMailConnectorKey, isQuickBooksKey, renamedKeys, spawnConnectorPlan, usableConnectors, type SpawnConnectorPlan } from '../shared/claudeConnectors';
 import { quickbooksAccessToSave } from '../shared/quickbooks';
-import { emailCalendarAllowed } from '../shared/mcpCatalog';
 import { agentIntegrations, fillSavedCall, hasIntegrationTools, integrationLevel, validateBaseUrl, buildAuthHeaders, resolveUpstreamUrl, secretRefFor, withIntegrationLevel, withoutIntegration, INTEGRATION_TEMPLATES } from '../shared/integrations';
 import { RosterStore } from './roster';
 import { PASTE_KEEP_MS, pastesDir, savePaste, sweepOldPastes } from './pastes';
 import { CASE_STUDY_DIR, CHECK_FOLDERS, RUN_COMPARE_DIR, STANDING_CHECK_DIR, TRUST_CHECK_DIR, eraseOfficeData } from './factoryReset';
 import { autoMemoryFolders, eraseMemoryTargets, foldersFromRoster, gitTopOf, idsFromCostRows, idsFromRecord, memberIdsIn, memoryResetTargets } from './memoryReset';
 import { groupMembers, hardKillTree, isAlive, KILL_GRACE_MS, snapshotRemains } from './procKill';
-import { buildWorkerLaunch } from './workerLaunch';
 import { ControlRegistry } from './control';
 import { WorkerWakeWatchdog, type WorkerWakeFacts } from './workerWake';
 import { inboxNudgeText } from '../shared/hiveNudge';
 import { resolveGodName } from '../shared/godIdentity';
-import { COLLECT_USAGE_STATS, SHOW_DELIVERY_SWITCH, SHOW_VOICE, SHOW_SLACK, SHOW_MAILBOXES } from '../shared/buildFeatures';
+import { SHOW_DELIVERY_SWITCH, SHOW_MAILBOXES } from '../shared/buildFeatures';
 import { fetchHireManifest, readHireManifestFiles } from './hire';
 import { parseHireDeepLink, type HireManifest } from '../shared/hire';
 import { ClosingTimeController } from './closingTime';
@@ -189,18 +161,16 @@ import {
 import { buildMissingCliScript, chooseInstallRung, installSucceeded } from './cliInstall';
 import { detectNodeVersion, nodeIsUsable, resolveNodeInstaller } from './nodeInstall';
 import { toolCatalog, type ToolStatus } from '../shared/toolCatalog';
-import { listLocalSkills, loadCatalog, installSkill, uninstallSkill, type LocalSkill } from './skills';
 import { loadHero } from './hero';
 import { loadModelCatalog } from './modelCatalog';
 import { exitLine, type StoppedMember } from '../shared/agentExit';
 import { claudeCliFlags, claudeCliVersion, lastClaudeCliVersion } from './claudeCliVersion';
-import { ALLOW_TEMP_WORKERS, AUTO_FAILURE_REPORTS } from '../shared/buildFeatures';
+import { AUTO_FAILURE_REPORTS } from '../shared/buildFeatures';
 import { APP_NAME, APP_DATA_DIR, APP_URL_SCHEME } from '../shared/appName';
 import { copyOfficeData, homeFolderStatus, homeReadyAtLaunch } from './homeFolder';
 import { backfillOfficeRecord, findOffice, folderLayoutFor, isUsableTeamFolder, syncOfficeRecord } from './officeFile';
 import { folderPolicy, AGENT_TMP_DIR, agentTmpName, researchFolderPolicy, withAgentTmpWall, withMemberWall, RESEARCH_TMP_DIR, shellTempWalls, withResearchWall, type AgentFolderPolicy, type FolderLayout } from '../shared/folderAccess';
 import { sandboxNetwork } from '../shared/webAccess';
-import { MCP_CATALOG } from '../shared/mcpCatalog';
 import { legacyBusinessFolder, touchesOffice } from '../shared/officeRecord';
 import { cleanCompanyProfile, companyProfileContext } from '../shared/companyProfile';
 import { scheduledRunBody } from '../shared/scheduleMessage';
@@ -220,6 +190,8 @@ import { copyImage, copyRich } from './clipboardCopy';
 import { createReporter } from './reportProblem';
 import { createMailboxNotes, newlyHeld, GRANT_NOTES_FILE, type PendingGrant } from './mailboxNotes';
 import { PromptSubmits, confirmSubmit } from '../shared/submitConfirm';
+import { createBootWatchdog, type BootWatchdog } from './bootWatchdog';
+import { dismissNotice, emptyDegraded, noteStart, shownNotices, type DegradedNotice } from '../shared/degradedNotices';
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
 
@@ -451,7 +423,7 @@ ipcMain.handle('cliUpdate:current', () => lastCliUpdate);
  *  in this PTY; when it exits cleanly the exit handler re-runs the SAME spawn (with
  *  install disabled) so the freshly-installed CLI launches in the SAME pty/window —
  *  no user click. Cleared the moment it's consumed, so it can never loop installs. */
-const pendingInstallRelaunch = new Map<string, { opts: AgentSpawnOptions; owner: Electron.WebContents | null; bin: string; rung: string }>();
+const pendingInstallRelaunch = new Map<string, { opts: AgentSpawnOptions; owner: Electron.WebContents | null; bin: string }>();
 const hive = new HiveManager(
   () => readConfig().harnessHome,
   (channel, payload) => {
@@ -463,7 +435,7 @@ const hive = new HiveManager(
 // #7C — operator control state (pause/gate/steer/halt), read by the HookServer
 // when deciding hook returns.
 const control = new ControlRegistry();
-// A steer to Research, typed or from the voice assistant, reaches it as a
+// A steer to Research reaches it as a
 // message from the owner through its trust layer (ship review D6.3).
 control.setSteerDivert((id, text) => {
   if (id !== RESEARCH_ID) return false;
@@ -481,9 +453,8 @@ const telemetry = new TelemetryCollector({
   resolveSessionId: (agentId) => hive.lastSession(agentId),
   resolveCodexHome: (agentId) => hive.codexHome(agentId)
 });
-// Usage provider (Seam 1) — the INTEGRATION swap: Oscar's telemetry collector (#7)
-// IS the provider, replacing Lane A's interim StubUsageProvider. Same
-// getAgentUsage(agentId) pull seam, so the breaker + cost ledger consumers are
+// Usage provider (Seam 1): Oscar's telemetry collector (#7) IS the provider,
+// through the getAgentUsage(agentId) pull seam, so the breaker + cost ledger consumers are
 // untouched; telemetry has a transcript fallback built in, so it works before any
 // live OTel arrives.
 const usageProvider: UsageProvider = telemetry;
@@ -937,7 +908,7 @@ function foundationsForAgent(agentId: string): string | null {
   if (agentId === team.godId || agentId === 'god') return michaelFoundations(foundations.read(), team.office, team.nameOf);
   return sectionFor(foundations.read(), team.jobs[agentId] ?? [], team.nameOf);
 }
-// Whether points are flowing, for telemetry:health and the stall warning (T9).
+// Whether points are flowing, for the batch log and the stall warning (T9).
 const pulseHealth = new PulseHealth();
 pulseTelemetry.onRecord = (office) => pulseHealth.point(office);
 /** One processor pass, noted for the health readout; a pass that read
@@ -1081,7 +1052,7 @@ hive.logObserver = (e) => {
 };
 hive.tasksObserver = (tasks) => pulseTelemetry.tasks(tasks as never);
 /** The PRIMARY window — the one running the hive/god orchestration and the sink
- *  for process-global timer events (missions, breaker, Slack ingestion). It is
+ *  for process-global timer events (missions, breaker). It is
  *  the most-recently-focused live window, so global events follow the user.
  *  Additional "floor" windows are tracked in `allWindows` below. */
 let mainWindow: BrowserWindow | null = null;
@@ -1098,24 +1069,6 @@ const worktreePaths = new Map<string, string>();
 /** id → the original repo cwd the worktree was created from (needed to run
  *  `git worktree remove` from the parent tree, not the worktree itself). */
 const worktreeOrigins = new Map<string, string>();
-
-/** A live god-triggered ephemeral worker, tracked from spawn to teardown. */
-interface WorkerRec {
-  workerId: string;       // == the PTY id == hive agent id (`worker-<reqId>`)
-  reqId: string;          // the spawn-request id
-  name?: string;          // display name (for the worker tab)
-  slack?: { channel: string; thread_ts: string };
-  baseBranch: string;     // the branch its worktree was cut from (for ahead-of-base)
-  spawnedAt: number;      // epoch ms
-  releasing?: boolean;    // kill issued; awaiting teardownPty (skip re-processing)
-  /** Per-worker TOTAL-token cap from the spawn-request (overrides the config
-   *  default). 0/undefined = no per-request cap. P4 plumbing — unlimited today. */
-  tokenCap?: number;
-}
-/** Live ephemeral workers by id. Populated by the spawn-request watcher; consulted
- *  by teardownPty so a finished/crashed/reaped worker's worktree is PRESERVED (not
- *  force-removed) when it holds unintegrated work — god is the sole integrator. */
-const liveWorkers = new Map<string, WorkerRec>();
 
 /** The loopback secret broker (Phase 2). Workers reach registered integrations through
  *  it without ever seeing a credential. getRecord/getSecret are injected so the broker
@@ -1364,8 +1317,9 @@ const integrationBroker = new IntegrationBroker({
   mail: SHOW_MAILBOXES ? (agentId, op, body) => handleMailRequest(mailService, { memberFolder: attachmentFolder, documentText: attachmentText, getConfig: () => readConfig(), audit: (event) => { try { hive.appendLog(event); } catch { /* best-effort */ } }, organized: (moved) => hive.recordOrganized(moved), proposals: mailApprovals, fitCheck: standingFit, present: memberPresent, log: (line) => console.log(line), tellMichael: (subject, text) => { if (hive.enabled()) hive.send({ to: hiveGodId(), act: 'inform', subject, body: text }, 'mail'); } }, agentId, op, body) : undefined
 });
 
-/** Absolute path to the bundled md-mail MCP server (same resolution as the
- *  Slack helper below). */
+/** Absolute path to the bundled md-mail MCP server. Packaged: under
+ *  `process.resourcesPath` (electron-builder extraResources); dev: the repo's
+ *  `resources/` dir. */
 function mdMailScriptPath(): string {
   return app.isPackaged ? join(process.resourcesPath, 'md-mail-mcp.cjs') : join(app.getAppPath(), 'resources', 'md-mail-mcp.cjs');
 }
@@ -1460,17 +1414,9 @@ function noticePausedGrants(): void {
   }
 }
 
-/** BYOK backend model-providers whose API keys the non-Claude CLI engines
- *  (OpenCode/Crush/pi/qwen) read from standard env vars. Keys are stored
- *  WRITE-ONLY in the same encrypted secret broker as integrations, under
- *  `apikey:<backend>`, and materialized MAIN-ONLY at spawn (never over IPC). */
-const BACKEND_KEY_ENV: Record<string, string> = {
-  anthropic: 'ANTHROPIC_API_KEY',
-  openai: 'OPENAI_API_KEY',
-  google: 'GEMINI_API_KEY',
-  openrouter: 'OPENROUTER_API_KEY',
-  groq: 'GROQ_API_KEY'
-};
+/** Where the Anthropic API key Claude signs in with is kept: WRITE-ONLY in the
+ *  same encrypted secret broker as integrations, under `apikey:anthropic`, and
+ *  read MAIN-ONLY at spawn (never over IPC). */
 const providerKeyRef = (backend: string): string => `apikey:${backend}`;
 
 /** Claude's sign in for the team when the owner chose an API key in Get Michael
@@ -1481,23 +1427,6 @@ function claudeAuthEnv(): Record<string, string> {
   const key = integrations.getSecret(providerKeyRef('anthropic'));
   return key ? { ANTHROPIC_API_KEY: key } : {};
 }
-
-/** A worker worktree that teardown PRESERVED because it held unintegrated work.
- *  Tracked so the GC sweep can reclaim it (+ its scratch dir) once the work lands
- *  in base or the worktree is removed by hand — see gcPreservedWorktrees(). */
-interface PreservedWorktree {
-  workerId: string;
-  wtPath: string;
-  origCwd: string;        // the parent repo to run `git worktree remove` from
-  baseBranch: string;     // re-checked against this for "integrated yet?"
-  scratchDir: string | null; // HIVE_ROOT/agents/<workerId> — removed alongside the worktree
-  slack?: { channel: string; thread_ts: string };
-  preservedAt: number;    // epoch ms
-}
-/** Preserved worker worktrees awaiting integration, keyed by worktree path. The GC
- *  sweep drains this: an entry is removed (worktree + scratch GC'd) only when the
- *  work is provably integrated, or when the worktree is already gone from disk. */
-const preservedWorktrees = new Map<string, PreservedWorktree>();
 
 /**
  * Tear down everything tied to a PTY id: archive its hive agent, remove its
@@ -1536,19 +1465,12 @@ function pausePty(id: string): void {
   try { breaker.forget(agentId); } catch { /* best-effort */ }
   // The restart is a new terminal with its own usage counter.
   try { telemetry.forgetAgent(agentId); } catch { /* best-effort */ }
-  try { hive.stopProxyBridge(agentId); } catch { /* best-effort */ }
   // Closing time stops waiting for it; the keep awake follows the terminals.
   try { closingTime.refresh(agentId); } catch (e) { console.error('[closing-time] refresh:', e); }
   syncKeepAwake();
 }
 
 function teardownPty(id: string, opts: { keepWorktree?: boolean } = {}): void {
-  // Ephemeral-worker flag, read BEFORE the cleanup below deletes the entry. All
-  // worker deaths (done-release, idle/token reap, manual stop, crash) funnel
-  // through here, so this is the one place their floor card gets archived
-  // (workers card via the hive:agentSpawned broadcast in processSpawnRequest).
-  // pty id == worker id == agent id for workers.
-  const wasWorker = liveWorkers.has(id);
   // A terminal the watch stopped is still its member's (pausePty).
   const agentId = ptyToAgent.get(id) ?? pausedPty.get(id);
   pausedPty.delete(id);
@@ -1570,9 +1492,6 @@ function teardownPty(id: string, opts: { keepWorktree?: boolean } = {}): void {
     try { breaker.forget(agentId); } catch { /* best-effort */ }
     // A replacement using this id needs a new usage counter, not the dead PTY's.
     try { telemetry.forgetAgent(agentId); } catch { /* best-effort */ }
-    // W1 — kill this agent's proxy-bridge sidecar (qwen), if any, so a dead
-    // PTY never leaves an orphan loopback listener. No-op for non-proxy agents.
-    try { hive.stopProxyBridge(agentId); } catch (e) { console.error('[hive] stopProxyBridge failed:', e); }
     if (hive.enabled()) {
       try { hive.setArchived(agentId, true); } catch (e) { console.error('[hive] setArchived failed:', e); }
     }
@@ -1585,29 +1504,9 @@ function teardownPty(id: string, opts: { keepWorktree?: boolean } = {}): void {
     const origCwd = worktreeOrigins.get(id) ?? wtPath;
     worktreePaths.delete(id);
     worktreeOrigins.delete(id);
-    // Ephemeral workers get a SAFETY-GATED teardown: never auto-remove a worktree
-    // that holds unintegrated work. This sits INSIDE teardownPty so it covers ALL
-    // teardown routes — a worker that finished (controller kill), crashed, or was
-    // idle-reaped all land here. Normal agents keep the immediate force-remove.
-    const worker = liveWorkers.get(id);
-    if (worker) {
-      liveWorkers.delete(id);
-      void finalizeWorkerWorktree(wtPath, origCwd, worker);
-    } else {
-      void removeWorktree(origCwd, wtPath)
-        .then(r => { if (!r.ok) console.error('[worktree] removeWorktree failed:', r.error); })
-        .catch(e => console.error('[worktree] removeWorktree threw:', e));
-    }
-  }
-  // A worker whose isolation failed (non-repo cwd) has no worktree to gate above —
-  // still clear its tracking entry so the controller stops watching a dead PTY.
-  // A restart keeps it, so its later teardown still goes through the gate.
-  if (!opts.keepWorktree && liveWorkers.has(id)) liveWorkers.delete(id);
-  // Archive the dead worker's floor card (mirrors killAgent's voice-kill path;
-  // the renderer's archiveAgent is a no-op if the card is already gone). NOT
-  // done for regular agents: their kill flows already manage their own card.
-  if (wasWorker && !opts.keepWorktree) {
-    try { liveWebContents()?.send('hive:agentArchived', { id }); } catch { /* window torn down */ }
+    void removeWorktree(origCwd, wtPath)
+      .then(r => { if (!r.ok) console.error('[worktree] removeWorktree failed:', r.error); })
+      .catch(e => console.error('[worktree] removeWorktree threw:', e));
   }
   // A terminal that ends during closing time leaves the dialog's list at once.
   // Best-effort: a failure here must never break the teardown.
@@ -1615,89 +1514,6 @@ function teardownPty(id: string, opts: { keepWorktree?: boolean } = {}): void {
   syncKeepAwake();
 }
 
-/** Send an inform to the god agent (the human's proxy). The ephemeral-worker
- *  controller uses this to surface every terminal failure AND to carry the Slack
- *  {channel,thread_ts} so god can post a 'couldn't complete' reply — closing the
- *  Slack loop (the success path is the worker replying in-thread itself). */
-function informGod(subject: string, body: string, slack?: { channel: string; thread_ts: string }): void {
-  try {
-    const slackLine = slack
-      // The bundled-node launcher, spelled as an ABSOLUTE PATH — NOT bare `node`
-      // (absent from the PATH of any machine whose node comes from nvm) and NOT
-      // `$HIVE_NODE` (POSIX-only: cmd.exe/PowerShell expand it to nothing, so the
-      // whole reply command was dead on Windows).
-      ? `\n\n[SLACK] Close the loop — post a reply to channel ${slack.channel} thread ${slack.thread_ts} via:\n  "${hive.nodeCommand()}" "${slackReplyScriptPath()}" --channel ${slack.channel} --thread ${slack.thread_ts} --text "<your message>"`
-      : '';
-    hive.send({ to: 'god', act: 'inform', subject, body: body + slackLine }, 'ephemeral-worker');
-  } catch (e) {
-    console.error('[worker] informGod failed:', e);
-  }
-}
-
-/** Gated worktree teardown for an ephemeral worker: remove it ONLY when it holds no
- *  unintegrated work; otherwise leave it (and its branch) in place and ping god, the
- *  sole integrator. Async + best-effort; on any uncertainty it KEEPS the worktree
- *  (fail-safe — never auto-discard possibly-valuable work). */
-async function finalizeWorkerWorktree(wtPath: string, origCwd: string, worker: WorkerRec): Promise<void> {
-  try {
-    const deps = await unlinkWorktreeDeps(origCwd, wtPath);
-    if (!deps.ok) console.error('[worktree] dependency unlink failed:', deps.error);
-    const work = await worktreeHasUnintegratedWork(wtPath, worker.baseBranch);
-    if (work.keep) {
-      console.warn(`[worker] PRESERVING worktree with unintegrated work: ${wtPath} (${work.detail})`);
-      // Track it so the GC sweep can reclaim it (+ scratch dir) once integrated —
-      // the worker is gone from liveWorkers by now, so its identity lives here.
-      preservedWorktrees.set(wtPath, {
-        workerId: worker.workerId, wtPath, origCwd, baseBranch: worker.baseBranch,
-        scratchDir: workerScratchDir(worker.workerId), slack: worker.slack, preservedAt: Date.now()
-      });
-      informGod(
-        `[worker worktree preserved] ${worker.workerId}`,
-        `Ephemeral worker ${worker.workerId} ended but its worktree holds unintegrated work, so it was NOT auto-removed (you are the sole integrator).\n`
-        + `Worktree: ${wtPath}\nBranch: ${work.branch}\nState: ${work.detail}\n`
-        + `Review/merge it — it will be auto-reclaimed once its work lands in ${worker.baseBranch}, or remove it now with: git -C "${origCwd}" worktree remove "${wtPath}"`,
-        worker.slack
-      );
-      return;
-    }
-    const r = await removeWorktree(origCwd, wtPath);
-    if (!r.ok) { console.error('[worker] removeWorktree failed:', r.error); return; }
-    // Worktree is gone (clean/integrated at teardown), but DEFER its scratch-dir
-    // cleanup to the throttled GC sweep rather than deleting it synchronously here:
-    // HIVE_ROOT/agents/<id> holds the worker's memory.md, which the owner's
-    // views still read for a while after it stops. Register
-    // it (its worktree path is now absent) so the sweep's path-gone branch reclaims
-    // the scratch after a window — same throttled path the preserved case uses.
-    preservedWorktrees.set(wtPath, {
-      workerId: worker.workerId, wtPath, origCwd, baseBranch: worker.baseBranch,
-      scratchDir: workerScratchDir(worker.workerId), slack: worker.slack, preservedAt: Date.now()
-    });
-  } catch (e) {
-    console.error('[worker] finalizeWorkerWorktree threw (worktree left in place):', e);
-  }
-}
-
-/** The hive scratch dir for a worker (its inbox/outbox/memory): HIVE_ROOT/agents/<id>.
- *  Null when there's no hive root. */
-function workerScratchDir(workerId: string): string | null {
-  const root = hive.root();
-  return root ? join(root, 'agents', workerId) : null;
-}
-
-/** Best-effort removal of a worker's scratch (hive agent) dir. Guarded to ONLY ever
- *  delete a path that resolves to exactly HIVE_ROOT/agents/<workerId> and never a
- *  still-live worker — so a crafted/mismatched id can't escape the agents root. */
-function removeWorkerScratch(workerId: string): void {
-  if (liveWorkers.has(workerId)) return; // never wipe a live worker's mailbox
-  const dir = workerScratchDir(workerId);
-  const root = hive.root();
-  if (!dir || !root) return;
-  const agentsRoot = join(root, 'agents');
-  // Path-safety: the resolved dir must sit directly under agents/ with basename == id.
-  if (resolve(dir) !== join(resolve(agentsRoot), basename(dir)) || basename(dir) !== workerId) return;
-  try { rmSync(dir, { recursive: true, force: true }); }
-  catch (e) { console.error('[worker] removeWorkerScratch failed:', e); }
-}
 // A natural PTY exit must run the same teardown as an explicit kill — EXCEPT when
 // the PTY was the missing-CLI installer: a clean exit there means the engine CLI was
 // just installed, so auto restart-and-continue by re-running the SAME spawn into the
@@ -1711,9 +1527,6 @@ ptyManager.setExitHandler((id, exitCode, info) => {
   if (isEngineSetupPty(id)) {
     // The next sign in read starts after this, never joining an older one.
     claudeAuth.invalidate();
-    if (id === ENGINE_INSTALL_PTY) {
-      analytics.track('agent_install_finished', { provider: 'claude', rung: 'native', outcome: claudePathFast() ? 'agent_launched' : 'install_failed' });
-    }
     const changed = (): void => {
       try { liveWebContents()?.send('engineSetup:changed', { id, exitCode: exitCode ?? null }); } catch { /* window gone */ }
     };
@@ -1766,11 +1579,7 @@ ptyManager.setExitHandler((id, exitCode, info) => {
   const pending = pendingInstallRelaunch.get(id);
   if (pending) {
     pendingInstallRelaunch.delete(id);
-    // Activation funnel: did the auto-installer actually complete? A non-zero exit
-    // is the Linux-installer-cannot-finish-unattended signal that used to be silent.
-    const provider = pending.opts.provider ?? inferAgentProvider(pending.opts.command, undefined);
     if (installSucceeded(exitCode, () => ptyManager.isCommandAvailable(pending.bin))) {
-      analytics.track('agent_install_finished', { provider, rung: pending.rung, outcome: 'agent_launched' });
       // Re-arm the renderer's pooled terminal (clear the "process exited" line +
       // re-enable input) so the freshly-spawned CLI paints onto a clean, typeable
       // grid, then re-run the normal spawn — which now finds the installed binary.
@@ -1781,7 +1590,6 @@ ptyManager.setExitHandler((id, exitCode, info) => {
     }
     // Install failed (non-zero exit, or the CLI still can't be found); leave its
     // honest manual-fix message on screen.
-    analytics.track('agent_install_finished', { provider, rung: pending.rung, outcome: 'install_failed' });
   }
   teardownPty(id);
 });
@@ -1929,57 +1737,6 @@ function syncMissions(): void {
     }, plan.firstDelayMs);
     missionTimers.set(m.id, entry);
   }
-}
-
-// ─── Context trigger (auto-compact / auto-clear own their own timers) ────────
-// Compaction used to ride on a mission (`compact-maintenance`), which meant the
-// operator had TWO competing controls for one behaviour — a schedule with an
-// interval and a trigger with a cadence. The mission is retired (see the
-// retirement migration in ensureDefaultMissions); these timers are the single
-// remaining source of scheduled context maintenance.
-//
-// Main owns only the CADENCE. The pressure gate (`minContextPct`) needs each
-// agent's live context usage, which only the renderer has, so the whole rule
-// rides along in the event and the renderer decides which agents actually get
-// the command. That split is why the payload carries the rule rather than a bare
-// "go" signal.
-
-/** Timers for the two halves, keyed by action. Same two-phase shape as
- *  `missionTimers` (a setTimeout for the remaining time, then a steady interval)
- *  so a partially-elapsed cadence survives a re-arm. */
-const contextTimers = new Map<'compact' | 'clear', MissionTimer>();
-
-/** `ContextRule` has no `lastFiredAt` (unlike `ScheduledMission`), so the last-run
- *  instants live in the durable kv store instead. Without them every re-arm —
- *  boot, a settings edit, a wake from sleep — would restart a 2h cadence from
- *  zero, and an operator who edits the rule twice a day would never see it fire. */
-const CONTEXT_LAST_RUN_KV_KEY = 'triggers.context.lastRun';
-let contextLastRun: Record<string, number> | null = null;
-
-function contextRunMap(): Record<string, number> {
-  if (!contextLastRun) {
-    try { contextLastRun = persist.getKv<Record<string, number>>(CONTEXT_LAST_RUN_KV_KEY) ?? {}; }
-    catch { contextLastRun = {}; }
-  }
-  return contextLastRun;
-}
-
-/** Clear and forget both context timers (setTimeout + setInterval handles). */
-function clearContextTimers(): void {
-  for (const t of contextTimers.values()) {
-    if (t.timeout) clearTimeout(t.timeout);
-    if (t.interval) clearInterval(t.interval);
-  }
-  contextTimers.clear();
-}
-
-function syncContextTriggers(): void {
-  // Nothing runs on a clock any more. Compaction is Claude Code's own
-  // (AUTO_COMPACT_WINDOW_TOKENS), and a conversation is cleared only after a
-  // finished, handed-off task (safeClearer.ts), never on a timer (owner,
-  // 2026-09-25). Kept so older callers (boot, settings, wake) still stop any
-  // timer a previous version armed.
-  clearContextTimers();
 }
 
 /** Startup migration (#57/#58): archive every agent entry that is `archived:false`
@@ -2171,61 +1928,10 @@ function ensureDefaultMissions(): void {
     });
   }
 
-  // maint-1 RETIREMENT: `compact-maintenance` is no longer a mission. Scheduled
-  // compaction is now the CONTEXT TRIGGER's job, so the operator has exactly one
-  // control (a cadence + a pressure gate + an editable message) instead of two
-  // that could disagree — a mission saying "hourly" while the trigger said "2h"
-  // was a real, unresolvable conflict.
-  //
-  // The carry-over preserves the operator's decisions: whether compaction was ON
-  // and how often. It runs at most once per install, and its guard is the
-  // mission's own ABSENCE — nothing seeds `compact-maintenance` any more, so once
-  // this has removed it there is nothing left to carry and a later hand-edit of
-  // the trigger can never be clobbered. That keeps the `*Seeded` convention's
-  // promise (exactly once, ever) without a config flag that would only ever be
-  // read here; `compactMaintenanceSeeded` is left set so nothing re-seeds it.
-  const cfg3 = readConfig();
-  const missions3 = cfg3.missions ?? [];
-  const retiring = missions3.find((m) => m.id === COMPACT_MAINTENANCE_MISSION.id);
-  if (retiring) {
-    const current = cfg3.contextTrigger ?? DEFAULT_CONTEXT_TRIGGER;
-    writeConfig({
-      missions: missions3.filter((m) => m.id !== COMPACT_MAINTENANCE_MISSION.id),
-      contextTrigger: {
-        ...current,
-        compact: {
-          ...current.compact,
-          enabled: retiring.enabled,
-          // A hand-tuned interval is a decision; only a missing/absurd one falls
-          // back to whatever the trigger already carries.
-          everyMs: retiring.intervalMs > 0 ? retiring.intervalMs : current.compact.everyMs
-        }
-      },
-      compactMaintenanceSeeded: true
-    });
-    // …and its elapsed time, so retiring the mission mid-cycle doesn't restart a
-    // 2h cadence from zero (the timers honour last-run exactly as arming did).
-    if (typeof retiring.lastFiredAt === 'number' && retiring.lastFiredAt > 0) {
-      const map = contextRunMap();
-      map.compact = retiring.lastFiredAt;
-      try { persist.setKv(CONTEXT_LAST_RUN_KV_KEY, map); } catch { /* DB best-effort */ }
-    }
-    console.log('[triggers] retired the compact-maintenance mission into contextTrigger.compact',
-      `(enabled: ${retiring.enabled}, everyMs: ${retiring.intervalMs})`);
-  }
-
-  // autoCompact RETIREMENT: the flag above was only ever half-removed. Retiring
-  // `compact-maintenance` left `autoCompact: true` sitting on the ops standup, so
-  // a default install still asked for compaction on TWO cadences — hourly from the
-  // standup, 2-hourly from the trigger — which is precisely the disagreement that
-  // retirement claims to have ended. (config.ts even documented a migration that
-  // strips this; it did not exist.)
-  //
-  // Strip it wherever it survives. This is a pure de-duplication, not a behaviour
-  // change: contextTrigger.compact still runs, still on the user's own cadence and
-  // pressure gate, and it is what actually performed every one of these
-  // compactions already — both paths have called the context trigger since Triggers
-  // landed. Idempotent, so it costs one no-op scan per boot once clean.
+  // autoCompact RETIREMENT: older offices kept `autoCompact: true` on the ops
+  // standup. Nothing compacts on a schedule any more (Claude Code compacts on
+  // its own), so the stale flag is stripped wherever it survives. Idempotent, so
+  // it costs one no-op scan per boot once clean.
   const cfg4 = readConfig();
   const missions4 = cfg4.missions ?? [];
   if (missions4.some((m) => m.autoCompact)) {
@@ -2236,7 +1942,7 @@ function ensureDefaultMissions(): void {
       })
     });
     console.log('[triggers] dropped the legacy per-mission autoCompact flag —',
-      'contextTrigger.compact is now the only schedule that compacts');
+      'Claude Code compacts on its own');
   }
 
   // The standup used to tell Michael each agent would be asked to summarise and
@@ -2413,7 +2119,7 @@ function buildHeartbeatDigest(quietMs: number, actionable = 0): string {
 
 /** Senders whose mail is the scheduler's OWN noise (heartbeat beats, ops-standup
  *  via 'scheduler', breaker steers, generic 'system') — never a reason to wake
- *  god. Everything else (a worker agent id, 'webhook', a human reply) is real
+ *  god. Everything else (a worker agent id, a human reply) is real
  *  mail god must act on. Kept narrow so any future real sender counts by default. */
 const SYSTEM_SENDERS = new Set(['heartbeat', 'scheduler', 'breaker', 'system']);
 
@@ -2456,6 +2162,24 @@ function ownerToast(title: string, body: string): void {
   if (!readConfig().notifications) return;
   try { if (Notification.isSupported()) new Notification({ title, body }).show(); }
   catch { /* unsupported platform */ }
+}
+
+// Members that started with something missing, kept for Michael's report card
+// on Ask me (src/shared/degradedNotices.ts): the desktop notification above is
+// off when notifications are, and then nobody heard (owner, 2026-11-10).
+let degradedState = emptyDegraded();
+function degradedShown(): DegradedNotice[] {
+  const agents = hive.enabled() ? hive.registry().agents ?? {} : {};
+  return shownNotices(degradedState, (id) => !!agents[id]);
+}
+function pushDegraded(): void {
+  try { liveWebContents()?.send('degraded:changed', degradedShown()); } catch { /* window torn down */ }
+}
+/** A member started: keep what it started without, or clear it. */
+function noteDegradedStart(agentId: string, name: string, degraded: string | undefined): void {
+  const before = JSON.stringify(degradedShown());
+  degradedState = noteStart(degradedState, agentId, name, degraded, Date.now());
+  if (JSON.stringify(degradedShown()) !== before) pushDegraded();
 }
 
 // ─── Office break (issue 124) ────────────────────────────────────────────────
@@ -2864,69 +2588,8 @@ function liveWebContents(): Electron.WebContents | null {
   return null;
 }
 
-// ─── Slack webhook server (Slack message → Michael's queue) ──────────────────
-/** The running Slack ingestion server, or null when disabled/stopped. */
-let slackServer: SlackWebhookServer | null = null;
-/** The loopback-only reply endpoint (lets the bundled helper post back to Slack
- *  without ever seeing the bot token). Lifecycle is tied to `slackServer`. */
-let slackReplyServer: SlackReplyServer | null = null;
-/** Last public tunnel URL handed out — persisted so Settings can re-show the
- *  Request URL after a reopen (Slack reuses it until the server is stopped). */
-let lastSlackUrl: string | undefined;
-
-/** AUTONOMOUS REQUEST PROTOCOL — built PER MESSAGE (not a static const) so it can
- *  embed the request's concrete `channel`, `thread_ts`, and the resolved helper
- *  path. Prepended (server-side, authoritatively) to the working instruction god
- *  reads for any Slack-origin request: there is no interactive human at the
- *  keyboard, so god must route fast, delegate WITH the exact reply command (so the
- *  worker posts its real result back into THIS thread itself), stay autonomous,
- *  and only block on enumerated high-severity actions. Prepended to god's PROMPT
- *  only — the human-facing kanban card TITLE stays the user's raw text (the
- *  renderer keeps them split). Trailing space is intentional so the user's message
- *  reads naturally after it. */
-function buildAutonomousRequestProtocol(channel: string, threadTs: string, helperPath: string): string {
-  // Slack reply rules ride the Slack request itself, not every agent's startup
-  // instructions (owner cleanup, 2026-09-25). Plain, no spawning or git.
-  return `[Slack request: nobody is watching the office live, so handle it this way.]
-1. Route it straight to the one team member whose role fits, from the roster. When the request names someone ("ask Pam"), send it to them.
-2. Tell them to do the work and post the result to this Slack thread themselves when done, with exactly: "${hive.nodeCommand()}" "${helperPath}" --channel ${channel} --thread ${threadTs} --text "<the result>". Use that Node path as it is; plain "node" is often missing.
-3. No questions in the office. Only spending money, anything public, or deleting something they did not create needs the owner first.
-4. The Slack reply is the real answer in Slack formatting: a short *bold* headline, then the outcome, specifics and links. Never just "done".
-5. They then tell you (Michael) what they did.
-6. If a decision is needed, post the question with numbered options to the thread with the same command, and record {q, options, askedAt, thread_ts ${threadTs}} so the reply in the thread finds its way back.
-The request starts now: `;
-}
-
-// ─── Slack done-notifier (Slack-origin task → done → one summary reply) ───────
-/** Polls the shared kanban (hive/tasks.json) for Slack-origin tasks that reach
- *  'done' and posts ONE summary reply into the originating thread. Lifecycle is
- *  tied to `slackServer`. OUTBOUND-only: it never touches inbound queue/lanes. */
-let slackDoneTimer: ReturnType<typeof setInterval> | null = null;
-/** Re-entrancy guard so a slow post can't overlap the next tick. */
-let slackDonePolling = false;
-/** Task ids already notified — exactly-once across re-reads AND restarts. Lazily
- *  loaded from / persisted to `slackDoneNotifiedPath()`. */
-let slackDoneNotified: Set<string> | null = null;
-/** Ids already 'done' when the observer started — baselined (never notified) so a
- *  summary only ever fires on a live …→done transition, not on pre-existing dones. */
-let slackDoneBaseline: Set<string> | null = null;
-/** thread_ts values an agent has ALREADY answered directly via the loopback
- *  `/reply` endpoint. The done-summary poller skips these — the agent's own
- *  substantive reply already landed in-thread, so the poller is a fallback, not a
- *  duplicator (this is what stops the bare/duplicate `:white_check_mark:` posts). */
-const directlyRepliedThreads = new Set<string>();
-
-/** Absolute path to the bundled `md-slack-reply.cjs` helper. Packaged: under
- *  `process.resourcesPath` (electron-builder extraResources). Dev: the repo's
- *  `resources/` dir, resolved from the app path. */
-function slackReplyScriptPath(): string {
-  return app.isPackaged
-    ? join(process.resourcesPath, 'md-slack-reply.cjs')
-    : join(app.getAppPath(), 'resources', 'md-slack-reply.cjs');
-}
-
 /** W3 — the bundled read-only `skills/` source dir copied into each agent's
- *  `.claude/skills/` at spawn. Same packaged/dev resolution as the helpers above.
+ *  `.claude/skills/` at spawn. Same packaged/dev resolution as mdMailScriptPath().
  *  Tolerated-missing until lp-manifest (Kevin) populates it (the hive copy is a
  *  no-op on an absent dir). */
 function skillsResourceDir(): string {
@@ -3018,707 +2681,6 @@ function businessFolderLayout(businessFolder: string): FolderLayout {
   return folderLayoutFor(businessFolder, folders, cfg.harnessHome ? expandTilde(cfg.harnessHome) : undefined);
 }
 
-/** Where the helper discovers `{ port, token }` for the loopback endpoint. Kept
- *  under userData (NOT the git repo, NOT mined into MemPalace). */
-function slackReplyConfigPath(): string {
-  return join(app.getPath('userData'), 'slack-reply.json');
-}
-
-/** Ledger of task ids whose done-summary has already been posted. Ids ONLY — no
- *  secret ever lands here. Under userData (out of the repo, out of MemPalace). */
-function slackDoneNotifiedPath(): string {
-  return join(app.getPath('userData'), 'slack-done-notified.json');
-}
-
-/** Directory where downloaded Slack attachments are saved (out of repo, out of MemPalace). */
-function slackFilesDir(): string {
-  return join(app.getPath('userData'), 'slack-files');
-}
-
-/** Per-file download size cap — reject files larger than 10 MB before writing. */
-const SLACK_FILE_MAX_BYTES = 10 * 1024 * 1024;
-
-/** Sanitize a Slack filename: keep only the basename, replace non-safe chars,
- *  prefix with a random hex tag to prevent collisions and path-traversal attacks. */
-function sanitizeSlackFilename(name: string | undefined, tag: string): string {
-  const safe = (typeof name === 'string' && name)
-    ? basename(name).replace(/[^\w.\-]/g, '_').replace(/^\.+/, '_').slice(0, 200) || 'file'
-    : 'file';
-  return `${tag}-${safe}`;
-}
-
-/**
- * Download a single Slack private file into slackFilesDir() using the bot token.
- * Returns the local path on success, null on any failure (size limit, network, etc.).
- * The bot token is used only in the Authorization header and is NEVER logged.
- */
-function downloadSlackFile(
-  file: SlackEventFile,
-  botToken: string,
-  destDir: string
-): Promise<{ path: string; name: string; mimetype: string } | null> {
-  return new Promise((resolve) => {
-    const tag = randomBytes(4).toString('hex');
-    const filename = sanitizeSlackFilename(file.name, tag);
-    const destPath = join(destDir, filename);
-    const name = file.name ?? filename;
-    const mimetype = file.mimetype ?? 'application/octet-stream';
-
-    try {
-      mkdirSync(destDir, { recursive: true });
-    } catch {
-      resolve(null);
-      return;
-    }
-
-    let urlObj: URL;
-    try {
-      urlObj = new URL(file.url_private);
-    } catch {
-      resolve(null);
-      return;
-    }
-    if (urlObj.protocol !== 'https:') { resolve(null); return; }
-
-    const req = httpsRequest(
-      { hostname: urlObj.hostname, path: urlObj.pathname + urlObj.search, method: 'GET',
-        headers: { authorization: `Bearer ${botToken}` } },
-      (res) => {
-        if (res.statusCode && res.statusCode >= 400) {
-          res.resume(); // drain response body
-          resolve(null);
-          return;
-        }
-        let written = 0;
-        let aborted = false;
-        const stream = createWriteStream(destPath);
-        res.on('data', (chunk: Buffer) => {
-          if (aborted) return;
-          written += chunk.length;
-          if (written > SLACK_FILE_MAX_BYTES) {
-            aborted = true;
-            stream.destroy();
-            try { unlinkSync(destPath); } catch { /* best-effort cleanup */ }
-            res.destroy();
-            resolve(null);
-            return;
-          }
-          stream.write(chunk);
-        });
-        res.on('end', () => {
-          if (aborted) return;
-          stream.end(() => resolve({ path: destPath, name, mimetype }));
-        });
-        res.on('error', () => { stream.destroy(); resolve(null); });
-        stream.on('error', () => { res.destroy(); resolve(null); });
-      }
-    );
-    req.on('error', () => resolve(null));
-    req.end();
-  });
-}
-
-/**
- * Download all raw Slack files (up to cap) and return the local-path file list.
- * Failures are silently dropped — a partial list is still useful to the agent.
- */
-async function downloadSlackFiles(
-  rawFiles: SlackEventFile[],
-  botToken: string | undefined
-): Promise<{ path: string; name: string; mimetype: string }[]> {
-  if (!rawFiles.length || !botToken) return [];
-  const destDir = slackFilesDir();
-  const results = await Promise.all(
-    rawFiles.map((f) => downloadSlackFile(f, botToken, destDir))
-  );
-  return results.filter((r): r is { path: string; name: string; mimetype: string } => r !== null);
-}
-
-function loadSlackDoneNotified(): Set<string> {
-  try {
-    const arr = JSON.parse(readFileSync(slackDoneNotifiedPath(), 'utf8'));
-    if (Array.isArray(arr)) return new Set(arr.filter((x): x is string => typeof x === 'string'));
-  } catch { /* missing/corrupt → start empty */ }
-  return new Set();
-}
-
-function persistSlackDoneNotified(set: Set<string>): void {
-  try { writeFileSync(slackDoneNotifiedPath(), JSON.stringify([...set])); }
-  catch (e) { console.error('[slack] could not persist done-notify ledger:', e); }
-}
-
-/** Slack `chat.postMessage` errors that are permanent for this config — retrying
- *  can never make them succeed, so a failed post with one of these is recorded
- *  (not retried) to avoid flooding the log every 5s. Anything else is treated as
- *  transient and left to retry. */
-const TERMINAL_SLACK_ERRORS = new Set<string>([
-  'missing_scope', 'invalid_auth', 'not_authed', 'account_inactive',
-  'token_revoked', 'token_expired', 'no_permission', 'channel_not_found',
-  'not_in_channel', 'is_archived', 'restricted_action', 'org_login_required',
-]);
-
-/** The single in-thread summary for a finished task. Sourced from the task's
- *  result/description (falling back to the title), trimmed Slack-friendly. */
-function slackDoneSummary(task: HiveTask): string {
-  const body = (task.result ?? task.description ?? '').trim();
-  const head = `:white_check_mark: *${task.title}*`;
-  const text = body ? `${head}\n\n${body}` : head;
-  return text.length > 2800 ? `${text.slice(0, 2799)}…` : text;
-}
-
-/** One observation pass over the kanban. Posts a summary for any Slack-origin
- *  task that has newly reached 'done'. Best-effort and self-guarding — it must
- *  never throw into the timer, and the bot token never leaves this function. */
-async function pollSlackDoneTasks(): Promise<void> {
-  if (slackDonePolling) return;
-  const botToken = readConfig().slackBotToken;
-  if (!botToken) return; // can't post without the token — nothing to do
-  let tasks: HiveTask[];
-  try {
-    const ledger = hive.tasks() as { tasks?: HiveTask[] };
-    tasks = Array.isArray(ledger?.tasks) ? ledger.tasks : [];
-  } catch { return; } // unreadable/missing tasks.json → skip this tick
-
-  const notified = slackDoneNotified ?? (slackDoneNotified = loadSlackDoneNotified());
-
-  // First tick seeds the baseline (ids already done) and posts nothing — so we
-  // only ever fire on a transition observed live this session.
-  if (slackDoneBaseline === null) {
-    slackDoneBaseline = new Set(tasks.filter((t) => t.status === 'done').map((t) => t.id));
-    return;
-  }
-  const baseline = slackDoneBaseline;
-
-  slackDonePolling = true;
-  try {
-    for (const t of tasks) {
-      if (t.status !== 'done') continue;
-      if (baseline.has(t.id) || notified.has(t.id)) continue; // already handled
-      const slack = t.slack;
-      if (!slack || !slack.channel || !slack.thread_ts) continue; // non-Slack-origin → leave alone
-      // FALLBACK-ONLY: if the agent already posted a DIRECT reply into this thread
-      // (loopback /reply), the human has its substantive answer — don't double-post.
-      if (directlyRepliedThreads.has(slack.thread_ts)) { notified.add(t.id); persistSlackDoneNotified(notified); continue; }
-      // Never post a bare `:white_check_mark: *title*` with no substance: if the card
-      // carries neither a result nor a description, there is nothing meaningful to
-      // deliver — skip it (still under the FALLBACK contract).
-      if (!(t.result ?? t.description ?? '').trim()) { notified.add(t.id); persistSlackDoneNotified(notified); continue; }
-      const res = await postSlackReply({
-        botToken, channel: slack.channel, thread_ts: slack.thread_ts, text: slackDoneSummary(t)
-      });
-      if (res.ok) {
-        notified.add(t.id);
-        persistSlackDoneNotified(notified); // mark-on-success → exactly one delivered reply
-      } else if (res.error && TERMINAL_SLACK_ERRORS.has(res.error)) {
-        // A permanent config/auth error (e.g. the bot token lacks `chat:write`)
-        // will NEVER succeed — record the id so we stop hammering every tick, and
-        // log the reason once. Never log the token or message body.
-        notified.add(t.id);
-        persistSlackDoneNotified(notified);
-        console.error('[slack] done-summary post for task', t.id,
-          '— giving up (terminal error:', res.error + '). Fix the Slack bot scope/permissions; later tasks post once resolved.');
-      } else {
-        // Transient (network / rate-limit / unknown) → leave unmarked so a later
-        // tick retries. Log the id + error only; never the token or message body.
-        console.error('[slack] done-summary post failed for task', t.id, '-', res.error, '(will retry)');
-      }
-    }
-  } finally {
-    slackDonePolling = false;
-  }
-}
-
-/** Begin watching the kanban for Slack-origin done-transitions (idempotent). */
-function startSlackDoneObserver(): void {
-  if (slackDoneTimer) return;
-  slackDoneNotified = loadSlackDoneNotified();
-  slackDoneBaseline = null; // re-seed on the first tick of this session
-  slackDoneTimer = setInterval(() => { void pollSlackDoneTasks(); }, 5000);
-}
-
-/** Stop watching the kanban. Safe to call when not running. */
-function stopSlackDoneObserver(): void {
-  if (slackDoneTimer) { clearInterval(slackDoneTimer); slackDoneTimer = null; }
-  slackDoneBaseline = null;
-}
-
-/** Build a SlackWebhookServer from the current config and start it, replacing
- *  any running instance, and return the start result (incl. the public tunnel
- *  URL the user pastes into Slack). No-op + error result when the integration is
- *  disabled or the signing secret is unset. */
-async function startSlackServer(): Promise<{ ok: boolean; url?: string; error?: string }> {
-  // Hidden in this build (buildFeatures.ts): no listener the owner can't see or stop.
-  if (!SHOW_SLACK) return { ok: false, error: 'Slack is not available in this build' };
-  const cfg = readConfig();
-  if (!cfg.slackEnabled || !cfg.slackSigningSecret) {
-    return { ok: false, error: 'slack disabled or missing signing secret' };
-  }
-  slackServer?.stop();
-  slackServer = new SlackWebhookServer({
-    port: cfg.slackPort && cfg.slackPort > 0 ? cfg.slackPort : 3847,
-    signingSecret: cfg.slackSigningSecret,
-    channelId: cfg.slackChannelId,
-    // Fires from the HTTP server's event loop (not the IPC thread); route through
-    // liveWebContents() so a message arriving during window teardown can't throw.
-    // Downloads any file attachments (bot token stays in main; local paths go to IPC).
-    onMessage: async (m) => {
-      const localFiles = await downloadSlackFiles(
-        m._rawFiles ?? [],
-        readConfig().slackBotToken
-      );
-      // `text` stays the user's RAW Slack text → drives the readable kanban card
-      // title. `autonomyPreamble` is the authoritative policy block the renderer
-      // prepends ONLY to god's working instruction (his PTY prompt), keeping the
-      // card title human-facing-clean. Built PER MESSAGE so the AUTONOMOUS REQUEST
-      // PROTOCOL carries THIS request's concrete channel, thread_ts, and the
-      // resolved helper path — god hands the worker an exact reply command.
-      // Server-side so it applies to every session.
-      const ipcMsg: { text: string; channel: string; ts: string; thread_ts: string; autonomyPreamble: string; files?: typeof localFiles } = {
-        text: m.text, channel: m.channel, ts: m.ts, thread_ts: m.thread_ts,
-        autonomyPreamble: buildAutonomousRequestProtocol(m.channel, m.thread_ts, slackReplyScriptPath())
-      };
-      if (localFiles.length > 0) ipcMsg.files = localFiles;
-      try { liveWebContents()?.send('slack:incomingMessage', ipcMsg); }
-      catch { /* window torn down */ }
-    }
-  });
-  const res = await slackServer.start();
-  // ok:false means the port is not bound (never bound, or closed again after the
-  // tunnel failed) → drop the instance.
-  if (!res.ok) { slackServer = null; return res; }
-  if (res.url) lastSlackUrl = res.url;
-  // Bring up the loopback reply endpoint (token-gated, never tunneled) and drop
-  // the discovery file for the bundled helper. Best-effort: reply path being
-  // unavailable must not sink ingestion.
-  await startSlackReplyServer();
-  // Begin watching the kanban for Slack-origin tasks that reach 'done', to post
-  // their one summary reply in-thread. OUTBOUND-only; never touches ingestion.
-  startSlackDoneObserver();
-  analytics.trackFeature('slack_trigger');
-  return res;
-}
-
-/** Start the loopback reply endpoint and write its `{ port, token }` to userData
- *  so `md-slack-reply.cjs` can reach it. The bot token is read lazily from config
- *  at reply time and never written to this file. */
-async function startSlackReplyServer(): Promise<void> {
-  slackReplyServer?.stop();
-  const token = randomBytes(24).toString('hex');
-  slackReplyServer = new SlackReplyServer({
-    token,
-    getBotToken: () => readConfig().slackBotToken,
-    // An agent posted a DIRECT substantive reply into this thread → record it so the
-    // done-summary poller skips it (the poller is a fallback, not a duplicator).
-    onReplied: (thread_ts) => { directlyRepliedThreads.add(thread_ts); }
-  });
-  const r = await slackReplyServer.start();
-  if (!r.ok || r.port === undefined) {
-    console.error('[slack] reply endpoint failed to start:', r.error);
-    slackReplyServer = null;
-    return;
-  }
-  try {
-    writeFileSync(slackReplyConfigPath(), JSON.stringify({ port: r.port, token }), { mode: 0o600 });
-  } catch (e) {
-    console.error('[slack] could not write reply config:', e);
-  }
-}
-
-/** Stop and forget the Slack server (+ reply endpoint). Best-effort; safe to call
- *  when not running. The last tunnel URL is retained so Settings keeps showing it. */
-function stopSlackServer(): void {
-  try { slackServer?.stop(); } catch (e) { console.error('[slack] stop failed:', e); }
-  slackServer = null;
-  try { slackReplyServer?.stop(); } catch (e) { console.error('[slack] reply stop failed:', e); }
-  slackReplyServer = null;
-  stopSlackDoneObserver();
-  try { if (existsSync(slackReplyConfigPath())) unlinkSync(slackReplyConfigPath()); } catch { /* noop */ }
-}
-
-// ─── Generic inbound webhook + status API (multi-endpoint) ───────────────────
-/** The running generic-webhook server, or null when disabled/stopped. A PUBLIC
- *  (tunnel-forwarded) surface — secret-gated, unlike the loopback /reply. ONE
- *  server and ONE tunnel serve EVERY configured endpoint; the id in the request
- *  path picks which. Adding a webhook therefore costs no port and no tunnel, and
- *  never disturbs a caller already pointed at another endpoint's URL. */
-let webhookServer: WebhookServer | null = null;
-/** Last public tunnel URL handed out — retained so Settings can re-show the
- *  endpoint after a reopen (the tunnel rotates it per restart). */
-let lastWebhookUrl: string | undefined;
-
-/** Local port the shared server binds to. The port is a property of the SERVER,
- *  not of any one trigger — `webhookPort` stays the (legacy) override. */
-const WEBHOOK_DEFAULT_PORT = 3849;
-
-/** The endpoints the operator has switched on. A disabled webhook is not merely
- *  rejected at the door — it is never handed to the server, so its id does not
- *  exist on the wire and its secret is not in memory on the request path. */
-function enabledWebhookEndpoints(): WebhookTrigger[] {
-  return (readConfig().webhookTriggers ?? []).filter((t) => t.enabled && !!t.secret);
-}
-
-/** SHA-256 hex of a capability token. The raw token is returned to the caller
- *  exactly once (the POST response) and never persisted; only this digest lands
- *  on the kanban card, so a GET can match without the raw token ever resting. */
-function hashWebhookToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex');
-}
-
-/** tokenHash → id of the `pending` history entry it belongs to.
- *
- *  A message the mode gate held has NO kanban card (the card is what approval
- *  creates), so this map is the only way its caller's GET can be answered — and
- *  answered HONESTLY, as "awaiting-approval" rather than a lie about queued work.
- *  It stores the token's DIGEST, never the token, exactly like the card stamp,
- *  and it is mirrored into the durable kv store so a restart doesn't 404 every
- *  caller that is still politely waiting on the operator. */
-let heldWebhookTokens: Map<string, string> | null = null;
-const HELD_TOKENS_KV_KEY = 'triggers.webhook.heldTokens';
-
-function heldTokens(): Map<string, string> {
-  if (heldWebhookTokens) return heldWebhookTokens;
-  let stored: Record<string, string> | undefined;
-  try { stored = persist.getKv<Record<string, string>>(HELD_TOKENS_KV_KEY); }
-  catch { stored = undefined; }
-  const entries = stored && typeof stored === 'object' ? Object.entries(stored) : [];
-  heldWebhookTokens = new Map(entries.filter((e): e is [string, string] => typeof e[1] === 'string'));
-  return heldWebhookTokens;
-}
-
-function persistHeldTokens(): void {
-  try { persist.setKv(HELD_TOKENS_KV_KEY, Object.fromEntries(heldTokens())); }
-  catch (e) { console.error('[webhook] could not persist held-token map:', e); }
-}
-
-/** Drop mappings whose history entry has aged out of the (capped) ledger — the
- *  operator can no longer decide them, so their tokens are dead weight. */
-function pruneHeldTokens(): void {
-  const map = heldTokens();
-  if (map.size === 0) return;
-  const live = new Set(listTriggerHistory().map((e) => e.id));
-  let changed = false;
-  for (const [hash, entryId] of [...map]) {
-    if (!live.has(entryId)) { map.delete(hash); changed = true; }
-  }
-  if (changed) persistHeldTokens();
-}
-
-/** The token digest a held history entry was accepted under, if we still have it. */
-function heldTokenHashFor(entryId: string): string | undefined {
-  for (const [hash, id] of heldTokens()) if (id === entryId) return hash;
-  return undefined;
-}
-
-/** Tell the Triggers tab its ledger moved, so history live-refreshes instead of
- *  waiting for the operator to re-open the tab. */
-function notifyTriggerHistoryUpdated(): void {
-  try { liveWebContents()?.send('triggerHistory:updated'); } catch { /* window gone */ }
-}
-
-/**
- * Create the stamped kanban card for an inbound message and route it to god.
- *
- * Split out of `handleWebhookMessage` because the APPROVAL path takes exactly
- * this route later — an operator saying yes must produce the same card and the
- * same god request an auto-allowed message would have, or the two paths drift
- * and "approved" quietly means something weaker than "allowed".
- *
- * Returns false only when the card — the thing the caller polls — could not be
- * written. The god routing is best-effort: the card already exists and is
- * pollable even if the send hiccups.
- */
-function dispatchWebhookWork(arg: {
-  taskId: string;
-  title: string;
-  message: string;
-  /** Stamped onto the card so a GET can match the caller's token. */
-  tokenHash?: string;
-  /** 'webhook' | 'org' — only for the subject line and the god-facing note. */
-  origin: 'webhook' | 'org';
-}): boolean {
-  try {
-    const card: HiveTask = {
-      id: arg.taskId,
-      title: arg.title,
-      description: arg.message,
-      status: 'todo',
-      dependsOn: [],
-      priority: 1,
-      createdAt: new Date().toISOString(),
-      ...(arg.tokenHash ? { webhook: { tokenHash: arg.tokenHash } } : {})
-    };
-    // addTask appends against the latest on-disk ledger and is idempotent by task
-    // id, so a concurrent card writer (Slack, god, voice, another webhook) can't
-    // have its card lost to our stale whole-ledger overwrite. (writeTasks(...existing)
-    // recreated exactly that race.) A fresh taskId never collides, so false here
-    // means the board did not parse and nothing was written: the caller has no card.
-    if (!hive.addTask(card)) return false;
-  } catch (e) {
-    console.error('[webhook] could not create task card:', e instanceof Error ? e.message : e);
-    return false;
-  }
-  // Body carries ONLY the sender's message + the card id (so whoever finishes it
-  // updates that card's status/result for the caller's GET) — never the secret,
-  // never the raw token.
-  try {
-    hive.send({
-      to: 'god',
-      act: 'request',
-      subject: `[${arg.origin}] ${arg.title}`,
-      body: `${arg.message}\n\n(Inbound via the generic ${arg.origin} API, tracked as kanban card ${arg.taskId}. When this work is finished, set that card's status to 'done' and fill its 'result' so the caller's status check reflects the outcome.)`,
-      requires_reply: false
-    }, 'webhook');
-  } catch (e) {
-    console.error('[webhook] could not route to god:', e instanceof Error ? e.message : e);
-  }
-  return true;
-}
-
-/**
- * A verified POST, run through the endpoint's TriggerMode.
- *
- * `isAutoAllowed(mode, kind)` is the whole gate. When it says yes this behaves
- * exactly as the single-endpoint server always did — card, god request, capability
- * token. When it says no NOTHING reaches the hive: the message is written to the
- * ledger as `pending` and sits there until the operator decides, and the caller
- * is handed its token plus a 202 so it can watch the hold rather than believe
- * work started.
- *
- * Either way an `inbound` history row is recorded. The secret never reaches here
- * (the server hands over `{id,name}` only) and no credential is ever written to
- * the ledger.
- */
-function handleWebhookMessage(msg: WebhookInbound, endpoint: WebhookEndpointRef): WebhookDispatch | null {
-  // 192-bit unguessable token, returned once; only its hash is stored.
-  const token = randomBytes(24).toString('hex');
-  const tokenHash = hashWebhookToken(token);
-  const trigger = (readConfig().webhookTriggers ?? []).find((t) => t.id === endpoint.id);
-  // An endpoint that vanished between the request and this lookup falls back to
-  // the STRICTEST mode, never the most permissive one.
-  const mode: TriggerMode = trigger?.mode ?? DEFAULT_TRIGGER_MODE;
-  // A caller may only make a message stricter: 'directive' is honored, but a
-  // 'communication' label is checked like an unlabeled message, so a label can't
-  // skip the approval hold (ship review, 2026-10-14). `classifyInboundKind`
-  // leans 'directive' on purpose.
-  const kind: InboundKind = msg.kind === 'directive' ? 'directive' : classifyInboundKind(msg.message);
-  // Only the message is checked, so a message let through as chatter in
-  // communication only mode takes its title from the message: a caller's title
-  // could otherwise carry the instruction to Michael (ship review, 2026-10-14).
-  const full = mode === 'communication-only' && isAutoAllowed(mode, kind) ? msg.message : (msg.title ?? msg.message);
-  const title = cutText(full, 80);
-  const peer = msg.from?.trim() || endpoint.name || endpoint.id;
-  // Minted here, not derived from the task id, because a HELD message has no task
-  // id yet and must still be pairable with the reply it eventually earns.
-  const correlationId = randomBytes(8).toString('hex');
-
-  const base = {
-    source: 'webhook' as const,
-    sourceId: endpoint.id,
-    sourceName: endpoint.name,
-    direction: 'inbound' as const,
-    peer,
-    title,
-    body: msg.message,
-    kind,
-    correlationId
-  };
-
-  if (!isAutoAllowed(mode, kind)) {
-    const entry = appendTriggerHistory({ ...base, decision: 'pending' });
-    heldTokens().set(tokenHash, entry.id);
-    persistHeldTokens();
-    notifyTriggerHistoryUpdated();
-    return { token, pending: true };
-  }
-
-  const taskId = `webhook-${randomBytes(8).toString('hex')}`;
-  if (!dispatchWebhookWork({ taskId, title, message: msg.message, tokenHash, origin: 'webhook' })) return null;
-  appendTriggerHistory({ ...base, decision: 'auto-allowed', taskId });
-  notifyTriggerHistoryUpdated();
-  return { token, taskId, pending: false };
-}
-
-/** Resolve a capability token to its task's public status — scoped to the ONE
- *  card (or the ONE held message) whose stored hash matches; never lists or leaks
- *  any other task. Returns null for any non-match (the server answers 404 either
- *  way, so a probe can't tell "unknown" from "malformed"). */
-function lookupWebhookStatus(token: string): WebhookTaskStatus | null {
-  const hash = hashWebhookToken(token);
-
-  // Held messages first — they have no card, and the O(1) hit keeps the common
-  // "still waiting" poll off the task scan entirely.
-  const heldEntryId = heldTokens().get(hash);
-  if (heldEntryId) {
-    const entry = listTriggerHistory().find((e) => e.id === heldEntryId);
-    if (!entry) { heldTokens().delete(hash); persistHeldTokens(); return null; }
-    if (entry.decision === 'pending') {
-      return { status: 'awaiting-approval', title: entry.title ?? '' };
-    }
-    if (entry.decision === 'rejected') {
-      return { status: 'rejected', title: entry.title ?? '' };
-    }
-    // Approved: the release stamped this hash onto a real card, so fall through.
-  }
-
-  const wanted = Buffer.from(hash);
-  let tasks: HiveTask[];
-  try {
-    const ledger = hive.tasks() as { tasks?: HiveTask[] };
-    tasks = Array.isArray(ledger?.tasks) ? ledger.tasks : [];
-  } catch { return null; }
-  for (const t of tasks) {
-    const h = t.webhook?.tokenHash;
-    if (!h) continue;
-    const have = Buffer.from(h);
-    // Both are fixed-length sha-256 hex; compare in constant time defensively.
-    if (have.length === wanted.length && timingSafeEqual(have, wanted)) {
-      // Triage is internal: to the caller the card is simply not started yet.
-      return { status: t.status === 'triage' ? 'todo' : t.status, title: t.title, result: t.result };
-    }
-  }
-  return null;
-}
-
-// ─── Webhook done-observer (the OUTBOUND half of the trigger ledger) ─────────
-// Mirrors `pollSlackDoneTasks`: watch the kanban for webhook-origin cards that
-// reach 'done' and write the reply side of the conversation, tagged with the
-// inbound row's correlationId so the UI can pair request ↔ response.
-//
-// Unlike the Slack poller there is no "baseline" of already-done ids: the LEDGER
-// is the record of what we've already paired, so a card that finished while the
-// app was closed still gets its outbound row on the next boot, and re-seeding
-// from the ledger makes a duplicate impossible.
-let webhookDoneTimer: ReturnType<typeof setInterval> | null = null;
-let webhookOutboundRecorded: Set<string> | null = null;
-
-function seedWebhookOutbound(): Set<string> {
-  const seen = new Set<string>();
-  try {
-    for (const e of listTriggerHistory()) {
-      if (e.direction === 'outbound' && e.taskId) seen.add(e.taskId);
-    }
-  } catch { /* unreadable ledger → treat as empty; appends are still deduped by taskId */ }
-  return seen;
-}
-
-function pollWebhookDoneTasks(): void {
-  let tasks: HiveTask[];
-  try {
-    const ledger = hive.tasks() as { tasks?: HiveTask[] };
-    tasks = Array.isArray(ledger?.tasks) ? ledger.tasks : [];
-  } catch { return; } // unreadable/missing tasks.json → skip this tick
-  const done = tasks.filter((t) =>
-    t.status === 'done' && (t.webhook != null || t.id.startsWith('webhook-')));
-  if (done.length === 0) return;
-  const recorded = webhookOutboundRecorded ?? (webhookOutboundRecorded = seedWebhookOutbound());
-  const fresh = done.filter((t) => !recorded.has(t.id));
-  if (fresh.length === 0) return;
-
-  const history = listTriggerHistory();
-  let wrote = false;
-  for (const t of fresh) {
-    const inbound = history.find((e) => e.direction === 'inbound' && e.taskId === t.id);
-    // No inbound row = a card from before the ledger existed. Nothing to pair it
-    // with, so mark it handled rather than writing a half of a conversation.
-    if (!inbound) { recorded.add(t.id); continue; }
-    appendTriggerHistory({
-      source: inbound.source,
-      sourceId: inbound.sourceId,
-      sourceName: inbound.sourceName,
-      direction: 'outbound',
-      peer: inbound.peer,
-      title: t.title,
-      body: (t.result ?? '').trim() || '(finished with no result recorded)',
-      kind: inbound.kind,
-      correlationId: inbound.correlationId,
-      taskId: t.id
-    });
-    recorded.add(t.id);
-    wrote = true;
-  }
-  if (wrote) notifyTriggerHistoryUpdated();
-}
-
-/** Begin watching the kanban for webhook-origin done-transitions (idempotent). */
-function startWebhookDoneObserver(): void {
-  if (webhookDoneTimer) return;
-  webhookOutboundRecorded = seedWebhookOutbound();
-  webhookDoneTimer = setInterval(() => {
-    try { pollWebhookDoneTasks(); } catch (e) { console.error('[webhook] done-observer:', e); }
-  }, 5000);
-}
-
-/** Stop watching the kanban. Safe to call when not running. */
-function stopWebhookDoneObserver(): void {
-  if (webhookDoneTimer) { clearInterval(webhookDoneTimer); webhookDoneTimer = null; }
-  webhookOutboundRecorded = null;
-}
-
-/** Build the shared WebhookServer from the enabled endpoints and start it. A
- *  server that is already up is RE-POINTED rather than restarted (see
- *  `reconcileWebhookServer`): restarting would mint a fresh tunnel URL and break
- *  every other endpoint's caller. The public tunnel is opened only here — never
- *  on a default; a webhook reaches the wire only once the operator enables it. */
-async function startWebhookServer(): Promise<{ ok: boolean; url?: string; error?: string }> {
-  const endpoints = enabledWebhookEndpoints();
-  if (endpoints.length === 0) return { ok: false, error: 'no enabled webhook endpoints' };
-  if (webhookServer) {
-    webhookServer.setEndpoints(endpoints);
-    return { ok: true, url: webhookServer.publicUrl() ?? lastWebhookUrl };
-  }
-  pruneHeldTokens();
-  const cfg = readConfig();
-  const server = new WebhookServer({
-    port: cfg.webhookPort && cfg.webhookPort > 0 ? cfg.webhookPort : WEBHOOK_DEFAULT_PORT,
-    endpoints,
-    onMessage: handleWebhookMessage,
-    lookupStatus: lookupWebhookStatus
-  });
-  webhookServer = server;
-  const res = await server.start();
-  // ok:false covers BOTH "never bound the port" (fatal → drop the instance) and
-  // "bound fine, tunnel unavailable" (the security boundary is live and must stay
-  // reachable/stoppable — dropping it there would leak an unstoppable listener).
-  if (!res.ok && !server.listening()) { webhookServer = null; return res; }
-  analytics.trackFeature('webhook_trigger');
-  if (res.url) lastWebhookUrl = res.url;
-  startWebhookDoneObserver();
-  return res;
-}
-
-/** Bring the running server in line with config after any webhook mutation.
- *  Live endpoint swap when it's up, start when the enabled set becomes non-empty,
- *  stop when it empties. Never restarts a healthy server. */
-function reconcileWebhookServer(): void {
-  const endpoints = enabledWebhookEndpoints();
-  if (endpoints.length === 0) { stopWebhookServer(); return; }
-  if (webhookServer) { webhookServer.setEndpoints(endpoints); return; }
-  void startWebhookServer().then((r) => {
-    if (!r.ok) console.error('[webhook] start failed:', r.error);
-    else console.log('[webhook] listening', r.url ? `(tunnel: ${r.url})` : '(no tunnel)');
-  });
-}
-
-/** Per-endpoint public URLs for the settings surface's copy button. Empty string
- *  when no tunnel has ever come up — the UI shows the endpoint, just not a URL
- *  it could hand out yet. */
-function webhookEndpointUrls(): { id: string; url: string }[] {
-  const base = (webhookServer?.publicUrl() ?? lastWebhookUrl ?? '').replace(/\/+$/, '');
-  return (readConfig().webhookTriggers ?? []).map((t) => ({
-    id: t.id,
-    url: base ? `${base}/${encodeURIComponent(t.id)}` : ''
-  }));
-}
-
-/** Stop and forget the webhook server. Best-effort; safe when not running. The
- *  last tunnel URL is retained so Settings keeps showing it. */
-function stopWebhookServer(): void {
-  try { webhookServer?.stop(); } catch (e) { console.error('[webhook] stop failed:', e); }
-  webhookServer = null;
-  // The done-observer deliberately OUTLIVES the server (it is a ledger concern,
-  // not a transport one) — it is torn down with the process/hive, not here.
-}
-
 /** The persisted main-window geometry (kv key `window.bounds`). */
 interface WindowBounds { x?: number; y?: number; width: number; height: number }
 
@@ -3788,7 +2750,6 @@ async function handleHireLink(link: string): Promise<void> {
     return;
   }
   deliverHire(res.manifest);
-  analytics.trackFeature('hire_install');
 }
 
 // Register the protocol. In dev (electron .) Windows needs the explicit
@@ -3824,6 +2785,11 @@ app.on('open-url', (evt, url) => {
   evt.preventDefault();
   void handleHireLink(url);
 });
+
+/** Each window's boot watchdog, by its webContents id (bootWatchdog.ts). */
+const bootWatchdogs = new Map<number, BootWatchdog>();
+// The page's first script ran: its window stops waiting (bootWatchdog.ts).
+ipcMain.on('app:rendererStarted', (evt) => { bootWatchdogs.get(evt.sender.id)?.started(); });
 
 // IPC: the renderer signals readiness and PULLS anything queued (deep links
 // that arrived before the window/subscription existed, incl. cold starts).
@@ -3896,34 +2862,15 @@ function createWindow(): BrowserWindow {
   win.on('focus', () => { mainWindow = win; });
   mainWindow = win;
 
-  // Permission gate for the renderer (our own trusted, local content). The only
-  // permission we constrain is microphone capture: it's allowed ONLY while a mic
-  // feature is actually live — Free Flow dictation (`freeflowEnabled`) OR a
-  // Realtime Michael voice session (`realtimeVoiceEnabled`, flipped on by the
-  // session at start() before getUserMedia, off at stop()). With both flags off,
-  // there's zero mic access even at the Electron layer. We deliberately do NOT
-  // gate on OpenAI-key presence: that key (`apikey:openai`) is shared with the CLI
-  // engines, so a CLI-only user must not have the mic gate opened. Every other
-  // permission keeps the app's prior permissive behavior (e.g. clipboard for
-  // xterm/editor copy must keep working).
-  const micFeatureLive = (): boolean => {
-    const cfg = readConfig();
-    return cfg.freeflowEnabled === true || cfg.realtimeVoiceEnabled === true;
-  };
+  // Permission gate for the renderer (our own trusted, local content). The app
+  // has no feature that uses the microphone, so media capture is always denied.
+  // Every other permission keeps the app's prior permissive behavior (e.g.
+  // clipboard for xterm copy must keep working).
   const ses = win.webContents.session;
-  ses.setPermissionRequestHandler((_wc, permission, callback, details) => {
-    if (permission === 'media') {
-      const mediaTypes = details && 'mediaTypes' in details ? details.mediaTypes : undefined;
-      const wantsAudio = !mediaTypes || mediaTypes.includes('audio');
-      callback(micFeatureLive() && wantsAudio);
-      return;
-    }
-    callback(true);
+  ses.setPermissionRequestHandler((_wc, permission, callback) => {
+    callback(permission !== 'media');
   });
-  ses.setPermissionCheckHandler((_wc, permission) => {
-    if (permission === 'media') return micFeatureLive();
-    return true;
-  });
+  ses.setPermissionCheckHandler((_wc, permission) => permission !== 'media');
 
   // The window keeps its smaller size (kv `window.bounds`) for when it is not
   // filling the screen. Skip while maximized, minimized or full screen so a
@@ -3953,9 +2900,9 @@ function createWindow(): BrowserWindow {
 
   // Never opens a window; hands the URL to the OS browser instead.
   //
-  // Scheme-checked, because this is now reachable from AUTHOR-CONTROLLED markup:
-  // a release drop's iframe has `allow-popups`, so a target="_blank" link in a
-  // release body arrives here. http(s) only — an unguarded openExternal will
+  // Scheme-checked, because this is reachable from OUTSIDE markup: the email
+  // tab's iframe has `allow-popups`, so a target="_blank" link in an email
+  // arrives here. http(s) only — an unguarded openExternal will
   // happily launch file://, or a registered custom scheme, on the user's machine.
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//i.test(url)) shell.openExternal(url);
@@ -3973,7 +2920,7 @@ function createWindow(): BrowserWindow {
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
   });
 
-  // A frame inside the window (the email tab, a release drop) shows only its
+  // A frame inside the window (the email tab) shows only its
   // own srcdoc: a link, a form or a refresh in one never loads a page there
   // (docs/designs/original-email-view.md). Its links open as new windows,
   // which the handler above sends to the browser.
@@ -4013,13 +2960,28 @@ function createWindow(): BrowserWindow {
     if (details.isMainFrame) rendererReadyForHires = false;
   });
 
-  if (isDev && process.env.ELECTRON_RENDERER_URL) {
-    win.loadURL(process.env.ELECTRON_RENDERER_URL);
-  } else {
-    win.loadFile(join(__dirname, '../renderer/index.html'));
-  }
+  const loadApp = (): void => {
+    if (isDev && process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL).catch(() => { /* did-fail-load reports it */ });
+    else void win.loadFile(join(__dirname, '../renderer/index.html')).catch(() => { /* did-fail-load reports it */ });
+  };
+  // A page whose code never starts is loaded again (bootWatchdog.ts): after a
+  // wake from hibernation the office once sat on its splash for good.
+  const boot = createBootWatchdog({
+    setTimer: (fn, ms) => setTimeout(fn, ms),
+    clearTimer: (t) => clearTimeout(t as ReturnType<typeof setTimeout>),
+    reload: () => { if (!win.isDestroyed()) loadApp(); },
+    log: (line) => console.warn(line)
+  });
+  bootWatchdogs.set(wc.id, boot);
+  wc.on('did-start-navigation', (details) => { if (details.isMainFrame && !details.isSameDocument) boot.navigationStarted(); });
+  wc.on('did-fail-load', (_e, code, _desc, _url, isMainFrame) => { if (isMainFrame) boot.loadFailed(code); });
+  wc.on('render-process-gone', (_e, details) => { if (!allowQuit && details.reason !== 'clean-exit') boot.rendererGone(details.reason); });
+  const wcId = wc.id;
+  loadApp();
 
   win.on('closed', () => {
+    boot.dispose();
+    bootWatchdogs.delete(wcId);
     allWindows.delete(win);
     if (mainWindow === win) {
       mainWindow = null;
@@ -4211,19 +3173,8 @@ function findCodexHomeForSession(sessionId: string, siblingsRoot: string): strin
   }
 }
 
-/** Spawn options shared by the `pty:spawn` IPC handler and the god-triggered
- *  ephemeral-worker watcher. */
+/** Spawn options for the `pty:spawn` IPC handler and spawnAgentCore. */
 type AgentSpawnOptions = SpawnOptions & { hive?: AgentMeta; isolate?: boolean; resume?: boolean; requireResume?: boolean; resumeSessionId?: string; provider?: AgentProvider; noAutoInstall?: boolean };
-
-/** Map a `ptyManager.spawn` failure string to the closed `agent_spawn_failed.reason`
- *  enum (analytics.ts). The two known strings come from PtyManager.spawn; anything
- *  else is a generic `spawn_error`. The raw message never leaves the machine — only
- *  the enum value does, per TELEMETRY.md. */
-function spawnFailReason(error?: string): SpawnFailReason {
-  if (error?.startsWith('cwd does not exist')) return 'cwd_missing';
-  if (error?.includes('already exists')) return 'already_running';
-  return 'spawn_error';
-}
 
 ipcMain.handle('pty:spawn', async (evt, opts: AgentSpawnOptions) => {
   if (!opts || typeof opts.id !== 'string' || typeof opts.cwd !== 'string' || typeof opts.command !== 'string') {
@@ -4237,11 +3188,10 @@ ipcMain.handle('pty:spawn', async (evt, opts: AgentSpawnOptions) => {
 
 /** Core agent-spawn logic — provider inference, the missing-CLI installer
  *  short-circuit, git-worktree isolation, hive provisioning, model/resume flags,
- *  and the final PTY spawn. Extracted VERBATIM from the `pty:spawn` IPC handler so
- *  it can ALSO be invoked by the god-triggered ephemeral-worker watcher (which has
- *  no renderer `evt`). `owner` is the window that should receive this PTY's output
- *  (null → the primary window). Behavior-identical to the prior inline handler. */
-async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebContents | null): Promise<{ ok: boolean; error?: string; cwd?: string; worktreePath?: string; resumeNotFound?: boolean; resumed?: boolean; seedPrompt?: string; name?: string }> {
+ *  and the final PTY spawn. Extracted from the `pty:spawn` IPC handler so the
+ *  missing-CLI relaunch can run it without a renderer `evt`. `owner` is the window
+ *  that should receive this PTY's output (null → the primary window). */
+async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebContents | null): Promise<{ ok: boolean; error?: string; cwd?: string; worktreePath?: string; resumeNotFound?: boolean; resumed?: boolean; name?: string }> {
   // A team member never starts without the hook channel (S1,
   // docs/designs/windows-11-installer.md): it would run unwatched, or report to
   // whatever holds the channel's name.
@@ -4249,8 +3199,7 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
   const channelError = opts.hive ? hookServer.channelError() : null;
   if (channelError) return { ok: false, error: channelError };
   // ── cwd INGESTION — expand `~` exactly once, here ───────────────────────────
-  // This is the single door every agent spawn comes through (`pty:spawn` IPC and
-  // the god-triggered ephemeral-worker watcher), so it is where a user-typed
+  // This is the single door every agent spawn comes through, so it is where a user-typed
   // `~/dev/foo` becomes an absolute path. Only a shell expands `~`; Node treats it
   // as a literal dir, so without this every downstream existsSync/statSync fails
   // with `cwd does not exist`. Expanding BEFORE hive provisioning is what makes the
@@ -4269,18 +3218,13 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
     opts.hive = { ...opts.hive, cwd: businessFolder };
   }
   // Which CLI is this? Explicit wins; else inferred from the binary
-  // (claude/codex/grok/agy). Non-Claude providers skip every Claude-only spawn step
+  // (claude/codex/gemini). Non-Claude providers skip every Claude-only spawn step
   // below. Persist the resolved provider onto opts (+ hive meta) so the registry
   // record and downstream provider-aware steps agree on one value.
   const provider = inferAgentProvider(opts.command, opts.provider ?? opts.hive?.provider);
   const claudeProvider = isClaudeProvider(provider);
   opts.provider = provider;
   if (opts.hive) opts.hive = { ...opts.hive, provider };
-  // Activation-funnel entry (v0.4.6): every spawn REQUEST, so (attempted − spawned)
-  // measures the fallout the whole rebuild exists to see. Gated on !noAutoInstall so
-  // the missing-CLI relaunch (the only re-entry, index.ts install-exit handler) does
-  // NOT double-count a single user attempt — it is the SAME attempt continuing.
-  if (!opts.noAutoInstall) analytics.track('agent_spawn_attempted', { provider });
   // ── Missing engine CLI → run its installer visibly (pre-spawn) ───────────────
   // Every engine but Claude, which is handled first in the block below. If the
   // agent's engine binary (codex/…) isn't installed, spawning it
@@ -4333,7 +3277,6 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
         { id: opts.id, cwd: opts.cwd, command: bin, cols: opts.cols, rows: opts.rows, shellScript: claudeMissingScript(process.platform, godName) },
         owner
       );
-      if (!opts.noAutoInstall) analytics.track('agent_spawn_failed', { provider, reason: 'cli_missing' });
       noticeEngineSetup(opts.id);
       syncKeepAwake();
       return res;
@@ -4373,20 +3316,7 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
       // and exits 0, and relaunching there would just respawn the still-missing
       // binary and die with the bare "process exited (code 1)" this whole path exists
       // to replace.
-      if (res.ok && rung.command) {
-        pendingInstallRelaunch.set(opts.id, { opts, owner, bin, rung: rung.kind });
-        // The auto-installer PTY is running; agent_install_finished on its exit says
-        // whether it actually produced an agent (rung is non-manual here by construction).
-        analytics.track('agent_install_started', { provider, rung: rung.kind });
-      } else if (res.ok) {
-        // Manual rung: the PTY only printed a hint (no installer to run, no relaunch
-        // armed), so no agent will start. This is the Mode 2 case that used to send
-        // NOTHING — an absent engine with no unattended install path.
-        analytics.track('agent_spawn_failed', { provider, reason: 'cli_missing' });
-      } else {
-        // The install PTY itself failed to spawn (cwd gone, id clash, throw).
-        analytics.track('agent_spawn_failed', { provider, reason: spawnFailReason(res.error) });
-      }
+      if (res.ok && rung.command) pendingInstallRelaunch.set(opts.id, { opts, owner, bin });
       syncKeepAwake();
       return res;
     }
@@ -4430,24 +3360,9 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
       console.error('[worktree] isolation failed:', e);
     }
   }
-  // Proxy-tier CLIs (qwen/crush) route their LLM traffic through a loopback sidecar
-  // whose UPSTREAM is read from the preset's bridge.baseUrlEnv inside hive.ensureAgent.
-  // For the local-LLM path, feed the user's configured base URL as that upstream so the
-  // proxy forwards to their endpoint (Ollama/LM Studio/vLLM). Set on process.env BEFORE
-  // ensureAgent reads it. (Crush's baseUrlEnv is an inert sentinel used ONLY as this
-  // upstream source; its real routing is the per-agent CRUSH_GLOBAL_CONFIG base_url.)
-  if (opts.hive && (provider === 'crush' || provider === 'qwen')) {
-    const bridge = providerPreset(provider).bridge;
-    const baseUrl = readConfig().providerBaseUrls?.[provider];
-    if (bridge && bridge.kind === 'proxy' && baseUrl) process.env[bridge.baseUrlEnv] = baseUrl;
-  }
   // If the agent carries hive metadata, provision its workspace and add
   // provider-specific spawn injection. Non-Claude providers get shared AGENT_*
   // env only; Claude Code also gets prompt/settings hook args.
-  // Protocol seed that must be TYPED into a bare TUI after boot (Crush —
-  // seedDelivery:'type-into-tui') rather than passed on argv. Surfaced in the spawn
-  // result so the renderer types it through the per-pty write-chain. (ondev-b)
-  let seedPrompt: string | undefined;
   // Claude connectors (docs/designs/claude-connectors.md): the plan is worked
   // out once, passed to the spawn and recorded as what this agent started with,
   // so a change in between still asks for a restart. It rides in the settings
@@ -4543,7 +3458,6 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
           // the business's name, type and city only.
           knowledgeGraph: false,
           theme: readConfig().terminalTheme ?? 'light',
-          mcpDefaults: Object.fromEntries(MCP_CATALOG.map((m) => [m.id, { enabled: false }])),
           skillsDir: skillsResourceDir(),
           extraWritableDirs: [],
           business: (() => {
@@ -4572,8 +3486,7 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
           kgRoot: knowledge.env().KG_ROOT,
           meaningSearch: meaningSearch(),
           theme: readConfig().terminalTheme ?? 'light',
-          // W3 — default-MCP consent state + the bundled skills source dir.
-          mcpDefaults: readConfig().mcpDefaults,
+          // W3 — the bundled skills source dir.
           skillsDir: skillsResourceDir(),
           // The shared palace is mutated by the agent's own `mempalace` calls, so
           // the OS sandbox must let it through (empty when memory is off).
@@ -4612,11 +3525,13 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
       // Only the settings file itself counts: another engine takes none.
       settingsApplied = !claudeProvider || inj.args.includes('--settings');
       researchWalled = isResearch && settingsApplied;
-      seedPrompt = inj.seedPrompt;
-      // A degraded spawn (proxy bridge never bound) is told to the user the same
-      // way breaker escalations are: a native toast, gated on the notifications
-      // setting. The hive already logged it and pushed hive:degraded to the floor.
+      // A degraded spawn (a team list it couldn't read, a hooks file of the
+      // owner's it left alone) is told the
+      // same way breaker escalations are, a native toast gated on the
+      // notifications setting, and always as Michael's report card on Ask me.
+      // A clean start clears the card.
       if (inj.degraded) ownerToast('Agent running degraded', inj.degraded);
+      noteDegradedStart(opts.hive.id, opts.hive.name, inj.degraded);
       // Point the agent's mempalace CLI at the shared palace + the `kg` CLI at the
       // enterprise knowledge store (both no-ops / empty when their flags are off).
       opts.env = isResearch ? { ...(opts.env ?? {}), ...inj.env } : { ...(opts.env ?? {}), ...inj.env, ...memory.env(), ...knowledge.env() };
@@ -4660,14 +3575,12 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
     const cfg = readConfig();
     // Permission posture (D9): only a GUI hire (Add Agent) builds its command
     // through buildSpawnCommand, which bakes autoMode's bypass flag into the
-    // command STRING before this function ever sees it. A main-only spawn (the
-    // ephemeral-worker watcher, a voice hire) skips that step entirely, so it
-    // previously reached here with neither the flag nor any equivalent — every
-    // other Claude spawn path got the user's autoMode posture and this one
-    // didn't. argsWithAutoModeFlag is idempotent (a GUI spawn's args already has
+    // command STRING before this function ever sees it. A spawn that skips that
+    // step would reach here with neither the flag nor any equivalent.
+    // argsWithAutoModeFlag is idempotent (a GUI spawn's args already has
     // the flag, so this is a no-op for it) and is the SAME check spawnAgentCore
-    // already applies for opencode/crush et al a few lines below via
-    // HIVE_AUTO_APPROVE — one global toggle, one posture, every spawn path.
+    // already applies for the other engines through their auto flags. One
+    // global toggle, one posture, every spawn path.
     // Confirmed live: a worker spawned without this flag deadlocked — a
     // cross-session message to it came back "held for the recipient user's
     // approval" with no surface for anyone to ever grant that approval.
@@ -4752,8 +3665,8 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
     }
     opts.args = args;
   }
-  // Idempotent session resume on respawn (#6.6a) — provider-aware: Claude
-  // `--resume <sid>`, Grok `--resume <sid>`, Antigravity `--conversation <id>`.
+  // Idempotent session resume on respawn (#6.6a) — provider-aware: Claude and
+  // Gemini `--resume <sid>`, Codex `resume <sid>`.
   // The recorded session id comes from hook payloads, so
   // a restored worker continues its prior CLI session. Only when requested AND a
   // prior id exists for this agent.
@@ -4840,57 +3753,6 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
   if (Object.keys(nonInteractiveEnv).length > 0) {
     opts.env = { ...(opts.env ?? {}), ...nonInteractiveEnv };
   }
-  // ── BYOK keys + per-provider config for the non-Claude CLI engines (v0.3.1) ──
-  // OpenCode / Crush / pi / qwen read BYOK API keys from standard env vars and, for
-  // the local-LLM path, a per-provider base URL. Keys are write-only in the broker
-  // (read MAIN-ONLY here, never logged); base URLs ride HarnessConfig. Claude/codex
-  // use their own login, so they skip this. Pam guardrails #3/#4/#5.
-  if (opts.hive && (provider === 'opencode' || provider === 'crush' || provider === 'pi' || provider === 'qwen')) {
-    const cfg = readConfig();
-    const extra: Record<string, string> = {};
-    // 1) BYOK keys — LEAST-PRIVILEGE (Pam/Jim NIT-2): inject ONLY the key for the
-    //    spawned model's provider prefix when we can identify it; fall back to all
-    //    stored keys when the model/prefix is unknown (default model, qwen slugs,
-    //    custom). Reduces the blast radius vs handing every CLI all keys.
-    const modelIdx = (opts.args ?? []).indexOf('--model');
-    const modelSlug = modelIdx >= 0 ? (opts.args?.[modelIdx + 1] ?? '') : '';
-    const prefix = modelSlug.includes('/') ? modelSlug.split('/')[0].toLowerCase() : '';
-    const PREFIX_BACKEND: Record<string, string> = {
-      anthropic: 'anthropic', openai: 'openai', google: 'google', gemini: 'google', groq: 'groq', openrouter: 'openrouter'
-    };
-    const scoped = ownValue(PREFIX_BACKEND, prefix);
-    const backends = scoped ? [scoped] : Object.keys(BACKEND_KEY_ENV);
-    for (const backend of backends) {
-      const key = integrations.getSecret(providerKeyRef(backend));
-      if (!key) continue;
-      extra[BACKEND_KEY_ENV[backend]] = key;
-      // OpenCode/AI-SDK's Google provider reads GOOGLE_GENERATIVE_AI_API_KEY, not
-      // GEMINI_API_KEY — inject both so google/* authenticates (Jim NIT #1).
-      if (backend === 'google') extra.GOOGLE_GENERATIVE_AI_API_KEY = key;
-    }
-    // 2) Floor auto-state for pi's bundled extension auto-allow (guardrail #5): it
-    //    only auto-approves tool calls when this is '1' (i.e. floor auto mode on).
-    extra.HIVE_AUTO_APPROVE = cfg.autoMode ? '1' : '0';
-    // 3) OpenCode's auto-approve + local provider live in its single config-injection
-    //    env var, built dynamically so permission:allow is GATED on autoMode (#2).
-    if (provider === 'opencode') {
-      const oc: Record<string, unknown> = { autoupdate: false };
-      if (cfg.autoMode) oc.permission = { edit: 'allow', bash: 'allow', webfetch: 'allow' };
-      const baseUrl = cfg.providerBaseUrls?.opencode;
-      if (baseUrl) {
-        // Register the model id the user actually selects (the part after 'local/')
-        // so `--model local/<id>` resolves; default to 'local'. Without this the
-        // dropdown's `local/llama3` failed against a config that only declared model
-        // 'local' (Jim verify-opencode MUST-FIX #2).
-        const localModel = (prefix === 'local' && modelSlug.slice(6)) || 'local';
-        oc.provider = {
-          local: { npm: '@ai-sdk/openai-compatible', name: 'Local (self-hosted)', options: { baseURL: baseUrl }, models: { [localModel]: { name: localModel } } }
-        };
-      }
-      extra.OPENCODE_CONFIG_CONTENT = JSON.stringify(oc);
-    }
-    opts.env = { ...(opts.env ?? {}), ...extra };
-  }
   // Codex Remote is daemon-based (there is no `/remote-control` slash command).
   // Start/enable the daemon under this agent's isolated CODEX_HOME and connect
   // the TUI to it so the thread is visible in ChatGPT mobile. Best-effort: an
@@ -4945,8 +3807,6 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
       void refreshCliUpdate();
     });
   }
-  if (res.ok) analytics.track('agent_spawned', { provider });
-  else analytics.track('agent_spawn_failed', { provider, reason: spawnFailReason(res.error) });
   // A team member whose terminal comes back mid-close is waited on again.
   try { if (res.ok && opts.hive?.id) closingTime.revive(opts.hive.id); } catch (e) { console.error('[closing-time] revive:', e); }
   syncKeepAwake(); // arm the power-save blocker while ≥1 agent PTY is alive (#18)
@@ -4964,7 +3824,7 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
   if (res.ok && opts.hive?.isGod) { standupOnOfficeOpen(); catchUpOwnerAnswers(); }
   // Research's name is the app's, from its settings (ship 2 D17): the floor
   // takes it from here, so a card saved under an older name follows it.
-  return { ...res, cwd: opts.cwd, ...(worktreePath ? { worktreePath } : {}), ...(resumeNotFound ? { resumeNotFound: true } : {}), ...(didResume ? { resumed: true } : {}), ...(seedPrompt ? { seedPrompt } : {}), ...(isResearch ? { name: hive.researchName() } : {}) };
+  return { ...res, cwd: opts.cwd, ...(worktreePath ? { worktreePath } : {}), ...(resumeNotFound ? { resumeNotFound: true } : {}), ...(didResume ? { resumed: true } : {}), ...(isResearch ? { name: hive.researchName() } : {}) };
 }
 ipcMain.handle('pty:write', (_evt, id: string, data: string) => {
   if (typeof id !== 'string' || typeof data !== 'string') return { ok: false, error: 'invalid args' };
@@ -5010,25 +3870,6 @@ ipcMain.handle('pty:kill', (_evt, id: string, opts?: unknown) => {
   return res;
 });
 ipcMain.handle('pty:list', () => ptyManager.list());
-
-// ─── IPC: analytics (the ONE renderer-facing seam) ──────────────────────────
-/** Count one human-sent message (TELEMETRY.md → `message_sent`). A COUNT, and
- *  nothing else: this channel takes no text, no length and no id, so there is
- *  no shape in which message content could cross it.
- *
- *  This is the only analytics event the renderer can cause. It exists because
- *  two of the four send surfaces — a line typed into the agent's terminal, and
- *  the queue composer — are submits main cannot observe: the `pty:write` handler
- *  above fires on EVERY KEYSTROKE, so counting there would produce a keystroke
- *  meter, not a message count. `steer` and `hive` are counted at their own IPC
- *  handlers in this file and are rejected here (isRendererMessageSurface) so
- *  they can never be counted twice. The event name is fixed here, not passed
- *  in: the renderer chooses a surface, never an event. */
-ipcMain.handle('analytics:messageSent', (_evt, surface: unknown) => {
-  if (!isRendererMessageSurface(surface)) return { ok: false };
-  analytics.trackMessageSent(surface);
-  return { ok: true };
-});
 
 // Resolve a pasted Claude session id to the cwd it originally ran in, so the Add
 // Agent dialog can auto-fill the folder for a resume (#2 zero-step resume). Reads
@@ -5146,40 +3987,6 @@ ipcMain.handle('integrations:setAccess', (_evt, agentId: unknown, id: unknown, l
   writeConfig({ agentCapabilities });
   return { ok: true, restartNeeded: !hasIntegrationTools(before, agentId) && hasIntegrationTools({ agentCapabilities }, agentId) };
 });
-// ─── IPC: per-CLI-provider BYOK keys (write-only) ────────────────────────────
-// API keys for the backend model-providers the non-Claude CLIs use are stored
-// WRITE-ONLY under `apikey:<backend>` in the same encrypted broker. The renderer
-// can SET a key and ASK whether one is set (boolean) — it can never read the
-// plaintext back. Keys are materialized MAIN-ONLY at spawn (spawnAgentCore). Base
-// URLs are non-secret and ride HarnessConfig.providerBaseUrls (normal config save).
-ipcMain.handle('providerKey:set', (_evt, payload: unknown) => {
-  const p = (payload ?? {}) as { backend?: unknown; key?: unknown };
-  if (typeof p.backend !== 'string' || !ownValue(BACKEND_KEY_ENV, p.backend)) return { ok: false, error: 'unknown backend' };
-  if (typeof p.key !== 'string' || !p.key) return { ok: false, error: 'key required' };
-  // A key this computer cannot encrypt is never saved, so say so (and what to do
-  // about it) before anything else touches it.
-  if (!integrations.canStoreSecrets()) return { ok: false, error: integrations.secretStoreUnavailableReason() };
-  const res = integrations.setSecret(providerKeyRef(p.backend), p.key);
-  // The same Anthropic key signs Claude in when the owner chose one in Get
-  // Michael ready: approve the new one and let the step and the card look again.
-  if (res.ok && p.backend === 'anthropic' && readConfig().claudeAuth === 'apiKey') {
-    try { approveClaudeApiKey(p.key); } catch { /* approved again at each start */ }
-    noticeEngineSetup('api-key');
-  }
-  return res;
-});
-ipcMain.handle('providerKey:has', (_evt, backend: unknown) =>
-  typeof backend === 'string' ? integrations.hasSecret(providerKeyRef(backend)) : false);
-ipcMain.handle('providerKey:clear', (_evt, backend: unknown) => {
-  if (typeof backend !== 'string' || !ownValue(BACKEND_KEY_ENV, backend)) return { ok: false, error: 'unknown backend' };
-  try {
-    // deleteSecret never throws: false means the key may still be stored.
-    if (!integrations.deleteSecret(providerKeyRef(backend))) return { ok: false, error: 'The saved key could not be removed. Try again; if it keeps failing, the saved secrets file needs repair.' };
-    if (backend === 'anthropic' && readConfig().claudeAuth === 'apiKey') noticeEngineSetup('api-key');
-    return { ok: true };
-  }
-  catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
-});
 // Probe an integration's reachability through the broker's own auth path (admin-only;
 // runs in main, so the secret is used but never returned — only the upstream status).
 ipcMain.handle('integrations:test', async (_evt, payload: unknown) => {
@@ -5232,7 +4039,6 @@ ipcMain.handle('config:update', (_evt, patch: Partial<HarnessConfig>) => {
   // relaunch, so bootstrap here on the null → set transition. Gated on the
   // transition so ordinary config writes never re-enter it.
   const hiveWasEnabled = hive.enabled();
-  const wasOnboarded = readConfig().onboardingComplete;
   const modelBefore = readConfig().embeddingModel ?? 'minilm';
   const profileBefore = cleanCompanyProfile(readConfig().companyProfile);
   const next = writeConfig(patch);
@@ -5250,19 +4056,6 @@ ipcMain.handle('config:update', (_evt, patch: Partial<HarnessConfig>) => {
   // A new search language: the index was built with the other model, which
   // MemPalace refuses to search with, so it is built again (owner, 2026-10-19).
   if (patch && typeof patch === 'object' && 'embeddingModel' in patch && (next.embeddingModel ?? 'minilm') !== modelBefore) memory.modelChanged();
-  // Live opt-in/out from Settings (TELEMETRY.md); stays off while
-  // COLLECT_USAGE_STATS is false.
-  if (typeof patch?.telemetryEnabled === 'boolean') analytics.setEnabled(COLLECT_USAGE_STATS && patch.telemetryEnabled);
-  // Activation funnel (v0.4.6): onboarding just finished (false → true) — the top of
-  // the launch → first-agent funnel. `provider` is the engine chosen in the wizard.
-  // Fired here (main), not in the renderer, so it rides the same allowlist as the rest.
-  if (!wasOnboarded && next.onboardingComplete) {
-    analytics.track('onboarding_completed', { provider: next.godProvider ?? 'claude' });
-  }
-  // Keep the hive's mirror of the spawn gate current. The queue itself reads
-  // config per tick so it gates immediately; this is for the PROMPT, which is
-  // built per spawn, so flipping the toggle reaches god the next time he starts.
-  if (typeof patch?.orchestratorMaySpawn === 'boolean') hive.setOrchestratorMaySpawn(patch.orchestratorMaySpawn);
   // The company profile and the foundations hold one set of facts (eng finding 6).
   if (patch && typeof patch === 'object' && 'companyProfile' in patch) { try { foundations.profileChanged(profileBefore); } catch (e) { console.error('[foundations] profile', e); } }
   if (!hiveWasEnabled && hive.enabled()) {
@@ -5319,15 +4112,10 @@ ipcMain.handle('config:changeHome', async (_evt, payload: unknown) => {
   // mid-copy — a live git commit into hive/.git would otherwise be copied as a
   // half-written object and corrupt the moved repo.
   try { clearMissionTimers(); } catch (e) { console.error('[changeHome] clearMissionTimers:', e); }
-  try { clearContextTimers(); } catch (e) { console.error('[changeHome] clearContextTimers:', e); }
-  try { stopWebhookDoneObserver(); } catch (e) { console.error('[changeHome] stopWebhookDoneObserver:', e); }
-  try { stopEphemeralWorkerWatcher(); } catch (e) { console.error('[changeHome] stopWorkerWatcher:', e); }
   try { integrationBroker.stop(); } catch (e) { console.error('[changeHome] broker.stop:', e); }
   try { mailService.closeAll(); } catch (e) { console.error('[changeHome] mail.closeAll:', e); }
   try { hive.stopRouter(); } catch (e) { console.error('[changeHome] stopRouter:', e); }
   try { hookServer.stop(); } catch (e) { console.error('[changeHome] hookServer.stop:', e); }
-  try { stopSlackServer(); } catch (e) { console.error('[changeHome] slack.stop:', e); }
-  try { stopWebhookServer(); } catch (e) { console.error('[changeHome] webhook.stop:', e); }
   try { memory.stop(); } catch (e) { console.error('[changeHome] memory.stop:', e); }
   try { memoryTidy.stop(); } catch (e) { console.error('[changeHome] memoryTidy.stop:', e); }
 
@@ -5338,9 +4126,6 @@ ipcMain.handle('config:changeHome', async (_evt, payload: unknown) => {
       // Copy failed: recover IN PLACE against the unchanged old home (config never
       // repointed) so the user loses nothing, and surface the error — no relaunch.
       bootstrapHiveServices();
-      const cfg = readConfig();
-      if (cfg.slackEnabled && cfg.slackSigningSecret) void startSlackServer();
-      reconcileWebhookServer();
       return { ok: false, error: `Could not copy data: ${e instanceof Error ? e.message : String(e)}` };
     }
   }
@@ -5389,14 +4174,6 @@ ipcMain.handle('config:startOverHere', () => {
 });
 
 // ─── IPC: filesystem (sandboxed to a root) ──────────────────────────────────
-ipcMain.handle('fs:listDir', (_evt, root: unknown, rel: unknown) => {
-  if (typeof root !== 'string' || typeof rel !== 'string') return { ok: false, error: 'invalid args' };
-  return listDir(root, rel);
-});
-ipcMain.handle('fs:readFile', (_evt, root: unknown, rel: unknown) => {
-  if (typeof root !== 'string' || typeof rel !== 'string') return { ok: false, error: 'invalid args' };
-  return readFileText(root, rel);
-});
 // Raw bytes for files the text reader refuses (images). The renderer cannot
 // load them off disk itself — the CSP has no `file:` source and no file
 // protocol is registered — so the bytes come through here and become a `blob:`
@@ -5404,12 +4181,6 @@ ipcMain.handle('fs:readFile', (_evt, root: unknown, rel: unknown) => {
 ipcMain.handle('fs:readBinary', (_evt, root: unknown, rel: unknown) => {
   if (typeof root !== 'string' || typeof rel !== 'string') return { ok: false, error: 'invalid args' };
   return readFileBinary(root, rel);
-});
-ipcMain.handle('fs:writeFile', (_evt, root: unknown, rel: unknown, content: unknown) => {
-  if (typeof root !== 'string' || typeof rel !== 'string' || typeof content !== 'string') {
-    return { ok: false, error: 'invalid args' };
-  }
-  return writeFileText(root, rel, content);
 });
 // v0.3.4: existence check for the terminal ⌘-click markdown flow (metadata only).
 ipcMain.handle('fs:statAbs', (_evt, p: unknown) => {
@@ -5621,83 +4392,6 @@ ipcMain.handle('fs:openAskFile', async (_evt, p: unknown, who: unknown) => {
 ipcMain.handle('git:isRepo', (_evt, cwd: unknown) => {
   if (typeof cwd !== 'string') return false;
   return isRepo(cwd);
-});
-
-// The repo a cwd belongs to, following a linked worktree back to its main
-// checkout — the renderer groups the agent roster by this.
-ipcMain.handle('git:mainRepo', (_evt, cwd: unknown) => {
-  if (typeof cwd !== 'string' || !cwd) return null;
-  return mainRepoRoot(cwd);
-});
-ipcMain.handle('git:branch', (_evt, cwd: unknown) => {
-  if (typeof cwd !== 'string') return { error: 'invalid cwd' };
-  return getBranch(cwd);
-});
-ipcMain.handle('git:status', (_evt, cwd: unknown) => {
-  if (typeof cwd !== 'string') return { error: 'invalid cwd' };
-  return getStatus(cwd);
-});
-ipcMain.handle('git:log', (_evt, cwd: unknown, n: unknown) => {
-  if (typeof cwd !== 'string') return { error: 'invalid cwd' };
-  const count = typeof n === 'number' ? Math.min(500, Math.max(1, n)) : 50;
-  return getLog(cwd, count);
-});
-ipcMain.handle('git:branches', (_evt, cwd: unknown) => {
-  if (typeof cwd !== 'string') return { error: 'invalid cwd' };
-  return getBranches(cwd);
-});
-ipcMain.handle('git:aheadBehind', (_evt, cwd: unknown) => {
-  if (typeof cwd !== 'string') return { error: 'invalid cwd' };
-  return getAheadBehind(cwd);
-});
-ipcMain.handle('git:diff', (_evt, cwd: unknown, relPath: unknown) => {
-  if (typeof cwd !== 'string' || typeof relPath !== 'string') {
-    return { ok: false, error: 'invalid args' };
-  }
-  return getDiff(cwd, relPath);
-});
-// ─── v0.3.4: history / compare / checkout (git visualization) ───────────────
-ipcMain.handle('git:logGraph', (_evt, cwd: unknown, n: unknown, skip: unknown) => {
-  if (typeof cwd !== 'string') return { error: 'invalid args' };
-  const count = Math.min(500, Math.max(1, typeof n === 'number' ? n : 200));
-  const off = Math.max(0, typeof skip === 'number' ? skip : 0);
-  return getLogGraph(cwd, count, off);
-});
-ipcMain.handle('git:commitFiles', (_evt, cwd: unknown, sha: unknown) => {
-  if (typeof cwd !== 'string' || typeof sha !== 'string') return { error: 'invalid args' };
-  return getCommitFiles(cwd, sha);
-});
-ipcMain.handle('git:showFile', (_evt, cwd: unknown, rev: unknown, relPath: unknown) => {
-  if (typeof cwd !== 'string' || typeof rev !== 'string' || typeof relPath !== 'string') {
-    return { ok: false, error: 'invalid args' };
-  }
-  return getFileAtRev(cwd, rev, relPath);
-});
-ipcMain.handle('git:compareRefs', (_evt, cwd: unknown, base: unknown, head: unknown, mode: unknown) => {
-  if (typeof cwd !== 'string' || typeof base !== 'string' || typeof head !== 'string') {
-    return { error: 'invalid args' };
-  }
-  return compareRefs(cwd, base, head, mode === 'two' ? 'two' : 'three');
-});
-ipcMain.handle('git:worktrees', (_evt, cwd: unknown) => {
-  if (typeof cwd !== 'string') return { error: 'invalid args' };
-  return listWorktrees(cwd);
-});
-ipcMain.handle('git:checkout', async (_evt, cwd: unknown, ref: unknown, detach: unknown) => {
-  if (typeof cwd !== 'string' || typeof ref !== 'string') return { ok: false, error: 'invalid args' };
-  // Guard: never swap files under an actively-working agent. Objective signal
-  // owned by main — any live pty whose cwd sits in this tree and emitted output
-  // in the last 10s is treated as mid-run. (Idle-but-open terminals are fine:
-  // checkoutRef additionally requires a clean tree, and TUIs redraw on fs
-  // changes gracefully.)
-  const busy = ptyManager.list().find((p) =>
-    isSameOrInside(cwd, p.cwd) &&
-    Date.now() - p.lastOutputAt < 10_000
-  );
-  if (busy) {
-    return { ok: false, error: `an agent is actively working in this repo (${busy.id}). Try again when it goes quiet` };
-  }
-  return checkoutRef(cwd, ref, detach === true);
 });
 
 // ─── IPC: roster mirror (shared between dev and a packaged build) ───────────
@@ -6082,6 +4776,15 @@ ipcMain.handle('kg:notice', () => {
   try { return { notice: knowledgeNoticeDue(cfg.knowledgeGraph?.enabled, cfg.knowledgeOnNoticeSeen, () => knowledge.list()) }; } catch { return { notice: false }; }
 });
 ipcMain.handle('kg:noticeSeen', () => { writeConfig({ knowledgeOnNoticeSeen: true }); return { ok: true }; });
+/** Members that started with something missing: Michael's report cards. */
+ipcMain.handle('degraded:list', () => degradedShown());
+/** Got it on one: hidden until it changes or the member starts clean. */
+ipcMain.handle('degraded:dismiss', (_evt, agentId: unknown) => {
+  if (typeof agentId !== 'string') return { ok: false };
+  degradedState = dismissNotice(degradedState, agentId);
+  pushDegraded();
+  return { ok: true };
+});
 /** The one time update card was read (Got it or Open Research settings). */
 ipcMain.handle('research:noticeSeen', () => {
   const cfg = readConfig();
@@ -6109,12 +4812,6 @@ ipcMain.handle('connectors:seen', () => {
 });
 /** An agent's handoff history, received and sent, for its Messages tab. */
 ipcMain.handle('hive:history', (_evt, id: unknown) => (typeof id === 'string' ? hive.messageHistory(id) : []));
-// Voice read-layer: recent message CONTENT (inbox/outbox bodies), REDACTED
-// main-side by hive.voiceMessages(). The renderer/voice layer never sees a raw
-// body — secrets are stripped here, before the result crosses IPC.
-ipcMain.handle('hive:messages', (_evt, opts: unknown) =>
-  hive.voiceMessages(opts && typeof opts === 'object' ? (opts as Parameters<typeof hive.voiceMessages>[0]) : {})
-);
 /** The last time the app cleared an agent's conversation (safeClearer.ts). */
 ipcMain.handle('hive:clearedState', (_evt, id: unknown) => (typeof id === 'string' ? hive.clearedState(id) : null));
 /** Undo a clear: point the agent back at its earlier conversation and restart
@@ -6141,11 +4838,6 @@ ipcMain.handle('hive:send', (_evt, partial: Partial<HiveMessage>, from: unknown)
   const sender = typeof from === 'string' ? from : 'system';
   // A 'human' send from the window is the owner's own (ownerSaid trusts only these).
   const msg = hive.send(partial ?? {}, sender, undefined, sender === 'human');
-  // Count only what a PERSON sent. Every renderer surface that dispatches on a
-  // human's behalf passes 'human' (Command Center dispatch, thread replies, ASK
-  // ME answers); agent-to-agent traffic passes the agent id and would swamp the
-  // number. Counted AFTER the send so a rejected message is never counted.
-  if (sender === 'human') analytics.trackMessageSent('hive');
   return { ok: true, message: msg };
 });
 // Michael's open requests from the owner, by card (card-lifecycle.md): the
@@ -6190,14 +4882,6 @@ ipcMain.handle('hive:firstTask', (_evt, payload: unknown) => {
   }
   hive.send({ to: MICHAEL_ID, act: 'request', subject: first.card.title, body: first.body, conversation: cardConversation(first.card.id), requires_reply: true }, 'human');
   return { ok: true, sent: true };
-});
-ipcMain.handle('hive:addTask', (_evt, task: unknown) => {
-  if (!task || typeof task !== 'object' || Array.isArray(task)
-    || typeof (task as { id?: unknown }).id !== 'string') {
-    return { ok: false, error: 'invalid task' };
-  }
-  if (!hive.enabled()) return { ok: false, error: 'hive disabled (no harnessHome)' };
-  return { ok: hive.addTask(task as HiveTask) };
 });
 /** The digest an answer is recorded by: its question and answer, word for word. */
 function answerDigest(q: string, a: string): string {
@@ -6422,22 +5106,6 @@ const MODEL_CATALOG_CACHE = () => join(app.getPath('userData'), 'model-catalog.j
 ipcMain.handle('models:catalog', async (_evt, force: unknown) =>
   loadModelCatalog(MODEL_CATALOG_CACHE(), { force: force === true }));
 
-// ─── IPC: skills (installed locally, and the browsable catalog) ─────────────
-/** Skills the CLIs on this machine can already use. Scans the registered repos
- *  plus the agent's own cwd, so a project-scoped skill shows up where it applies. */
-ipcMain.handle('skills:local', (_evt, cwd: unknown): LocalSkill[] => {
-  const cfg = readConfig();
-  const cwds = [
-    ...(typeof cwd === 'string' && cwd ? [cwd] : []),
-    ...(cfg.registeredRepos ?? [])
-  ];
-  try {
-    return listLocalSkills({ cwds, bundledDir: skillsResourceDir() });
-  } catch (e) {
-    console.error('[skills] local scan failed:', e);
-    return [];
-  }
-});
 /** The business types onboarding offers, each with its core agents merged in.
  *  A pack that fails to load is reported rather than thrown: onboarding's first
  *  screen is this list, and one bad file must not leave an owner with an empty
@@ -6631,42 +5299,6 @@ ipcMain.handle('folders:ensure', (_evt, paths: unknown) => {
   return list.map((p) => ensureFolder(expandTilde(p)));
 });
 
-/** The skills catalog, parsed from its README and cached in userData.
- *  `force` is the explicit refresh button; everything else is served from a
- *  day-old cache so opening the tab never waits on the network. */
-ipcMain.handle('skills:catalog', async (_evt, force: unknown) => {
-  const cachePath = join(app.getPath('userData'), 'skill-catalog.json');
-  return loadCatalog(cachePath, { force: force === true });
-});
-
-/** Install one catalog skill into ~/.claude/skills. Structured refusals, never a
- *  throw: the UI distinguishes "not installable" from "install failed". */
-ipcMain.handle('skills:install', async (_evt, url: unknown, name: unknown) => {
-  if (typeof url !== 'string' || typeof name !== 'string') {
-    return { ok: false as const, error: 'bad request' };
-  }
-  return installSkill(url, name);
-});
-/** Delete an installed skill. The guard rails live in uninstallSkill — it refuses
- *  any path it cannot prove is a skill folder inside a skills root. */
-ipcMain.handle('skills:uninstall', (_evt, path: unknown) => {
-  if (typeof path !== 'string') return { ok: false as const, error: 'bad request' };
-  const cfg = readConfig();
-  return uninstallSkill(path, { cwds: cfg.registeredRepos ?? [] });
-});
-/** Reveal a skill on disk. `openExternal` is deliberately https-only, so a
- *  file:// URL cannot (and should not) be smuggled through it. */
-ipcMain.handle('skills:reveal', (_evt, path: unknown) => {
-  if (typeof path !== 'string' || !path.trim()) return { ok: false, error: 'bad request' };
-  const skillRoots = [join(homedir(), '.claude', 'skills'), join(homedir(), '.config', 'opencode')];
-  const target = resolve(path);
-  const inRoot = skillRoots.some((r) => target.startsWith(resolve(r) + sep))
-    || (readConfig().registeredRepos ?? []).some((c) => target.startsWith(resolve(c) + sep));
-  if (!inRoot) return { ok: false, error: 'outside a managed skills directory' };
-  shell.showItemInFolder(target);
-  return { ok: true };
-});
-
 // ─── IPC: Get Michael ready (engineSetup.ts) ────────────────────────────────
 // Where Claude stands on this computer, its install and its sign in, each run in
 // a terminal the step can show (Show details). Only Claude is set up here; any
@@ -6744,8 +5376,6 @@ ipcMain.handle('engineSetup:install', (e): { ok: boolean; error?: string } => {
   const res = process.platform === 'win32'
     ? ptyManager.spawn({ id: ENGINE_INSTALL_PTY, cwd: homedir(), command: 'claude', cols: 100, rows: 12, shellScript: script }, e.sender)
     : ptyManager.spawn({ id: ENGINE_INSTALL_PTY, cwd: homedir(), command: '/bin/sh', args: ['-c', script], cols: 100, rows: 12 }, e.sender);
-  if (res.ok) analytics.track('agent_install_started', { provider: 'claude', rung: 'native' });
-  else analytics.track('agent_spawn_failed', { provider: 'claude', reason: spawnFailReason(res.error) });
   return res;
 });
 // Sign in: `claude auth login` opens the browser. A fresh run each time, so
@@ -6854,23 +5484,10 @@ ipcMain.handle('tools:status', (): ToolStatus[] => {
 // the mine loop that boot's start() had to skip — otherwise the pill reads
 // "getting ready" until the app is restarted.
 ipcMain.handle('hive:memoryStatus', () => memory.refresh());
-ipcMain.handle('hive:memoryWakeUp', (_evt, wing: unknown) =>
-  memory.wakeUp(typeof wing === 'string' ? wing : undefined));
-ipcMain.handle('hive:mineNow', () => { memory.mineNow(); return { ok: true }; });
-// Condense memory.md on demand: an explicit id condenses that one agent (skips
-// the size trigger — a "condense now" button); no id runs a full threshold scan.
-ipcMain.handle('memory:reflectNow', (_evt, id: unknown) =>
-  memoryTidy.tidyNow(typeof id === 'string' && id ? id : undefined));
 
 // ─── IPC: enterprise Knowledge Graph (multimodal context for agents) ─────────
 ipcMain.handle('kg:status', () => knowledge.status());
 ipcMain.handle('kg:list', () => knowledge.list());
-ipcMain.handle('kg:search', (_evt, query: unknown, limit: unknown) => {
-  if (typeof query !== 'string' || !query.trim()) return [];
-  return knowledge.search(query, typeof limit === 'number' ? limit : undefined);
-});
-ipcMain.handle('kg:get', (_evt, id: unknown) =>
-  (typeof id === 'string' && id ? knowledge.get(id) : null));
 // Open a document in the owner's own app; a save there is read in again.
 ipcMain.handle('kg:open', (_evt, id: unknown) =>
   (typeof id === 'string' && id ? knowledgeEdits.open(id).catch((e) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) })) : { ok: false as const, error: 'missing' }));
@@ -6879,16 +5496,6 @@ ipcMain.handle('kg:remove', (_evt, id: unknown) => {
   const ok = typeof id === 'string' && id ? knowledge.remove(id) : false;
   if (ok) memory.companyKnowledgeChanged(); // drop it from search by meaning too
   return { ok };
-});
-// Ingest one or more files from disk. Best-effort per file; returns per-file
-// results so the UI can report partial success.
-ipcMain.handle('kg:ingestFiles', async (_evt, payload: unknown) => {
-  const p = (payload ?? {}) as { paths?: unknown; tags?: unknown };
-  const paths = Array.isArray(p.paths) ? p.paths.filter((x): x is string => typeof x === 'string') : [];
-  const tags = Array.isArray(p.tags) ? p.tags.filter((x): x is string => typeof x === 'string') : undefined;
-  const results = await ingestSequentially(paths, tags);
-  if (results.some((r) => r.ok)) memory.companyKnowledgeChanged(); // index it for search by meaning
-  return { results };
 });
 // Open a multi-file picker and ingest the chosen artifacts in one round-trip.
 ipcMain.handle('kg:addFiles', async (evt) => {
@@ -6926,7 +5533,7 @@ async function ingestSequentially(paths: string[], tags?: string[]) {
 
 // ─── IPC: composer attachments (images + arbitrary files, attached by PATH) ──
 // The message queue pipes raw text into a Claude CLI PTY, so attachments travel
-// as a file PATH the agent reads with its Read tool (same convention as Slack).
+// as a file PATH the agent reads with its Read tool.
 // Picker offers an Images group + All Files.
 ipcMain.handle('dialog:attachFiles', async (evt) => {
   const win = BrowserWindow.fromWebContents(evt.sender);
@@ -6957,23 +5564,6 @@ ipcMain.handle('clipboard:saveImage', async () => {
   }
 });
 
-// ─── IPC: command history (SQLite — every prompt submitted to an agent) ──────
-ipcMain.handle('history:add', (_evt, payload: unknown) => {
-  const p = (payload ?? {}) as { agentId?: unknown; cwd?: unknown; text?: unknown };
-  if (typeof p.agentId !== 'string' || typeof p.text !== 'string') return { ok: false, error: 'invalid args' };
-  try {
-    persist.addHistory({ agentId: p.agentId, cwd: typeof p.cwd === 'string' ? p.cwd : null, text: p.text });
-    return { ok: true };
-  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
-});
-ipcMain.handle('history:list', (_evt, agentId: unknown, limit: unknown) =>
-  persist.listHistory(
-    typeof agentId === 'string' && agentId ? agentId : undefined,
-    typeof limit === 'number' ? limit : undefined
-  ));
-ipcMain.handle('history:search', (_evt, query: unknown, limit: unknown) =>
-  persist.searchHistory(typeof query === 'string' ? query : '', typeof limit === 'number' ? limit : undefined));
-
 // ─── IPC: quit confirmation ─────────────────────────────────────────────────
 /** Tear the harness down and quit. Shared by the hard "kill all & quit" path
  *  and the closing-time conclusion (after the god confirmed the floor saved). */
@@ -6982,21 +5572,15 @@ function teardownAndQuit(): void {
   // Each teardown step is best-effort: a throw here (e.g. a dying child or a
   // half-torn-down socket) must never abort the quit or pop a crash dialog.
   try { clearMissionTimers(); } catch (e) { console.error('[quit] clearMissionTimers:', e); }
-  try { clearContextTimers(); } catch (e) { console.error('[quit] clearContextTimers:', e); }
-  try { stopWebhookDoneObserver(); } catch (e) { console.error('[quit] stopWebhookDoneObserver:', e); }
-  try { stopEphemeralWorkerWatcher(); } catch (e) { console.error('[quit] stopWorkerWatcher:', e); }
   try { integrationBroker.stop(); } catch (e) { console.error('[quit] broker.stop:', e); }
   try { mailService.closeAll(); } catch (e) { console.error('[quit] mail.closeAll:', e); }
   try { hive.stopRouter(); } catch (e) { console.error('[quit] stopRouter:', e); }
   try { hookServer.stop(); } catch (e) { console.error('[quit] hookServer.stop:', e); }
   try { telemetry.stop(); } catch (e) { console.error('[quit] telemetry.stop:', e); }
-  try { stopSlackServer(); } catch (e) { console.error('[quit] slack.stop:', e); }
-  try { stopWebhookServer(); } catch (e) { console.error('[quit] webhook.stop:', e); }
   try { memory.stop(); } catch (e) { console.error('[quit] memory.stop:', e); }
   try { memoryTidy.stop(); } catch (e) { console.error('[quit] memoryTidy.stop:', e); }
   try { pulseTelemetry.runningPause(officeStopped()); pulseTelemetry.flush(); } catch (e) { console.error('[quit] pulse flush:', e); }
   try { persist.close(); } catch (e) { console.error('[quit] persist.close:', e); }
-  try { hive.stopAllProxyBridges(); } catch (e) { console.error('[quit] stopAllProxyBridges:', e); }
   try { ptyManager.killAll(); } catch (e) { console.error('[quit] killAll:', e); }
   app.quit();
 }
@@ -7068,22 +5652,14 @@ ipcMain.handle('app:closingTimeSaid', (_evt, ids: unknown) => {
 function stopForReset(tag: string, opts: { keepPersist?: boolean } = {}): void {
   const step = (name: string, fn: () => void): void => { try { fn(); } catch (e) { console.error(`[${tag}] ${name}:`, e); } };
   step('clearMissionTimers', () => clearMissionTimers());
-  step('clearContextTimers', () => clearContextTimers());
-  step('stopWebhookDoneObserver', () => stopWebhookDoneObserver());
-  step('stopWorkerWatcher', () => stopEphemeralWorkerWatcher());
   step('broker.stop', () => integrationBroker.stop());
   step('mail.closeAll', () => mailService.closeAll());
   step('stopRouter', () => hive.stopRouter());
   step('hookServer.stop', () => hookServer.stop());
   step('telemetry.stop', () => telemetry.stop());
-  step('slack.stop', () => stopSlackServer());
   step('memory.stop', () => memory.stop());
   step('memoryTidy.stop', () => memoryTidy.stop());
   if (!opts.keepPersist) step('persist.close', () => persist.close());
-  // The same stops as quitting (teardownAndQuit): proxy sidecars and the
-  // webhook server would otherwise outlive the relaunch.
-  step('stopAllProxyBridges', () => hive.stopAllProxyBridges());
-  step('webhook.stop', () => stopWebhookServer());
   step('killAll', () => ptyManager.killAll());
 }
 
@@ -7208,11 +5784,7 @@ ipcMain.handle('app:resetMemory', async () => {
   return { ok: true };
 });
 
-// ─── IPC: token telemetry (real usage + est. cost from CC transcripts) ───────
-// Reconciler/fallback path: per-cwd transcript sum, now priced PER MODEL (cost
-// bug #1 fixed in pricing.ts). Kept for back-compat with the existing UsageRow.
-ipcMain.handle('hive:agentUsage', (_evt, cwd: unknown) =>
-  typeof cwd === 'string' ? readAgentUsage(cwd) : null);
+// ─── IPC: token telemetry (context size from CC transcripts) ─────────────────
 // Current context size (tokens) of an agent's LIVE session — the transcript
 // path is learned from the agent's hook payloads (SessionStart fires right at
 // spawn), so this works even when several agents share one cwd. Null until the
@@ -7233,72 +5805,10 @@ ipcMain.handle('hive:agentContext', (_evt, agentId: unknown) => {
   return { tokens: readContextTokens(tp) ?? 0 };
 });
 
-// A consolidated, NON-SENSITIVE per-agent directory for the voice read-layer
-// (Realtime Michael's get_agent_detail / list_agents). One read that joins
-// everything the office-floor sidebar + telemetry know per agent: the registry
-// record (name/role/provider/cwd/status/archived/isGod/isAssistant/sessionId/
-// cwdValid), live token + breaker + last-tool telemetry, and the current context
-// window fill. Includes ARCHIVED agents (unlike the heartbeat's fleet.json, which
-// is live-only) so Michael can speak to inactive agents — their cwd and memory
-// stay reachable. PII-free: no secrets, env, or API keys ever leave main; cost is
-// carried as tokens (+ a usd field the voice layer deliberately never speaks).
-ipcMain.handle('hive:agentDirectory', () => {
-  if (!hive.enabled()) return { godId: null, agents: [] };
-  const reg = hive.registry();
-  const snap = telemetry.snapshot();
-  const usageById = new Map(snap.usage.map((u) => [u.agentId, u]));
-  const now = Date.now();
-  const agents = Object.entries(reg.agents).map(([id, a]) => {
-    const u = usageById.get(id);
-    const spans = snap.spans[id] ?? [];
-    const tokens = u ? u.input + u.output + u.cacheRead + u.cacheCreation : 0;
-    const ctx = hookServer.contextFor(id);
-    return {
-      id,
-      name: a.name,
-      role: a.role ?? (a.isGod ? 'orchestrator' : 'agent'),
-      provider: a.provider ?? 'claude',
-      model: u?.model ?? null,
-      status: a.status ?? 'idle',
-      cwd: a.cwd ?? null,
-      cwdValid: a.cwdValid ?? null,
-      archived: !!a.archived,
-      isGod: !!a.isGod,
-      isAssistant: !!a.isAssistant,
-      sessionId: a.sessionId ?? null,
-      hasMemory: hive.hasMemory(id),
-      inboxBacklog: hive.inboxBacklog(id),
-      breaker: breaker.levelFor(id),
-      tokens,
-      usd: u ? Number(u.usd.toFixed(4)) : 0,
-      lastTool: spans.length ? spans[spans.length - 1].tool : null,
-      lastActiveSecAgo: u ? Math.round((now - u.ts) / 1000) : null,
-      contextTokens: ctx?.tokens ?? null,
-      contextLimit: ctx?.limit ?? null,
-      contextPct: ctx && ctx.limit > 0 ? Math.round((ctx.tokens / ctx.limit) * 100) : null
-    };
-  });
-  return { godId: reg.godId, agents };
-});
-
 // ─── IPC: live telemetry (the OTel collector — the locked usage-provider seam) ─
-// The fleet grid + span waterfall (#7B) read these; Lane A's breaker (#6)
+// The fleet grid (#7B) reads these; Lane A's breaker (#6)
 // consumes getAgentUsage in-process via the provider, not over IPC.
-ipcMain.handle('telemetry:usage', (_evt, agentId: unknown) =>
-  typeof agentId === 'string' ? telemetry.getAgentUsage(agentId) : null);
-ipcMain.handle('telemetry:spans', (_evt, agentId: unknown) =>
-  typeof agentId === 'string' ? telemetry.getSpans(agentId) : []);
 ipcMain.handle('telemetry:snapshot', () => telemetry.snapshot());
-
-// ─── IPC: circuit-breaker state (Lane A #6 policy → this lane's avatars/meter) ─
-// Lane A's breaker calls this with a BreakerState; we fan it out to the renderer
-// on `control:breakerState`, where the avatar adapter gives it precedence over
-// hook-derived status (#5C looping/zombie). Defined here so the channel exists
-// before Jim's policy lands; he produces, this lane consumes.
-ipcMain.handle('control:setBreakerState', (_evt, state: unknown) => {
-  try { liveWebContents()?.send('control:breakerState', state); } catch { /* window tore down */ }
-  return { ok: true };
-});
 
 // ─── IPC: operator control over agents (#7C.1–7C.3) ─────────────────────────
 // All return the agent's fresh control snapshot so the UI can reflect state.
@@ -7321,18 +5831,9 @@ ipcMain.handle('control:resume', (_evt, agentId: unknown) => {
   control.resume(agentId);
   return control.snapshot(agentId);
 });
-ipcMain.handle('control:gateTool', (_evt, agentId: unknown, tool: unknown, on: unknown) => {
-  if (typeof agentId !== 'string' || typeof tool !== 'string') return null;
-  control.gateTool(agentId, tool, on === true);
-  return control.snapshot(agentId);
-});
 ipcMain.handle('control:steer', (_evt, agentId: unknown, text: unknown) => {
   if (typeof agentId !== 'string' || typeof text !== 'string') return null;
   control.steer(agentId, text);
-  // A steer typed into the control strip is a human message. Counted HERE, at
-  // the IPC seam, and deliberately not inside control.steer(): closingTime and
-  // the voice action layer call that directly, and neither is a person typing.
-  analytics.trackMessageSent('steer');
   return control.snapshot(agentId);
 });
 ipcMain.handle('control:halt', (_evt, agentId: unknown) => {
@@ -7446,12 +5947,6 @@ ipcMain.handle('pulse:snapshot', (_evt, period: unknown, compare: unknown) => {
   // they land).
   try { pulseTelemetry.flush(); const office = pulseOffice(); if (office) { pulseBackfillOnce(office); pulseTick(office); } } catch (e) { console.error('[pulse] snapshot tick', e); }
   return pulse.snapshot(isPeriod(period) ? period : 'this-week', compare === true);
-});
-// Whether Pulse's points are flowing (T9): the last batch, failed writes by
-// day and hook frames refused per member.
-ipcMain.handle('telemetry:health', () => {
-  const office = pulseOffice();
-  return pulseHealth.view(office, office ? pulseTelemetry.failedWrites(office) : {}, hookServer.rejectedFrames());
 });
 ipcMain.handle('pulse:apply', (_evt, id: unknown, expected: unknown) => (typeof id === 'string' ? pulse.apply(id, expected) : { ok: false, error: 'stale' }));
 ipcMain.handle('pulse:modelApplied', (_evt, id: unknown, agentId: unknown, from: unknown, to: unknown) =>
@@ -7862,11 +6357,6 @@ ipcMain.handle('github:issues', (_evt, cwd: unknown) =>
   typeof cwd === 'string' ? listIssues(cwd) : { ok: false, error: 'no cwd' }
 );
 
-// ─── IPC: GitHub CI status watcher (gh CLI) ──────────────────────────────────
-ipcMain.handle('github:ciRuns', (_evt, cwd: unknown) =>
-  typeof cwd === 'string' ? listCIRuns(cwd) : { ok: false, error: 'no cwd' }
-);
-
 // ─── IPC: desktop notifications toggle ──────────────────────────────────────
 ipcMain.handle('app:setNotifications', (_evt, val) => writeConfig({ notifications: val === true }));
 
@@ -7892,1003 +6382,10 @@ ipcMain.handle('app:setLoginItem', (_evt, enabled: unknown) => {
   return app.getLoginItemSettings().openAtLogin;
 });
 
-// ─── IPC: Slack integration ─────────────────────────────────────────────────
-ipcMain.handle('slack:start', () => startSlackServer());
-/** Stop must survive a restart. Boot re-arms from `slackEnabled`, so stopping
- *  without clearing it silently brought the server back on the next launch —
- *  the user pressed Stop and Slack was live again.
- *
- *  Persist BEFORE tearing down. If the write throws (read-only volume, ENOSPC)
- *  the server is still up and the UI stays truthful; the other order leaves a
- *  dead server that still reads as Connected with the flag set, which is this
- *  same bug again with no error to show for it.
- *
- *  Only this handler clears the flag. changeHome / quit / reset call
- *  `stopSlackServer()` directly and must not: they are lifecycle, not a user
- *  turning the integration off. (Start persists the flag from the renderer, in
- *  `SettingsModal.startSlack`, not here.) */
-ipcMain.handle('slack:stop', () => {
-  writeConfig({ slackEnabled: false });
-  stopSlackServer();
-  return { ok: true };
-});
-/** Current connection state + last Request URL — lets Settings hydrate the
- *  "Connected" badge and re-show the persisted tunnel URL on reopen. */
-ipcMain.handle('slack:status', () => ({ running: slackServer != null, url: lastSlackUrl }));
-/** Absolute path to the bundled reply helper, for the prompt the office worker
- *  runs to post its summary back in-thread. No secret crosses this boundary. */
-ipcMain.handle('slack:replyScriptPath', () => slackReplyScriptPath());
-/** Renderer's immediate "queued" ack into the triggering Slack thread. The bot
- *  token stays in main — only channel/thread/text cross IPC. */
-ipcMain.handle('slack:reply', (_evt, arg: unknown) => {
-  const p = (arg ?? {}) as { channel?: unknown; thread_ts?: unknown; text?: unknown };
-  const cfg = readConfig();
-  // CLAUSE-3 (human: "stop posting into Slack by default"): this is the ONLY
-  // app/voice-INITIATED proactive Slack post (the renderer's "queued" ack). It is
-  // OFF unless the user opts in via Settings → Slack. The Slack-ORIGIN done-reply
-  // round-trip (done-poller) and an agent's own direct /reply are NOT routed
-  // through here, so they are unaffected and always stay on.
-  if (!cfg.slackProactivePosting) return { ok: false, error: 'app-initiated Slack posting disabled (enable in Settings → Slack)' };
-  const botToken = cfg.slackBotToken;
-  if (!botToken) return { ok: false, error: 'no bot token' };
-  if (typeof p.channel !== 'string' || typeof p.thread_ts !== 'string' || typeof p.text !== 'string') {
-    return { ok: false, error: 'channel, thread_ts, text required' };
-  }
-  // CLAUSE-1 (fix-slack-integration): an app-initiated send must target an
-  // EXPLICIT thread — reject a blank/whitespace channel or thread rather than
-  // letting it fall through to an implicit destination (the channel root).
-  if (!p.channel.trim() || !p.thread_ts.trim()) {
-    return { ok: false, error: 'explicit channel + thread_ts required' };
-  }
-  return postSlackReply({ botToken, channel: p.channel, thread_ts: p.thread_ts, text: p.text });
-});
-ipcMain.handle('slack:setConfig', (_evt, patch: unknown) => {
-  const p = (patch ?? {}) as {
-    signingSecret?: unknown; botToken?: unknown; channelId?: unknown; port?: unknown; enabled?: unknown;
-    proactivePosting?: unknown;
-  };
-  const next: Partial<HarnessConfig> = {};
-  // Trim string fields; an emptied field clears back to undefined.
-  if (typeof p.signingSecret === 'string') next.slackSigningSecret = p.signingSecret.trim() || undefined;
-  if (typeof p.botToken === 'string') next.slackBotToken = p.botToken.trim() || undefined;
-  if (typeof p.channelId === 'string') next.slackChannelId = p.channelId.trim() || undefined;
-  if (typeof p.port === 'number' && Number.isFinite(p.port)) next.slackPort = p.port;
-  if (typeof p.enabled === 'boolean') next.slackEnabled = p.enabled;
-  if (typeof p.proactivePosting === 'boolean') next.slackProactivePosting = p.proactivePosting;
-  writeConfig(next);
-  // Reconcile the running server: disabling (or clearing the secret) stops it. We
-  // deliberately do NOT auto-(re)start here — the user presses Start in Settings
-  // to fetch the fresh (ephemeral) tunnel URL.
-  const cfg = readConfig();
-  if (!cfg.slackEnabled || !cfg.slackSigningSecret) stopSlackServer();
-  return { ok: true };
-});
-
-// ─── IPC: Triggers — context (auto-compact / auto-clear) ────────────────────
-ipcMain.handle('triggers:getContext', () => readConfig().contextTrigger ?? DEFAULT_CONTEXT_TRIGGER);
-ipcMain.handle('triggers:setContext', (_evt, arg: unknown) => {
-  const current = readConfig().contextTrigger ?? DEFAULT_CONTEXT_TRIGGER;
-  const p = (arg ?? {}) as Partial<ContextTriggerConfig>;
-  const next: ContextTriggerConfig = {
-    compact: sanitizeContextRule(p.compact, current.compact),
-    clear: sanitizeContextRule(p.clear, current.clear)
-  };
-  writeConfig({ contextTrigger: next });
-  // The timers ARE the setting — a cadence saved but not re-armed would keep
-  // firing on the old rhythm until the next boot.
-  syncContextTriggers();
-  return next;
-});
-
-/** Clamp one half of the context trigger. The renderer is not trusted with the
- *  arming maths: a zero/negative/NaN `everyMs` would arm a runaway timer, and an
- *  out-of-range percentage would silently disable (or permanently trip) the
- *  pressure gate. */
-function sanitizeContextRule(patch: Partial<ContextRule> | undefined, current: ContextRule): ContextRule {
-  const p = (patch ?? {}) as Partial<ContextRule>;
-  const num = (v: unknown, fallback: number, min: number, max: number): number =>
-    typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : fallback;
-  return {
-    enabled: typeof p.enabled === 'boolean' ? p.enabled : current.enabled,
-    everyMs: num(p.everyMs, current.everyMs, 60_000, 86_400_000),
-    minContextPct: num(p.minContextPct, current.minContextPct, 0, 100),
-    minContextPctLargeWindow: num(p.minContextPctLargeWindow, current.minContextPctLargeWindow, 0, 100),
-    message: typeof p.message === 'string' ? p.message : current.message
-  };
-}
-
-// ─── IPC: Triggers — webhooks (many endpoints, one server, one tunnel) ──────
-ipcMain.handle('webhooks:list', () => readConfig().webhookTriggers ?? []);
-ipcMain.handle('webhooks:save', (_evt, arg: unknown) => {
-  const incoming = Array.isArray(arg) ? arg : [];
-  const existing = readConfig().webhookTriggers ?? [];
-  const list: WebhookTrigger[] = [];
-  const seen = new Set<string>();
-  for (const raw of incoming) {
-    const t = sanitizeWebhookTrigger(raw, existing);
-    if (!t || seen.has(t.id)) continue; // an id is a URL path segment — one owner each
-    seen.add(t.id);
-    list.push(t);
-  }
-  writeConfig({ webhookTriggers: list });
-  reconcileWebhookServer();
-  return list;
-});
-ipcMain.handle('webhooks:delete', (_evt, arg: unknown) => {
-  const id = typeof arg === 'string' ? arg : '';
-  const list = (readConfig().webhookTriggers ?? []).filter((t) => t.id !== id);
-  writeConfig({ webhookTriggers: list });
-  // Revoking one endpoint must not disturb the others: the live server is
-  // re-pointed, not restarted, so every remaining caller's URL keeps working.
-  reconcileWebhookServer();
-  return list;
-});
-/** Mint a strong (256-bit) secret for the operator to paste into their caller.
- *  Not persisted here — it belongs to whichever endpoint the UI saves it onto. */
-ipcMain.handle('webhooks:generateSecret', () => randomBytes(32).toString('hex'));
-/** Server state + the tunnel root + one public URL per configured endpoint (the
- *  UI offers a copy button per webhook, so the root alone isn't enough). */
-ipcMain.handle('webhooks:status', () => ({
-  running: webhookServer != null,
-  url: lastWebhookUrl,
-  endpoints: webhookEndpointUrls()
-}));
-
-/** Normalise one endpoint coming back from the renderer. Unknown/blank fields
- *  fall back to what is already persisted, so a UI that round-trips a partially
- *  filled row can never blank a live secret or silently widen a mode. */
-function sanitizeWebhookTrigger(raw: unknown, existing: WebhookTrigger[]): WebhookTrigger | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const r = raw as Partial<WebhookTrigger>;
-  const id = typeof r.id === 'string' ? r.id.trim() : '';
-  // The id is spliced into a public URL path. Restrict it to a boring charset
-  // rather than escaping later: no slashes (which would forge a nested route),
-  // no encoded traversal, nothing that could make two endpoints alias.
-  if (!/^[A-Za-z0-9._-]{1,64}$/.test(id)) return null;
-  const prior = existing.find((t) => t.id === id);
-  const secret = typeof r.secret === 'string' && r.secret.trim() ? r.secret.trim() : prior?.secret ?? '';
-  const mode = isTriggerMode(r.mode) ? r.mode : prior?.mode ?? DEFAULT_TRIGGER_MODE;
-  return {
-    id,
-    name: typeof r.name === 'string' && r.name.trim() ? r.name.trim() : prior?.name ?? id,
-    secret,
-    // A secretless endpoint can never be enabled — it would be an open door.
-    enabled: secret ? (typeof r.enabled === 'boolean' ? r.enabled : prior?.enabled ?? false) : false,
-    mode,
-    schema: typeof r.schema === 'string' && r.schema.trim() ? r.schema : prior?.schema ?? DEFAULT_WEBHOOK_SCHEMA,
-    createdAt: typeof r.createdAt === 'number' && r.createdAt > 0 ? r.createdAt : prior?.createdAt ?? Date.now()
-  };
-}
-
-function isTriggerMode(v: unknown): v is TriggerMode {
-  return v === 'strict' || v === 'allow-all' || v === 'communication-only';
-}
-
-// ─── IPC: Triggers — organisation (persistence only; no transport yet) ──────
-ipcMain.handle('org:getTrigger', () => readConfig().orgTrigger ?? DEFAULT_ORG_TRIGGER);
-ipcMain.handle('org:setTrigger', (_evt, arg: unknown) => {
-  const current = readConfig().orgTrigger ?? DEFAULT_ORG_TRIGGER;
-  const p = (arg ?? {}) as Partial<OrgTriggerConfig>;
-  // PERSIST ONLY — the peer messaging service does not exist yet, so nothing
-  // reads `apiKey` beyond the settings surface that shows it. Deliberately no
-  // start/stop, no network, no side effect of any kind.
-  const next: OrgTriggerConfig = {
-    apiKey: typeof p.apiKey === 'string' ? p.apiKey.trim() : current.apiKey,
-    enabled: typeof p.enabled === 'boolean' ? p.enabled : current.enabled,
-    mode: isTriggerMode(p.mode) ? p.mode : current.mode
-  };
-  writeConfig({ orgTrigger: next });
-  return next;
-});
-
-// ─── IPC: Triggers — history ledger + the approval gate ─────────────────────
-ipcMain.handle('triggerHistory:list', () => listTriggerHistory());
-ipcMain.handle('triggerHistory:clear', (_evt, arg: unknown) => {
-  const source = arg === 'webhook' || arg === 'org' ? arg : undefined;
-  clearTriggerHistory(source);
-  pruneHeldTokens();
-  notifyTriggerHistoryUpdated();
-  return { ok: true };
-});
-/**
- * The operator's verdict on a held message.
- *
- * 'approved' RELEASES it: it takes the identical path an auto-allowed message
- * would have taken (card + god request), then the entry flips. 'rejected' just
- * flips — nothing is ever dispatched.
- *
- * Idempotent by construction: only an entry still sitting at `pending` can be
- * decided, so a double-click (or two windows deciding at once) cannot dispatch
- * the same message twice.
- */
-ipcMain.handle('triggerHistory:decide', (_evt, arg: unknown) => {
-  const p = (arg ?? {}) as { id?: unknown; decision?: unknown };
-  const id = typeof p.id === 'string' ? p.id : '';
-  const decision = p.decision === 'approved' ? 'approved' : p.decision === 'rejected' ? 'rejected' : null;
-  if (!id || !decision) return null;
-  const entry: TriggerHistoryEntry | undefined = listTriggerHistory().find((e) => e.id === id);
-  if (!entry) return null;
-  if (entry.decision !== 'pending') return entry; // already decided → no-op, not a re-dispatch
-
-  if (decision === 'rejected') {
-    const next = updateTriggerHistory(id, { decision: 'rejected' });
-    notifyTriggerHistoryUpdated();
-    return next;
-  }
-
-  const taskId = `webhook-${randomBytes(8).toString('hex')}`;
-  const tokenHash = heldTokenHashFor(id);
-  const title = entry.title ?? cutText(entry.body, 80);
-  if (!dispatchWebhookWork({ taskId, title, message: entry.body, tokenHash, origin: entry.source })) {
-    // The card is what the caller polls and what god works from. Leave the entry
-    // pending so the operator can approve again once the hive is writable.
-    return entry;
-  }
-  // The hash now lives on the card, so the caller's GET resolves through the
-  // normal task lookup from here on.
-  if (tokenHash) { heldTokens().delete(tokenHash); persistHeldTokens(); }
-  const next = updateTriggerHistory(id, { decision: 'approved', taskId });
-  pruneHeldTokens();
-  notifyTriggerHistoryUpdated();
-  return next;
-});
-
-// ─── IPC: Generic webhook (LEGACY single-endpoint channels) ─────────────────
-// Kept alive for Settings → Webhook, which still speaks the one-secret shape.
-// They are now THIN SHIMS over the multi-endpoint engine: the legacy secret and
-// enabled flag map onto the `legacy` WebhookTrigger the config migration created,
-// so the two surfaces can never disagree about whether the endpoint is live.
-ipcMain.handle('webhook:start', () => startWebhookServer());
-ipcMain.handle('webhook:stop', () => { stopWebhookServer(); return { ok: true }; });
-/** Current state + last public endpoint URL, for the Settings badge/URL field. */
-ipcMain.handle('webhook:status', () => ({ running: webhookServer != null, url: lastWebhookUrl }));
-/** Mint a strong (256-bit) secret, persist it, and return it so Settings can show
- *  it for the user to copy into their client. The previous secret is replaced. */
-ipcMain.handle('webhook:generateSecret', () => {
-  const secret = randomBytes(32).toString('hex');
-  writeConfig({ webhookSecret: secret });
-  upsertLegacyWebhookTrigger({ secret });
-  return { ok: true, secret };
-});
-ipcMain.handle('webhook:setConfig', (_evt, patch: unknown) => {
-  const p = (patch ?? {}) as { secret?: unknown; port?: unknown; enabled?: unknown };
-  const next: Partial<HarnessConfig> = {};
-  if (typeof p.secret === 'string') next.webhookSecret = p.secret.trim() || undefined;
-  if (typeof p.port === 'number' && Number.isFinite(p.port)) next.webhookPort = p.port;
-  if (typeof p.enabled === 'boolean') next.webhookEnabled = p.enabled;
-  writeConfig(next);
-  upsertLegacyWebhookTrigger({
-    secret: typeof p.secret === 'string' ? p.secret.trim() : undefined,
-    enabled: typeof p.enabled === 'boolean' ? p.enabled : undefined
-  });
-  // Disabling (or clearing the secret) stops the public surface immediately; the
-  // reconcile also picks up the case where OTHER endpoints are still enabled, in
-  // which case the server stays up minus the legacy one.
-  reconcileWebhookServer();
-  return { ok: true };
-});
-
-/** Mirror a legacy `webhook:setConfig` / `webhook:generateSecret` edit onto the
- *  `legacy` WebhookTrigger. Creates the row only once a secret exists — an
- *  enabled endpoint without a secret would be an open door, so a bare "enable"
- *  against a never-configured webhook is deliberately a no-op. */
-function upsertLegacyWebhookTrigger(patch: { secret?: string; enabled?: boolean }): void {
-  const list = readConfig().webhookTriggers ?? [];
-  const prior = list.find((t) => t.id === 'legacy');
-  const secret = patch.secret !== undefined ? patch.secret : prior?.secret ?? '';
-  if (!secret) return;
-  const row: WebhookTrigger = {
-    id: 'legacy',
-    name: prior?.name ?? 'Default webhook',
-    secret,
-    enabled: patch.enabled !== undefined ? patch.enabled : prior?.enabled ?? false,
-    mode: prior?.mode ?? DEFAULT_TRIGGER_MODE,
-    schema: prior?.schema ?? DEFAULT_WEBHOOK_SCHEMA,
-    createdAt: prior?.createdAt ?? Date.now()
-  };
-  writeConfig({
-    webhookTriggers: prior ? list.map((t) => (t.id === 'legacy' ? row : t)) : [...list, row]
-  });
-}
-
-// ─── IPC: Free Flow (voice dictation → message queue) ────────────────────────
-// Entry point B is hold-Option-to-talk, handled entirely in the renderer
-// (capture-phase key listeners) — no globalShortcut here. macOS doesn't deliver
-// the Fn key to Electron (electron#16714) and a faithful native Fn helper
-// (CGEventTap) is deferred; hold-Option is the human-chosen v1 activation.
-
-ipcMain.handle('freeflow:setConfig', (_evt, patch: unknown) => {
-  const p = (patch ?? {}) as { enabled?: unknown; apiKey?: unknown; model?: unknown };
-  const next: Partial<HarnessConfig> = {};
-  if (typeof p.enabled === 'boolean') next.freeflowEnabled = p.enabled;
-  // Trim string fields; an emptied key clears back to undefined.
-  if (typeof p.apiKey === 'string') next.groqApiKey = p.apiKey.trim() || undefined;
-  if (typeof p.model === 'string') next.freeflowModel = p.model.trim() || DEFAULT_GROQ_MODEL;
-  writeConfig(next);
-  return { ok: true };
-});
-
-/** Transcribe one captured audio clip via Groq. Gated on the flag + a key being
- *  present, so a disabled feature can NEVER reach the network. The Groq key stays
- *  in main — only the audio bytes cross IPC inbound and the transcript outbound. */
-ipcMain.handle('freeflow:transcribe', async (_evt, arg: unknown) => {
-  const cfg = readConfig();
-  // Voice is off in this build (SHOW_VOICE): no dictation either.
-  if (!SHOW_VOICE) return { ok: false, error: 'Voice is off in this version.' };
-  if (!cfg.freeflowEnabled) return { ok: false, error: 'Free Flow is disabled' };
-  if (!cfg.groqApiKey) return { ok: false, error: 'no Groq API key set' };
-  const a = (arg ?? {}) as { audio?: unknown; mimeType?: unknown; filename?: unknown; language?: unknown };
-  if (!(a.audio instanceof ArrayBuffer) && !(a.audio instanceof Uint8Array)) {
-    return { ok: false, error: 'no audio' };
-  }
-  const out = await transcribeWithGroq({
-    apiKey: cfg.groqApiKey,
-    audio: a.audio,
-    mimeType: typeof a.mimeType === 'string' ? a.mimeType : undefined,
-    filename: typeof a.filename === 'string' ? a.filename : undefined,
-    model: cfg.freeflowModel || DEFAULT_GROQ_MODEL,
-    language: typeof a.language === 'string' && a.language ? a.language : undefined
-  });
-  if (out.ok) analytics.trackFeature('voice_dictation');
-  return out;
-});
-
-// ─── IPC: Realtime Michael (voice orchestrator — ephemeral token mint, rt-1) ──
-// MAIN owns the BYOK OpenAI key (encrypted broker, apikey:openai) and mints a
-// short-lived EPHEMERAL client secret; the real key never crosses IPC. All wiring
-// lives in ./realtime so this stays a single registration line.
-registerRealtimeIpc();
-
-// ─── IPC: Realtime Michael voice ACTIONS (rt-5, Phase 2) ─────────────────────
-// Thin adapters over the SAME main fns the god PTY already uses. ALL of the safety
-// spine — soft-vs-destructive tiering, the two-step verbal echo-back confirm, the
-// distinct-token rule, the hard allowlist (kill-god / mass-ops forbidden), and the
-// michael-voice attribution — lives in ./realtimeActions. This site only injects
-// the existing functions; it adds NO new orchestration logic.
-// ─── IPC: Realtime Michael completion watcher (rt-12, Phase 2) ───────────────
-// Jim's net-new engine (realtimeCompletionWatcher.ts) detects a voice-dispatched
-// task finishing (card→done OR a done-reply in michael-voice's inbox) and EMITS it;
-// I own the seam — inject the hive read deps, push completions to the live session
-// (so Michael speaks them unprompted), and bridge waitFor / queue-drain over IPC.
-const completionWatcher = initCompletionWatcher({
-  readTasks: () => { const t = hive.tasks() as { tasks?: TaskCard[] }; return Array.isArray(t?.tasks) ? t.tasks : []; },
-  // Voice dispatches go out as from:michael-voice, so assignee done-replies land here.
-  readInbox: () => {
-    // Voice dispatches go out from:michael-voice, so done-replies normally land in its
-    // inbox — but an assignee may address god out of habit. Merge both inboxes (de-dupe
-    // by id) so a god-addressed completion isn't missed; the detector filters by sender.
-    try {
-      const mv = hive.inbox('michael-voice') as unknown as InboxMessage[];
-      const godId = hive.registry().godId;
-      const god = godId ? (hive.inbox(godId) as unknown as InboxMessage[]) : [];
-      const seen = new Set<string>();
-      return [...mv, ...god].filter((m) => !!m?.id && !seen.has(m.id) && seen.add(m.id) !== undefined);
-    } catch {
-      return [];
-    }
-  },
-  onNotify: (evt) => {
-    try {
-      if (!Notification.isSupported()) return;
-      const reg = hive.registry();
-      const title = resolveGodName(reg.agents[reg.godId ?? 'god']?.name);
-      new Notification({ title, body: evt.summary }).show();
-    } catch { /* best-effort */ }
-  }
-});
-
-registerRealtimeActionIpc({
-  hiveEnabled: () => hive.enabled(),
-  hiveSend: (partial, from) => hive.send(partial, from),
-  hiveTasks: () => ownerLedger(hive.tasks()),
-  hiveAddTask: (task) => hive.addTask(task as HiveTask),
-  hivePatchTask: (id, patch) => hive.patchTask(id, patch as Partial<Omit<HiveTask, 'id'>>),
-  hiveMoveTask: (id, status) => hive.ownerMoveTask(id, status),
-  hiveCloseTask: (id, reason) => hive.ownerCloseTask(id, reason),
-  hiveRegistry: () => hive.registry(),
-  hiveLog: (event) => hive.appendLog(event),
-  controlPause: (id, on) => control.pause(id, on),
-  controlSteer: (id, text) => control.steer(id, text),
-  controlHalt: (id) => control.halt(id),
-  controlSnapshot: (id) => control.snapshot(id),
-  killAgent: (id) => {
-    const r = ptyManager.kill(id);
-    teardownPty(id);
-    // A voice (MAIN-initiated) kill: the renderer never removed the card itself
-    // (unlike a UI kill), so tell the floor to archive it. Mirrors hive:agentSpawned.
-    try { liveWebContents()?.send('hive:agentArchived', { id }); } catch { /* window torn down */ }
-    return r;
-  },
-  spawnAgent: async (opts) => {
-    const o = opts as AgentSpawnOptions;
-    const res = await spawnAgentCore(o, null);
-    // The renderer roster is only mutated by renderer-initiated hires (AddAgentModal),
-    // so a MAIN-initiated spawn is invisible on the floor until we broadcast it. The
-    // renderer (useHive) builds the Agent card from this descriptor; addAgent is
-    // idempotent so a renderer-initiated hire is never double-carded.
-    if (res.ok) {
-      try {
-        liveWebContents()?.send('hive:agentSpawned', {
-          id: o.id,
-          name: o.hive?.name ?? o.id,
-          provider: o.provider ?? o.hive?.provider ?? 'claude',
-          cwd: res.worktreePath ?? o.cwd,
-          command: o.command,
-          role: o.hive?.role,
-          worktreePath: res.worktreePath
-        });
-      } catch { /* window torn down */ }
-    }
-    return res;
-  },
-  listMissions: () => readConfig().missions ?? [],
-  // The spec carries lastFiredAt through from listMissions(), so a wholesale write
-  // preserves the scheduler's stamps; edit_schedule is deliberate + rare.
-  // Through the single writer, so a voice edit re-arms the timers and refreshes the UI.
-  saveMissions: (missions) => {
-    // A failed save throws, so the voice action says it failed instead of "done".
-    const res = applyMissions(() => missions);
-    if (!res.ok) throw new Error(res.error);
-  },
-  // rt-12: register each voice dispatch so the watcher can detect its completion.
-  trackDispatch: (d) => { try { completionWatcher.track({ ...d, kind: 'dispatch' }); } catch { /* watcher unavailable */ } },
-  // ── v0.3.4 full-control extensions ──
-  controlResume: (id) => control.resume(id),
-  controlAutoDelivery: (id, paused) => control.pauseAutoDelivery(id, paused),
-  controlGateTool: (id, toolName, on) => control.gateTool(id, toolName, on),
-  setArchived: (id, archived) => {
-    if (!hive.enabled()) return { ok: false, error: 'hive disabled' };
-    // The owner archiving an agent by voice is closing it on purpose, so its
-    // schedules pause like a close from the panel (eng review R1).
-    if (archived) closeAgentByOwner(id);
-    // Bringing it back ends "closed by the owner" (its schedules stay paused
-    // until the owner turns them on, design 6A).
-    else hive.setClosedByOwner(id, false);
-    hive.setArchived(id, archived);
-    try { if (archived) closingTime.refresh(id); } catch (e) { console.error('[closing-time] refresh:', e); }
-    try { liveWebContents()?.send(archived ? 'hive:agentArchived' : 'hive:agentSpawned', { id }); } catch { /* window gone */ }
-    return { ok: true };
-  },
-  // clear_context: hand the text to the renderer's queue so delivery rides every
-  // existing gate (idle-only, boot grace, draft/picker safety).
-  enqueueToAgent: (id, text) => {
-    try { liveWebContents()?.send('realtime:enqueue', { agentId: id, text }); } catch { /* window gone */ }
-  },
-  getConfigValue: (key) => (readConfig() as unknown as Record<string, unknown>)[key],
-  patchConfig: (patch) => { writeConfig(patch as Partial<HarnessConfig>); }
-});
-
-// rt-12 seam: push detected completions to the live floor; bridge live-flag, queue
-// drain (closed-session warm-start), and wait_for over IPC. Then start polling.
-completionWatcher.onCompletion((evt) => { try { liveWebContents()?.send('realtime:completion', evt); } catch { /* window gone */ } });
-// v0.3.4: the floor delta watcher shares the session-live flag — while a voice
-// session is open it pushes coalesced floor updates the renderer injects as
-// silent conversation items (snapshot-at-connect + append-only deltas).
-const floorWatcher = new RealtimeFloorWatcher({
-  enabled: () => hive.enabled(),
-  registry: () => hive.registry(),
-  tasks: () => ownerLedger(hive.tasks()),
-  ptys: () => ptyManager.list().map((p) => ({ id: p.id, lastOutputAt: p.lastOutputAt })),
-  push: (text) => { try { liveWebContents()?.send('realtime:floorDelta', { text }); } catch { /* window gone */ } }
-});
-floorWatcher.start();
-ipcMain.handle('realtime:setSessionLive', (_e, live: unknown) => {
-  completionWatcher.setSessionLive(live === true);
-  floorWatcher.setSessionLive(live === true);
-  return { ok: true };
-});
-// v0.3.4: app self-knowledge for the voice get_app_info tool — version + the
-// newest CHANGELOG sections. Read-only; ships CHANGELOG.md with the app.
-ipcMain.handle('app:info', () => {
-  let changelog = '';
-  for (const p of [join(app.getAppPath(), 'CHANGELOG.md'), join(process.cwd(), 'CHANGELOG.md')]) {
-    try { changelog = readFileSync(p, 'utf8'); if (changelog) break; } catch { /* try next */ }
-  }
-  const top = changelog
-    ? changelog.split(/\n## /).slice(1, 3).map((s) => `## ${s}`).join('\n').slice(0, 8000)
-    : '';
-  // `packaged`: only installed builds check for updates (updater.ts), so
-  // Settings can say so instead of promising checks a dev build never runs.
-  return { version: app.getVersion(), changelog: top, packaged: app.isPackaged };
-});
-ipcMain.handle('realtime:drainCompletions', () => completionWatcher.drainQueuedCompletions());
-ipcMain.handle('realtime:waitFor', (_e, taskId: unknown, timeoutMs: unknown) =>
-  typeof taskId === 'string'
-    ? completionWatcher.waitFor(taskId, typeof timeoutMs === 'number' && timeoutMs > 0 ? timeoutMs : 120_000)
-    : Promise.resolve({ timedOut: true as const, taskId: '' }));
-completionWatcher.start();
-
-// ─── god-triggered ephemeral Slack workers ──────────────────────────────────
-// god drops a spawn-request JSON into HIVE_ROOT/spawn-requests/; MAIN polls that
-// queue (same cadence + atomic-rename archival as the hive router — reliability
-// over latency, no fs.watch/dedup needed), spins up a FRESH ISOLATED worker via
-// the shared spawnAgentCore, dispatches the objective through the standard inbox
-// path, then watches each worker for a terminal `act:"done"` (success → release)
-// or excessive idleness (reap). All teardown flows through teardownPty's
-// safety-gate, so a worker's worktree is never auto-removed while it holds
-// unintegrated work. Every terminal failure informs god WITH the Slack coords so
-// god closes the Slack loop; the success path is the worker replying in-thread.
-
-/** A spawn-request god drops into HIVE_ROOT/spawn-requests/<id>.json. god authors
- *  these directly; `objective` and `cwd` are the only required fields. */
-interface SpawnRequest {
-  id?: string;
-  objective?: string;
-  command?: string;                                   // engine CLI; default = config.defaultCommand
-  provider?: AgentProvider;                           // optional explicit provider
-  model?: string;                                     // optional --model override (Claude)
-  cwd?: string;                                        // repo the worker (and its worktree) runs in
-  name?: string;                                       // display name
-  slack?: { channel: string; thread_ts: string };     // reply target + where failures surface
-  isolate?: boolean;                                   // default true (fresh worktree)
-  tokenCap?: number;                                   // optional per-worker token cap (advisory P1)
-  // Appearance on the office floor. Both optional and both validated renderer-side
-  // against the real cast and accent lists, so a bad value degrades to the default
-  // rather than breaking the card.
-  //
-  // Naming a worker after a cast member ALREADY gets you their avatar: the floor
-  // card infers it from the name. These two exist for the case that inference
-  // cannot express, an agent called something else that should still look like a
-  // particular character, and picking the accent instead of taking the one hashed
-  // from the worker id.
-  character?: string;
-  accent?: string;
-}
-
-/** Polling cadence — matches the hive router. */
-const WORKER_TICK_MS = 1500;
-let workerWatchTimer: ReturnType<typeof setInterval> | null = null;
-/** Re-entrancy guard so a slow tick (await spawn / git checks) never overlaps. */
-let workerTickRunning = false;
-
-/** HIVE_ROOT/spawn-requests — the queue dir god drops requests into. */
-function spawnRequestsDir(): string | null {
-  const root = hive.root();
-  return root ? join(root, 'spawn-requests') : null;
-}
-
-/** Move a processed request out of the queue so it's never reprocessed. */
-function archiveRequest(filePath: string, sub: '.done' | '.failed'): void {
-  const queue = spawnRequestsDir();
-  try {
-    if (!queue) throw new Error('no hive root');
-    const dir = join(queue, sub);
-    mkdirSync(dir, { recursive: true });
-    renameSync(filePath, join(dir, basename(filePath)));
-  } catch (e) {
-    // Last resort: delete it so a poison file can't loop forever.
-    try { unlinkSync(filePath); } catch { /* noop */ }
-    console.error('[worker] archiveRequest failed:', e);
-  }
-}
-
-/** Did this worker post a terminal `act:"done"` yet? Scans its own outbox AND
- *  outbox/.sent (the router archives delivered mail there ~every 1.5s), so the
- *  signal is caught whether or not it's been routed out yet.
- *
- *  Stale-done guard: agent dirs persist after teardown, so REUSING a reqId would
- *  leave a PRIOR worker's `done` sitting in this same dir. Without a guard that
- *  stale signal would release the new worker on its very first tick — before it
- *  does anything or replies — causing a silent Slack hang. So we only count a
- *  `done` authored AFTER this worker spawned: by its `created_at` (the message's
- *  own timestamp), falling back to the file's mtime when `created_at` is missing
- *  or unparseable. When neither yields a usable timestamp we DON'T count it
- *  (fail toward keeping the worker alive — the idle reaper is the backstop). */
-function workerSignaledDone(workerId: string, spawnedAt: number): boolean {
-  const root = hive.root();
-  if (!root) return false;
-  const base = join(root, 'agents', workerId, 'outbox');
-  for (const dir of [base, join(base, '.sent')]) {
-    if (!existsSync(dir)) continue;
-    let files: string[];
-    try { files = readdirSync(dir); } catch { continue; }
-    for (const f of files) {
-      if (!f.endsWith('.json')) continue;
-      const fp = join(dir, f);
-      try {
-        const msg = JSON.parse(readFileSync(fp, 'utf8')) as { act?: string; created_at?: string };
-        if (msg.act !== 'done') continue;
-        let ts = Date.parse(msg.created_at ?? '');
-        if (!Number.isFinite(ts)) {
-          try { ts = statSync(fp).mtimeMs; } catch { ts = NaN; }
-        }
-        if (Number.isFinite(ts) && ts > spawnedAt) return true;
-      } catch { /* skip unreadable/partial */ }
-    }
-  }
-  return false;
-}
-
-/** Spin up one ephemeral worker from a spawn-request. Terminal failures (bad
- *  request, missing CLI, spawn error) archive to .failed and inform god WITH the
- *  Slack coords so god can post a 'couldn't start' reply. On success the worker is
- *  registered (for done-scan / reaping / safe teardown) and dispatched its
- *  objective via the standard inbox path. */
-async function processSpawnRequest(filePath: string): Promise<void> {
-  let raw: SpawnRequest;
-  try {
-    raw = JSON.parse(readFileSync(filePath, 'utf8')) as SpawnRequest;
-  } catch (e) {
-    console.error('[worker] unparseable spawn-request:', filePath, e);
-    informGod('[worker spawn rejected] unparseable request', `Could not parse spawn-request ${basename(filePath)} — ${String(e)}`);
-    archiveRequest(filePath, '.failed');
-    return;
-  }
-  const slack = raw.slack && typeof raw.slack.channel === 'string' && typeof raw.slack.thread_ts === 'string'
-    ? { channel: raw.slack.channel, thread_ts: raw.slack.thread_ts } : undefined;
-  const fail = (reason: string): void => {
-    informGod(`[worker spawn rejected] ${reason}`, `Spawn-request ${basename(filePath)} rejected: ${reason}.`, slack);
-    archiveRequest(filePath, '.failed');
-  };
-
-  const objective = typeof raw.objective === 'string' ? raw.objective.trim() : '';
-  if (!objective) { fail('missing "objective"'); return; }
-
-  const reqId = (typeof raw.id === 'string' && raw.id.trim() ? raw.id.trim() : basename(filePath).replace(/\.json$/i, ''))
-    .replace(/[^A-Za-z0-9._-]/g, '-');
-  const workerId = `worker-${reqId}`;
-  if (liveWorkers.has(workerId)) { fail(`worker "${workerId}" already running`); return; }
-
-  // Worker request files are hand/LLM-authored, so `~/…` shows up here too — expand
-  // before the existence check (Node reads `~` literally).
-  const cwd = typeof raw.cwd === 'string' && raw.cwd.trim() ? expandTilde(raw.cwd) : '';
-  if (!cwd || !existsSync(cwd)) { fail(`"cwd" missing or not found (${cwd || 'unset'})`); return; }
-
-  // Request line → executable + argv (auto-mode inheritance, tokenization,
-  // model-flag dedupe). Pure and unit-tested — see workerLaunch.ts for why this
-  // translation earned a test.
-  const cfgSpawn = readConfig();
-  const launch = buildWorkerLaunch({
-    requestCommand: raw.command,
-    requestProvider: raw.provider,
-    requestModel: raw.model,
-    defaultCommand: cfgSpawn.defaultCommand,
-    autoMode: !!cfgSpawn.autoMode
-  });
-  const bin = launch.bin;
-  // Validate the executable name on the spawn path. A spawn-request file is
-  // untrusted input (authored by the orchestrator, reachable by anything that can
-  // write HIVE_ROOT/spawn-requests), so the bin must be a plain command token or
-  // an absolute path — never a string a downstream shell `which`/`where` could
-  // reinterpret. Rejected here, before any resolution; the resolver guards behind
-  // it validate the same thing in depth.
-  if (!isSafeCommandName(bin) && !isAbsolute(bin)) {
-    fail(`refusing spawn: engine command "${bin}" is not a plain command name or an absolute path`);
-    return;
-  }
-  // Missing-CLI → FAIL FAST. A headless worker has no human to watch an installer,
-  // so we never run the cc49e1e install banner here — we reject and tell god.
-  if (!ptyManager.isCommandAvailable(bin)) { fail(`engine CLI "${bin}" is not installed`); return; }
-
-  const isolate = raw.isolate !== false; // default true
-  // Base branch the worktree will be cut from (for the ahead-of-base safety check).
-  let baseBranch = 'main';
-  try { const br = await getBranch(cwd); if ('current' in br && br.current) baseBranch = br.current; } catch { /* keep default */ }
-
-  const meta: AgentMeta = {
-    id: workerId,
-    name: typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim() : `Worker ${reqId.slice(0, 12)}`,
-    provider: raw.provider,
-    role: 'worker',
-    cwd
-  };
-  // Phase 2: grant this worker a broker capability over the currently-enabled
-  // integrations and inject the broker URL + a per-worker capability TOKEN (a handle,
-  // never a secret) into its env, so it can reach registered REST integrations through
-  // the loopback secret broker without ever seeing a credential. Only when the broker
-  // is up; the grant is revoked in teardownPty (and below if the spawn fails).
-  const brokerEnv: Record<string, string> = {};
-  if (integrationBroker.running()) {
-    const token = integrationBroker.grant(workerId, integrations.enabledIds());
-    brokerEnv.MD_BROKER_URL = integrationBroker.url();
-    brokerEnv.MD_BROKER_TOKEN = token;
-  }
-  const spawnOpts: AgentSpawnOptions = {
-    id: workerId, cwd, command: bin, cols: 120, rows: 32,
-    args: launch.args,
-    hive: meta, isolate, provider: raw.provider, env: brokerEnv
-  };
-
-  let res: { ok: boolean; error?: string; worktreePath?: string };
-  try {
-    res = await spawnAgentCore(spawnOpts, liveWebContents());
-  } catch (e) {
-    res = { ok: false, error: String(e) };
-  }
-  if (!res.ok) { integrationBroker.revoke(workerId); fail(`spawn failed — ${res.error ?? 'unknown error'}`); return; }
-
-  // A god-hired worker is a MAIN-initiated spawn, so the renderer would never
-  // card it on its own (same reason as the voice-spawn broadcast): without this
-  // the worker is invisible on the floor, never enters the roster, and after a
-  // restart nothing offers to restore it. The card rides the normal agent
-  // lifecycle from here — teardownPty broadcasts the matching archive. A card
-  // RESTORED after an app quit revives through the renderer's normal spawn path
-  // and never re-enters liveWorkers: ephemerality is a property of the hiring,
-  // not of the card, so a restored worker is a regular agent (no reaping).
-  try {
-    liveWebContents()?.send('hive:agentSpawned', {
-      id: workerId,
-      name: meta.name,
-      provider: raw.provider ?? 'claude',
-      cwd: res.worktreePath ?? cwd,
-      command: launch.command,
-      role: meta.role,
-      worktreePath: res.worktreePath,
-      character: typeof raw.character === 'string' ? raw.character : undefined,
-      accent: typeof raw.accent === 'string' ? raw.accent : undefined
-    });
-  } catch { /* window torn down */ }
-
-  // Register for done-scan / idle-reap / token-cap / safe teardown (pty id == workerId).
-  // tokenCap is optional plumbing (default unlimited) — only a positive finite cap is kept.
-  const tokenCap = typeof raw.tokenCap === 'number' && Number.isFinite(raw.tokenCap) && raw.tokenCap > 0
-    ? raw.tokenCap : undefined;
-  liveWorkers.set(workerId, { workerId, reqId, name: meta.name, slack, baseBranch, spawnedAt: Date.now(), tokenCap });
-
-  // Dispatch the objective via the standard inbox path (zero new transport),
-  // reusing the autonomous-request preamble so the worker gets the exact Slack
-  // reply command + autonomy policy. `from: god` so the worker treats it as a god
-  // dispatch per its protocol.
-  try {
-    const prefix = slack
-      ? buildAutonomousRequestProtocol(slack.channel, slack.thread_ts, slackReplyScriptPath())
-      : '[AUTONOMOUS WORKER TASK — no interactive human is watching. Work autonomously; do not ask interactive questions.] The task starts now: ';
-    const suffix = `\n\n[CAPABILITIES] Before you start, consult your capability catalog — run the \`/capabilities\` skill (or read \`$AGENT_DIR/.claude/skills/capabilities/SKILL.md\`). It lists your temporal date-range skills (\`/today\`, \`/last30Days\`, \`/lastQuarter\`, …) and the integrations available to you (reached via the loopback broker) and how to call each. For any time-scoped work, resolve the dates with those skills instead of computing them by hand.\n\n[WORKER COMPLETION] When finished, signal done by sending ONE outbox message to god with "act":"done" and a short result summary — that releases this ephemeral worker (terminal closed; your branch is handed to god). Do NOT push to any remote; god is the sole integrator.`;
-    hive.send({ to: workerId, conversation: `worker-${reqId}`, act: 'request', subject: meta.name, body: `${prefix}${objective}${suffix}` }, 'god');
-  } catch (e) {
-    console.error('[worker] dispatch send failed:', e);
-  }
-
-  console.log(`[worker] spawned ${workerId} (cwd=${cwd}, base=${baseBranch}${slack ? ', slack' : ''})`);
-  archiveRequest(filePath, '.done');
-}
-
-/** Total tokens (input+output+cache) a worker has burned so far, from the usage
- *  provider — 0 when unknown. Mirrors the breaker's `tokensOf`. Used only by the
- *  (default-off) per-worker token cap. */
-function workerTokensUsed(workerId: string): number {
-  const s = usageProvider.getAgentUsage(workerId);
-  return s ? s.input + s.output + s.cacheRead + s.cacheCreation : 0;
-}
-
-/** Throttle for the GC sweep — git checks are cheap but pointless every 1.5s tick. */
-const GC_SWEEP_MS = 60_000;
-let lastGcSweepAt = 0;
-let gcSweepRunning = false;
-
-/** Reclaim preserved worker worktrees (+ their scratch dirs) whose work is now
- *  integrated, or whose worktree was already removed by hand. Fail-safe: a worktree
- *  is removed ONLY when `worktreeIsGcSafe` proves it clean AND integrated; any doubt
- *  KEEPS it (never discards un-integrated work — god is the sole integrator). Runs
- *  inside the worker tick, throttled to GC_SWEEP_MS, and is a no-op when nothing is
- *  preserved (the common case → zero cost). */
-async function gcPreservedWorktrees(): Promise<void> {
-  if (gcSweepRunning || preservedWorktrees.size === 0) return;
-  gcSweepRunning = true;
-  try {
-    for (const [key, e] of [...preservedWorktrees]) {
-      // A worker id that is live again (reqId reuse) → never GC its worktree or
-      // scratch out from under the new run; leave the stale entry for a later sweep.
-      if (liveWorkers.has(e.workerId)) continue;
-      // (a) Worktree already gone (removed at clean teardown, or god removed it by
-      //     hand per the preserve note) → just reclaim the scratch dir + drop tracking.
-      if (!existsSync(e.wtPath)) {
-        removeWorkerScratch(e.workerId);
-        preservedWorktrees.delete(key);
-        console.log(`[worker gc] ${e.workerId}: worktree already gone — reclaimed scratch`);
-        continue;
-      }
-      // (b) Still on disk → reclaim ONLY when provably integrated + clean.
-      const deps = await unlinkWorktreeDeps(e.origCwd, e.wtPath);
-      if (!deps.ok) { console.error('[worker gc] dependency unlink failed (keeping):', deps.error); continue; }
-      let safe: { gc: boolean; detail: string };
-      try { safe = await worktreeIsGcSafe(e.wtPath, e.baseBranch); }
-      catch (err) { console.error('[worker gc] gc-safe check threw (keeping):', err); continue; }
-      if (!safe.gc) continue; // keep — fail-safe
-      const r = await removeWorktree(e.origCwd, e.wtPath);
-      if (!r.ok) { console.error(`[worker gc] removeWorktree failed (keeping ${e.workerId}):`, r.error); continue; }
-      removeWorkerScratch(e.workerId);
-      preservedWorktrees.delete(key);
-      console.log(`[worker gc] reclaimed ${e.workerId} (${safe.detail})`);
-      informGod(
-        `[worker worktree reclaimed] ${e.workerId}`,
-        `The preserved worktree for ${e.workerId} is now integrated (${safe.detail}), so it and its scratch dir were garbage-collected.\nWorktree: ${e.wtPath}`,
-        e.slack
-      );
-    }
-  } finally {
-    gcSweepRunning = false;
-  }
-}
-
-/** One controller tick: (1) finish/reap live workers (frees slots), then (2) pull
- *  new requests up to the concurrency cap. Order matters so a freed slot is reused
- *  the same tick. */
-async function ephemeralWorkerTick(): Promise<void> {
-  if (workerTickRunning) return;
-  workerTickRunning = true;
-  try {
-    const cfg = readConfig();
-    const maxWorkers = Math.max(1, cfg.maxConcurrentWorkers ?? 4);
-    const idleTimeoutMs = Math.max(1, cfg.workerIdleTimeoutMinutes ?? 20) * 60_000;
-    // Per-worker token cap. 0 = UNLIMITED (the default — wired but never throttles
-    // unless a positive cap is set per-request or via defaultWorkerTokenCap).
-    const defaultTokenCap = typeof cfg.defaultWorkerTokenCap === 'number' && cfg.defaultWorkerTokenCap > 0
-      ? cfg.defaultWorkerTokenCap : 0;
-
-    // (1) Finish or reap. Each release calls teardownPty EXPLICITLY after the
-    //     kill, like every other kill site: ptyManager.kill() deletes the session
-    //     synchronously, so when node-pty's async onExit later fires it fails the
-    //     session-identity guard and the global exit handler (→ teardownPty)
-    //     never runs. Relying on onExit here left released workers un-torn-down:
-    //     no hive archive, no hive:agentArchived, frozen floor cards, and god
-    //     kept mailing dead agents (seen live 2026-08-16 with worker-business/
-    //     worker-qa/worker-bizreview). A double teardown is a harmless no-op.
-    for (const [workerId, rec] of [...liveWorkers]) {
-      if (rec.releasing) continue;
-      if (workerSignaledDone(workerId, rec.spawnedAt)) {
-        // Success: the worker already replied in-thread; just release it.
-        rec.releasing = true;
-        console.log(`[worker] ${workerId} signaled done — releasing`);
-        ptyManager.kill(workerId);
-        teardownPty(workerId);
-        continue;
-      }
-      // Token-cap reap (default-off plumbing). An effective cap > 0 → reap when the
-      // worker's cumulative token use exceeds it; its committed work is preserved.
-      const tokenCap = (rec.tokenCap && rec.tokenCap > 0) ? rec.tokenCap : defaultTokenCap;
-      if (tokenCap > 0) {
-        const used = workerTokensUsed(workerId);
-        if (used > tokenCap) {
-          rec.releasing = true;
-          console.warn(`[worker] reaping ${workerId} — token cap (${used.toLocaleString()} > ${tokenCap.toLocaleString()})`);
-          informGod(
-            `[worker reaped — token cap] ${workerId}`,
-            `Worker ${workerId} used ${used.toLocaleString()} tokens (> its cap of ${tokenCap.toLocaleString()}) and was reaped. Any committed work on its branch is preserved for you.`,
-            rec.slack
-          );
-          ptyManager.kill(workerId);
-          teardownPty(workerId);
-          continue;
-        }
-      }
-      const idleMs = ptyManager.idleFor(workerId);
-      if (idleMs === undefined) continue; // PTY already gone; teardownPty cleans up
-      if (idleMs > idleTimeoutMs) {
-        rec.releasing = true;
-        console.warn(`[worker] reaping idle ${workerId} (${Math.round(idleMs / 60000)}min idle)`);
-        informGod(
-          `[worker reaped — idle] ${workerId}`,
-          `Worker ${workerId} produced no output for ${Math.round(idleMs / 60000)} min (> the ${Math.round(idleTimeoutMs / 60000)} min cap) and never signaled done, so it was reaped. Any committed work on its branch is preserved for you.`,
-          rec.slack
-        );
-        ptyManager.kill(workerId);
-        teardownPty(workerId);
-      }
-    }
-
-    // (2) Process new requests, honoring the concurrency cap (backpressure: leave
-    //     the rest in the queue for a later tick).
-    //
-    //     Gated on config.orchestratorMaySpawn (default OFF): letting the
-    //     orchestrator spin up agents unprompted is a SPEND decision, so the
-    //     operator opts in. The gate sits HERE, on intake, and not on the watcher
-    //     itself, because step (1) above owns the lifecycle of workers that are
-    //     already running — reaping, teardown, the Slack failure notice — and
-    //     turning the toggle off mid-flight must not strand them.
-    //
-    //     Declining also means declining to CONSUME. A request dropped in while
-    //     this is off stays in the queue and runs when it is turned on, rather
-    //     than being eaten and failed for a reason god never asked about.
-    // ALLOW_TEMP_WORKERS (buildFeatures.ts) switches the whole route off in this
-    // build, whatever an older config file says.
-    const dir = ALLOW_TEMP_WORKERS && readConfig().orchestratorMaySpawn ? spawnRequestsDir() : null;
-    if (dir && existsSync(dir)) {
-      let files: string[] = [];
-      try { files = readdirSync(dir).filter(f => f.endsWith('.json')).sort(); } catch { /* dir vanished */ }
-      for (const f of files) {
-        if (liveWorkers.size >= maxWorkers) break;
-        await processSpawnRequest(join(dir, f));
-      }
-    }
-
-    // (3) GC preserved worktrees whose work has since integrated. Throttled to
-    //     GC_SWEEP_MS and a no-op when nothing is preserved (the common case).
-    const now = Date.now();
-    if (preservedWorktrees.size > 0 && now - lastGcSweepAt >= GC_SWEEP_MS) {
-      lastGcSweepAt = now;
-      await gcPreservedWorktrees();
-    }
-  } catch (e) {
-    console.error('[worker] tick error:', e);
-  } finally {
-    workerTickRunning = false;
-  }
-}
-
-function startEphemeralWorkerWatcher(): void {
-  if (workerWatchTimer || !hive.enabled()) return;
-  const dir = spawnRequestsDir();
-  if (dir) { try { mkdirSync(dir, { recursive: true }); } catch { /* noop */ } }
-  workerWatchTimer = setInterval(() => { void ephemeralWorkerTick(); }, WORKER_TICK_MS);
-}
-
-function stopEphemeralWorkerWatcher(): void {
-  if (workerWatchTimer) { clearInterval(workerWatchTimer); workerWatchTimer = null; }
-}
-
-/** Snapshot of one live ephemeral worker for the renderer Workers tab. */
-interface WorkerSnapshot {
-  workerId: string;
-  reqId: string;
-  name: string;
-  baseBranch: string;
-  spawnedAt: number;
-  ageMs: number;
-  idleMs: number | null;        // null = PTY already gone
-  tokensUsed: number;
-  tokenCap: number | null;      // effective cap (per-request or config default); null = unlimited
-  hasSlack: boolean;
-  releasing: boolean;
-  status: 'releasing' | 'working';
-}
-/** Snapshot of a preserved-but-not-yet-GC'd worktree for the tab. */
-interface PreservedSnapshot {
-  workerId: string;
-  wtPath: string;
-  baseBranch: string;
-  preservedAt: number;
-}
-
-/** List live ephemeral workers (+ preserved worktrees awaiting GC) for the tab. */
-ipcMain.handle('workers:list', (): { live: WorkerSnapshot[]; preserved: PreservedSnapshot[]; maxWorkers: number } => {
-  const cfg = readConfig();
-  const defaultCap = typeof cfg.defaultWorkerTokenCap === 'number' && cfg.defaultWorkerTokenCap > 0
-    ? cfg.defaultWorkerTokenCap : 0;
-  const now = Date.now();
-  const live: WorkerSnapshot[] = [...liveWorkers.values()].map((rec) => {
-    const idle = ptyManager.idleFor(rec.workerId);
-    const effCap = (rec.tokenCap && rec.tokenCap > 0) ? rec.tokenCap : (defaultCap > 0 ? defaultCap : 0);
-    return {
-      workerId: rec.workerId,
-      reqId: rec.reqId,
-      name: rec.name ?? rec.workerId,
-      baseBranch: rec.baseBranch,
-      spawnedAt: rec.spawnedAt,
-      ageMs: Math.max(0, now - rec.spawnedAt),
-      idleMs: idle === undefined ? null : idle,
-      tokensUsed: workerTokensUsed(rec.workerId),
-      tokenCap: effCap > 0 ? effCap : null,
-      hasSlack: !!rec.slack,
-      releasing: !!rec.releasing,
-      status: rec.releasing ? 'releasing' : 'working'
-    };
-  });
-  const preserved: PreservedSnapshot[] = [...preservedWorktrees.values()].map((e) => ({
-    workerId: e.workerId, wtPath: e.wtPath, baseBranch: e.baseBranch, preservedAt: e.preservedAt
-  }));
-  return { live, preserved, maxWorkers: Math.max(1, cfg.maxConcurrentWorkers ?? 4) };
-});
-
-/** Manually stop a live ephemeral worker. Mirrors the done-release path: mark
- *  releasing, then kill + teardownPty runs the SAFETY-GATED worktree teardown
- *  (committed work is preserved, never force-discarded). Idempotent. teardownPty
- *  is called explicitly (D10) rather than left to the PTY's natural exit: kill()
- *  frees the manager's id slot synchronously, so by the time the process's real
- *  exit arrives the exit-handler's stale-id guard already misreads it as a
- *  reclaimed id and skips teardown — the worker would stay "live" in registry.json
- *  and fleet.json forever after this call. */
-ipcMain.handle('workers:stop', (_evt, workerId: string): { ok: boolean; error?: string } => {
-  if (typeof workerId !== 'string' || !workerId) return { ok: false, error: 'invalid worker id' };
-  const rec = liveWorkers.get(workerId);
-  if (!rec) return { ok: false, error: 'no such live worker' };
-  if (rec.releasing) return { ok: true }; // already stopping
-  rec.releasing = true;
-  console.log(`[worker] manual stop requested for ${workerId}`);
-  try { ptyManager.kill(workerId); } catch (e) { return { ok: false, error: String(e) }; }
-  teardownPty(workerId);
-  return { ok: true };
-});
+// ─── IPC: app info ───────────────────────────────────────────────────────────
+// `packaged`: only installed builds check for updates (updater.ts), so
+// Settings → Updates can say so instead of promising checks a dev build never runs.
+ipcMain.handle('app:info', () => ({ version: app.getVersion(), packaged: app.isPackaged }));
 
 /** Start every hive-bound background service against the current harnessHome.
  *  Called on boot, and again to recover in place if a folder-change copy fails
@@ -8952,7 +6449,6 @@ function bootstrapHiveServices(): void {
   // Tell the hive what it is running inside, BEFORE anything spawns: the prompt
   // builder reads this, so an agent spawned earlier would never learn it.
   hive.setRuntimeInfo({ version: app.getVersion(), packaged: app.isPackaged, appPath: app.getAppPath() });
-  hive.setOrchestratorMaySpawn(readConfig().orchestratorMaySpawn === true);
   // An app-start marker in the event log. log.jsonl had twelve event kinds and
   // none of them meant "the app restarted", so a relaunch, and more importantly a
   // switch between a packaged build and a local one, was invisible to every agent
@@ -8983,7 +6479,6 @@ function bootstrapHiveServices(): void {
   }
   archiveOrphanedAgents(); // #57/#58: archive stale archived:false entries with no live PTY
   hive.startRouter();
-  startEphemeralWorkerWatcher(); // poll HIVE_ROOT/spawn-requests → ephemeral workers
   // Phase 2: the loopback secret broker. Bind it BEFORE workers spawn so each spawn can
   // be granted a capability token + the broker URL in its env. Loopback-only, idempotent.
   void integrationBroker.start().then((r) => {
@@ -8994,12 +6489,6 @@ function bootstrapHiveServices(): void {
   ensureDefaultMissions(); // one-time: seed the built-in hourly ops standup
   migrateMissionOwners(); // one-time: everyone rows to Michael, createdBy stamped
   syncMissions(); // arm recurring auto-dispatch missions now the router is live
-  syncContextTriggers(); // …and the context trigger's own compact/clear cadences
-  // Pair replies to inbound webhook messages in the ledger. Tied to the FEATURE
-  // (any endpoint configured), not to the server: an approved message's card can
-  // finish long after the operator switched the public surface back off, and its
-  // reply still belongs in the history.
-  if ((readConfig().webhookTriggers ?? []).length > 0) startWebhookDoneObserver();
   hookServer.start();
   // Bind the telemetry collector BEFORE the renderer spawns any agent, then point
   // the hive at it so every subsequent spawn is instrumented. Best-effort — a bind
@@ -9272,10 +6761,6 @@ function healthCheckPtys(reason: string, awayMs: number | null): void {
 function onSystemResume(reason: string): void {
   console.log(`[power] ${reason} — re-arming scheduler, beats, router, keep-awake`);
   try { syncMissions(); } catch (e) { console.error('[power] syncMissions on resume', e); }
-  // Same freeze, same catch-up: the context timers honour elapsed-time-since-last-
-  // run, so a compact/clear that came due while the machine slept fires ONCE here
-  // rather than being lost or replayed N times.
-  try { syncContextTriggers(); } catch (e) { console.error('[power] syncContextTriggers on resume', e); }
   try { armAlwaysOnBeats(); } catch (e) { console.error('[power] armAlwaysOnBeats on resume', e); }
   // The hive message router (outbox→inbox drain) is a setInterval that freezes
   // during true system sleep exactly like the beats above — but it was the one
@@ -9304,27 +6789,9 @@ function onSystemResume(reason: string): void {
 }
 
 app.whenReady().then(() => {
-  // Realtime Michael mic-gate hygiene (rt-8 / Pam rt-10 nit): the voice session
-  // opens the mic permission gate by persisting realtimeVoiceEnabled=true and
-  // closes it on disconnect — but a hard crash/reload mid-session skips that
-  // teardown, leaving the flag stuck true so the gate would boot PRE-OPEN with no
-  // live session. Force it closed at startup (a real session re-opens it via
-  // setMicGate(true)); macOS TCC stays a second gate regardless.
-  if (readConfig().realtimeVoiceEnabled) writeConfig({ realtimeVoiceEnabled: false });
-
   // A file check cut short by a quit or crash leaves its settings folder, with
   // the checked text, in the temp folder (hiddenClaude.ts isolateConfig).
   sweepIsolatedLeftovers();
-
-  // Anonymous product analytics (PostHog) — the full contract lives in
-  // TELEMETRY.md. Off entirely while COLLECT_USAGE_STATS (buildFeatures.ts) is
-  // false. Otherwise a no-op unless a build-time key was injected (official
-  // releases only), and gated on DO_NOT_TRACK + the telemetryEnabled config.
-  analytics.init({
-    stateDir: app.getPath('userData'),
-    appVersion: app.getVersion(),
-    enabled: COLLECT_USAGE_STATS && readConfig().telemetryEnabled !== false
-  });
 
   // Warm the model catalog cache before any picker opens. The renderer reads
   // the same cache over IPC on load; doing the network hop here means the file
@@ -9336,11 +6803,6 @@ app.whenReady().then(() => {
   const startupHireLink = process.argv.find((a) => a.startsWith(`${APP_URL_SCHEME}://`));
   if (startupHireLink) void handleHireLink(startupHireLink);
 
-  // Hand every spawned agent the path to the Slack reply discovery file via the
-  // inherited env (pty merges process.env). The path is stable whether or not the
-  // server is running; the FILE only exists while it is, so the helper degrades
-  // to "endpoint not running" cleanly. NO secret is in the env — only the path.
-  process.env.MD_SLACK_REPLY_CONFIG = slackReplyConfigPath();
   // Open the durable store first — createWindow() reads the saved window bounds.
   // Guarded: a DB failure (e.g. a bad native build) must degrade to defaults,
   // never block app startup.
@@ -9379,26 +6841,6 @@ app.whenReady().then(() => {
   // developer tools, which are not for an office owner (owner, 2026-10-03).
   installAppMenu();
   createWindow();
-  // Auto-start the Slack webhook server when configured. Best-effort: a tunnel
-  // failure (offline) is logged, not fatal. The tunnel URL is ephemeral and
-  // changes per restart, so the user re-pastes it via Settings → Start.
-  const slackCfg = readConfig();
-  // Slack and webhooks hand work to the hive, so they wait for the office too.
-  if (homeReady && slackCfg.slackEnabled && slackCfg.slackSigningSecret) {
-    void startSlackServer().then((r) => {
-      if (!r.ok) console.error('[slack] auto-start failed:', r.error);
-      else console.log('[slack] webhook listening', r.url ? `(tunnel: ${r.url})` : '(no tunnel)');
-    });
-  }
-  // Auto-start the generic webhook only for endpoints the user has explicitly
-  // enabled (each with its own secret) — never a default-on public surface.
-  // Opt-in, like Slack; an install with no enabled endpoint opens no tunnel.
-  if (homeReady && enabledWebhookEndpoints().length > 0) {
-    void startWebhookServer().then((r) => {
-      if (!r.ok) console.error('[webhook] auto-start failed:', r.error);
-      else console.log('[webhook] listening', r.url ? `(tunnel: ${r.url})` : '(no tunnel)');
-    });
-  }
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
@@ -9429,35 +6871,10 @@ onConfigWritten((config) => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    // Full teardown, not a bare killAll: this path must also stop the proxy
-    // sidecars and helper servers — on Windows a child is NOT killed when its
+    // Full teardown, not a bare killAll: this path must also stop the
+    // helper servers — on Windows a child is NOT killed when its
     // parent exits, so anything skipped here outlives the app.
     teardownAndQuit();
   }
 });
 
-// Final analytics flush (session_ended + drain the send queue), bounded so a
-// hung network can never wedge quit: preventDefault ONCE, race the flush
-// against a short timeout, then exit hard.
-//
-// finish MUST be app.exit(), not a re-entrant app.quit(): when the quit was
-// initiated while a window was still open (the "kill all & quit" confirm path
-// calls teardownAndQuit → app.quit() and the window closes DURING that quit),
-// Electron is left with its internal is-quitting state set after this
-// preventDefault, and the later app.quit() is silently a no-op — no before-quit,
-// no will-quit, no quit; the main process idles forever with zero windows. On
-// Windows that stranded the whole Electron process group (main + GPU + network
-// service) after every agents-running quit. By this point teardown has already
-// run and the flush has finished or timed out, so an unconditional exit is
-// exactly what's left to do.
-let analyticsFlushed = false;
-app.on('will-quit', (e) => {
-  if (analyticsFlushed) return;
-  analyticsFlushed = true;
-  e.preventDefault();
-  const finish = (): void => app.exit(0);
-  Promise.race([
-    analytics.endSession(),
-    new Promise<void>((r) => setTimeout(r, 1200))
-  ]).then(finish, finish);
-});

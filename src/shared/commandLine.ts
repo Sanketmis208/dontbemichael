@@ -4,12 +4,9 @@
  *  way a shell reads it, so a typed `--model="Gemini 3.1 Pro (High)"` is one
  *  token too. A quote with no closing partner stays a literal character.
  *
- *  Shared because BOTH sides split command lines: the renderer's spawn flows
- *  (AddAgentModal, restore, command center) and main's god-hired-worker path
- *  (processSpawnRequest). They used to carry byte-identical copies, which is an
- *  invitation for the two to drift — and a worker whose command line splits
- *  differently from the renderer's is exactly the class of silent breakage the
- *  spawn-request fix exists to prevent. */
+ *  Shared because both sides split command lines: the renderer's spawn flows
+ *  (AddAgentModal, restore, command center) and main (hiddenClaude, hiddenModel),
+ *  so the two never drift. */
 export function tokenizeCommand(command: string): string[] {
   const out: string[] = [];
   // A token is a run of non-space characters and quoted spans, so a span may

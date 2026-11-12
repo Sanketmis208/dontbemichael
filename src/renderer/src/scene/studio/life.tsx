@@ -236,13 +236,7 @@ export function useStudioLife({ seatOf, godId, paused, T, posts, accentOf, done,
       if (scheduled) later(450, () => launch(add)); else if (pointing) later(380, () => launch(add)); else launch(add);
     };
     const off = window.cth.onHiveMessage(fly);
-    // Demo mode has no real hive, so the mock loop sends its own handoffs.
-    const onDemo = (ev: Event) => {
-      const d = (ev as CustomEvent<{ from: string; to: string; act: string; subject?: string }>).detail;
-      fly({ id: 'demo', from: d.from, to: d.to, act: d.act, subject: d.subject });
-    };
-    window.addEventListener('cth:demo-handoff', onDemo);
-    return () => { off(); window.removeEventListener('cth:demo-handoff', onDemo); };
+    return off;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

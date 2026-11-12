@@ -159,12 +159,6 @@ export class LedgerFold {
   days(): Map<string, number> { return this.byDay; }
 }
 
-export function ledgerDays(rows: Iterable<{ agent_id?: unknown; session_id?: unknown; ts?: unknown; usd?: unknown }>, since: number, until: number): Map<string, number> {
-  const f = new LedgerFold(since, until);
-  for (const r of rows) f.add(r);
-  return f.days();
-}
-
 // ─── the run ──────────────────────────────────────────────────────────────
 
 async function* lines(file: string): AsyncGenerator<string> {

@@ -26,7 +26,9 @@ test('a member is in once their engine has started, and real work is never overw
   assert.equal(O.engineStarted('PreToolUse', 'startup'), false);
   const hive = read('src/renderer/src/hooks/useHive.ts');
   assert.match(hive, /if \(engineStarted\(e\.event, e\.source\) && self\.action === ACTION_CLOCKING_IN\) updateAgent\(e\.agentId, \{ action: '' \}\);/);
-  assert.match(hive, /if \(a\.action === ACTION_CLOCKING_IN && a\.ptyId && printed\.has\(a\.ptyId\) && !usesHookStandingGoal\(a\)\) updateAgent\(a\.id, \{ action: '' \}\);/, 'an engine with no hooks: first output');
+  // Every kept engine reports its start through hooks; the first output rule
+  // for an engine with none went with those engines (owner, 2026-11-11).
+  assert.doesNotMatch(hive, /usesHookStandingGoal/);
 });
 
 test('the lock can never trap: it lifts on the opening ending, Michael stopping, or the limit', () => {
@@ -87,8 +89,8 @@ test('the card names the slowest, and tells slow from silent without a false ala
 });
 
 test('every word is there in every language, with no dashes', () => {
-  // Value: protects=Chinese and Arabic offices get the new card; fails_when=a key or placeholder is missing, or a dash slips in; why_new=owner 2026-10-30; seam=none; no_claim=translation quality
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  // Value: protects=the new card has its words; fails_when=a key or placeholder is missing, or a dash slips in; why_new=owner 2026-10-30; seam=none; no_claim=translation quality
+  for (const loc of ['en']) {
     const l = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`));
     const o = l.office.opening;
     for (const k of ['time', 'slowest', 'longer', 'quiet']) {

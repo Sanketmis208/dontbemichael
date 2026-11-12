@@ -18,7 +18,7 @@ const en = JSON.parse(read('src/renderer/src/i18n/locales/en.json'));
 test('one Settings section, after Connections, with Research first', () => {
   // Value: protects=the switch and what it may be sent read as one decision; fails_when=the section moves or splits; why_new=design review D3; seam=source
   const modal = read('src/renderer/src/components/SettingsModal.tsx');
-  assert.match(modal, /'Connections', 'Research & privacy', 'Voice'/);
+  assert.match(modal, /'Connections', 'Research & privacy', 'Memory & Knowledge'/);
   assert.equal(en.settings.nav.research, 'Research & privacy');
   assert.ok(ui.indexOf("t('research.title')") < ui.indexOf("t('research.sendTitle'"));
   assert.match(modal, /classes=\{pending\.dataClasses \?\? config\.dataClasses\}/, 'classes are staged for the footer Save');
@@ -51,7 +51,7 @@ test('classes are named radio groups in a fixed order; passwords are locked', ()
   assert.match(ui, /<Icon name="lock" size=\{0\.75\} \/><span>\{t\('research\.alwaysPrivate'\)\}<\/span>/, 'the locked state is spoken as visible text');
   assert.match(ui, /t\('research\.otherEngines', \{ names: uncovered\.join\(', '\) \}\)/, 'members on other engines are named (D4)');
   for (const id of ['places', 'industry', 'dates', 'general', 'names', 'contact', 'companies', 'money', 'accounts', 'health', 'quoted', 'secrets']) {
-    for (const lang of ['en', 'ar', 'zh-CN']) {
+    for (const lang of ['en']) {
       const l = JSON.parse(read(`src/renderer/src/i18n/locales/${lang}.json`));
       assert.ok(l.research.class[id].name && l.research.class[id].tip, `${lang} ${id}`);
     }
@@ -99,7 +99,7 @@ test('setup offers Research as one unchecked Team step row', () => {
 
 test('Research copy has no dashes', () => {
   // Value: protects=the owner's no dash rule; fails_when=a dash slips into Research strings; why_new=standing rule; seam=none
-  for (const lang of ['en', 'ar', 'zh-CN']) {
+  for (const lang of ['en']) {
     const l = JSON.parse(read(`src/renderer/src/i18n/locales/${lang}.json`));
     assert.doesNotMatch(JSON.stringify(l.research) + l.capabilities.research, /[–—]| - /, lang);
   }

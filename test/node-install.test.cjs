@@ -186,7 +186,7 @@ test('a Windows checksum mismatch exits before msiexec runs', () => {
 // ── the ladder ──────────────────────────────────────────────────────────────
 
 test('a usable npm is untouched — no Node install is ever spliced in', () => {
-  for (const provider of ['claude', 'codex', 'opencode', 'copilot']) {
+  for (const provider of ['claude', 'codex', 'gemini']) {
     const rung = chooseInstallRung(
       { command: 'npm install -g x', nativeCommand: 'curl x | bash', label: 'X' }, true, INSTALLER
     );

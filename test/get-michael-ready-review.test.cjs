@@ -81,12 +81,10 @@ test('a key Anthropic refuses for a reason shows that reason, not a network erro
   for (const status of [408, 502, 503, 504]) {
     assert.deepEqual(await setup.checkAnthropicKey(key, async () => ({ status })), { verdict: 'unreachable' }, `HTTP ${status} with no body`);
   }
-  assert.ok(JSON.parse(read('src/renderer/src/i18n/locales/ar.json')).engineSetup.keyError.refused.includes('\u2068{{reason}}\u2069'), 'Arabic isolates the English reason so its punctuation stays in place');
   assert.deepEqual(await setup.checkAnthropicKey(key, reply(400, { error: { message: '  two\n lines  ' } })), { verdict: 'refused', reason: 'two lines' });
-  for (const l of ['en', 'zh-CN', 'ar']) {
+  for (const l of ['en']) {
     const w = JSON.parse(read(`src/renderer/src/i18n/locales/${l}.json`)).engineSetup.keyError.workspace;
     assert.match(w, /console\.anthropic\.com/, `${l}: says where to make the key`);
-    if (l === 'ar') assert.ok(w.includes('\u2068console.anthropic.com\u2069'), 'Arabic isolates the domain, as keyInfo does');
     assert.ok(w.length <= 80, `${l}: short`);
     if (l === 'en') assert.ok(w.split(/\s+/).length < 12, 'system feedback stays under 12 words (DESIGN.md)');
     assert.doesNotMatch(w, /[\u2013\u2014]| - /, `${l}: no dashes`);
@@ -97,7 +95,7 @@ test('a key Anthropic refuses for a reason shows that reason, not a network erro
   assert.match(read('src/main/index.ts'), /if \(verdict !== 'ok'\) return \{ ok: false, error: verdict, \.\.\.\(reason \? \{ reason \} : \{\}\) \};/);
   const ready = read('src/renderer/src/components/GetMichaelReady.tsx');
   assert.match(ready, /res\.error === 'refused' && 'reason' in res && res\.reason\s*\? t\('engineSetup\.keyError\.refused', \{ reason: res\.reason \}\)/);
-  for (const l of ['en', 'zh-CN', 'ar']) {
+  for (const l of ['en']) {
     const k = JSON.parse(read(`src/renderer/src/i18n/locales/${l}.json`)).engineSetup.keyError;
     assert.match(k.refused, /\{\{reason\}\}/, l);
     assert.doesNotMatch(k.refused + k.busy, /[\u2013\u2014]| - /, `${l}: no dashes`);

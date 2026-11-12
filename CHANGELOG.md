@@ -6,6 +6,35 @@ All notable changes to this project are documented here. The format is based on
 
 Don't Be Michael keeps its own version line, starting at 0.0.1.
 
+## [0.3.8] (2026-11-11)
+
+### Added
+- **All clear has something to say.** Once every question is answered, Needs you shows one quiet line for your answers and one tip from Michael drawn from your office: the biggest weekly saving Pulse can apply in one click, or a connector you switched on that no team member uses yet. With neither, it shows what the team did today. Not now hides a tip for a week.
+- A draft's text to post is a box with its own Copy, and the file tab's Copy takes only that text.
+
+### Changed
+- Pulse's Your changes shows each change you applied on its own line, with what it set, about how much it saves or costs and its own Undo, in place of one signed total.
+- Run less never moves a schedule past the hour the prompt cache lasts, where every run would cost more.
+- Ask me cards keep their sources under See full context, skip a file the question already shows, and link a record where the question names it.
+- A team member that started with something missing shows a report card on Ask me, whatever the notifications setting.
+- The app is English only, and setup and hiring offer Claude Code. Codex and Gemini stay in the code but are not offered.
+- The hire link preview says the servers a hire names are not turned on.
+
+### Removed
+- Voice: Talk to Michael by voice and dictation. The Mac app no longer asks for the microphone.
+- Webhooks, Slack, the History tab, the Skills page, the code editor, git views, focus mode, temporary helpers, the organisation trigger, release drops, usage stats and traces.
+- Arabic and Simplified Chinese, right to left layout and the terminal's Arabic mode.
+- Every AI engine but Claude Code, Codex and Gemini. A team member, Michael or the default command saved on another engine moves to Claude Code, keeping its name, job, memory and folders.
+- The Compact on a schedule switch, which did nothing since Claude Code compacts by itself.
+- Saving the prompts you type to team members. Prompts an older version saved are deleted, and old webhook secrets leave your settings.
+
+### Fixed
+- The office floor never invents activity for real team members while the team starts or is stopped.
+- Nothing needs you shows on the office only, and each question's own answer box grows as you type.
+- A window whose code never starts is loaded again, up to three times.
+- A cut or slow download from the internet ends within its time limit, release notes included (#701, with thanks to @amartya1523).
+- Text cut to fit never ends in half an emoji (#703, with thanks to @Phantom-TA).
+
 ## [0.3.7] (2026-11-09)
 
 ### Added

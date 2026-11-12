@@ -74,7 +74,7 @@ test('the engine is one folded line, closed by default, naming the provider and 
 
 test('Edit agent takes the window\'s full height over the panel it edits (owner, 2026-10-02)', () => {
   // Value: protects=the dialog lays exactly over the panel, the full window high; fails_when=the dialog sizes to its content again or leaves the panel; why_new=new fill option; seam=none
-  assert.match(src, /width=\{640\}\s*fill\s*align="end"\s*over=\{docked \? panelBehind : undefined\}\s*zIndex=\{500\}/, 'exactly over the panel it edits (owner, 2026-10-02); the fullscreen view has none');
+  assert.match(src, /width=\{640\}\s*fill\s*align="end"\s*over=\{panelBehind\}\s*zIndex=\{500\}/, 'exactly over the panel it edits (owner, 2026-10-02)');
   assert.match(src, /document\.querySelector<HTMLElement>\('\[data-right-column\] \[data-panel-card\]'\)/);
   assert.match(fs.readFileSync(path.resolve(__dirname, '../src/renderer/src/shell/PanelChrome.tsx'), 'utf8'), /<div data-panel-card style=/);
   const dialog = fs.readFileSync(path.resolve(__dirname, '../src/renderer/src/shell/Dialog.tsx'), 'utf8');

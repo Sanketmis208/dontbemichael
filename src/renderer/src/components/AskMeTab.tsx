@@ -6,13 +6,14 @@ import { askHeadline, askTitle, askedAgo } from './askHeadline';
 import { family } from '@/scene/studio/theme';
 import { PixelButton } from './PixelButton';
 import { useStore } from '@/store/store';
+import type { DegradedNotice } from '@shared/degradedNotices';
 import { AgentAvatar } from './AgentAvatar';
+import { AllClearTipCard, AnswersSent } from './AllClearTipCard';
 import { type HiveTask, type HumanQA } from './TasksKanban';
 import { compareByNewestAsk } from './askMeOrder';
 import { answerMessages, askAsText, isAnswered, isReport, isWithdrawn, labeledAnswer, openAskIndexes, openReportIndexes, partAnswerText, raiserOf, readAskShape, type AskShape } from '@shared/askMeRouting';
 import { noticeKindOf } from '@shared/noticeCards';
 import { isComposingKey } from '@shared/imeGuard';
-import { useRtl } from '@/i18n/useDirection';
 import { ScheduleRequestCards } from './ScheduleRequestCards';
 import { WorkStyleUpdateCards } from './WorkStyleUpdateCards';
 import { MailProposalCards } from './MailProposalCards';
@@ -21,7 +22,6 @@ import { OfficeBreakCard, useOfficeBreak } from './OfficeBreakNotice';
 import { SilentEngineCards } from './SilentEngine';
 import { silentCards } from '@shared/silentEngine';
 import { FileText } from './FileChip';
-import { SourceRow } from './SourceRow';
 import { ChoiceRows, PartLines } from './AskAnswerFields';
 import { refreshNeedsYou, setupCardShown, updateNeedsYouTasks, useNeedsYou } from '@/shell/useNeedsYou';
 import { useResolvedGodName } from '@/hooks/useResolvedGodName';
@@ -86,12 +86,11 @@ function withoutDetail<T extends object>(e: T): T {
 
 export function AskMeTab() {
   const { t: translate, i18n } = useTranslation();
-  const rtl = useRtl();
   const godName = useResolvedGodName();
   const agents = useStore((s) => s.agents);
   const restorable = useStore((s) => s.restorableAgents);
   // One shared read with the pill, the strip and the chips (D3, eng R4).
-  const { tasks, requests: scheduleRequests, offers, proposals, engineSetup, stop, researchNotice, knowledgeNotice, silent, foundations, update, updateLater, cliUpdate, cliUpdateLater, caseStudyWaiting, count: needsCount } = useNeedsYou();
+  const { tasks, requests: scheduleRequests, offers, proposals, engineSetup, stop, researchNotice, knowledgeNotice, degraded, silent, foundations, update, updateLater, cliUpdate, cliUpdateLater, caseStudyWaiting, count: needsCount } = useNeedsYou();
   // Michael's team upgrade card (docs/designs/team-upgrade-card.md) keeps All clear away too.
   const cliShown = cliUpdateToastVisible(cliUpdate, cliUpdateLater);
   // Michael's card for a new version (UpdateCard) keeps All clear away too.
@@ -284,6 +283,8 @@ export function AskMeTab() {
   };
   // The whole board, whatever is picked: All clear and the answered list read it.
   const boardEmpty = !engineCard && !updateShown && !caseShown && !silentShown && !cliShown && waiting.length === 0 && scheduleRequests.length === 0 && offers.length === 0 && proposals.length === 0;
+  // All clear shows, and with it Michael's one tip (owner, 2026-11-10).
+  const showAllClear = boardEmpty && !onBreak && !researchNotice && !knowledgeNotice && degraded.length === 0;
 
   /** The answer a row would send: the owner's words, labeled with the option
    *  or the questions it answers (ask-me-options.md, 5A). */
@@ -409,26 +410,17 @@ export function AskMeTab() {
       </div>
       {/* Nothing left (D4, D8): All clear, one light line, and what was just
           answered. The column closes on the next click outside it. */}
-      {boardEmpty && !onBreak && !researchNotice && !knowledgeNotice && (
+      {boardEmpty && !onBreak && !researchNotice && !knowledgeNotice && degraded.length === 0 && (
         <div style={{ padding: '4px 2px 2px' }}>
           <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--cth-ink)' }}>{translate('shell.allClear')}</div>
           <div style={{ marginTop: 4, fontSize: 13, lineHeight: '19px', color: 'var(--cth-ink-3)' }}>{translate(`shell.allClearLine${line}`, { godName })}</div>
         </div>
       )}
-      {boardEmpty && answeredHere.map((x) => {
-        const xDept = deptOf(x.whoId);
-        const xFam = famOf(xDept);
-        return (
-        <section key={x.id} aria-label={xDept ? `${askTitle(x.title)}, ${deptName(xDept)}` : askTitle(x.title)} style={card}>
-          <div style={{ fontSize: 13, fontWeight: 600, lineHeight: '18px', letterSpacing: '-0.01em', color: 'var(--cth-ink)' }}>{askTitle(x.title)}</div>
-          {x.who && <div style={{ marginTop: 6 }}><span style={chipLook(xFam)} title={xDept ? translate('askMe.personDept', { name: x.who, dept: deptName(xDept) }) : undefined}><AgentAvatar id={x.whoId} name={x.who} size={16} />{x.who}{xDept && <span className="cth-sr-only">, {deptName(xDept)}</span>}</span></div>}
-          <div style={{ marginTop: 8, fontSize: 11, fontWeight: 600, color: 'var(--cth-ink-3)' }}>{translate('askMe.yourAnswer')}</div>
-          <div dir={rtl ? 'auto' : undefined} style={{ marginTop: 2, fontSize: 12.5, lineHeight: '18px', color: 'var(--cth-ink-2)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{x.a}</div>
-          {/* The files that went with it, by name: the paths are for the team. */}
-          {!!x.files?.length && <div style={{ ...fileRow, marginTop: 6 }}>{x.files.map((n) => <span key={n} style={fileChip}>{n}</span>)}</div>}
-        </section>
-        );
-      })}
+      {/* What was just answered: one quiet line, not a card each (owner,
+          2026-11-10: a stack of answered cards under All clear read as work
+          still waiting). Then one tip from Michael from this office. */}
+      {boardEmpty && <AnswersSent answers={answeredHere} godName={godName} />}
+      {showAllClear && <AllClearTipCard godName={godName} />}
       {waiting.map((row) => {
         const { task: t, ask: open } = row;
         const foundationId = foundationAsk(open);
@@ -534,7 +526,7 @@ export function AskMeTab() {
                 </div>
                 {/* Folded: the ask itself, in a line or two. */}
                 {!expanded && (
-                  <div dir={rtl ? 'auto' : undefined} style={{
+                  <div style={{
                     marginTop: 7, fontSize: 12.5, lineHeight: '18px', color: 'var(--cth-ink-2)',
                     display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
                   }}>{askHeadline(open.q)}</div>
@@ -559,12 +551,12 @@ export function AskMeTab() {
             </div>
             {expanded && <>
             {/* The question, as markdown: Michael writes lists, emphasis and code. */}
-            <div dir={rtl ? 'auto' : undefined} className="cth-askme-q" style={{ margin: '10px 0 12px', fontSize: 12.5, lineHeight: '18px', color: 'var(--cth-ink)' }}>
+            <div className="cth-askme-q" style={{ margin: '10px 0 12px', fontSize: 12.5, lineHeight: '18px', color: 'var(--cth-ink)' }}>
               {/* Files the question names are chips that open them (docs/designs/open-file-tab.md). */}
               <FileText source={open.q} who={{ raisedBy: open.raisedBy, assignee: typeof t.assignee === 'string' ? t.assignee : undefined }} />
             </div>
-            {/* What the card rests on, under the question and above the answer (ask-me-source-links.md). */}
-            <SourceRow entry={open} who={{ raisedBy: open.raisedBy, assignee: typeof t.assignee === 'string' ? t.assignee : undefined }} />
+            {/* What the card rests on is under See full context, not here (owner,
+                2026-11-10): the card keeps the decision and the file it names. */}
             {shape.kind === 'choice' && (
               <ChoiceRows
                 options={shape.options}
@@ -589,11 +581,10 @@ export function AskMeTab() {
                 question stays above the box, whole, while the owner types
                 (owner D2, ask-me-answer-box.md). */}
             {pickedNote && (
-              <div dir={rtl ? 'auto' : undefined} data-askme-note style={{ margin: '0 0 6px', fontSize: 12, lineHeight: '18px', color: 'var(--cth-ink-2)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{pickedNote}</div>
+              <div data-askme-note style={{ margin: '0 0 6px', fontSize: 12, lineHeight: '18px', color: 'var(--cth-ink-2)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{pickedNote}</div>
             )}
             <GrowingTextarea
               className="cth-input"
-              dir={rtl ? 'auto' : undefined}
               value={draft}
               onChange={(e) => setAnswerDraft(row.key, e.target.value)}
               onFocus={() => setOpenId(row.key)}
@@ -625,7 +616,6 @@ export function AskMeTab() {
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6 }}>
               <GrowingTextarea
                 className="cth-input"
-                dir={rtl ? 'auto' : undefined}
                 value={draft}
                 onChange={(e) => setAnswerDraft(row.key, e.target.value)}
                 // Typing pins this card open, so a newer ask arriving never folds it mid answer.
@@ -724,6 +714,9 @@ export function AskMeTab() {
       {/* A report, after the questions like every Report card (DESIGN.md 7.8). */}
       {researchNotice && <ResearchNoticeCard />}
       {knowledgeNotice && <KnowledgeNoticeCard />}
+      {degraded.map((n) => (
+        <DegradedNoticeCard key={n.agentId} notice={n} name={agents.find((a) => a.id === n.agentId)?.name ?? n.name} />
+      ))}
     </div>
   );
 }
@@ -793,6 +786,27 @@ function KnowledgeNoticeCard() {
           seen();
           window.dispatchEvent(new CustomEvent('cth:open-settings', { detail: { section: 'Memory & Knowledge' } }));
         }}>{t('knowledgeNotice.open')}</PixelButton>
+      </div>
+    </section>
+  );
+}
+
+/** A member that started with something missing (shared/degradedNotices.ts):
+ *  the sentence the desktop notification says, as a report, so it reaches an
+ *  owner with notifications off too. Got it clears it until it changes. */
+function DegradedNoticeCard({ notice, name }: { notice: DegradedNotice; name: string }) {
+  const { t } = useTranslation();
+  const seen = (): void => { void window.cth.degradedDismiss?.(notice.agentId).then(() => refreshNeedsYou()).catch(() => undefined); };
+  return (
+    <section aria-label={t('degradedNotice.title', { name })} style={card}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <AgentAvatar id={notice.agentId} name={name} size={18} />
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--cth-ink)' }}>{t('degradedNotice.title', { name })}</span>
+        <span style={reportTag}>{t('askMe.report')}</span>
+      </div>
+      <p style={{ margin: '8px 0 12px', fontSize: 12.5, lineHeight: '18px', color: 'var(--cth-ink)', overflowWrap: 'anywhere' }}>{notice.message}</p>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+        <PixelButton variant="secondary" size="sm" onClick={seen}>{t('askMe.gotIt')}</PixelButton>
       </div>
     </section>
   );

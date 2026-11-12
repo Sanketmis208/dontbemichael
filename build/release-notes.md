@@ -1,4 +1,4 @@
-- **Cards show** the pages and files they rest on.
-- **Department chips** focus Ask me on one team.
-- A job update shows exactly what it changes.
-- Team members save only in their own folders.
+- **A lighter app.** Voice, webhooks, Slack and unused engines are gone.
+- Pulse lists each change you applied, with its own Undo.
+- All clear offers one tip or what the team did today.
+- The prompts you type are no longer saved.

@@ -2,7 +2,7 @@
  * Non-destructive edits to the task ledger (`hive/tasks.json`).
  *
  * The ledger is a HAND-WRITTEN file: the god appends whatever fields a card
- * needs — `result` (the verbatim Slack reply posted back to the user), `repo`,
+ * needs — `result` (the outcome, shown on the done card), `repo`,
  * `scope`, `origin`, `deliverable`, `commit`, `blockedOn`, `notes` — none of
  * which the renderer's display model knows about. Several UI surfaces write the
  * ledger back after a small edit (answer a question, move a card, dismiss one),
@@ -89,7 +89,7 @@ export function patchTaskInLedger(
 /**
  * The ledger as the owner sees it: without the cards still in triage. A team
  * member files a card as "triage" and Michael checks it before it reaches the
- * owner's board, Ask me, the floor or voice (card-lifecycle.md section 10).
+ * owner's board, Ask me or the floor (card-lifecycle.md section 10).
  */
 export function ownerLedger(raw: unknown): unknown {
   if (!raw || typeof raw !== 'object' || !Array.isArray((raw as { tasks?: unknown }).tasks)) return raw;

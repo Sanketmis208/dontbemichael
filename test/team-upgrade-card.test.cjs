@@ -18,7 +18,7 @@ test('no chip in the top bar and no corner toast', () => {
   // Value: protects=U1 and U2: the chip and the toast are gone; fails_when=either comes back; why_new=owner ask; seam=source pin; no_claim=none beyond protects
   assert.doesNotMatch(read('src/renderer/src/shell/TopBar.tsx'), /CliUpdateBadge/);
   assert.doesNotMatch(read('src/renderer/src/App.tsx'), /CliUpdateToast/);
-  for (const loc of ['en', 'ar', 'zh-CN']) {
+  for (const loc of ['en']) {
     const cli = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).cliUpdate;
     assert.equal(cli.chip, undefined, loc);
     assert.equal(typeof cli.title, 'string', loc);

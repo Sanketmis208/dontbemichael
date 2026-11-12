@@ -13,7 +13,8 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { parseEmailHref } from '@shared/emailLink';
-import { sourcesOf, type Source } from '@shared/askSources';
+import { entryText, sourcesBesideText, sourcesOf, type Source } from '@shared/askSources';
+import { chipPaths } from '@/markdown/chipPaths';
 import { isExternal, labelMismatch, linkName } from '@/markdown/mdLinks';
 import { EmailChip } from '@/markdown/EmailChip';
 import { FileChip, useAskFileChecks } from './FileChip';
@@ -70,7 +71,9 @@ function PlainSource({ s }: { s: Source }) {
 
 export function SourceRow({ entry, who, margin = '-4px 0 12px' }: { entry: unknown; who: Who; margin?: string }) {
   const { t } = useTranslation();
-  const { items, searched } = useMemo(() => sourcesOf(entry), [entry]);
+  // A file the question already shows as a chip is not listed twice: the
+  // chips come from the same parse the question's text draws with.
+  const { items, searched } = useMemo(() => sourcesBesideText(sourcesOf(entry), chipPaths(entryText(entry))), [entry]);
   // Files are checked by main, as file chips in the question are.
   const fileEntries = useMemo(() => {
     const paths = items.filter((s) => s.kind === 'file').map((s) => `\`${(s as { url: string }).url}\``);
@@ -92,7 +95,8 @@ export function SourceRow({ entry, who, margin = '-4px 0 12px' }: { entry: unkno
             if (s.kind === 'file') {
               // A click that finds the file gone marks it Not found, as question chips do.
               const check = gone[s.url] ? { verdict: 'missing' as const, tab: false, path: s.url } : checks[s.url];
-              return <FileChip key={i} path={s.url} check={check} who={who} onGone={(p) => setGone((g) => ({ ...g, [p]: true }))} />;
+              // Its label says what the file is ("First email to Emily, 26 Oct"); the path stays in the tooltip.
+              return <FileChip key={i} path={s.url} label={s.label} check={check} who={who} onGone={(p) => setGone((g) => ({ ...g, [p]: true }))} />;
             }
             return <PlainSource key={i} s={s} />;
           })}

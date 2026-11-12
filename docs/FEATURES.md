@@ -1,6 +1,6 @@
 # Don't Be Michael: features and changes
 
-Everything the app does today, and every release that got it here (0.0.1 to 0.3.7). Part 1 is
+Everything the app does today, and every release that got it here (0.0.1 to 0.3.8). Part 1 is
 written to be lifted onto the GitHub page and the website as it is; Part 2 is the full list, release
 by release.
 
@@ -303,6 +303,31 @@ moving, and brings you only the decisions that need you.
   as a picture, and a part you select pastes as clean as the whole, in light or dark mode.
 
 ## Part 2: Every change, release by release
+
+### 0.3.8 (2026-11-11)
+- Once every question is answered, Needs you shows one quiet line for your answers and one tip
+  from Michael drawn from your office: the biggest weekly saving Pulse can apply in one click, or a
+  connector you switched on that no team member uses yet. With neither, it shows what the team did
+  today, in Pulse's words. Not now hides a tip for a week.
+- Pulse's Your changes shows each change you applied on its own line, with what it set, about how
+  much it saves or costs, and its own Undo. Run less never moves a schedule past the hour the
+  prompt cache lasts.
+- A draft's text to post is a box with its own Copy, and the file tab's Copy takes only that text.
+- Ask me cards keep their sources under See full context, skip a file the question already shows,
+  and link a record where the question names it. A team member that started with something
+  missing shows a report card on Ask me, whatever the notifications setting.
+- A lighter app: voice, webhooks, Slack, the History tab, the Skills page, the code editor, git
+  views, focus mode, temporary helpers, release drops, usage stats and traces are removed. The Mac
+  app no longer asks for the microphone.
+- The app is English only. Every AI engine but Claude Code, Codex and Gemini is removed; a team
+  member or Michael saved on another engine moves to Claude Code with its name, job, memory and
+  folders. Setup and hiring offer Claude Code.
+- The prompts you type to team members are no longer saved, and the ones an older version saved
+  are deleted. Old webhook secrets leave your settings.
+- The office floor never invents activity for real team members. A window whose code never starts
+  is loaded again, up to three times.
+- Contributor fixes: a cut or slow download ends within its time limit (#701), and text cut to fit
+  never ends in half an emoji (#703).
 
 ### 0.3.7 (2026-11-09)
 - An Ask me card shows what it rests on: the pages, records, posts, emails and files behind it sit

@@ -1,7 +1,7 @@
 /**
  * One place that fetches text over https.
  *
- * Extracted from skills.ts when the hero payload needed the same thing: two
+ * Shared by the hero payload and the model catalog: two
  * copies of redirect-following, timeout and status handling would drift, and the
  * one that drifted would be the one nobody was looking at.
  *

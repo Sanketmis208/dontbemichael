@@ -1,8 +1,8 @@
 'use strict';
 
 /**
- * KnowledgeManager.ingestFile, the door the Settings "add documents" button and
- * the kg:ingestFiles IPC both go through. doc-text.test.cjs proves the
+ * KnowledgeManager.ingestFile, the door the Settings "add documents" button
+ * goes through. doc-text.test.cjs proves the
  * converter; this proves the manager USES it: a Word file is stored as its
  * words (with the converter recorded), and a file that can't be read is refused
  * with the owner-readable reason instead of being stored as bytes, which is

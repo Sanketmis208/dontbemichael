@@ -434,15 +434,13 @@ test('a team member archived mid-close leaves the rows, and Michael is told once
   assert.equal(f.sent.filter((m) => /terminal ended/.test(m.subject)).length, 0);
 });
 
-test('archiving from the panel or by voice refreshes closing time', () => {
-  // Value: protects=both archive paths reach the controller; fails_when=an archive path stops calling closingTime.refresh; why_new=index.ts can't be loaded in a test; seam=source pin
+test('archiving from the panel refreshes closing time', () => {
+  // Value: protects=the archive path reaches the controller; fails_when=the archive path stops calling closingTime.refresh; why_new=index.ts can't be loaded in a test; seam=source pin
   const fs = require('node:fs');
   const path = require('node:path');
   const src = fs.readFileSync(path.join(__dirname, '..', 'src/main/index.ts'), 'utf8');
   const ipc = src.slice(src.indexOf("ipcMain.handle('hive:setArchived'"));
   assert.match(ipc.slice(0, ipc.indexOf('});')), /hive\.setArchived\(id, archived === true\);\s*\/\/[^\n]*\s*try \{ if \(archived === true\) closingTime\.refresh\(id\); \}/);
-  const voice = src.slice(src.indexOf('  setArchived: (id, archived) => {'));
-  assert.match(voice.slice(0, voice.indexOf('\n  },')), /hive\.setArchived\(id, archived\);\s*try \{ if \(archived\) closingTime\.refresh\(id\); \}/);
 });
 
 test('a new closing time tells Michael again about a terminal that ends again', (t) => {
@@ -702,7 +700,7 @@ test('the closing bar lists members that are not reporting, and its count opens 
   const main = read('src/main/index.ts');
   assert.match(main, /\(agentId\) => mailFor\(silentWatch\?\.episode\(agentId\)\) === 'hold'\n\);/);
   assert.match(main, /try \{ closingTimeRef\?\.refresh\(\); \}/);
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const l = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`));
     for (const v of [l.closingTime.notReporting, l.closingBar.notReporting]) {
       assert.equal(typeof v, 'string', loc);

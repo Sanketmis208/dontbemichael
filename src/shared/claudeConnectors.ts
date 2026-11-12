@@ -17,7 +17,15 @@
  */
 import type { AgentCapabilities } from './mailboxes';
 import { quickbooksCapability } from './quickbooks';
-import { emailCalendarAllowed } from './mcpCatalog';
+
+/** Whether the owner allowed the email and calendar connected to their Claude
+ *  account with the old "Your Claude account" switch (mcpDefaults['email-calendar'],
+ *  saved by an older build). Read once, for the carry-over to per-agent Gmail
+ *  and Calendar grants (docs/designs/claude-connectors.md, D9); agents are gated
+ *  by the connector rules. Only an explicit yes counts: a missing entry is off. */
+export function emailCalendarAllowed(mcpDefaults: { [id: string]: { enabled: boolean } } | undefined): boolean {
+  return mcpDefaults?.['email-calendar']?.enabled === true;
+}
 
 /** `unreachable`: the check failed to connect (a network or server failure),
  *  which signing in again would not fix. */

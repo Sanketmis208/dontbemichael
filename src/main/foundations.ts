@@ -97,9 +97,6 @@ const EXPIRY_CHECK_MS = 3_600_000;
 /** The coverage of a whole list, saved today. */
 type CoverageDecision = { ok: true; coverage: Coverage; remaining: SeenItem[] } | { ok: false };
 
-/** What the owner can do with a seen item on a list card (design review D4, D7). */
-export type SeenAction = 'notOurs' | 'undoNotOurs' | 'later' | 'undoLater';
-
 /** Why a file added on a card was not taken; each has its own card line. */
 export type AddFileError = 'unknown' | 'no-office' | 'no-file' | 'unreadable' | 'picture-type' | 'picture-engine' | 'misfit' | 'unchecked';
 

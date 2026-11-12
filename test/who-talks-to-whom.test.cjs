@@ -75,7 +75,7 @@ test('the chart reads the messages of a time range, picked from eight, Last 1 da
   const hive = read('src/main/hive.ts');
   assert.match(hive, /logTail\(n = 200, kind\?: string, since\?: number\): unknown\[\]/);
   assert.match(hive, /if \(since !== undefined && typeof e\.ts === 'number' && e\.ts < since\) break;/);
-  for (const loc of ['en', 'ar', 'zh-CN']) {
+  for (const loc of ['en']) {
     const g = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).memoryGraph;
     assert.deepEqual(Object.keys(g.range), R.TIME_RANGES.map((r) => r.key), loc);
     assert.equal(g.lastN, undefined, loc);
@@ -91,7 +91,7 @@ test('there is no Topics layer: people and message lines only', () => {
   assert.deepEqual(Object.keys(g).sort(), ['edges', 'nodes']);
   assert.ok(g.nodes.every((n) => n.kind === 'agent' || n.kind === 'pseudo'));
   assert.ok(!fs.existsSync(path.resolve(__dirname, '..', 'src/renderer/src/components/memoryGraph/extractTopics.ts')));
-  for (const loc of ['en', 'ar', 'zh-CN']) {
+  for (const loc of ['en']) {
     const m = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).memoryGraph;
     for (const k of ['topics', 'readingMemory', 'knowsAbout', 'legendTopic']) assert.equal(m[k], undefined, `${loc} ${k}`);
   }

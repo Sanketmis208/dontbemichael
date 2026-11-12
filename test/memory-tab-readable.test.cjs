@@ -131,7 +131,7 @@ test('the notes view uses list semantics, a disclosure for steps, and the divide
 test('strings exist in every language, Michael by godName, no dashes', () => {
   const keys = (o, p = '') => Object.entries(o).flatMap(([k, v]) => (typeof v === 'object' ? keys(v, `${p}${k}.`) : [`${p}${k}`]));
   const en = JSON.parse(read('src/renderer/src/i18n/locales/en.json')).memoryNotes;
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const d = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).memoryNotes;
     assert.deepEqual(keys(d).sort(), keys(en).sort(), loc);
     assert.match(d.source.michael, /\{\{godName\}\}/, loc);
@@ -151,7 +151,7 @@ test('every agent has its own Memory tab; Michael keeps the picker and the offic
   assert.match(src, /\{!ownOnly && \(\s*<label/, 'no picker on a team member tab');
   assert.match(src, /\{!ownOnly && <section/, 'no office search on a team member tab');
   assert.match(src, /<MemoryTab godId=\{agent\.id\} who=\{selectedMemoryAgent \?\? undefined\} onWho=\{setSelectedMemoryAgent\} \/>/, "Michael's tab unchanged");
-  for (const loc of ['en', 'zh-CN', 'ar']) assert.ok(JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).sidebar.memory, loc);
+  for (const loc of ['en']) assert.ok(JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).sidebar.memory, loc);
 });
 
 test('every slug the app writes can be read back', () => {

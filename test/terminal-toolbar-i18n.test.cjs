@@ -1,8 +1,8 @@
 'use strict';
 
 /**
- * The Work tab's terminal toolbar (zoom out, reset, zoom in, Focus) was English
- * only in an app that ships Arabic and Chinese, and its tooltips named Cmd on
+ * The Work tab's terminal toolbar (zoom out, reset, zoom in) had its words
+ * written in the code instead of the language file, and its tooltips named Cmd on
  * Windows, where the owner presses Ctrl. Structural checks: the renderer has no
  * DOM test harness here.
  */
@@ -17,7 +17,7 @@ const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 const view = read('src/renderer/src/components/PtyTerminalView.tsx');
 
 test('the terminal toolbar has no literal English tooltips or labels', () => {
-  // Value: protects=an Arabic or Chinese owner reads the toolbar in their language; fails_when=a title or aria-label on the toolbar is a string literal again; why_new=i18n-keys-exist only checks keys the code asks for, never text that skips t(); seam=none
+  // Value: protects=the toolbar's words come from the language file; fails_when=a title or aria-label on the toolbar is a string literal again; why_new=i18n-keys-exist only checks keys the code asks for, never text that skips t(); seam=none
   assert.doesNotMatch(view, /\btitle="[A-Za-z]/);
   assert.doesNotMatch(view, /aria-label="[A-Za-z]/);
   assert.doesNotMatch(view, /title=\{[^}]*'[A-Z][a-z]+ [^']*'/, 'no English literal inside a title expression');
@@ -29,10 +29,10 @@ test('the shortcut names the key this OS uses', () => {
   for (const k of ['zoomOut', 'zoomIn', 'zoomReset']) {
     assert.match(view, new RegExp(`t\\('workTab\\.${k}', \\{ mod \\}\\)`), `${k} gets the modifier`);
   }
-  for (const locale of ['en', 'zh-CN', 'ar']) {
+  for (const locale of ['en']) {
     const w = JSON.parse(read(`src/renderer/src/i18n/locales/${locale}.json`)).workTab;
     for (const k of ['zoomOut', 'zoomIn', 'zoomReset']) assert.match(w[k], /\{\{mod\}\}/, `${locale} workTab.${k} shows the key`);
-    for (const k of ['zoomOutLabel', 'zoomInLabel', 'zoomResetLabel', 'exitFocus']) assert.ok(w[k], `${locale} workTab.${k}`);
+    for (const k of ['zoomOutLabel', 'zoomInLabel', 'zoomResetLabel']) assert.ok(w[k], `${locale} workTab.${k}`);
   }
 });
 

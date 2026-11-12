@@ -3,9 +3,8 @@
 // Every literal t('a.b') key the renderer asks for must exist in en.json.
 //
 // i18next returns the KEY itself when a key is missing, so a typo or a key
-// nobody added renders as raw text like "common.clear" on a button. The
-// locale parity test in arabic-ui.test.cjs cannot catch that: it compares the
-// locale files with each other, never with the code that reads them.
+// nobody added renders as raw text like "common.clear" on a button. Only a
+// check against the code that reads the locale file can catch that.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');

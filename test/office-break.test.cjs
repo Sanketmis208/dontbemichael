@@ -231,7 +231,7 @@ test('during a break nothing types into a Claude terminal, and schedules still r
   assert.match(read('src/renderer/src/shell/TopBar.tsx'), /<ReportProblemButton \/>\s*<OfficeBreakChip \/>/);
   assert.match(read('src/renderer/src/shell/useNeedsYou.ts'), /if \(stopNeedsOwner\(merged\.stop\)\) feed = \{ \.\.\.feed, count: feed\.count \+ 1 \};/);
   assert.equal(stopNeedsOwner({ until: null, checking: false, reason: 'limit', again: false }), false, 'the plan limit never counts');
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const j = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`));
     for (const k of ['title', 'body', 'bodyUnknown', 'info', 'chip', 'chipUnknown']) assert.equal(typeof j.officeBreak[k], 'string', `${loc} ${k}`);
     assert.match(j.officeBreak.body, /\{\{time\}\}/, loc);
@@ -403,7 +403,7 @@ test('the office says the real cause to the owner, Michael and the team, and res
   assert.match(card, /<span className="cth-sr-only"> \{t\('markdown\.opensInBrowser'\)\}<\/span>/);
   assert.match(card, /window\.cth\.officeAddCredit\?\.\(\)/);
   assert.doesNotMatch(card.slice(card.indexOf('const stopCard'), card.indexOf('function LimitBreakCard')), /border(Left|InlineStart)|inset 3px/, 'no side rule (design D5)');
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const j = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`));
     for (const k of ['title', 'credit', 'creditAgain', 'signIn', 'keyStopped', 'checking', 'addCredit', 'tryAgain', 'signInAction', 'changeKey', 'changeSignIn', 'chip', 'creditInfo', 'creditKeyInfo', 'signInInfo', 'keyInfo']) {
       assert.equal(typeof j.officeStop[k], 'string', `${loc} ${k}`);

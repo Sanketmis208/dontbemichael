@@ -75,7 +75,7 @@ test('the empty state offers suggestions with a paused Add action in every suppo
   assert.match(list, /remainingStarterMissions\(/, 'the suggested save must be a parsed paused mission');
   assert.match(list, /upsertMission\(mission\)/, 'the click saves the mission in main');
   assert.match(capabilities, /businessType=\{config\.businessType\} sourceCard=\{agent\.sourceCard\}/, 'agent provenance is passed through');
-  for (const locale of ['en', 'ar', 'zh-CN']) {
+  for (const locale of ['en']) {
     const o = JSON.parse(read(`src/renderer/src/i18n/locales/${locale}.json`));
     assert.match(o.schedulesSection.suggestedJob, /\{\{title\}\}/);
     assert.match(o.schedulesSection.suggestedJob, /\{\{schedule\}\}/);

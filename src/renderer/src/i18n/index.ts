@@ -1,71 +1,15 @@
 /**
- * i18n bootstrap — react-i18next with inline JSON resources.
+ * i18n bootstrap: react-i18next with the English strings inline.
  *
- * English is the default language (and the fallback for any missing key).
- * The user's choice is persisted in localStorage (`cth.language`). With nothing
- * saved the app starts in English, ALWAYS — it deliberately does not read
- * navigator.language. Auto-detect would change the UI out from under every
- * existing user on a non-English machine, who never asked for a translation and
- * may not want a partial one. Nothing moves until someone picks a language in
- * Settings.
- *
- * Adding a language: drop a `locales/<code>.json` with the exact same key
- * tree as `en.json`, register it in `resources` and `supportedLngs`, and add
- * an entry to `LANGUAGES` (Settings → General exposes the picker from that
- * list). Give it `dir: 'rtl'` if it is a right-to-left script. No other code
- * needs to change.
+ * The app is English only (owner, 2026-11-11). The framework stays because
+ * every string lives in `locales/en.json` and reaches the UI through `t()`,
+ * which is also how `{{godName}}` gets the live name. A language an older build
+ * saved in localStorage is ignored: English shows.
  */
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { DEFAULT_GOD_NAME } from '@shared/godIdentity';
 import en from './locales/en.json';
-import zhCN from './locales/zh-CN.json';
-import ar from './locales/ar.json';
-
-/**
- * The languages the Settings picker offers, in display order.
- *
- * `dir` is the language's WRITING DIRECTION, and it is the ONLY thing the app
- * keys right-to-left layout off. Not the OS locale, not the content of a
- * document, not a system font — the language the user picked here, and nothing
- * else. That is what makes RTL inert for everybody who has not picked an RTL
- * language: `dir` is 'ltr' for every one of them, so every `isRtl` branch in
- * the renderer takes the same path it took before Arabic existed.
- */
-export const LANGUAGES = [
-  { code: 'en', label: 'English', dir: 'ltr' },
-  { code: 'zh-CN', label: '简体中文', dir: 'ltr' },
-  { code: 'ar', label: 'العربية', dir: 'rtl' }
-] as const;
-
-export type LanguageCode = (typeof LANGUAGES)[number]['code'];
-
-/** Language codes that read right-to-left, derived from LANGUAGES itself so a
- *  new locale cannot be registered with a direction and then forgotten here. */
-const RTL_CODES: ReadonlySet<string> = new Set(
-  LANGUAGES.filter((l) => l.dir === 'rtl').map((l) => l.code)
-);
-
-/**
- * Does this language code read right-to-left?
- *
- * Deliberately EXACT-MATCH on a registered code rather than a prefix or a
- * script guess. An unknown code is left-to-right, which is the direction every
- * user had before this shipped — an unrecognised value must never be able to
- * mirror somebody's UI.
- */
-export function isRtlLanguage(lng: string | undefined | null): boolean {
-  return !!lng && RTL_CODES.has(lng);
-}
-
-/** `'rtl'` or `'ltr'` for a language code, for a `dir` attribute. */
-export function directionFor(lng: string | undefined | null): 'rtl' | 'ltr' {
-  return isRtlLanguage(lng) ? 'rtl' : 'ltr';
-}
-
-const STORAGE_KEY = 'cth.language';
-
-const SUPPORTED: readonly string[] = LANGUAGES.map((l) => l.code);
 
 /**
  * The orchestrator's display name, for every string that talks about it.
@@ -96,32 +40,13 @@ export function godNameNow(): string {
   return typeof v?.godName === 'string' && v.godName ? v.godName : DEFAULT_GOD_NAME;
 }
 
-/** The saved choice, or English. Never the OS locale — see the note above. */
-function detectLanguage(): string {
-  try {
-    const saved = window.localStorage.getItem(STORAGE_KEY);
-    if (saved && SUPPORTED.includes(saved as LanguageCode)) return saved;
-  } catch { /* localStorage unavailable — English it is */ }
-  return 'en';
-}
-
-/** Switch language now and persist the choice for next launch. */
-export function setLanguage(lng: string): void {
-  void i18n.changeLanguage(lng);
-  try { window.localStorage.setItem(STORAGE_KEY, lng); } catch { /* best-effort */ }
-}
-
 void i18n
   .use(initReactI18next)
   .init({
-    resources: {
-      en: { translation: en },
-      'zh-CN': { translation: zhCN },
-      ar: { translation: ar }
-    },
-    lng: detectLanguage(),
+    resources: { en: { translation: en } },
+    lng: 'en',
     fallbackLng: 'en',
-    supportedLngs: ['en', 'zh-CN', 'ar'],
+    supportedLngs: ['en'],
     // Resources are bundled inline, so nothing ever suspends — the string is
     // there at init time. Keeping this false lets every component call
     // useTranslation() without wrapping the tree in <Suspense>.

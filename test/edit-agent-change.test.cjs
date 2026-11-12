@@ -144,7 +144,7 @@ test('a pack update is worked into the member\'s own job, and the card shows the
 
 test('the new strings have no dashes and say who, never "you" for a team member', () => {
   // Value: protects=the no dashes rule and plain owner copy in every locale; fails_when=a dash or a hyphen used as one slips into the new copy; why_new=T3 copy; seam=pure
-  for (const loc of ['en', 'ar', 'zh-CN']) {
+  for (const loc of ['en']) {
     const d = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).jobChange;
     const flat = Object.entries(d).flatMap(([k, v]) => (typeof v === 'string' ? [[k, v]] : Object.entries(v).map(([k2, v2]) => [`${k}.${k2}`, v2])));
     for (const [k, v] of flat) assert.doesNotMatch(v, /[—–]| - /, `${loc} ${k}`);

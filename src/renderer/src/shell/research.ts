@@ -58,7 +58,7 @@ export async function startResearch(config: HarnessConfig): Promise<{ ok: true }
     cols: 100,
     rows: 30,
     hive: { id: RESEARCH_ID, name, provider: 'claude', cwd: prep.cwd, role: RESEARCH_DESCRIPTION }
-  }).catch((e: unknown) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e), cwd: undefined, seedPrompt: undefined }));
+  }).catch((e: unknown) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e), cwd: undefined }));
   if (!res.ok) {
     // Nothing started, so the owner's choice goes back to off.
     await window.cth.researchOff().catch(() => undefined);
@@ -90,7 +90,6 @@ export async function startResearch(config: HarnessConfig): Promise<{ ok: true }
     command: command.trim(),
     provider: 'claude',
     model: config.defaultModel,
-    seedPrompt: res.seedPrompt,
     recentTextTs: Date.now()
   }, { select: false });
   return { ok: true };

@@ -10,8 +10,7 @@
  * place that is not here (or is hidden in this build) is never a button.
  */
 
-/** Settings sections an agent may name. Voice and Skills are left out: they are
- *  hidden in this build (SHOW_VOICE, SHOW_SKILLS), so their words stay words. */
+/** Settings sections an agent may name. */
 export const PLACE_SECTIONS = {
   'general': 'General',
   'company-profile': 'Company profile',
@@ -84,13 +83,6 @@ export function placeHref(place: Place): string {
   if (place.group) parts.push(place.group);
   if (place.add) parts.push('add');
   return PLACE_SCHEME + parts.join('/');
-}
-
-/** The words an agent writes for a place: "Settings, Connections, Mailboxes". */
-export function placeWords(place: Extract<Place, { kind: 'settings' }>): string {
-  const key = sectionKeyOf(place.section);
-  const group = place.group ? groupsOf(key)[place.group] : undefined;
-  return ['Settings', place.section, ...(group ? [group] : [])].join(', ');
 }
 
 /** The section and group names, longest first, for the word spotter. */

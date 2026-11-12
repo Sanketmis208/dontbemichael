@@ -67,3 +67,36 @@ test('anything that is not a list of objects is read as no sources', () => {
   // Control and format characters never reach a label.
   assert.equal(of([{ label: 'Line\none\u202e', url: 'https://example.com' }]).items[0].label, 'Line one');
 });
+
+test('a file the question already shows is not listed again beside it', () => {
+  // Value: protects=the owner sees the file to review once, not once in the question and again in the sources (owner, 2026-11-10); fails_when=a file named in the words is listed again, or another source is dropped with it; why_new=new display rule; seam=pure helpers; no_claim=the renderer's chip parse (chipPaths, pinned in ask-source-row)
+  const draft = '/Users/owner/Office/Sales/Northwind last note draft.md';
+  const first = '/Users/owner/Office/Sales/Northwind first contact.md';
+  const entry = {
+    q: `**Approve one last short note?**\n\n\`${draft}\``,
+    sources: [
+      { label: 'The draft note', url: draft },
+      { label: 'First email, 26 Oct', url: first },
+      { label: 'Our HubSpot page', url: 'https://example.com/hubspot' },
+      { label: 'HubSpot contacts', searched: true }
+    ]
+  };
+  const all = S.sourcesOf(entry);
+  const shown = S.sourcesBesideText(all, [draft]);
+  assert.deepEqual(shown.items.map((x) => x.label), ['First email, 26 Oct', 'Our HubSpot page']);
+  assert.deepEqual(shown.searched.map((x) => x.label), ['HubSpot contacts']);
+  // What Michael's checks count is unchanged.
+  assert.equal(all.items.length, 3);
+  assert.equal(S.hasUsableSource(S.sourcesBesideText(S.sourcesOf({ sources: [{ label: 'Draft', url: draft }] }), [draft])), false);
+  assert.equal(S.hasUsableSource(S.sourcesOf({ sources: [{ label: 'Draft', url: draft }] })), true);
+  // Nothing shown in the words: the list is kept as is.
+  assert.equal(S.sourcesBesideText(all, []), all);
+});
+
+test('the words a card draws are the question, its parts and its options', () => {
+  // Value: protects=a file named in a part or an option counts as shown too; fails_when=parts or option labels are left out, or bad shapes throw; why_new=new helper; seam=pure helper; no_claim=none beyond protects
+  const t = S.entryText({ q: 'Main', parts: [{ q: 'Part one' }, null, 'x'], options: [{ label: 'Send it' }, {}] });
+  assert.equal(t, 'Main\n\nPart one\n\nSend it');
+  assert.equal(S.entryText(null), '');
+  assert.equal(S.entryText({ q: 3 }), '');
+});

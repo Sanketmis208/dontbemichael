@@ -47,5 +47,7 @@ test('the five already branched seams keep their Windows paths', async () => {
     Object.defineProperty(process, 'platform', real);
   }
   const hive = read('src/main/hive.ts');
-  assert.match(hive, /const command = \(event: string\) => process\.platform === 'win32'\n\s+\? this\.nodeRunUnquoted\(shim, event\)/, 'hook commands run the shim through node on Windows');
+  // Antigravity's hook command carried this seam until it was removed (owner,
+  // 2026-11-11); Gemini's carries the same branch.
+  assert.match(hive, /command: process\.platform === 'win32'\n\s+\? this\.nodeRunUnquoted\(shim\)/, 'hook commands run the shim through node on Windows');
 });

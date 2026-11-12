@@ -33,8 +33,13 @@ test('Pulse is a fixed view tab between Tasks and Who talks to whom, and takes t
 test('sections run recommendations, what got done (one grid, then the quiet chips), then team at work', () => {
   // Value: protects=D2 and D3 order (owner, 2026-10-15) as the smart view set it on 2026-10-19 (pulse-smart-view.md 1E: Kept safe and the row of four join the What got done grid, eng R3), the saved card only once something was applied, and the start date with its reason behind the (i); fails_when=a section moves, the grid stops reading pulseTiles, a table returns, the saved card shows with nothing in it, or the start date loses its reason; why_new=owner asks 2026-10-15 and 2026-10-19; seam=none; no_claim=pixel layout (live check)
   assert.equal(en.pulse.recommendations, 'Recommendations');
-  assert.match(view, /const savedShown = view\.saved\.state !== 'none';/);
+  assert.match(view, /const savedShown = savedChanges\.length > 0;/);
   assert.match(view, /\{savedShown && <div/);
+  // One line per change with its own Undo, never a signed total (owner, 2026-11-09).
+  assert.match(view, /\{savedChanges\.map\(\(c\) => \{[\s\S]*?onClick=\{\(\) => \{ void undo\(c\.appliedId\); \}\}/);
+  assert.doesNotMatch(view, /'−'/, 'no minus sign: the words say saved or cost more');
+  assert.equal(en.pulse.changeCostMore, 'Cost about {{usd}} more since {{day}}');
+  assert.equal(en.pulse.savedByChanges, undefined);
   assert.match(en.pulse.adviceStarts, /\{\{day\}\}[\s\S]*two full weeks[\s\S]*\{\{since\}\}/);
   assert.doesNotMatch(en.pulse.adviceStarts, /record/i, 'business words, not records (owner, 2026-10-15)');
   assert.match(view, /tip=\{noAdvice && view\.adviceFrom \? t\('pulse\.adviceStarts', \{ day: fmtDay\(view\.adviceFrom\), since: /, 'the why sits behind the header (i) (1D)');
@@ -76,7 +81,7 @@ test('Team at work folds members with no working time into one disclosure row, a
 test('suggestions are amber soft cards, applied ones green with Undo; no coral and no left stripe anywhere', () => {
   // Value: protects=D10, D12 and calm by default; fails_when=a suggestion gets coral or a stripe, or Apply loses its Undo; why_new=design D12; seam=none; no_claim=none beyond protects
   assert.match(view, /background: 'var\(--cth-amber-soft\)'/);
-  assert.match(view, /background: 'var\(--cth-green-soft\)'[\s\S]{0,400}t\('pulse\.undo'\)/);
+  assert.match(view, /background: 'var\(--cth-green-soft\)'[\s\S]{0,420}t\('pulse\.undo'\)/);
   assert.doesNotMatch(view, /--cth-coral/, 'no coral color on Pulse');
   assert.doesNotMatch(view, /borderLeft|borderInlineStart/);
   assert.match(view, /window\.cth\.pulseApply\(a\.id, a\.change\)/, 'apply sends what the card showed');
@@ -116,7 +121,7 @@ test('Kept safe tiles say what they count in a few words, keep the meaning in th
   for (const k of ['toInternet', 'answersCleaned', 'held', 'rules']) assert.ok(en.pulse.safe[k].split(' ').length <= 5, `${k} is a label, not a sentence`);
   for (const k of ['sentAsWritten', 'privateOut', 'stopped', 'cleaned', 'nothingToRemove']) assert.ok(en.pulse.safe[k].split(' ').length <= 3, k);
   for (const g of Object.values(en.pulse.safe.gate)) assert.ok(g.split(' ').length <= 3, g);
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const s = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'src/renderer/src/i18n/locales', `${loc}.json`), 'utf8')).pulse.safe;
     for (const k of ['toInternet', 'answersCleaned', 'held', 'rules', 'toInternetTip', 'answersTip', 'heldTip', 'rulesTip']) {
       assert.equal(typeof s[k], 'string', `${loc} ${k}`);
@@ -152,11 +157,9 @@ test('while one suggestion is being applied, every other Apply shows it is off t
   assert.match(view, /disabled=\{busy !== null && a\.change\.kind !== 'editor'\}/, 'every other Apply is disabled while one runs');
 });
 
-test('every pulse string is in all three locales, and the plan ring shows only on a plan', () => {
-  // Value: protects=locale parity and E6 on an API key; fails_when=a key is missing in ar or zh-CN, or the ring shows for an API key; why_new=new strings; seam=none; no_claim=translation quality
+test('the Compare copy has every period, no pulse string has a dash, and the plan ring shows only on a plan', () => {
+  // Value: protects=Compare's copy, the no dashes rule and E6 on an API key; fails_when=a period's words go missing, a dash slips in, or the ring shows for an API key; why_new=new strings; seam=none
   const keys = (o, p = '') => Object.entries(o).flatMap(([k, v]) => (typeof v === 'object' ? keys(v, `${p}${k}.`) : [`${p}${k}`]));
-  const want = keys(en.pulse).sort();
-  for (const loc of ['ar', 'zh-CN']) assert.deepEqual(keys(JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).pulse).sort(), want, loc);
   // Compare's copy (owner, 2026-10-16): every period has its words, the old periods' copy is gone, no dashes.
   for (const k of ['periods', 'compareWith', 'compareBefore']) assert.deepEqual(Object.keys(en.pulse[k]), ['today', 'this-week', 'this-month'], k);
   assert.deepEqual(Object.keys(en.pulse.learning.sub), ['today', 'this-week', 'this-month']);
@@ -248,14 +251,10 @@ test('the Learning number opens the notes behind it, read on open by the same ru
 });
 
 test('emails sent says how many went out approved without edits, and only once any were sent', () => {
-  // Value: protects=the owner's 2026-10-19 wording ("as written" read as jargon; "0 as written" said nothing at zero); fails_when=the second part returns at zero or the old words come back; why_new=owner ask 2026-10-19; seam=none; no_claim=ar and zh-CN wording (presence only)
+  // Value: protects=the owner's 2026-10-19 wording ("as written" read as jargon; "0 as written" said nothing at zero); fails_when=the second part returns at zero or the old words come back; why_new=owner ask 2026-10-19; seam=none
   assert.equal(en.pulse.outcome.sent, 'emails sent for you, {{sub}} approved without edits');
   assert.equal(en.pulse.outcome.sentNone, 'emails sent for you');
   assert.match(view, /t\(o\.kind === 'sent' && o\.total === 0 \? 'pulse\.outcome\.sentNone' : `pulse\.outcome\.\$\{o\.kind\}`, \{ sub: o\.sub \?\? 0 \}\)/);
-  for (const loc of ['ar', 'zh-CN']) {
-    const o = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).pulse.outcome;
-    assert.ok(o.sentNone && o.sent.includes('{{sub}}') && !o.sentNone.includes('{{sub}}'), loc);
-  }
 });
 
 test('before advice, Pulse shows what the rules see so far under a bold line, as facts with nothing to apply (owner, 2026-10-19)', () => {
@@ -271,14 +270,9 @@ test('before advice, Pulse shows what the rules see so far under a bold line, as
   for (const part of [block, cardFn]) assert.doesNotMatch(part, /PixelButton|pulse\.apply|pulse\.notNow|savesAbout|<button/, 'facts only, nothing to apply');
   assert.match(cardFn, /role="group" aria-label=\{text\}/, 'each card is spoken as its full sentence');
   const flat = (o) => Object.values(o).flatMap((v) => (typeof v === 'string' ? [v] : flat(v)));
-  const keys = (o, p = '') => Object.entries(o).flatMap(([k, v]) => (typeof v === 'string' ? [p + k] : keys(v, `${p}${k}.`))).sort();
   // The tiles say "A cheaper model" (owner, 2026-10-26, design A), but no fact names which one (eng D2).
   assert.doesNotMatch(flat(en.pulse.early).join(' '), /\{\{model\}\}|opus|sonnet|haiku|fable/i, 'a model fact names no model');
-  for (const loc of ['ar', 'zh-CN']) {
-    const o = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).pulse.early;
-    assert.deepEqual(keys(o), keys(en.pulse.early), loc);
-    assert.doesNotMatch(flat(o).join(' '), /[\u2013\u2014]/, `${loc}: no dashes`);
-  }
+  assert.doesNotMatch(flat(en.pulse.early).join(' '), /[\u2013\u2014]/, 'no dashes');
 });
 
 
@@ -297,11 +291,7 @@ test('Questions to you is part of Your time: the count, then two small stats, th
   const en = JSON.parse(read('src/renderer/src/i18n/locales/en.json')).pulse;
   assert.equal(en.typicalWait, 'typical wait', 'a median is not an average');
   assert.equal(en.per100Requests, 'per 100 requests');
-  for (const l of ['ar', 'zh-CN']) {
-    const p = JSON.parse(read(`src/renderer/src/i18n/locales/${l}.json`)).pulse;
-    assert.ok(p.typicalWait && p.per100Requests, l);
-    assert.equal(p.quiet.name.questions, undefined, `${l}: no chip name for a tile that is gone`);
-  }
+  assert.equal(en.quiet.name.questions, undefined, 'no chip name for a tile that is gone');
 });
 
 test('the Early look shows all four things Pulse watches, lit or waiting, and each card names its rule (owner, 2026-10-26)', () => {
@@ -330,5 +320,4 @@ test('Recommendations start folded under their header, with View recommendations
   assert.match(view, /aria-expanded=\{open\} aria-controls=\{controls\}/);
   const en = JSON.parse(read('src/renderer/src/i18n/locales/en.json')).pulse.recs;
   assert.equal(en.view, 'View recommendations');
-  for (const loc of ['ar', 'zh-CN']) assert.deepEqual(Object.keys(JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).pulse.recs).sort(), Object.keys(en).sort(), loc);
 });

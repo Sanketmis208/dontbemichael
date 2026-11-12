@@ -86,7 +86,7 @@ test('every onboarding key the wizard uses exists in every shipped locale', () =
   const locales = fs
     .readdirSync(path.join(root, 'src/renderer/src/i18n/locales'))
     .filter((f) => f.endsWith('.json'));
-  assert.ok(locales.length >= 3);
+  assert.ok(locales.length >= 1);
   for (const file of locales) {
     const keys = flatten(JSON.parse(read(`src/renderer/src/i18n/locales/${file}`)));
     const missing = used.filter((k) => typeof keys[k] !== 'string' || !keys[k].trim());

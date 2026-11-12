@@ -22,7 +22,6 @@ import { existsSync, lstatSync, readlinkSync, realpathSync, type Stats } from 'n
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { AGENT_TMP_DIR, agentTmpName } from '../shared/folderAccess';
-import { ALLOW_TEMP_WORKERS } from '../shared/buildFeatures';
 import { isSameOrInside } from './pathInside';
 
 /** Claude's tools that write a file at a path given in their input. */
@@ -243,9 +242,8 @@ function isPlumbing(rel: string, agentId: string, isGod: boolean, tool: string, 
   if (isGod && rel.startsWith('triage/.done/')) return true;
   // Michael alone writes the board (ship review D8).
   if (isGod && rel === 'tasks.json') return true;
-  // Michael is the board's sole scribe, and the only one who files spawn
-  // requests, in a build that has them (ALLOW_TEMP_WORKERS).
-  if (isGod && (rel === 'board.md' || (ALLOW_TEMP_WORKERS && rel.startsWith('spawn-requests/')))) return true;
+  // Michael is the board's sole scribe.
+  if (isGod && rel === 'board.md') return true;
   return false;
 }
 

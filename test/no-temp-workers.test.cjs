@@ -4,8 +4,7 @@
  * Michael no longer starts temporary helpers on his own (owner, 2026-09-24).
  * Starting an agent is a spend the owner never saw. When a job fits no one on
  * the team and is too big for him, he puts it on the ASK ME board with
- * suggestions, and the owner decides. ALLOW_TEMP_WORKERS brings the old route
- * back; every gate below reads it.
+ * suggestions, and the owner decides. The old route is gone from the code.
  */
 
 const test = require('node:test');
@@ -15,7 +14,7 @@ const os = require('node:os');
 const path = require('node:path');
 const loadTs = require('./load-ts.cjs');
 
-const { ALLOW_TEMP_WORKERS } = loadTs('src/shared/buildFeatures.ts');
+const buildFeatures = loadTs('src/shared/buildFeatures.ts');
 const { HiveManager } = loadTs('src/main/hive.ts');
 const { OFFICE_ROLES } = loadTs('src/shared/officeRoles.ts');
 const read = (rel) => fs.readFileSync(path.resolve(__dirname, '..', rel), 'utf8');
@@ -31,14 +30,12 @@ function setup(t) {
   return { home, hive: new HiveManager(() => home) };
 }
 
-test('this build has no temporary workers', () => {
-  assert.equal(ALLOW_TEMP_WORKERS, false);
+test('there is no switch to bring temporary workers back', () => {
+  assert.equal('ALLOW_TEMP_WORKERS' in buildFeatures, false);
 });
 
-test('Michael is never told he can start one, even with an old config that allowed it', async (t) => {
+test('Michael is never told he can start one', async (t) => {
   const { home, hive } = setup(t);
-  hive.setOrchestratorMaySpawn(true);
-  assert.equal(hive.orchestratorMaySpawn(), false);
   const p = promptOf(await hive.ensureAgent({ id: 'god', name: 'Michael', provider: 'claude', cwd: home, isGod: true }));
   assert.doesNotMatch(p, /SPAWNING A WORKER/);
   const protocol = fs.readFileSync(path.join(home, 'hive', 'PROTOCOL.md'), 'utf8');
@@ -74,12 +71,9 @@ test('team members do not get Michael\'s rule', async (t) => {
   assert.doesNotMatch(p, /WHEN NO ONE FITS/);
 });
 
-test('the queue, the Settings switch and the WORKERS tab are all closed', () => {
-  assert.match(read('src/main/index.ts'), /const dir = ALLOW_TEMP_WORKERS && readConfig\(\)\.orchestratorMaySpawn \? spawnRequestsDir\(\) : null;/);
-  const settings = read('src/renderer/src/components/SettingsModal.tsx');
-  const gate = settings.indexOf('{ALLOW_TEMP_WORKERS && (<>');
-  assert.ok(gate > 0 && settings.lastIndexOf('Who can add agents') > gate, 'the switch is behind the flag');
-  const cc = read('src/renderer/src/components/CommandCenterPanel.tsx');
-  assert.match(cc, /\(t\.key !== 'workers' \|\| ALLOW_TEMP_WORKERS\)/);
-  assert.match(cc, /\{ALLOW_TEMP_WORKERS && tab === 'workers' && <WorkersTab \/>\}/);
+test('nothing reads a spawn request, and no screen offers temporary workers', () => {
+  const main = read('src/main/index.ts');
+  assert.doesNotMatch(main, /spawn-requests|processSpawnRequest|orchestratorMaySpawn/);
+  assert.doesNotMatch(read('src/renderer/src/components/SettingsModal.tsx'), /Who can add agents|orchestratorMaySpawn/);
+  assert.doesNotMatch(read('src/renderer/src/components/CommandCenterPanel.tsx'), /'workers'|WorkersTab/);
 });

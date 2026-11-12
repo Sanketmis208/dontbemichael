@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { MarkdownPreview } from '@/markdown/MarkdownPreview';
 import { PixelButton } from './PixelButton';
 import { useResolvedGodName } from '@/hooks/useResolvedGodName';
-import { useRtl } from '@/i18n/useDirection';
 import { parseRoleLine, workStyleBody } from '@shared/agentProfile';
 import { fillBusiness } from '@shared/teamPlan';
 import type { AgentDefinitionV2 } from '@shared/agentDefinition';
@@ -64,7 +63,6 @@ function loadOfficeInfo(): Promise<OfficeInfo> {
 
 export function ProfileTab({ agent }: { agent: Agent }) {
   const { t } = useTranslation();
-  const rtl = useRtl();
   const godName = useResolvedGodName();
   const [card, setCard] = useState<AgentDefinitionV2 | undefined>(undefined);
   const [office, setOffice] = useState<OfficeInfo | null>(null);
@@ -128,12 +126,12 @@ export function ProfileTab({ agent }: { agent: Agent }) {
     <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflowY: 'auto', background: 'var(--cth-paper-200)' }}>
       <div style={{ padding: '16px 16px 24px', maxWidth: '72ch' }}>
         {title && (
-          <h2 dir={rtl ? 'auto' : undefined} style={{ margin: 0, fontFamily: 'var(--cth-font-display)', fontSize: 12, lineHeight: '20px', fontWeight: 400, color: 'var(--cth-ink-900)' }}>
+          <h2 style={{ margin: 0, fontFamily: 'var(--cth-font-display)', fontSize: 12, lineHeight: '20px', fontWeight: 400, color: 'var(--cth-ink-900)' }}>
             {title}
           </h2>
         )}
         {summary ? (
-          <p dir={rtl ? 'auto' : undefined} style={{ margin: '8px 0 0', fontSize: 16, lineHeight: '24px', color: 'var(--cth-ink-900)' }}>{summary}</p>
+          <p style={{ margin: '8px 0 0', fontSize: 16, lineHeight: '24px', color: 'var(--cth-ink-900)' }}>{summary}</p>
         ) : (
           <p style={{ margin: '8px 0 0', fontSize: 14, lineHeight: '20px', color: 'var(--cth-ink-500)' }}>{t('profile.noRole', { name })}</p>
         )}
@@ -181,7 +179,7 @@ export function ProfileTab({ agent }: { agent: Agent }) {
 
         {god && office?.briefing && (
           <Section title={t('profile.god.business', { name })}>
-            <p dir={rtl ? 'auto' : undefined} style={{ margin: 0, fontSize: 14, lineHeight: '22px', color: 'var(--cth-ink-900)' }}>{office.briefing}</p>
+            <p style={{ margin: 0, fontSize: 14, lineHeight: '22px', color: 'var(--cth-ink-900)' }}>{office.briefing}</p>
           </Section>
         )}
 
@@ -263,13 +261,12 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function List({ items, mark, markColor }: { items: string[]; mark: string; markColor: string }) {
-  const rtl = useRtl();
   return (
     <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
       {items.map((it, i) => (
         <li key={`${i}:${it}`} style={{ display: 'flex', gap: 8, alignItems: 'baseline', fontSize: 14, lineHeight: '20px', color: 'var(--cth-ink-900)' }}>
           <span aria-hidden style={{ width: 12, flexShrink: 0, textAlign: 'center', fontWeight: 700, color: markColor }}>{mark}</span>
-          <span dir={rtl ? 'auto' : undefined}>{it}</span>
+          <span>{it}</span>
         </li>
       ))}
     </ul>

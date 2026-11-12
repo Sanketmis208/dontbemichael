@@ -50,7 +50,11 @@ export function focusNeedsYouPill(): void {
  *  D1): while the column shows on the current view (the board, a person's panel
  *  or the minimized strip), each of which shows the count already. The column
  *  shows on the office and file tabs only, as App's `columnView` rule. */
-export function pillHidden(rightColumn: 'closed' | 'board' | 'person', floorView: string): boolean {
+export function pillHidden(rightColumn: 'closed' | 'board' | 'person', floorView: string, nothingWaits = false): boolean {
+  // "Nothing needs you" says something only on the office: on Tasks, Pulse
+  // or a file it is noise, so it steps out there (owner, 2026-11-11). Any
+  // ask or report brings it back at once.
+  if (nothingWaits && floorView !== 'office') return true;
   return rightColumn !== 'closed' && (floorView === 'office' || floorView === 'file');
 }
 

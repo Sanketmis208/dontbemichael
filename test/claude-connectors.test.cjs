@@ -320,7 +320,7 @@ test('connector copy exists in every language and has no dashes', () => {
     connectors: ['title', 'intro', 'reading', 'summaryNone', 'summaryOne', 'summaryCount', 'removedCount', 'refresh', 'refreshing', 'readFailed', 'readFailedSince', 'tryAgain', 'empty', 'addAtClaude', 'removed', 'clear', 'signIn', 'unreachable', 'connected', 'allow'],
     capabilities: ['connectors', 'connectorsBlurb', 'connectorsSummary', 'connectorsNone', 'connectorsTurnOn', 'canUseConnector', 'needsSignIn', 'unreachable', 'booksRoleDefault', 'connectorsPending', 'restartNow']
   };
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const j = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`));
     assert.equal(j.quickbooksSettings, undefined, `${loc}: the QuickBooks section is gone`);
     for (const [sec, ks] of Object.entries(keys)) {

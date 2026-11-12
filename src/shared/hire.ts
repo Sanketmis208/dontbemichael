@@ -36,10 +36,9 @@ export const BUNDLED_SKILL_IDS: ReadonlySet<string> = new Set([
   'md-audit'
 ]);
 
-/** Providers a manifest may request ('agy' is accepted as an alias for
- *  'antigravity'). 'custom' is deliberately NOT allowed — it would let a
- *  manifest choose an arbitrary local binary. */
-export type HireProvider = 'claude' | 'antigravity' | 'codex' | 'cursor';
+/** Providers a manifest may request. An arbitrary command is deliberately NOT
+ *  allowed: it would let a manifest choose an arbitrary local binary. */
+export type HireProvider = 'claude' | 'codex';
 
 export interface HireManifest {
   /** Spec tag; exactly `munder-difflin/hire@1` for this version. */
@@ -75,10 +74,9 @@ export interface HireManifest {
   /** Bundled skill ids to activate in the agent's workspace. References into
    *  BUNDLED_SKILL_IDS only — never raw file paths or arbitrary skill names. */
   skills?: string[];
-  /** Default MCP catalog ids to enable for this agent. References into the
-   *  MCP_CATALOG allowlist only — never raw specs. Safe-readonly ids are
-   *  pre-filled; write/secret ids are surfaced for human consent at import
-   *  and never auto-enabled. */
+  /** MCP catalog ids the hire names. References into the MCP_CATALOG
+   *  allowlist only, never raw specs. Add Agent lists them; the app starts
+   *  none of them. */
   mcpServers?: string[];
 }
 
@@ -87,12 +85,11 @@ export interface HireValidation {
   manifest?: HireManifest;
   errors: string[];
   /** MCP catalog ids present in the manifest's `mcpServers` that are NOT
-   *  safe-readonly (write or secret tier). These must be surfaced to the human
-   *  for explicit consent before they are enabled — they are NEVER auto-enabled. */
+   *  safe-readonly (write or secret tier). Nothing starts them. */
   consentRequired?: string[];
 }
 
-const PROVIDERS: readonly string[] = ['claude', 'antigravity', 'codex', 'cursor'];
+const PROVIDERS: readonly string[] = ['claude', 'codex'];
 const MAX_BYTES = 64 * 1024;
 
 /** A flag ("-x", "--flag", "--flag=value") or a bare value token that may follow
@@ -129,7 +126,7 @@ const MODEL_RE = /^[A-Za-z0-9 ._()[\]\/:@+-]{1,80}$/;
  *  because the spawn command stays editable after import, so a user who needs an
  *  exotic flag can add it by hand. Each is behavioral / output / a safety-cap
  *  only, with a single non-escalating value (or none):
- *    --model          select the model id           (claude/codex/agy modelFlag)
+ *    --model          select the model id           (claude/codex modelFlag)
  *    --max-turns      cap agentic turns (runaway guard, strictly safety-↑)
  *    --output-format  headless output shape: text / json / stream-json
  *    --verbose        logging verbosity only
@@ -197,9 +194,9 @@ export function validateHireManifest(raw: unknown): HireValidation {
 
   let provider: HireProvider | undefined;
   if (o.provider !== undefined) {
-    const p = str(o.provider) ? (o.provider === 'agy' ? 'antigravity' : o.provider) : o.provider;
+    const p = o.provider;
     if (str(p) && PROVIDERS.includes(p)) provider = p as HireProvider;
-    else errors.push(`"provider" must be one of ${PROVIDERS.join(', ')} (or "agy")`);
+    else errors.push(`"provider" must be one of ${PROVIDERS.join(', ')}`);
   }
 
   let commandFlags: string[] | undefined;

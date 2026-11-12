@@ -3,7 +3,7 @@
  * URL (deep link) or read one from disk (file import), and validate it via the
  * shared, dependency-free validator. See `src/shared/hire.ts` for the spec and
  * security model. Deliberately free of any `electron` import so it can be
- * smoke-tested as a plain Node module (mirrors webhook.ts's approach).
+ * smoke-tested as a plain Node module.
  */
 import { readFileSync, statSync } from 'node:fs';
 import { lookup } from 'node:dns/promises';

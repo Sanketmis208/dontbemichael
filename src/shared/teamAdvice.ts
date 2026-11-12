@@ -23,6 +23,12 @@ export const EARLY_SCALE = 0.5;
 export const REOPEN_MIN = 3;
 export const MIN_RUNS = 10;
 export const MIN_INTERVAL_MS = 15 * 60_000;
+/** How long Claude keeps a member's recent context in its prompt cache:
+ *  a run inside it rereads the context for cents, one after it pays full
+ *  price. "Run less" never moves a schedule across it. On an API key the
+ *  cache can be shorter (5 minutes), where this only holds back a saving,
+ *  never suggests a loss. */
+export const CACHE_WINDOW_MS = 60 * 60_000;
 
 /** One scheduled run, as the processor closed it. */
 export interface RunFact {
@@ -137,11 +143,20 @@ export function adviceFor(input: {
     const weeks = Math.max(1, input.now - since) / (7 * 86_400_000);
     const runUsdPerWeek = mine.reduce((s, r) => s + r.usd, 0) / weeks;
     if (nothing / mine.length >= 0.7) {
+      // Never past the cache hour (owner, 2026-11-09): within it each run
+      // rereads the member's context from the prompt cache for cents; past it
+      // every run rereads it cold. Michael's standup at 1h cost $0.07 a run,
+      // at 2h $1.44, so "run less" cost more. Up to the hour at most, and none
+      // from the hour itself.
+      const toMs = m.intervalMs <= CACHE_WINDOW_MS ? Math.min(m.intervalMs * 2, CACHE_WINDOW_MS) : m.intervalMs * 2;
+      if (!m.timed && toMs <= m.intervalMs) continue;
       out.push({
         id: `run-less:${m.to}:${m.id}`, kind: 'run-less', agentId: m.to, missionId: m.id,
         evidence: { runs: mine.length, nothing },
-        change: m.timed ? { kind: 'editor', direction: 'less' } : { kind: 'interval', fromMs: m.intervalMs, toMs: m.intervalMs * 2 },
-        savesPerWeek: runUsdPerWeek / 2,
+        change: m.timed ? { kind: 'editor', direction: 'less' } : { kind: 'interval', fromMs: m.intervalMs, toMs },
+        // Both sides of the hour alike (warm to warm, cold to cold): the cost
+        // follows the runs, so fewer runs save that share.
+        savesPerWeek: m.timed ? runUsdPerWeek / 2 : runUsdPerWeek * (1 - m.intervalMs / toMs),
         band: nothing
       });
       continue;

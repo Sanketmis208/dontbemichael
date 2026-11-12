@@ -289,10 +289,6 @@ test('wiring: ids before the store closes, both resets share their stops, and Se
   assert.match(src, /function memoryResetFolders\(\): Map<string, string\[\]> \{\n  return foldersFromRoster\(roster\.read\(\)\);/, 'the roster, never the registry');
   assert.doesNotMatch(body, /registry\(\)|log\.jsonl/, 'no member writable source');
   assert.match(read('src/preload/index.ts'), /resetMemory: \(\): Promise<\{ ok: boolean \}> => ipcRenderer\.invoke\('app:resetMemory'\)/);
-  // Not offered to voice or agent tools.
-  for (const f of ['src/main/realtimeActions.ts', 'src/renderer/src/realtime/tools.ts', 'src/renderer/src/realtime/actions.ts']) {
-    assert.doesNotMatch(read(f), /resetMemory|app:resetMemory/, f);
-  }
   const settings = read('src/renderer/src/components/SettingsModal.tsx');
   assert.match(settings, /onClick=\{\(\) => void askResetMemory\(\)\}/);
   assert.match(settings, /onClick=\{resetMemory\} disabled=\{busy\}/, 'one confirm, then busy');
@@ -447,15 +443,11 @@ test('every reader of handled messages has its after reset behavior stated here'
       fileOwnerNotes: 'files into a fresh folder',
       ownerAnswersWithoutRequest: 'only waiting messages count (pinned above)',
       awaitingReplies: 'zero (pinned above)',
-      voiceMessages: 'the archived part of Messages starts over',
       messageHistory: 'only waiting messages show (pinned above)'
     },
     'src/main/index.ts': {
       isFloorQuiet: 'a missing folder is skipped; inbox, log and terminals still judge',
-      lastCoordinationAt: 'a missing folder is skipped; inbox, outbox and notes still count',
-      archiveRequest: 'spawn requests, not member mail; untouched',
-      workerSignaledDone: 'spawn requests, not member mail; untouched',
-      processSpawnRequest: 'spawn requests, not member mail; untouched'
+      lastCoordinationAt: 'a missing folder is skipped; inbox, outbox and notes still count'
     },
     'src/main/checkedBackfill.ts': { backfillChecked: 'finds nothing to backfill from mail; marks already recorded stay' },
     'src/shared/agentPrivatePaths.ts': { privateOwnerSentDir: 'the owner\'s own mail; kept', legacyOwnerSentDir: 'the owner\'s own mail; kept' },

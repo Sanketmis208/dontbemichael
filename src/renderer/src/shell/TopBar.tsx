@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { SHOW_FOCUS_MODE } from '@shared/buildFeatures';
 import { useTranslation } from 'react-i18next';
 import { useStore, type FloorView, ACTION_CLOCKING_IN } from '@/store/store';
 import { stillOut } from './clockingIn';
@@ -16,14 +15,13 @@ import lockupDark from '@brandkit/logo/lockup/dbm-lockup-horizontal-dark.svg?url
 
 /**
  * The v2 top bar (branding/DESIGN.md 7.1): lockup, view tabs, then the clock,
- * version, Report a problem, theme, focus mode, Settings and the Needs you
+ * version, Report a problem, theme, Settings and the Needs you
  * button. It is also the window's drag region; every control opts out with
  * cth-titlebar-nodrag.
  */
 export function TopBar({ onOpenSettings }: { onOpenSettings: () => void }) {
   const { t } = useTranslation();
   const theme = useAppTheme();
-  const fullscreenAgentId = useStore((s) => s.fullscreenAgentId);
 
   const toggleTheme = () => {
     const next = toggleAppTheme();
@@ -32,15 +30,6 @@ export function TopBar({ onOpenSettings }: { onOpenSettings: () => void }) {
     // agents; the owner's global Claude theme is never touched.
     notifyThemeChangeAll(next === 'dark' ? 'dark' : 'light');
     void window.cth.updateConfig({ terminalTheme: next });
-  };
-
-  const toggleFocus = () => {
-    if (fullscreenAgentId) { useStore.getState().setFullscreen(null); return; }
-    const all = useStore.getState().agents;
-    const target = all.find((x) => x.id === useStore.getState().selectedId && x.ptyId)
-      ?? all.find((x) => x.isGod && x.ptyId)
-      ?? all.find((x) => x.ptyId);
-    if (target) useStore.getState().setFullscreen(target.id);
   };
 
   return (
@@ -69,11 +58,6 @@ export function TopBar({ onOpenSettings }: { onOpenSettings: () => void }) {
         <IconButton label={theme === 'dark' ? t('shell.themeLight') : t('shell.themeDark')} onClick={toggleTheme}>
           {theme === 'dark' ? <SunGlyph /> : <MoonGlyph />}
         </IconButton>
-        {SHOW_FOCUS_MODE && (
-          <IconButton label={fullscreenAgentId ? t('shell.exitFocus') : t('shell.focus')} onClick={toggleFocus}>
-            {fullscreenAgentId ? <CollapseGlyph /> : <ExpandGlyph />}
-          </IconButton>
-        )}
         <IconButton label={t('shell.settings')} onClick={onOpenSettings}>
           <GearGlyph />
         </IconButton>
@@ -357,7 +341,8 @@ export function NeedsYouButton() {
   // The column shows the count already: the pill steps out of the top bar and
   // the buttons beside it close the gap (needs-you-pill-hides.md, D1 and D2).
   // The screen reader line stays (E1).
-  const hidden = useStore((s) => pillHidden(s.rightColumn, s.floorView));
+  const nothingWaits = state === 'quiet' && reports === 0;
+  const hidden = useStore((s) => pillHidden(s.rightColumn, s.floorView, nothingWaits));
   // Hiding and coming back ease (global.css, .cth-pill-slot): the pill's width
   // (a grid column from 0fr to 1fr, so its real width, whatever its text) and
   // the row's 8 px gap move together, so the buttons beside it glide. Going
@@ -536,8 +521,6 @@ function MoonGlyph() { return <Glyph><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0
 function SunGlyph() {
   return <Glyph><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></Glyph>;
 }
-function ExpandGlyph() { return <Glyph><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5" /></Glyph>; }
-function CollapseGlyph() { return <Glyph><path d="M3 8h5V3M21 8h-5V3M3 16h5v5M21 16h-5v5" /></Glyph>; }
 function GearGlyph() {
   return (
     <Glyph>

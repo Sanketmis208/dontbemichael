@@ -56,16 +56,11 @@ test('the email tab: subject leads, white sheet, pictures line, focus, cancel on
   assert.match(read('src/renderer/src/design/global.css'), /@media \(max-width: 560px\) \{ \.cth-email-rows \{ grid-template-columns: 1fr !important; \} \}/);
 });
 
-test('every state the tab can show has its words, in every language, with no dashes', () => {
+test('every state the tab can show has its words, with no dashes', () => {
   const en = JSON.parse(read('src/renderer/src/i18n/locales/en.json')).emailTab;
-  const ar = JSON.parse(read('src/renderer/src/i18n/locales/ar.json')).emailTab;
-  const zh = JSON.parse(read('src/renderer/src/i18n/locales/zh-CN.json')).emailTab;
   for (const r of ['broken', 'mailbox', 'message', 'auth', 'blocked', 'network', 'unknown']) {
-    assert.ok(en.failed[r] && ar.failed[r] && zh.failed[r], r);
+    assert.ok(en.failed[r], r);
   }
-  const keys = (o) => Object.entries(o).flatMap(([k, v]) => (typeof v === 'object' ? keys(v).map((x) => `${k}.${x}`) : [k])).sort();
-  assert.deepEqual(keys(ar), keys(en));
-  assert.deepEqual(keys(zh), keys(en));
   const words = JSON.stringify(en);
   assert.ok(!/[–—]| - /.test(words), 'no dashes in the copy');
 });

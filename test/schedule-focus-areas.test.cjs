@@ -107,7 +107,7 @@ test('Profile and Edit agent show each job with its focus, read only', () => {
   assert.match(list, /color: 'var\(--cth-ink-3\)' \}\}>\{t\('scheduledJobs\.noFocus'\)\}<\/span>/, 'a quiet note, not a call to act on a read only list');
   assert.match(read('src/renderer/src/components/WorkStyleUpdateCards.tsx'), /\$\{t\(offer\.whyKey\)/, 'the why is in view on the card (owner, 2026-11-07, replacing CEO review C1)');
   assert.match(read('src/renderer/src/components/ProfileTab.tsx'), /<ScheduledJobsSection agentId=\{agent\.id\} name=\{name\} god=\{god\} \/>/);
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const d = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`));
     assert.ok(d.scheduledJobs.title && d.scheduledJobs.focus.includes('{{focus}}') && d.scheduledJobs.noFocus, loc);
   }

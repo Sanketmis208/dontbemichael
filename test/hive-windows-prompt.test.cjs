@@ -40,7 +40,7 @@ async function floor(t, opts = {}) {
 
 /** The injected system prompt, whichever flag this provider carries it on. */
 function promptOf(inj) {
-  const i = inj.args.findIndex((a) => a === '--append-system-prompt' || a === '--prompt');
+  const i = inj.args.findIndex((a) => a === '--append-system-prompt');
   assert.ok(i >= 0, 'the hive protocol must be on argv');
   return inj.args[i + 1];
 }
@@ -116,33 +116,16 @@ test('the injected prompt survives the Windows ARRAY argv path byte for byte', a
   assert.ok(prompt.includes('(') && prompt.includes('"'), 'paren- and quote-bearing');
 
   const node = 'C:\\Program Files\\nodejs\\node.exe';
-  const script = 'C:\\Users\\Tester\\AppData\\Roaming\\npm\\node_modules\\opencode-ai\\bin\\opencode.js';
-  const line = argsToCommandLine(node, [script, '--prompt', prompt]);
+  const script = 'C:\\Users\\Tester\\AppData\\Roaming\\npm\\node_modules\\@google\\gemini-cli\\dist\\index.js';
+  const line = argsToCommandLine(node, [script, '-i', prompt]);
   // Newlines ride through CreateProcess as literal characters inside one quoted
   // CRT argument; nothing is truncated and nothing needs a shell.
   assert.ok(line.includes('\n'));
   assert.ok(line.includes('HIVE PROTOCOL'));
-  const quotedArg = line.slice(line.indexOf('--prompt') + '--prompt '.length);
+  const quotedArg = line.slice(line.indexOf(' -i ') + ' -i '.length);
   assert.equal(
     quotedArg.slice(1, -1).replace(/\\"/g, '"'),
     prompt,
     'the child CRT un-escapes back to exactly the prompt we injected'
   );
-});
-
-test('the OpenCode plugin lands in BOTH plugin/ and plugins/', async (t) => {
-  // Which directory the installed OpenCode scans is version-dependent and the
-  // bridge is LIVE-UNVERIFIED; writing both is cheap and removes the coin flip.
-  const { dir } = await floor(t, { provider: 'opencode' });
-  for (const name of ['plugin', 'plugins']) {
-    const p = path.join(dir, '.opencode', name, 'hive-bridge.js');
-    assert.ok(fs.existsSync(p), `missing ${p}`);
-    assert.ok(fs.readFileSync(p, 'utf8').includes('HIVE_SOCK'), 'must be the real bridge');
-  }
-});
-
-test('OpenCode carries the protocol on --prompt, so the argv fix is what delivers it', async (t) => {
-  const { inj } = await floor(t, { provider: 'opencode' });
-  assert.ok(inj.args.includes('--prompt'));
-  assert.ok(promptOf(inj).includes('HIVE PROTOCOL'));
 });

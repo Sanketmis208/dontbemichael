@@ -6,8 +6,7 @@ import { useEffect, useRef, useState } from 'react';
  * The main-process collector (telemetry.ts) pushes normalized, PII-free events
  * on `telemetry:event` and breaker state on `control:breakerState`. These hooks
  * subscribe + backfill from the cold-start snapshot, and shape the data for the
- * fleet grid (`useFleetTelemetry`) and the per-agent span waterfall
- * (`useAgentSpans`).
+ * fleet grid (`useFleetTelemetry`).
  *
  * Types mirror the LOCKED contract in src/main/telemetry.ts + src/preload (kept
  * in sync by hand, matching the codebase's local-redeclare pattern).
@@ -51,12 +50,6 @@ type TelemetryEvent =
 /** Total tokens across all kinds — the sparkline/velocity basis. */
 export function totalTokens(s: AgentUsageSample): number {
   return s.input + s.output + s.cacheRead + s.cacheCreation;
-}
-
-/** How many tokens were fresh vs served from cache, as a 0–1 cache fraction. */
-export function cacheFraction(s: AgentUsageSample): number {
-  const total = totalTokens(s);
-  return total > 0 ? s.cacheRead / total : 0;
 }
 
 /** Per-agent rolling token deltas (for the sparkline) plus a simple tokens/min. */
@@ -139,34 +132,4 @@ export function useFleetTelemetry(): FleetTelemetry {
   }, []);
 
   return { samples, spark, rate, lastTool, breakers };
-}
-
-/**
- * Subscribe to ONE agent's tool spans for the waterfall. Backfills from the
- * collector on mount/agent-change, then appends live `tool_result` pushes.
- */
-export function useAgentSpans(agentId: string): ToolSpan[] {
-  const [spans, setSpans] = useState<ToolSpan[]>([]);
-
-  useEffect(() => {
-    let alive = true;
-    setSpans([]);
-    window.cth.telemetrySpans?.(agentId).then((s) => {
-      if (alive && Array.isArray(s)) setSpans(s as ToolSpan[]);
-    }).catch(() => { /* none yet */ });
-
-    const off = window.cth.onTelemetryEvent?.((e: TelemetryEvent) => {
-      if (e.kind === 'tool_result' && e.span.agentId === agentId) {
-        setSpans((prev) => [...prev, e.span].slice(-200));
-      } else if (e.kind === 'api_error' && e.agentId === agentId) {
-        setSpans((prev) => [...prev, {
-          agentId, sessionId: e.sessionId, ts: e.ts, tool: 'api_error',
-          success: false, durationMs: 0, error: e.error
-        }].slice(-200));
-      }
-    });
-    return () => { alive = false; off?.(); };
-  }, [agentId]);
-
-  return spans;
 }

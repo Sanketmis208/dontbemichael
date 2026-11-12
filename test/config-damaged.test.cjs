@@ -70,7 +70,7 @@ test('setup shows the notice with the copy path on its first step, in every lang
   assert.match(wizard, /window\.cth\.damagedConfigCopy\?\.\(\)/);
   assert.match(wizard, /\{damagedCopy && \(step === 'business' \|\| step === 'resume'\) && \(\s*<div role="status" data-damaged-config/);
   assert.match(read('src/main/index.ts'), /ipcMain\.handle\('config:damagedCopy', \(\): string \| null => damagedConfigCopy\(\)\)/);
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     assert.equal(typeof JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).onboarding.damagedConfig, 'string', loc);
   }
 });

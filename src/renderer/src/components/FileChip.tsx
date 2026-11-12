@@ -85,8 +85,11 @@ export function useAskFileChecks(
 }
 
 /** The chip itself (DD1): one button with a context menu; Not found is text. */
-export function FileChip({ path, check, who, onGone }: {
+export function FileChip({ path, label, check, who, onGone }: {
   path: string;
+  /** Words naming what the file is (a source's label), shown in place of its
+   *  name; the path stays in the tooltip. */
+  label?: string;
   check?: AskFileCheck;
   who: Who;
   onGone: (path: string) => void;
@@ -95,7 +98,7 @@ export function FileChip({ path, check, who, onGone }: {
   // Finder is the Mac's; Windows and Linux both say folder.
   const win = window.cth.platform !== 'darwin';
   const folder = isFolderSpan(path);
-  const name = folder ? folderTitle(path) : fileTitle(path);
+  const name = label?.trim() || (folder ? folderTitle(path) : fileTitle(path));
   const kind = kindOf(path);
   const icon = folder ? 'folder' : kind === 'excel' || kind === 'csv' ? 'sheet' : kind === 'image' ? 'image' : 'file';
   const missing = check?.verdict === 'missing';

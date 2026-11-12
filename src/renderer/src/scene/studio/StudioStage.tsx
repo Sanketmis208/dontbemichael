@@ -161,13 +161,11 @@ export const StudioStage = memo(function StudioStage({ config: initialConfig, bl
   const selectedId = useStore((s) => s.selectedId);
   const rightColumn = useStore((s) => s.rightColumn);
   const floorView = useStore((s) => s.floorView);
-  const fullscreenAgentId = useStore((s) => s.fullscreenAgentId);
   // The office re-renders only when something it draws changes (review,
   // 2026-10-01: every agent update re-rendered the whole stage), and keeps
   // its last picture while the Tasks or graph view covers it.
   const agents = useStoreWithEqualityFn(useStore, (s) => s.agents, (a, b) => {
-    const st = useStore.getState();
-    return st.floorView !== 'office' || !!st.fullscreenAgentId || sameDrawnAgents(a, b);
+    return useStore.getState().floorView !== 'office' || sameDrawnAgents(a, b);
   });
   const god = agents.find((a) => a.isGod);
   const godId = god?.id ?? 'god';
@@ -239,7 +237,7 @@ export const StudioStage = memo(function StudioStage({ config: initialConfig, bl
     document.addEventListener('visibilitychange', on);
     return () => document.removeEventListener('visibilitychange', on);
   }, []);
-  const paused = docHidden || floorView !== 'office' || !!fullscreenAgentId;
+  const paused = docHidden || floorView !== 'office';
   const svgRef = useRef<SVGSVGElement | null>(null);
   useEffect(() => {
     const svg = svgRef.current;

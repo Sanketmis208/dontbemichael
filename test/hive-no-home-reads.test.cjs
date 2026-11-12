@@ -23,7 +23,6 @@ test('per-agent reads with no home return empty instead of throwing', () => {
   assert.deepEqual(hive.inbox('jim-1'), []);
   assert.deepEqual(hive.outbox('jim-1'), []);
   assert.equal(hive.memory('jim-1'), '');
-  assert.equal(hive.hasMemory('jim-1'), false);
   assert.equal(hive.memoryIndexFor('jim-1'), null);
   assert.equal(hive.inboxBacklog('jim-1'), 0);
   assert.equal(hive.clearedState('jim-1'), null);

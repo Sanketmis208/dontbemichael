@@ -64,7 +64,7 @@ test('the switches refuse a mailbox, and taking an old grant away still works', 
 
 test('the Mailboxes info says email goes only through it, in every language', () => {
   // Value: protects=an owner looking for Gmail is told where it lives; fails_when=the tip still sends them to Claude connectors, or a language lacks it; why_new=owner 2026-10-30; seam=none; no_claim=wording in other languages
-  for (const loc of ['en', 'ar', 'zh-CN']) {
+  for (const loc of ['en']) {
     const m = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).mailboxes;
     assert.ok(m.onlyHere, loc);
     assert.equal(m.gmailIsConnector, undefined, loc);

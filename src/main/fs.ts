@@ -1,4 +1,4 @@
-import { readdir, lstat, open, realpath, stat } from 'node:fs/promises';
+import { lstat, open, realpath, stat } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
 import { constants, existsSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, normalize, posix, relative, resolve, sep } from 'node:path';
@@ -12,9 +12,9 @@ import { RESEARCH_ID } from '../shared/research';
  * Lexical containment — pure string math, no filesystem access.
  *
  * PRIVATE on purpose. On its own this is NOT a containment guarantee: `resolve`,
- * `normalize` and `relative` know nothing about symlinks, while the `readFile` /
- * `writeFile` / `readdir` that runs afterwards is resolved by the kernel, which
- * follows them. `safeResolve` is the guard every consumer must use.
+ * `normalize` and `relative` know nothing about symlinks, while the read that
+ * runs afterwards is resolved by the kernel, which follows them. `safeResolve`
+ * is the guard every consumer must use.
  */
 function lexicalJoin(root: string, rel: string): { absRoot: string; absPath: string } | null {
   const absRoot = resolve(root);
@@ -131,8 +131,6 @@ async function confineCanonical(realRoot: string, absPath: string): Promise<stri
  * own right and not merely a pre-filter.
  */
 const READ_FLAGS = constants.O_RDONLY | (constants.O_NOFOLLOW | 0) | (constants.O_NONBLOCK | 0);
-const WRITE_FLAGS =
-  constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | (constants.O_NOFOLLOW | 0);
 
 /**
  * Open a path that `safeResolve` has ALREADY cleared, for reading.
@@ -149,38 +147,6 @@ const WRITE_FLAGS =
  */
 export function openForRead(abs: string): Promise<FileHandle> {
   return open(abs, READ_FLAGS);
-}
-
-export interface DirEntry {
-  name: string;
-  isDir: boolean;
-  size: number;
-  mtime: number;
-}
-
-export async function listDir(root: string, rel: string): Promise<{
-  ok: true; entries: DirEntry[]; path: string;
-} | { ok: false; error: string }> {
-  const abs = await safeResolve(root, rel);
-  if (!abs) return { ok: false, error: 'path escapes root' };
-  try {
-    const names = await readdir(abs);
-    const entries = await Promise.all(names.map(async (name): Promise<DirEntry> => {
-      try {
-        const s = await stat(join(abs, name));
-        return { name, isDir: s.isDirectory(), size: s.size, mtime: s.mtimeMs };
-      } catch {
-        return { name, isDir: false, size: 0, mtime: 0 };
-      }
-    }));
-    entries.sort((a, b) => {
-      if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
-      return a.name.localeCompare(b.name);
-    });
-    return { ok: true, entries, path: abs };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
-  }
 }
 
 const MAX_READ_BYTES = 2 * 1024 * 1024; // 2 MB
@@ -211,9 +177,9 @@ export async function readFileText(root: string, rel: string): Promise<{
 
 /**
  * Ceiling for the BINARY read. Deliberately larger than MAX_READ_BYTES (2 MB):
- * that cap exists to stop Monaco choking on a huge text buffer, and applying it
- * to images would reject the exact files people want to look at — a retina
- * screenshot of a full 5K display is routinely 3–6 MB. 10 MB covers real
+ * that cap is for text, and applying it to images would reject the exact files
+ * people want to look at — a retina screenshot of a full 5K display is
+ * routinely 3–6 MB. 10 MB covers real
  * screenshots and design assets while still refusing to hand the renderer a
  * video-sized payload over structured clone.
  */
@@ -224,10 +190,9 @@ const MAX_BINARY_READ_BYTES = 10 * 1024 * 1024; // 10 MB
  * every other fs entry point here.
  *
  * Exists because the text path deliberately refuses binary content (the
- * null-byte sniff in readFileText), which meant a PNG in an agent's workspace
- * was completely unviewable inside the app — the IDE opened a tab that said
- * "binary file (not displayable)" and stopped there. The renderer cannot reach
- * the file itself: the CSP is `default-src 'self'` with no `file:` source and
+ * null-byte sniff in readFileText), which would leave a PNG in an agent's
+ * workspace unviewable inside the app. The renderer cannot reach the file
+ * itself: the CSP is `default-src 'self'` with no `file:` source and
  * there is no registered file protocol, so `<img src="file://…">` silently
  * fails. Bytes therefore have to travel over IPC, and the renderer turns them
  * into a `blob:` URL (already allowed by `img-src`).
@@ -273,23 +238,6 @@ export async function readFileBinary(root: string, rel: string, maxBytes = MAX_B
       path: abs,
       size: s.size
     };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
-  } finally {
-    await fh?.close().catch(() => {});
-  }
-}
-
-export async function writeFileText(root: string, rel: string, content: string): Promise<{
-  ok: true; path: string;
-} | { ok: false; error: string }> {
-  const abs = await safeResolve(root, rel);
-  if (!abs) return { ok: false, error: 'path escapes root' };
-  let fh;
-  try {
-    fh = await open(abs, WRITE_FLAGS, 0o666);
-    await fh.writeFile(content, 'utf8');
-    return { ok: true, path: abs };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   } finally {

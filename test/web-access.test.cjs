@@ -116,7 +116,7 @@ test('Research runs only on Claude, where its walls work', () => {
   assert.match(modal, /BUILD_ENGINES\.includes\(p\.id\) && \(!isResearch \|\| isClaudeProvider\(p\.id\)\)/);
   assert.match(modal, /\{researchLocked \? \(/, 'a locked engine shows as plain text');
   assert.match(modal, /isResearch && isClaudeProvider\(inferAgentProvider\(agent\.command, agent\.provider\)\)/, 'locked on the saved engine');
-  for (const loc of ['en', 'ar', 'zh-CN']) assert.ok(JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).editAgent.researchEngine, loc);
+  for (const loc of ['en']) assert.ok(JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).editAgent.researchEngine, loc);
 });
 
 test('Research\'s Work style and jobs reach it only as the trust layer passed them', async () => {

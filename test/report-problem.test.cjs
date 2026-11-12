@@ -146,7 +146,7 @@ test('the top bar has a hard to miss Report a problem button and no Beta; Settin
   assert.match(hero, /settingsHero\.whatsNew/);
   assert.match(hero, /settingsHero\.starOnGitHub/);
   assert.equal(fs.existsSync(path.resolve(__dirname, '..', 'src/renderer/src/components/BetaPill.tsx')), false);
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const d = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`));
     // Dashes in these strings are no-dashes.test.cjs's job.
     assert.ok(d.shell.reportProblem && d.shell.reportProblemTip && d.shell.reportProblemFailed, loc);
