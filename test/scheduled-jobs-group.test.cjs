@@ -65,7 +65,7 @@ test('the group: a heading with the count and an info icon, rows with when, focu
   assert.match(src, /status === 'ready' && jobs\.length === 0 \? t\('scheduledJobs\.addOnAccess'\) : t\('scheduledJobs\.changeOnAccess'\)/);
   assert.match(src, /if \(agentId === RESEARCH_ID\) return null;/, 'Research holds no schedules');
   assert.match(src, /flexWrap: 'wrap'/, 'the when line drops under a long name (SJ7)');
-  for (const loc of ['en', 'ar', 'zh-CN']) {
+  for (const loc of ['en']) {
     const sj = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).scheduledJobs;
     for (const k of ['title', 'info', 'infoOffice', 'changeOnAccess', 'addOnAccess', 'changeOnOffice', 'none', 'loadError', 'tryAgain', 'paused', 'noFocus']) {
       assert.ok(sj[k], `${loc} ${k}`);
@@ -80,7 +80,6 @@ test('Change on Access closes Edit agent through its question, then opens On a s
   const go = edit.slice(edit.indexOf('const goToSchedules ='), edit.indexOf('const keepEditing ='));
   assert.match(go, /if \(dirtyRef\.current\) \{ afterClose\.current = go; setAsking\('close'\); return; \}/);
   assert.match(go, /onClose\(\);\s*go\(\);/);
-  assert.match(go, /if \(!docked\) useStore\.getState\(\)\.setFullscreen\(null\);/);
   assert.match(edit, /const keepEditing = \(\): void => \{ afterClose\.current = null;/, 'Keep editing drops it');
   const store = read('src/renderer/src/store/store.ts');
   assert.match(store, /openSchedules: \(agentId\) => \{\s*get\(\)\.setSidebarTab\('capabilities'\);\s*set\(\(s\) => \(\{ schedulesRequest: \{ agentId, seq: \(s\.schedulesRequest\?\.seq \?\? 0\) \+ 1 \} \}\)\);/);

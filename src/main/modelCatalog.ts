@@ -64,7 +64,7 @@ export async function loadModelCatalog(
   }
 
   try {
-    const body = await (opts.fetch ?? ((u: string) => getText(u, { timeoutMs: 8000 })))(CATALOG_URL);
+    const body = await (opts.fetch ?? ((u: string) => getText(u, { timeoutMs: 8000, deadlineMs: 15_000 })))(CATALOG_URL);
     // Parse the JSON and the SHAPE separately: valid JSON that is not a catalog
     // must fall back, not reach a picker as undefined rows.
     const catalog = parseModelCatalog(JSON.parse(body));

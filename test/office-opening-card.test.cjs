@@ -39,7 +39,7 @@ test('the floor shows the opening card on every launch, and the stage uses the s
   const card = read('src/renderer/src/components/TeamClockingIn.tsx');
   assert.match(card, /const arriving = useClockingIn\(agents, firstSeen\.current\);/);
   assert.match(card, /t\('office\.clockedInCount', \{ count: inCount, total \}\)/);
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const v = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).office.clockedInCount;
     assert.equal(typeof v, 'string', loc);
     assert.match(v, /\{\{count\}\}/);
@@ -145,16 +145,16 @@ test('the clock pill says Opening and the count while the office opens', () => {
 });
 
 test('Michael\'s start line comes from the language files', () => {
-  // Value: protects=Chinese and Arabic offices read Michael's start in their language; fails_when=the English line is put back in the component; why_new=design review, ship; seam=source pin (no DOM harness)
+  // Value: protects=Michael's start line lives in the language file with his real name; fails_when=the English line is put back in the component; why_new=design review, ship; seam=source pin (no DOM harness)
   const booting = read('src/renderer/src/components/MichaelBooting.tsx');
   assert.match(booting, /line=\{t\('office\.opening\.michaelLine', \{ name: godName \}\)\}/);
   assert.doesNotMatch(booting, /settling into the corner office/);
 });
 
-test('every opening word in three languages, with no dash', () => {
-  // Value: protects=the new words reach Chinese and Arabic offices; fails_when=a key is missing or uses a dash; why_new=new words; seam=locale files
+test('every opening word exists, with no dash', () => {
+  // Value: protects=the new words reach the office; fails_when=a key is missing or uses a dash; why_new=new words; seam=locale files
   const keys = ['title', 'announce', 'stillComing', 'stillComingMore', 'nameSep', 'allIn', 'missingOne', 'missingMore', 'michael', 'michaelLine'];
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const j = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`));
     for (const k of keys) {
       assert.equal(typeof j.office.opening[k], 'string', `${loc} ${k}`);

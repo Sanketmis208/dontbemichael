@@ -55,7 +55,7 @@ test('the migration makes the tables once, and nothing but kind, time, value and
   // Value: protects=the store shape and no text in telemetry; fails_when=a migration is edited or prompt text lands in a row; why_new=D16; seam=none; no_claim=a database made by an older build (user_version 1 upgrades here)
   const { persist, store } = setup(t);
   const db = persist.database();
-  assert.equal(db.pragma('user_version', { simple: true }), 6);
+  assert.equal(db.pragma('user_version', { simple: true }), 7);
   const idx = db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name IN ('idx_tr_open', 'idx_te_office_id', 'idx_te_office_kind_ts')").all().map((r) => r.name).sort();
   assert.deepEqual(idx, ['idx_te_office_id', 'idx_te_office_kind_ts', 'idx_tr_open'], 'the hot reads have their indexes');
   store.record({ agentId: 'pam', kind: 'tool', ts: 1, attrs: { tool: 'Write' } });
@@ -300,7 +300,9 @@ test('Apply changes a schedule only if it still is what the advice saw; Undo res
   assert.equal(missions()[0].intervalMs, 4 * 3600_000);
   assert.deepEqual(svc.apply(advice.id, advice.change), { ok: false, error: 'stale' }, 'a second click finds it changed');
   assert.equal(svc.snapshot('this-week').advice.length, 0, 'an applied suggestion waits for new evidence');
-  assert.equal(svc.snapshot('this-week').saved.state, 'measuring');
+  const saved = svc.snapshot('this-week').saved;
+  assert.equal(saved.state, 'changes');
+  assert.deepEqual(saved.changes.map((c) => [c.appliedId, c.agentId, c.change, c.result.state]), [[r.appliedId, 'toby', { kind: 'schedule', missionId: 'm1', toMs: 4 * 3600_000 }, 'measuring']], 'one line per change, what it set, measuring for a week');
   assert.equal(svc.undo(r.appliedId).ok, true);
   assert.equal(missions()[0].intervalMs, 2 * 3600_000);
   assert.deepEqual(svc.undo(r.appliedId), { ok: false, error: 'stale' }, 'undone once');

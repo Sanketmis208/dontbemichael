@@ -92,7 +92,7 @@ test('the bottom bar has no pack caption beside Hire; each wizard job names its 
   const bar = read('src/renderer/src/shell/BottomBar.tsx');
   assert.doesNotMatch(bar, /teamFromPack|cth-bb-pack|packsList/);
   assert.match(bar, /function HireButton\(\)/);
-  for (const loc of ['en', 'ar', 'zh-CN']) {
+  for (const loc of ['en']) {
     assert.equal(JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).shell.teamFromPack, undefined, loc);
   }
   assert.match(read('src/shared/hireTemplates.ts'), /business: pack\.displayName/);

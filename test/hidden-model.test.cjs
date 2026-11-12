@@ -50,7 +50,7 @@ test('Claude keeps its original model, settings, preview and cancellation option
 
 test('unimplemented engines and a request for Codex tools fail without launching a process', async () => {
   const before = calls.length;
-  for (const engine of ['gemini', 'custom', 'opencode', 'pi']) {
+  for (const engine of ['gemini', 'custom', 'opencode']) {
     assert.deepEqual(await HM.runHiddenModel('text', { ...base, engine }), { ok: false, error: 'engine unavailable' });
   }
   assert.equal((await HM.runHiddenModel('text', { ...base, noTools: false })).ok, false);

@@ -3,7 +3,7 @@
  *
  * Plain node:fs, no electron import, so it tests as a node module.
  */
-import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import {
@@ -201,10 +201,6 @@ function commonDir(paths: string[]): string | undefined {
     dir = up;
   }
   return dir;
-}
-
-function isFolder(p: string): boolean {
-  try { return statSync(p).isDirectory(); } catch { return false; }
 }
 
 /** Only usable folders, and for an office that never recorded Michael's folder,

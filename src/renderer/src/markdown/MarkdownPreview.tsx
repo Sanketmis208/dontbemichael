@@ -1,8 +1,7 @@
 /**
- * Rendered markdown view (v0.3.4) — the shared preview used by the IDE's
- * split/preview modes, the fullscreen file overlay, and (via those) the
- * terminal ⌘-click flow. The `card` variant renders agent-written markdown
- * inside another surface: the ASK ME question and the task detail's Q&A trail.
+ * Rendered markdown view (v0.3.4): file tabs show it as a document, and the
+ * `card` variant renders agent-written markdown inside another surface: the
+ * ASK ME question and the task detail's Q&A trail.
  *
  * SECURITY: agent-generated markdown is untrusted. react-markdown WITHOUT
  * rehype-raw renders to React elements only — no HTML sink exists, raw HTML in
@@ -13,20 +12,19 @@
  * (original-email-view.md); both render as a button and never navigate.
  *
  * Links never navigate the window: http(s)/mailto go through the main-process
- * opener; relative *.md links surface through onOpenMarkdownLink so the host
- * (IDE tab / overlay) opens them in context; everything else is inert.
+ * opener; everything else is inert.
  *
  * In a card, a web or email link is named (docs/designs/named-links.md): a
  * pasted URL shows the app or site it opens ("HubSpot"), an arrow or a mail
  * icon says where the click goes, and words that name another site get the
- * real one after the link. Documents (file tabs, the IDE) show links as written.
+ * real one after the link. Documents (file tabs) show links as written.
  */
 import { memo, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown, { type Components, type Options } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useWorkspaceImage } from '@/hooks/useWorkspaceImage';
-import { isBareLink, isExternal, labelMismatch, linkName, resolveLocalImageRel, resolveMdLinkRel } from './mdLinks';
+import { isBareLink, isExternal, labelMismatch, linkName, resolveLocalImageRel } from './mdLinks';
 import { Icon } from '@/components/Icon';
 import { remarkSoftBreaks } from './remarkSoftBreaks';
 import { remarkFileChips } from './remarkFileChips';
@@ -38,8 +36,8 @@ import { PLACE_SCHEME, parsePlace } from '@shared/settingsPlaces';
 import { EMAIL_SCHEME, parseEmailHref } from '@shared/emailLink';
 import { EmailChip } from './EmailChip';
 import { placeUrlTransform } from './placeUrl';
-import { rehypeAutoDir } from './rehypeAutoDir';
-import { useRtl } from '@/i18n/useDirection';
+import { PostBox } from './PostBox';
+import { isPostLang } from '@/components/fileTabCopy';
 
 /** How the rendered markdown sits in its host.
  *  - `document` (default): a page — its own type scale, 72ch measure, page padding.
@@ -64,12 +62,6 @@ const DOC_FILE_PLACE_PLUGINS = [remarkGfm, remarkFileChips, remarkSettingsLinks]
 const CARD_FILE_PLACE_PLUGINS = [remarkGfm, remarkFileChips, remarkSettingsLinks, remarkSoftBreaks];
 
 
-/** Per-block `dir="auto"`, for an RTL app language only — see the note at the
- *  `useRtl()` call site below. Frozen module constants so the prop identity is
- *  stable and react-markdown does not re-run the pipeline on every render. */
-const AUTO_DIR_PLUGINS = [rehypeAutoDir];
-const NO_PLUGINS: never[] = [];
-
 export interface MarkdownPreviewProps {
   source: string;
   /** Repo-relative path of the file being previewed (for resolving relative links). */
@@ -78,8 +70,6 @@ export interface MarkdownPreviewProps {
    *  chips into actual pictures (read through the root-confined fs IPC); without
    *  it every image stays a chip, because there is nothing to resolve against. */
   root?: string;
-  /** Open a sibling markdown file (repo-relative path) in the host's context. */
-  onOpenMarkdownLink?: (rel: string) => void;
   /** Page vs in-card rendering. Defaults to `document`. */
   variant?: MarkdownVariant;
   /** Draw each file the text names as this chip, in place of its path
@@ -95,7 +85,7 @@ export interface MarkdownPreviewProps {
 }
 
 export const MarkdownPreview = memo(function MarkdownPreview({
-  source, baseRel, root, onOpenMarkdownLink, variant = 'document', fileChip, placeLinks = false, folderTeam
+  source, baseRel, root, variant = 'document', fileChip, placeLinks = false, folderTeam
 }: MarkdownPreviewProps) {
   const card = variant === 'card';
   const basePlugins = placeLinks
@@ -109,22 +99,12 @@ export const MarkdownPreview = memo(function MarkdownPreview({
     const last = basePlugins[basePlugins.length - 1];
     return last === remarkSoftBreaks ? [...basePlugins.slice(0, -1), folders, last] : [...basePlugins, folders];
   }, [basePlugins, folderTeam]) as Options['remarkPlugins'];
-  // Per-block direction, gated on the APP LANGUAGE rather than on the text.
-  //
-  // The plugin stamps `dir="auto"`, which resolves from each block's first
-  // strong character — so ungated it fires for an English user the moment an
-  // agent quotes a line of Arabic, and mirrors a block of their UI over
-  // something they never turned on. Keying it to the chosen language instead
-  // means an English user's markdown renders through exactly the pipeline it
-  // rendered through before this existed, whatever the agent writes into it.
-  const rtl = useRtl();
   const { t } = useTranslation();
   return (
     <div className={card ? 'cth-md-preview cth-md-card' : 'cth-md-preview'}>
       <ReactMarkdown
         remarkPlugins={remarkPlugins}
         urlTransform={placeUrlTransform}
-        rehypePlugins={rtl ? AUTO_DIR_PLUGINS : NO_PLUGINS}
         components={{
           ...(fileChip ? {
             'cth-file': ({ node }: { node?: { properties?: Record<string, unknown> } }) => fileChip(String(node?.properties?.dataPath ?? ''))
@@ -148,15 +128,12 @@ export const MarkdownPreview = memo(function MarkdownPreview({
               const email = card ? parseEmailHref(h) : null;
               return email ? <EmailChip email={email} words={hastText(node)}>{children}</EmailChip> : <>{children}</>;
             }
-            // The .md file a link opens, judged on its cleaned path (resolveMdLinkRel).
-            const mdTarget = onOpenMarkdownLink && !isExternal(h) ? resolveMdLinkRel(baseRel, h) : null;
             const onClick = (e: React.MouseEvent) => {
               e.preventDefault();
               if (isExternal(h)) { void window.cth.openExternal?.(h); return; }
-              if (mdTarget !== null) onOpenMarkdownLink?.(mdTarget);
               // anything else (file:, anchors into self, unknown schemes): inert
             };
-            const clickable = isExternal(h) || mdTarget !== null;
+            const clickable = isExternal(h);
             if (card && isExternal(h)) {
               const text = hastText(node);
               const bare = isBareLink(text, h);
@@ -200,6 +177,16 @@ export const MarkdownPreview = memo(function MarkdownPreview({
           ),
           // Right aligned columns (GFM `--:`) are amounts: marked here, not
           // matched on the inline style, so the dock can set them in mono (5.1A).
+          // A fenced block tagged `post` is the exact text a draft is meant to
+          // post or send: a box in the page's own type with its own Copy
+          // (PostBox). Any other fenced block stays code.
+          pre: ({ node, ...props }) => {
+            const code = (node as { children?: Array<{ tagName?: string; properties?: Record<string, unknown> }> } | undefined)?.children?.[0];
+            if (code?.tagName === 'code' && isPostLang(code.properties?.className)) {
+              return <PostBox text={hastText(code).replace(/\n$/, '')} />;
+            }
+            return <pre {...props} />;
+          },
           th: ({ node: _node, ...props }) => <th {...props} className={numClass(props.style)} />,
           td: ({ node: _node, ...props }) => <td {...props} className={numClass(props.style)} />,
           // Images. LOCAL ones render for real (bytes via the root-confined fs

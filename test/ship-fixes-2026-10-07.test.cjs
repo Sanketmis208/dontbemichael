@@ -227,8 +227,8 @@ test('the owner\'s messages stay out of git; dock keys live in their own cached 
   assert.match(read('src/main/closingTime.ts'), /const COMPLETE_RE = CLOSING_COMPLETE_RE;/);
 });
 
-test('screens: the dock polls only while open and shown, mirrors in Arabic, and the badge, inputs and Access tab follow the design system', () => {
-  // Value: protects=the review's design and polling fixes; fails_when=the dock polls every 4 s closed, physical corners return, the badge text loses contrast in dark, or the Access tab loses its confirm, focus ring or RTL arrows; why_new=performance and design findings; seam=source pin
+test('screens: the dock polls only while open and shown, and the badge, inputs and Access tab follow the design system', () => {
+  // Value: protects=the review's design and polling fixes; fails_when=the dock polls every 4 s closed, physical corners return, the badge text loses contrast in dark, or the Access tab loses its confirm, focus ring or arrows; why_new=performance and design findings; seam=source pin
   const dock = read('src/renderer/src/shell/MichaelDock.tsx');
   assert.match(dock, /const iv = setInterval\(tick, active \? POLL_MS : IDLE_POLL_MS\);/);
   assert.match(dock, /const tick = \(\): void => \{ if \(!document\.hidden\) refresh\(\); \};/);
@@ -244,13 +244,13 @@ test('screens: the dock polls only while open and shown, mirrors in Arabic, and 
   assert.match(card, /t\('askMe\.mailFailed'\)/);
   const tab = read('src/renderer/src/components/CapabilitiesTab.tsx');
   assert.match(tab, /if \(senders\.length\) setConfirmRemove\(true\); else stopWatching\(\);/);
-  assert.match(tab, /const forward = inline && rtl \? 'ArrowLeft' : 'ArrowRight';/);
+  assert.match(tab, /const forward = 'ArrowRight';/);
   assert.doesNotMatch(tab, /overflow: 'hidden'/);
   assert.doesNotMatch(tab, /cth-paper-200|cth-mint/);
   const composer = read('src/renderer/src/components/MessageQueueComposer.tsx');
   assert.match(composer, /disabled=\{!canSend \|\| godSending\}/);
   assert.match(composer, /\{godFailed && <div role="alert"/);
-  for (const loc of ['en', 'zh-CN', 'ar']) {
+  for (const loc of ['en']) {
     const l = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`));
     assert.doesNotMatch(l.dock.empty, /\n/, `${loc} dock empty state is one line`);
     for (const [sec, k] of [['askMe', 'mailFailed'], ['capabilities', 'removeWatchedSure']]) {

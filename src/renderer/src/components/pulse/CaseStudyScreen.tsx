@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  caseLangOf, PAGE_W, pageHtml, startingEdits,
+  PAGE_W, pageHtml, startingEdits,
   type CaseDraft, type CaseInput, type CaseOpen, type CasePrep, type HeroPalette
 } from '@shared/caseStudy';
 import { useStore } from '@/store/store';
@@ -29,10 +29,9 @@ type Draft = { state: 'drafting' } | { state: 'ready'; draft: CaseDraft } | { st
 type Send = { state: 'idle' } | { state: 'sending' } | { state: 'sent' } | { state: 'maybe' } | { state: 'error'; text: string };
 
 export function CaseStudyScreen() {
-  const { t, i18n } = useTranslation();
-  const lang = caseLangOf(i18n.language);
+  const { t } = useTranslation();
   // Fixed (D3): the last 30 days, the business name shown.
-  const input: CaseInput = useMemo(() => ({ lang, period: 'last-30', showName: true }), [lang]);
+  const input: CaseInput = useMemo(() => ({ period: 'last-30', showName: true }), []);
   const [open, setOpen] = useState<CaseOpen | null | 'failed'>(null);
   const [draft, setDraft] = useState<Draft>({ state: 'drafting' });
   const [logo, setLogo] = useState<{ logo: string; palette: HeroPalette } | null>(null);

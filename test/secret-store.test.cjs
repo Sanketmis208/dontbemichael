@@ -329,10 +329,3 @@ test('removing a connected app logs when its secret could not be removed, and st
   }
 });
 
-test('clearing an engine key still reports a key that could not be removed (issue 133)', () => {
-  // Value: protects=Settings is not told a key is gone when it may still be stored; fails_when=providerKey:clear ignores deleteSecret's answer now that it no longer throws; why_new=the handler relied on a throw; seam=source pin (index.ts does not load under node)
-  const main = fs.readFileSync(path.join(__dirname, '..', 'src', 'main', 'index.ts'), 'utf8');
-  const start = main.indexOf("ipcMain.handle('providerKey:clear'");
-  const handler = main.slice(start, main.indexOf('\n});', start));
-  assert.match(handler, /if \(!integrations\.deleteSecret\(providerKeyRef\(backend\)\)\) return \{ ok: false, error: '[^']+' \};/);
-});

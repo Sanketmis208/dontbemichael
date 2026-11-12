@@ -24,8 +24,7 @@ import { fieldLabel } from './fieldText';
  *
  * Later takes it off Ask me for this version until the app starts again; a
  * newer version asks again. The title bar badge and Settings, Updates still
- * offer the restart meanwhile. An authored release page (the drop) still opens
- * centered from UpdateToast: it has no buttons, and this card keeps the action.
+ * offer the restart meanwhile.
  *
  * The star ask is shown AT MOST ONCE EVER, not once per release: a repeated ask
  * is the kind of nagging that gets the update channel ignored (STAR_ASK_KEY).

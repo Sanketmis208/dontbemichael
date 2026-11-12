@@ -96,7 +96,7 @@ test('board.md is Michael\'s alone, and nobody files spawn requests in this buil
   assert.equal(decide(`${HIVE}/spawn-requests/w1.json`).deny, true);
   const god = { agentId: 'god', isGod: true, cwd: '/Users/me/Documents/Pho/Office' };
   assert.equal(decide(`${HIVE}/board.md`, god).deny, false);
-  // Temporary workers are off (ALLOW_TEMP_WORKERS), so not even Michael.
+  // There are no temporary workers, so not even Michael.
   assert.equal(decide(`${HIVE}/spawn-requests/w1.json`, god).deny, true);
   assert.equal(decide(`${HIVE}/agents/god/memory/inbox.md`, god).deny, false);
 });

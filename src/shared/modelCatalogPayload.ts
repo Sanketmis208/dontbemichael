@@ -119,7 +119,7 @@ function parseKey(key: string): string | null {
  * Turn whatever came off the network into a catalog, or null.
  *
  * A provider survives only if its value is an array AND either that array was
- * empty (a deliberate "offer nothing", which is what `custom` is) or at least
+ * empty (a deliberate "offer nothing") or at least
  * one of its rows parsed. A provider whose rows ALL failed is dropped entirely,
  * so a mangled entry costs the user that provider's remote list and they fall
  * back to the models the build shipped with — never an empty picker.

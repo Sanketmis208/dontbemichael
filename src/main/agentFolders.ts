@@ -16,11 +16,8 @@
  */
 
 import { mkdirSync, statSync } from 'node:fs';
-import { join, relative, resolve, isAbsolute } from 'node:path';
+import { join, isAbsolute } from 'node:path';
 import { cleanFolderName } from '../shared/folderName';
-
-/** The folder Michael works in, and that every agent can reach. */
-export const OFFICE_FOLDER = 'Office';
 
 const FALLBACK_BUSINESS = 'My Business';
 
@@ -38,20 +35,6 @@ export function safeFolderName(raw: string, fallback = 'Folder'): string {
 /** `~/Documents/<Business name>` — the parent of every default agent folder. */
 export function businessFolderRoot(documentsDir: string, businessName: string): string {
   return join(documentsDir, safeFolderName(businessName, FALLBACK_BUSINESS));
-}
-
-/**
- * `~/Documents/<Business name>/<Folder>` for one agent's folder name.
- *
- * Throws if the result would land outside the business folder. The cleaning
- * above already makes that impossible; this is the check that proves it, kept
- * because a folder path is exactly where a quiet mistake does lasting damage.
- */
-export function defaultAgentFolder(documentsDir: string, businessName: string, folderName: string): string {
-  const root = businessFolderRoot(documentsDir, businessName);
-  const path = join(root, safeFolderName(folderName));
-  if (!isInside(root, path)) throw new Error(`Folder "${folderName}" would land outside ${root}`);
-  return path;
 }
 
 export type EnsureFolderResult = { ok: true; path: string; created: boolean } | { ok: false; path: string; reason: string };
@@ -84,10 +67,4 @@ export function ensureFolder(path: string): EnsureFolderResult {
         : 'The folder couldn\'t be created. Pick a different location.'
     };
   }
-}
-
-/** True when `child` is `parent` itself or somewhere below it. */
-function isInside(parent: string, child: string): boolean {
-  const rel = relative(resolve(parent), resolve(child));
-  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
 }

@@ -127,13 +127,14 @@ test('the card: rows to pick, a line per question, Reply on its own row saying w
   assert.match(tab, /pick=\{pk\.pick\}/);
   assert.doesNotMatch(tab, /recommended\)\s*\?\?|findIndex\(\(o\) => o\.recommended/);
   // A1: with options or questions, Reply is its own row under the box.
-  assert.match(tab, /\{shape\.kind !== 'plain' \? <>[\s\S]*?<GrowingTextarea[\s\S]*?<div style=\{\{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 \}\}>\s*<PixelButton/);
+  // Reply on its own row, with the paperclip beside it (ask-me-answer-box.md).
+  assert.match(tab, /\{shape\.kind !== 'plain' \? <>[\s\S]*?<GrowingTextarea[\s\S]*?<div style=\{\{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, marginTop: 8 \}\}>\s*<AddFileButton[\s\S]*?\/>\s*<PixelButton/);
   assert.match(tab, /translate\(draft\.trim\(\) \? 'askMe\.replyOptionNote' : 'askMe\.replyOption', \{ n: pk\.pick \+ 1 \}\)/);
   assert.match(tab, /translate\('askMe\.replyPartial', \{ n: partsAnswered, total: shape\.parts\.length \}\)/);
   // The plain card keeps today's one row.
   assert.match(tab, /\/\* One row: the answer, and Reply\. \*\/\s*<div style=\{\{ display: 'flex', alignItems: 'flex-end', gap: 6 \}\}>/);
   // A pick is a draft too (3A), and goes with the answer to main.
-  assert.match(tab, /const hasDraft = !!draft\.trim\(\) \|\| pk\.pick !== undefined \|\| partsAnswered > 0;/);
+  assert.match(tab, /const hasDraft = !!draft\.trim\(\) \|\| pk\.pick !== undefined \|\| partsAnswered > 0 \|\| files\.length > 0;/);
   assert.match(tab, /\? \{ answeredAt, \.\.\.detail \}|answeredAt, \.\.\.detail \}/);
   assert.match(tab, /setAnswerPick\(row\.key, \{\}\);/, 'a sent pick is cleared');
   assert.match(tab, /answerMessages\(\{ raiser, raiserName, taskId: task\.id, title: task\.title, q: asked, a: text, answeredAt \}\)/);
@@ -152,7 +153,7 @@ test('Michael writes options and parts, and team members settle what the owner l
 
 test('the new strings exist in every language, with no dashes', () => {
   const keys = ['recommended', 'ownAnswer', 'addNote', 'replyOption', 'replyOptionNote', 'replyOptionAria', 'replyPartial', 'partAnswer', 'partOwn', 'anythingElse'];
-  for (const loc of ['en', 'ar', 'zh-CN']) {
+  for (const loc of ['en']) {
     const d = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).askMe;
     for (const k of keys) {
       assert.equal(typeof d[k], 'string', `${loc} askMe.${k}`);
@@ -231,11 +232,24 @@ test('an option that needs the owner\'s words asks for them, and Reply waits for
 
   const tab = read('src/renderer/src/components/AskMeTab.tsx');
   assert.match(tab, /const pickedNote = shape\.kind === 'choice' && pk\.pick !== undefined \? shape\.options\[pk\.pick\]\?\.note : undefined;/);
-  assert.match(tab, /const toSend = pickedNote && !draft\.trim\(\) \? '' : answerFor\(row, shape\);/, 'nothing to send until the owner writes');
-  assert.match(tab, /disabled=\{!toSend \|\| sending === row\.key\}/);
-  assert.match(tab, /: pickedNote \?\? \(pk\.pick !== undefined \? translate\('askMe\.addNote'\)/, 'the box asks the option\'s question');
+  // Nothing to send until the owner writes, or attaches a file (ask-me-answer-box.md).
+  assert.match(tab, /const toSend = pickedNote && !draft\.trim\(\) && !files\.length \? '' : answerFor\(row, shape\);/, 'nothing to send until the owner writes or attaches');
+  assert.match(tab, /disabled=\{\(!toSend && !files\.length\) \|\| sending === row\.key\}/);
+  // The option's question shows above the box, whole, and stays while the owner
+  // types (owner D2, 2026-11-05, ask-me-answer-box.md); the box reads Your answer.
+  assert.match(tab, /\{pickedNote && \(\s*<div data-askme-note[\s\S]*?\{pickedNote\}<\/div>/, 'the option\'s question shows above the box');
+  assert.match(tab, /: pickedNote \? translate\('askMe\.yourAnswer'\) : \(pk\.pick !== undefined \? translate\('askMe\.addNote'\)/);
 
   const hive = read('src/main/hive.ts');
   assert.match(hive, /An option that needs the owner\\'s own words \(the changes to make, a date, a name\) adds "note" with a short question for them/);
   assert.match(hive, /owner's own words adds \\`"note": "What should change\?"\\`, which the card asks when it is picked;/);
 });
+
+test("each question's own answer grows with what is typed", () => {
+  // Value: protects=a longer answer to one question can be read and written whole (owner, 2026-11-11); fails_when=the field goes back to a one line input or loses its fixed one line height floor; why_new=owner 2026-11-11; seam=source pin; no_claim=the measured growth (GrowingTextarea's own tests)
+  const src = fs.readFileSync(path.resolve(__dirname, '..', 'src/renderer/src/components/AskAnswerFields.tsx'), 'utf8');
+  assert.ok(!/<input\b/.test(src), 'no one line input for an answer');
+  assert.match(src, /<GrowingTextarea\s+className="cth-input"\s+value=\{a\.text \?\? ''\}/);
+  assert.match(src, /const lineStyle: CSSProperties = \{[^}]*minHeight: 30/);
+});
+

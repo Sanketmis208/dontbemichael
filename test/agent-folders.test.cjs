@@ -17,7 +17,7 @@ const os = require('node:os');
 const path = require('node:path');
 const loadTs = require('./load-ts.cjs');
 
-const { safeFolderName, businessFolderRoot, defaultAgentFolder, ensureFolder, OFFICE_FOLDER } =
+const { safeFolderName, businessFolderRoot, ensureFolder } =
   loadTs('src/main/agentFolders.ts');
 
 // Unique per run: a shared fixed path collides across parallel checkouts and
@@ -74,20 +74,9 @@ test('very long names are shortened without leaving a trailing space', () => {
   assert.doesNotMatch(n, /\s$/);
 });
 
-test('an agent folder is Documents/<Business>/<Folder>', () => {
-  assert.equal(
-    defaultAgentFolder(docs, 'Pho Saigon Kitchen', 'Finance'),
-    path.join(docs, 'Pho Saigon Kitchen', 'Finance')
-  );
-  assert.equal(
-    defaultAgentFolder(docs, 'Pho Saigon Kitchen', OFFICE_FOLDER),
-    path.join(docs, 'Pho Saigon Kitchen', 'Office')
-  );
-});
-
 test('hostile inputs on both sides still land inside the business folder', () => {
   const root = businessFolderRoot(docs, '../../etc');
-  const p = defaultAgentFolder(docs, '../../etc', '../../../.ssh');
+  const p = path.join(root, safeFolderName('../../../.ssh'));
   assert.ok(root.startsWith(docs + path.sep), root);
   assert.ok(p.startsWith(root + path.sep), p);
 });
@@ -152,7 +141,7 @@ test('a long name is never cut through an emoji', () => {
 });
 
 test('the folder made for a long emoji name is found again by the same name', () => {
-  const made = defaultAgentFolder(docs, 'Round Trip', EMOJI_NAME);
+  const made = path.join(businessFolderRoot(docs, 'Round Trip'), safeFolderName(EMOJI_NAME));
   assert.equal(ensureFolder(made).ok, true);
   const listed = fs.readdirSync(path.dirname(made));
   assert.deepEqual(listed, [safeFolderName(EMOJI_NAME)], 'what is on disk is exactly the name the app asked for');

@@ -56,16 +56,11 @@ test('the email tab: subject leads, white sheet, pictures line, focus, cancel on
   assert.match(read('src/renderer/src/design/global.css'), /@media \(max-width: 560px\) \{ \.cth-email-rows \{ grid-template-columns: 1fr !important; \} \}/);
 });
 
-test('every state the tab can show has its words, in every language, with no dashes', () => {
+test('every state the tab can show has its words, with no dashes', () => {
   const en = JSON.parse(read('src/renderer/src/i18n/locales/en.json')).emailTab;
-  const ar = JSON.parse(read('src/renderer/src/i18n/locales/ar.json')).emailTab;
-  const zh = JSON.parse(read('src/renderer/src/i18n/locales/zh-CN.json')).emailTab;
   for (const r of ['broken', 'mailbox', 'message', 'auth', 'blocked', 'network', 'unknown']) {
-    assert.ok(en.failed[r] && ar.failed[r] && zh.failed[r], r);
+    assert.ok(en.failed[r], r);
   }
-  const keys = (o) => Object.entries(o).flatMap(([k, v]) => (typeof v === 'object' ? keys(v).map((x) => `${k}.${x}`) : [k])).sort();
-  assert.deepEqual(keys(ar), keys(en));
-  assert.deepEqual(keys(zh), keys(en));
   const words = JSON.stringify(en);
   assert.ok(!/[–—]| - /.test(words), 'no dashes in the copy');
 });
@@ -80,8 +75,9 @@ test('members and Michael carry an email\'s link into the filing and the ask', (
   const hive = read('src/main/hive.ts');
   // Since 2026-11-05 a message about an email carries its link too (the Will Cox card).
   assert.match(hive, /When a filing or a message to \$\{michael\} is about an email you read .* put that email's link from your mail read \(its "link"/);
-  assert.match(hive, /When the ask is built on an email, keep the email link the team member gave \(an email: link\) as written/);
-  assert.match(hive, /an ask built on an email keeps that email's link/);
+  // Now through "sources" (ask-me-source-links.md), still as written.
+  assert.match(hive, /When the ask is built on an email, its email: link goes in "sources" as the team member gave it/);
+  assert.match(hive, /an email's \\`email:\\` link from the mail read goes there as written/);
   assert.match(hive, /A filing built on an email carries that email's link from the mail read/);
   assert.match(read('resources/md-mail-mcp.cjs'), /Its "link" names this email for the owner: put it, as written, in any filing or message about this email\./);
   assert.match(read('src/main/mail.ts'), /const link = emailLinkFor\(mailbox!, msg\);\s*return \{ status: 200, body: link \? \{ \.\.\.msg, link \} : msg \};/);

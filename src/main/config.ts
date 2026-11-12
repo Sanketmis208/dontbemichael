@@ -9,26 +9,14 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, rename
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import {
-  autoModeFlagForProvider,
-  defaultCommandForProvider,
-  inferAgentProvider,
+  onRetiredEngine,
   providerPreset,
   type AgentProvider
 } from '../shared/agentProvider';
-import { defaultMcpDefaults } from '../shared/mcpCatalog';
 import { MAX_AGENT_TOKEN_CAP } from '../shared/tokenCaps';
 import { expandTilde, normalizeHiveHome } from './fs';
 import { isHeldRename, RENAME_RETRY_MS, sleepSync, writeFileAtomic } from './atomicFile';
 import type { IntegrationRecord } from '../shared/integrations';
-import {
-  DEFAULT_CONTEXT_TRIGGER,
-  DEFAULT_ORG_TRIGGER,
-  DEFAULT_TRIGGER_MODE,
-  DEFAULT_WEBHOOK_SCHEMA,
-  type ContextTriggerConfig,
-  type OrgTriggerConfig,
-  type WebhookTrigger
-} from '../shared/triggers';
 
 /** A recurring schedule. The type and every rule about it (ownership, next run,
  *  what a run sends) live in shared/missions.ts so main, preload and the
@@ -96,7 +84,6 @@ export const OPS_STANDUP_MISSION: ScheduledMission = {
   body: '',
   focus: OPS_STANDUP_FOCUS,
   enabled: true
-  // NO autoCompact. Compaction belongs to contextTrigger.compact and nothing else.
 };
 
 /** Company foundations check (office-foundations.md, eng D3): once a week,
@@ -194,37 +181,6 @@ export function heartbeatMessage(body: string | undefined, digest: string): stri
   return own && own !== HEARTBEAT_MISSION.body.trim() ? `${own}\n\n${digest}` : digest;
 }
 
-/** The dedicated auto-compact MAINTENANCE schedule (maint-1). DECOUPLED from the
- *  ops standup so editing/replacing a standup can never silently disable
- *  compaction again (the bug this fixes). It fires ONLY the auto-compact signal —
- *  `kind:'compact'` makes syncMissions skip the hive.send dispatch (empty to/body).
- *  Shipped DISABLED (v0.3.4 founder decision): scheduled compaction is opt-in.
- *  Turn it on in Settings → General or the Schedules tab; the Schedules warning
- *  panel explains the risk of leaving it off for long-running agents. It is the
- *  SINGLE source of truth for compaction, and it's persistent: deleting it makes
- *  it reappear DISABLED.
- *  Existing installs keep whatever enabled state the user already has
- *  (compactMaintenanceSeeded guards re-seeding). */
-export const COMPACT_MAINTENANCE_MISSION: ScheduledMission = {
-  id: 'compact-maintenance',
-  label: 'Auto-compact (maintenance)',
-  // 2h, matching DEFAULT_CONTEXT_TRIGGER.compact.everyMs. The two cadences must
-  // agree: this mission is the schedule half of the same behaviour the context
-  // trigger now owns, and a 1h seed here would keep interrupting agents on the
-  // old rhythm no matter what the trigger says.
-  intervalMs: 7_200_000,
-  to: '',
-  body: '',
-  enabled: false,
-  autoCompact: true,
-  kind: 'compact'
-};
-
-/** The 1h cadence `compact-maintenance` was seeded with before Triggers doubled
- *  it. `migrateTriggersV1` bumps only missions still sitting on this EXACT value,
- *  so an interval the user tuned by hand is left exactly where they put it. */
-const LEGACY_COMPACT_MAINTENANCE_INTERVAL_MS = 3_600_000;
-
 /** Circuit-breaker thresholds (Lane A #6.6b). The breaker runs inside the
  *  heartbeat beat, so it only ticks when the heartbeat is enabled. Trip
  *  conditions are behavioral by default; `costCapUsd` is the only $-based one and
@@ -319,23 +275,13 @@ export interface HarnessConfig {
   registeredRepos: string[];
   /** When true, new agents are spawned with --permission-mode bypassPermissions. */
   autoMode: boolean;
-  /** May the orchestrator ("Michael") spin up agents on its own?
-   *
-   *  Default FALSE. Spawning an agent is a SPEND decision, so it should not
-   *  happen unprompted. The ability itself shipped in v0.4.4 with no gate at all,
-   *  so this closes an existing default-on behaviour rather than gating a new
-   *  feature: an operator who wants it must now say so.
-   *
-   *  Off does not FAIL a queued spawn request, it declines to consume one. The
-   *  request sits in HIVE_ROOT/spawn-requests until the toggle is turned on. */
-  orchestratorMaySpawn: boolean;
   /** The command we run when spawning a new agent. */
   defaultCommand: string;
   /** Default model for newly spawned agents (e.g. 'claude-sonnet-4-6[1m]'); unset = CLI default. */
   defaultModel?: string;
   /** Which provider powers the GOD orchestrator ("Michael"). The persona is
    *  constant; only its engine is selectable. Default 'claude'. Eligible providers
-   *  are those that can receive inbox (claude/codex/antigravity/qwen). */
+   *  are those that can receive inbox (claude/codex/gemini). */
   godProvider?: AgentProvider;
   /** How Claude Code signs in for the team (docs/designs/get-michael-ready.md):
    *  the owner's Claude account (default), or an Anthropic API key kept in the
@@ -348,9 +294,9 @@ export interface HarnessConfig {
   /** The model GOD runs on. Unset falls back to the provider preset's
    *  `recommendedOrchestratorModel`, then MODEL_GOD. Default 'claude-opus-5-5'. */
   godModel?: string;
-  /** Per-server consent state for the default MCP bundle, keyed by catalog id.
-   *  Seeded from MCP_CATALOG (safe-readonly ON, write/secret OFF); the user flips
-   *  these in Settings. A server is wired into an agent only when enabled here. */
+  /** Read only: the default MCP switches an older build saved. Nothing writes
+   *  it now; the one-time Claude connectors carry-over reads its
+   *  'email-calendar' entry (emailCalendarAllowed in claudeConnectors.ts). */
   mcpDefaults?: { [id: string]: { enabled: boolean } };
   /** Mailboxes connected in Settings (docs/designs/multi-mailbox.md). Metadata
    *  only; each app password lives in the secret store under `mail:<id>`. */
@@ -410,11 +356,6 @@ export interface HarnessConfig {
   /** One-time guard for the built-in heartbeat mission (mirrors opsStandupSeeded
    *  so a user who deletes the heartbeat doesn't get it re-added every boot). */
   heartbeatSeeded?: boolean;
-  /** maint-1 guard for the dedicated auto-compact maintenance mission. UNLIKE the
-   *  two above, this does NOT suppress re-add forever: once seeded (flag set), a
-   *  later delete makes the mission reappear DISABLED on next boot (compaction is
-   *  required, so it's never silently lost — only user-disabled). */
-  compactMaintenanceSeeded?: boolean;
   /** DEPRECATED (v0.3.4): config-file only, no UI anywhere. Hard dollar ceiling
    *  across all active agents. Still enforced if present so legacy configs keep
    *  their guard, but the token cap (costCapTokens) is the real budget —
@@ -439,26 +380,11 @@ export interface HarnessConfig {
    *  Code's `--max-turns` works in print mode only. A coarse runaway guard
    *  independent of the breaker. */
   maxTurns?: number;
-  /** Max concurrent god-triggered ephemeral Slack workers; extra spawn-requests
-   *  wait in the queue (natural backpressure, a resource backstop). Default 4. */
-  maxConcurrentWorkers?: number;
-  /** Minutes an ephemeral worker may produce NO output before the reaper kills it
-   *  — idle-based, never wall-clock, so an actively-working worker is never reaped.
-   *  Default 20. */
-  workerIdleTimeoutMinutes?: number;
   /** Registered integrations (Phase 2) — labeled REST endpoints workers reach through
    *  the loopback secret broker. METADATA ONLY: each record carries a `secretRef`
    *  handle, never the secret value (secrets live encrypted in a separate file via
    *  Electron safeStorage — see src/main/integrations.ts). Default []. */
   integrations?: IntegrationRecord[];
-  /** Default per-worker TOTAL-token cap (input+output+cache) applied to every
-   *  god-triggered ephemeral worker; a worker's own spawn-request `tokenCap`
-   *  overrides it. When the effective cap is exceeded the worker is reaped (its
-   *  committed work preserved) and god is informed. This is PLUMBING for a later
-   *  budget feature: per the human directive there is NO per-worker cap today, so
-   *  the default is 0 = UNLIMITED — the mechanism is wired but never throttles
-   *  unless someone explicitly sets a positive cap (per request or here). */
-  defaultWorkerTokenCap?: number;
   /** Circuit-breaker thresholds (Lane A #6.6b). Unset = conservative defaults. */
   circuitBreaker?: CircuitBreakerConfig;
   /** Company knowledge (the Knowledge Graph store). Default ON. */
@@ -480,104 +406,13 @@ export interface HarnessConfig {
    *  ("theme" key) at spawn so the TUI's truecolor palette matches. Scoped to
    *  harness agents only; the user's global Claude theme is never touched. */
   terminalTheme?: 'light' | 'dark';
-  /** Anonymous product analytics (PostHog) — the exact events/properties are
-   *  documented in TELEMETRY.md. Ignored while COLLECT_USAGE_STATS
-   *  (buildFeatures.ts) is false, as it is in this build. Otherwise default ON
-   *  (opt-out); builds without an injected key and environments
-   *  with DO_NOT_TRACK set never send regardless of this flag. (Mirrored in
-   *  preload + renderer config.) */
-  telemetryEnabled?: boolean;
   /** Master flag for the TV-show office themes feature (Settings theme picker +
    *  destructive switch flow). Default false = the picker is hidden and the
    *  office renders as today (zero behavior change). */
   tvShowOffices?: boolean;
-  /** Which office map/cast theme the pixel office renders. Only honored when
-   *  `tvShowOffices` is on; otherwise the office theme is used. Unbuilt show
-   *  themes fall back to 'office' in the loader. */
-  officeTheme?: 'office' | 'friends' | 'brooklyn99' | 'siliconvalley' | 'got' | 'hogwarts';
-  /** Per-CLI-provider local/self-hosted base URL (Ollama/LM Studio/vLLM, …) for the
-   *  OpenCode/Crush/pi/qwen engines; applied at spawn (config-injection or proxy
-   *  upstream). API KEYS are NOT stored here — they live write-only in the secret
-   *  broker (integrations.ts), read MAIN-ONLY at spawn. */
-  providerBaseUrls?: Partial<Record<AgentProvider, string>>;
   /** Per-CLI-provider default model slug, used to pre-fill the model picker. */
   providerDefaultModels?: Partial<Record<AgentProvider, string>>;
-  /** Master toggle for the Slack → Michael's-queue integration. */
-  slackEnabled?: boolean;
-  /** Slack app signing secret (Basic Information → Signing Secret). Never logged. */
-  slackSigningSecret?: string;
-  /** Bot token (xoxb-…) — only needed if the bot ever replies; optional for now. */
-  slackBotToken?: string;
-  /** Restrict ingestion to one channel id; empty/undefined = any channel. */
-  slackChannelId?: string;
-  /** Local HTTP port the webhook server binds to (default 3847). */
-  slackPort?: number;
-  /** Opt-in: allow APP/VOICE-INITIATED proactive posting into Slack (e.g. the
-   *  renderer's "queued" acknowledgement). DEFAULT OFF per the human directive
-   *  "stop posting into Slack by default". This does NOT gate the Slack-ORIGIN
-   *  done-reply round-trip (a user @-mention → task → result posted back to that
-   *  thread) or an agent's own direct in-thread reply — those always stay on. */
-  slackProactivePosting?: boolean;
 
-  // ─── Free Flow (voice dictation → message queue) ───────────────────────────
-  /** Master toggle for Free Flow push-to-talk dictation. Default OFF: with it off
-   *  the composer shows no mic button, no getUserMedia runs, and no Groq call is
-   *  ever made (zero behavior change). */
-  freeflowEnabled?: boolean;
-  /** User-pasted Groq API key (the user supplies their own free key). Used ONLY in
-   *  the main process for the Groq STT call; NEVER logged, and never crosses IPC
-   *  for the request. Treated like `slackBotToken`. */
-  groqApiKey?: string;
-  /** Groq Whisper model id. Default 'whisper-large-v3-turbo' (fast, multilingual). */
-  freeflowModel?: string;
-
-  // ─── Realtime Michael (premium speech-to-speech voice orchestrator) ─────────
-  /** True ONLY while a Realtime Michael voice session is live: the renderer
-   *  session flips this on at start() (before getUserMedia) and off at stop().
-   *  The main-process mic permission gate reads it so the Electron media
-   *  permission is open EXACTLY while the voice loop holds the mic — never just
-   *  because an OpenAI key exists (that key is shared with the CLI engines).
-   *  Default off; absence ⇒ mic denied, mirroring `freeflowEnabled`. */
-  realtimeVoiceEnabled?: boolean;
-  /** How long (ms) a realtime voice session may sit with no voice activity before
-   *  it auto-disconnects (the rt-9 idle guard). Default 180000 (3 min). 0 = never
-   *  auto-disconnect on idle — the spend cap remains the runaway guard. The user
-   *  tunes this in Settings → Realtime Michael. */
-  realtimeIdleDisconnectMs?: number;
-
-  // ─── Generic inbound webhook + status API (LEGACY, single-endpoint) ─────────
-  // Superseded by `webhookTriggers`, which allows many endpoints over one server
-  // and one tunnel. These three are kept because they are the MIGRATION SOURCE
-  // (`migrateTriggersV1` folds them into a `WebhookTrigger`) and because the main
-  // process still reads them until the server is rewired onto the new list.
-  // Nothing new should be written here.
-  /** @deprecated Use `webhookTriggers[].enabled`. */
-  webhookEnabled?: boolean;
-  /** App-generated shared secret callers echo in `x-md-webhook-secret`. Never
-   *  logged, and never forwarded into the routed message/card/response.
-   *  @deprecated Use `webhookTriggers[].secret` (one secret per endpoint, so
-   *  revoking one caller never disturbs the others). */
-  webhookSecret?: string;
-  /** Local HTTP port the generic webhook server binds to (default 3849).
-   *  @deprecated The port is a property of the shared server, not of any one
-   *  trigger; `webhookTriggers` are multiplexed over it by id. */
-  webhookPort?: number;
-
-  // ─── Triggers (src/shared/triggers.ts owns every type here) ────────────────
-  /** Auto-compaction / auto-clearing of agent terminal context. Both halves ship
-   *  in DEFAULT_CONTEXT_TRIGGER; `readConfig` deep-fills them, because the
-   *  top-level merge below is one level deep and a half-written sub-object would
-   *  otherwise reach consumers with `undefined` thresholds. */
-  contextTrigger?: ContextTriggerConfig;
-  /** Inbound HTTP endpoints, one entry per caller. Replaces the legacy single
-   *  webhook above; several coexist on one port, told apart by `id` in the path. */
-  webhookTriggers?: WebhookTrigger[];
-  /** Peer messaging between teammates' clone nodes. Persistence + UI only today —
-   *  no transport service reads `apiKey` yet. */
-  orgTrigger?: OrgTriggerConfig;
-  /** One-time guard for `migrateTriggersV1` (legacy webhook → webhookTriggers,
-   *  1h → 2h compact cadence). Set once the migration has run to completion. */
-  triggersMigratedV1?: boolean;
 }
 
 const DEFAULTS: HarnessConfig = {
@@ -586,7 +421,6 @@ const DEFAULTS: HarnessConfig = {
   recentHives: [],
   registeredRepos: [],
   autoMode: true,
-  orchestratorMaySpawn: false,
   defaultCommand: 'claude',
   godProvider: 'claude',
   godModel: 'claude-opus-5-5',
@@ -594,42 +428,13 @@ const DEFAULTS: HarnessConfig = {
   // over the role-based tiers (modelForRole) in the spawn handler, so all agents
   // (incl. god) default to Fable 5. A per-agent model choice still overrides it.
   defaultModel: 'claude-fable-5',
-  // Seeded from the MCP catalog so the consent defaults never drift from it
-  // (safe-readonly ON, write/secret OFF).
-  mcpDefaults: defaultMcpDefaults(),
-  maxConcurrentWorkers: 4,
-  workerIdleTimeoutMinutes: 20,
   integrations: [],
-  defaultWorkerTokenCap: 0, // 0 = unlimited (human directive: NO per-worker cap)
   embeddingModel: 'minilm',
   missions: [OPS_STANDUP_MISSION],
   // On from setup (owner, 2026-10-29); a saved choice, either way, is kept.
   notifications: true,
   strongKeepalive: false,
-  telemetryEnabled: true,
   tvShowOffices: false,
-  officeTheme: 'office',
-  slackEnabled: false,
-  slackSigningSecret: undefined,
-  slackBotToken: undefined,
-  slackChannelId: undefined,
-  slackPort: undefined,
-  slackProactivePosting: false,
-  freeflowEnabled: true,
-  groqApiKey: undefined,
-  freeflowModel: 'whisper-large-v3-turbo',
-  realtimeVoiceEnabled: false,
-  realtimeIdleDisconnectMs: 180_000,
-  webhookEnabled: false,
-  webhookSecret: undefined,
-  webhookPort: undefined,
-  // Triggers. These three are the ONLY object/array defaults that get handed
-  // straight back out of `readConfig` for a config that never persisted them, so
-  // `withTriggerDefaults` re-copies them on every read — see the note there.
-  contextTrigger: DEFAULT_CONTEXT_TRIGGER,
-  webhookTriggers: [],
-  orgTrigger: DEFAULT_ORG_TRIGGER,
-  triggersMigratedV1: false,
   // Company knowledge (the knowledge feature): ON by default (owner,
   // 2026-09-25). It is where company wide information, policies and rules live,
   // and every agent, Michael included, searches it. Existing installs are
@@ -641,98 +446,38 @@ function configPath(): string {
   return join(app.getPath('userData'), 'config.json');
 }
 
-/**
- * Deep-fill the trigger sub-objects, and hand back copies of them.
- *
- * TWO problems, one fix. First, the merge in `readConfig` is one level deep, so a
- * `contextTrigger` persisted by an older build (or by a `writeConfig` that
- * patched only `compact`) arrives missing sub-keys that DEFAULTS would have
- * supplied — the consumer then reads `undefined` where it expects a number and
- * the rule never fires. Second, that same shallow merge hands the literal
- * DEFAULT_CONTEXT_TRIGGER / DEFAULT_ORG_TRIGGER instances to every config that
- * didn't persist them, so one caller mutating what it read would rewrite the
- * defaults for the whole process — and for every config read afterwards.
- *
- * Every branch below therefore constructs a fresh object, including the
- * "nothing persisted" branch.
- */
-function withTriggerDefaults(cfg: HarnessConfig): HarnessConfig {
-  return {
-    ...cfg,
-    contextTrigger: {
-      compact: { ...DEFAULT_CONTEXT_TRIGGER.compact, ...cfg.contextTrigger?.compact },
-      clear: { ...DEFAULT_CONTEXT_TRIGGER.clear, ...cfg.contextTrigger?.clear }
-    },
-    orgTrigger: { ...DEFAULT_ORG_TRIGGER, ...cfg.orgTrigger },
-    webhookTriggers: Array.isArray(cfg.webhookTriggers)
-      ? cfg.webhookTriggers.map((t) => ({ ...t }))
-      : []
-  };
+/** Scheduled compaction is retired (owner, 2026-09-25): Claude Code compacts on
+ *  its own. An older install may still hold the `compact-maintenance` schedule
+ *  (or another compact-only one), so every read drops it and it can never be
+ *  armed or run. The next save leaves it out of config.json. */
+function isRetiredMission(m: ScheduledMission | null | undefined): boolean {
+  return m?.id === 'compact-maintenance' || m?.kind === 'compact';
 }
 
-/** Set once `migrateTriggersV1` has run in THIS process. `writeConfig` reads
- *  before it writes, so without an in-memory latch the migration's own persist
- *  would re-enter `readConfig` and run the migration a second time before
- *  `triggersMigratedV1: true` ever reached disk. */
-let triggersMigrationRan = false;
+function dropRetiredMissions(cfg: HarnessConfig): HarnessConfig {
+  if (!Array.isArray(cfg.missions) || !cfg.missions.some(isRetiredMission)) return cfg;
+  return { ...cfg, missions: cfg.missions.filter((m) => !isRetiredMission(m)) };
+}
 
-/**
- * Fold the pre-Triggers config shape forward, exactly once per install.
- *
- * Runs from `readConfig`, so it is complete before any consumer can observe the
- * config — there is no boot ordering to get wrong and no window in which half
- * the app sees the old shape. Two things move:
- *
- *   1. The single legacy webhook (`webhookEnabled`/`webhookSecret`) becomes one
- *      `WebhookTrigger` with the stable id `legacy`, so the caller that already
- *      holds that secret keeps working across the upgrade. Skipped when
- *      `webhookTriggers` is already populated — the user has moved on, and
- *      re-adding a synthesised entry would resurrect a revoked endpoint.
- *   2. The seeded `compact-maintenance` mission moves from the old 1h cadence to
- *      2h, but ONLY if it still reads exactly 1h. A user-chosen interval is a
- *      decision, not a stale default, and is left alone.
- *
- * Wrapped end-to-end in a try/catch: a config that is corrupt in some unrelated
- * way must still boot the app, and a migration is never worth a failed launch.
- */
-function migrateTriggersV1(cfg: HarnessConfig): HarnessConfig {
-  if (cfg.triggersMigratedV1 || triggersMigrationRan) return cfg;
-  triggersMigrationRan = true;
+/** What the removed webhook feature saved (owner, 2026-11-11). The fields held
+ *  live secrets, so the first read drops them from config.json, saves it once,
+ *  and deletes the webhook log (trigger-history.json) beside it. A failed save
+ *  still hands back the stripped copy, and the next save writes it. */
+const REMOVED_WEBHOOK_FIELDS = ['webhookEnabled', 'webhookSecret', 'webhookPort', 'webhookTriggers'] as const;
+
+function dropRemovedWebhookData<T>(p: string, parsed: T): T {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return parsed;
+  const rec = parsed as Record<string, unknown>;
+  if (!REMOVED_WEBHOOK_FIELDS.some((k) => k in rec)) return parsed;
+  const next: Record<string, unknown> = { ...rec };
+  for (const k of REMOVED_WEBHOOK_FIELDS) delete next[k];
   try {
-    const next: HarnessConfig = { ...cfg, triggersMigratedV1: true };
-
-    const legacySecret = typeof cfg.webhookSecret === 'string' ? cfg.webhookSecret.trim() : '';
-    if (legacySecret && (cfg.webhookTriggers?.length ?? 0) === 0) {
-      next.webhookTriggers = [
-        {
-          id: 'legacy',
-          name: 'Default webhook',
-          secret: legacySecret,
-          enabled: cfg.webhookEnabled ?? false,
-          mode: DEFAULT_TRIGGER_MODE,
-          schema: DEFAULT_WEBHOOK_SCHEMA,
-          createdAt: Date.now()
-        }
-      ];
-    }
-
-    const missions = Array.isArray(cfg.missions) ? cfg.missions : [];
-    const stale = (m: ScheduledMission): boolean =>
-      m?.id === COMPACT_MAINTENANCE_MISSION.id
-      && m.intervalMs === LEGACY_COMPACT_MAINTENANCE_INTERVAL_MS;
-    if (missions.some(stale)) {
-      next.missions = missions.map((m) =>
-        stale(m) ? { ...m, intervalMs: COMPACT_MAINTENANCE_MISSION.intervalMs } : m
-      );
-    }
-
-    persistConfig(next);
-    return next;
-  } catch {
-    // Leave the config exactly as read. The latch above stays set, so a failing
-    // migration retries on the next launch rather than on every single read.
-    return cfg;
+    writeFileAtomic(p, JSON.stringify(next, null, 2));
+    rmSync(join(dirname(p), 'trigger-history.json'), { force: true });
+  } catch (e) {
+    console.warn('[config] could not remove the old webhook settings:', e);
   }
+  return next as T;
 }
 
 export function readConfig(): HarnessConfig {
@@ -740,13 +485,13 @@ export function readConfig(): HarnessConfig {
   // No file yet = a first run with nothing to migrate; the defaults ARE the
   // post-migration shape. Deliberately does not persist — a bare read must not
   // conjure a config.json before onboarding has written one.
-  if (!existsSync(p)) return withTriggerDefaults({ ...DEFAULTS });
+  if (!existsSync(p)) return { ...DEFAULTS };
   try {
     const raw = readFileSync(p, 'utf8');
-    const parsed = JSON.parse(raw);
-    return normalizeStoredHomes(migrateTriggersV1(withTriggerDefaults({ ...DEFAULTS, ...parsed })));
+    const parsed = dropRemovedWebhookData(p, JSON.parse(raw));
+    return offRetiredEngines(normalizeStoredHomes(dropRetiredMissions({ ...DEFAULTS, ...parsed })));
   } catch {
-    return withTriggerDefaults({ ...DEFAULTS });
+    return { ...DEFAULTS };
   }
 }
 
@@ -773,9 +518,25 @@ function normalizeStoredHomes(cfg: HarnessConfig): HarnessConfig {
   return cfg;
 }
 
+/** Michael, or the office's default command, saved on an engine this build
+ *  no longer runs (Pi, Grok, Kimi, Antigravity, Qwen, OpenCode, Crush, Copilot,
+ *  Cursor, a custom command) moves to Claude Code, with the old engine's model
+ *  dropped. Applied on every read, so nothing on disk has to be rewritten. */
+function offRetiredEngines(cfg: HarnessConfig): HarnessConfig {
+  if (onRetiredEngine(undefined, cfg.godProvider)) {
+    cfg.godProvider = 'claude';
+    cfg.godModel = undefined;
+  }
+  if (onRetiredEngine(cfg.defaultCommand, undefined)) {
+    cfg.defaultCommand = DEFAULTS.defaultCommand;
+    cfg.defaultModel = undefined;
+  }
+  return cfg;
+}
+
 /** Announces every saved setting, so a screen showing one can update.
  *
- *  Settings, Slack, voice and notifications each save by their own route, and
+ *  Settings and notifications each save by their own route, and
  *  all of them end up writing the file below — so one subscription here covers
  *  every setting rather than the ones anybody remembered to wire up. */
 type ConfigWriteListener = (next: HarnessConfig) => void;
@@ -816,16 +577,17 @@ export function damagedConfigCopy(): string | null {
   try { return keepUnreadableConfig(configPath()); } catch { return null; }
 }
 
-function persistConfig(next: HarnessConfig): HarnessConfig {
+function persistConfig(patched: HarnessConfig): HarnessConfig {
+  // A stale copy of the missions cannot bring a retired schedule back.
+  const next = dropRetiredMissions(patched);
   const p = configPath();
   mkdirSync(dirname(p), { recursive: true });
   keepUnreadableConfig(p);
   writeFileAtomic(p, JSON.stringify(next, null, 2));
   // Saving one setting stores only that setting, so fill the rest back in first:
   // subscribers must see the same complete config a read gives them, never a
-  // half-filled one. Skip the migration — it saves in its own right, and has
-  // already run against what this change was built on.
-  const view = normalizeStoredHomes(withTriggerDefaults({ ...DEFAULTS, ...next }));
+  // half-filled one.
+  const view = normalizeStoredHomes({ ...DEFAULTS, ...next });
   // The change is already saved, so one failed subscriber must not fail the save
   // for its caller, nor stop the subscribers after it.
   for (const listener of configWriteListeners) {
@@ -901,11 +663,7 @@ export function setAgentTokenCap(agentId: unknown, tokenCap: unknown): HarnessCo
 export function resetConfig(): HarnessConfig {
   // Saved like any other change, so a reset announces itself too.
   persistConfig({ ...DEFAULTS });
-  // Drop the migration latch too: the file on disk is back to `triggersMigratedV1:
-  // false`, and a latch left set would keep the flag from ever being written again
-  // in this process. The migration itself is a no-op on defaults either way.
-  triggersMigrationRan = false;
-  return withTriggerDefaults({ ...DEFAULTS });
+  return { ...DEFAULTS };
 }
 
 /** Model ids by tier (Lane A #6.4). Kept in sync with the claude list in

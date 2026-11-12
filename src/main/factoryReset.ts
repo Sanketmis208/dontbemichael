@@ -94,8 +94,8 @@ export const APP_DATA_ENTRIES = [
   'opened-attachments',
   'trigger-history.json',
   'owner-dock-keys.json',
-  'slack-reply.json',
-  'slack-done-notified.json',
+  // Slack's files, which an older build may have left.
+  'slack-reply.json',  'slack-done-notified.json',
   'slack-files',
   'pastes',
   ...CHECK_FOLDERS
@@ -105,8 +105,6 @@ export const APP_DATA_ENTRIES = [
  *  not the office (test/factory-reset.test.cjs checks every name is in one list). */
 export const APP_DATA_KEPT = [
   'config.json', 'hero.json', 'model-catalog.json', 'skill-catalog.json', 'last-run-version', 'updater.log',
-  // The anonymous usage id and its version stamp (analytics.ts).
-  'telemetry-install-id', 'telemetry-last-version',
   // Automatic failure reports and its one old file (failureReport.ts): fixed
   // fields about this install, no office data, and reports still owed.
   'failures.jsonl', 'failures.1.jsonl'

@@ -113,10 +113,11 @@ Approval readiness: PASS (MODE D1, CORE brief, ROW-1 D2, E1 D3, E2 D4, E3 D5, E4
   refuses any connector it cannot match. Only when discovery has never succeeded does every agent
   start with `ENABLE_CLAUDEAI_MCP_SERVERS=false` and `--strict-mcp-config`. The Settings list
   shows "Couldn't read your Claude connectors" with Try again and the time of the last good read.
-- **No settings file, no connectors (D8).** If an agent's `--settings` cannot be written
-  (`hive.ts:1197-1204` skips it when the socket or shim path is missing), that agent has no hook and
-  no deny rules, so it starts with `ENABLE_CLAUDEAI_MCP_SERVERS=false` and `--strict-mcp-config`
-  whatever its grants.
+- **No settings file, no start (D8; owner, 2026-11-09).** If a Claude team member's `--settings`
+  cannot be written or its set up fails, it has no hook, no deny rules and none of its walls, so it
+  does not start, Michael included, the same as Research; the owner sees why and the next start
+  tries again. (Before 2026-11-09 it started with `ENABLE_CLAUDEAI_MCP_SERVERS=false` and
+  `--strict-mcp-config`.)
 - **Grants need the restart; revokes don't (D2).** A newly granted connector is removed by that
   agent's start-up deny rule (or start-up removal) until the agent restarts, so a grant takes
   effect at the automatic idle restart or the one-click "Restart <name> to apply". A revoke is

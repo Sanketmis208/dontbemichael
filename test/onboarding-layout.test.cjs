@@ -47,10 +47,9 @@ test('the studio and the glow read the same flag', () => {
   assert.doesNotMatch(wizard, /radial-gradient\(900px 600px at 72%/, 'the glow no longer sits fixed at 72% in the page background');
 });
 
-test('the glow is centered alone and over the studio after, mirrored in right to left', () => {
+test('the glow is centered alone and over the studio after', () => {
   assert.match(css, /@property --cth-onb-glow-x \{[^}]*initial-value: 50%/);
   assert.match(css, /\.cth-onb-glow\.is-studio \{ --cth-onb-glow-x: 72%; \}/);
-  assert.match(css, /\[dir="rtl"\] \.cth-onb-glow\.is-studio \{ --cth-onb-glow-x: 28%; \}/);
 });
 
 test('the slide, the glow and the fade stop under reduced motion', () => {

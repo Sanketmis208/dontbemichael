@@ -1,4 +1,5 @@
 import type { StoppedMember } from '../shared/agentExit';
+import type { DegradedNotice } from '../shared/degradedNotices';
 import type { Period } from '../shared/teamPerformance';
 import type { JobRun, RunSuggestion } from '../shared/runCompare';
 import type { HeldRow } from '../shared/heldRecord';
@@ -8,7 +9,6 @@ import type { OrganizedList } from '../shared/organizedRecord';
 import type { PulseView } from '../shared/pulseView';
 import type { CaseDraftResult, CaseInput, CaseOpen, CasePrep, CaseSaveResult, CaseSendOutcome } from '../shared/caseStudy';
 import type { FoundationsView } from '../shared/foundations';
-import type { PulseHealthView } from '../shared/pulseHealth';
 import type { ResearchConfig } from '../shared/research';
 import type { DataClassId, DataClassSetting } from '../shared/dataClasses';
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
@@ -38,16 +38,8 @@ import type { ModelCatalog } from '../shared/modelCatalogPayload';
 export type { ModelCatalog, CatalogModel } from '../shared/modelCatalogPayload';
 import type { HookEvent } from '../shared/hookEvents';
 export type { HookEvent } from '../shared/hookEvents';
-import type { LocalSkill, CatalogSkill } from '../main/skills';
-export type { LocalSkill, CatalogSkill } from '../main/skills';
 import type { OfficePack, PackOrigin } from '../shared/officePack';
 export type { OfficePack, PackOrigin } from '../shared/officePack';
-import type {
-  ContextRule, ContextTriggerConfig, OrgTriggerConfig, TriggerHistoryEntry, WebhookTrigger
-} from '../shared/triggers';
-export type {
-  ContextRule, ContextTriggerConfig, OrgTriggerConfig, TriggerHistoryEntry, WebhookTrigger
-} from '../shared/triggers';
 
 /** Renderer-visible integration record: the secretRef handle is redacted to a
  *  presence boolean. Matches main `integrations.listRecordsRedacted()` — the
@@ -74,7 +66,7 @@ export interface RosterSnapshot {
 export interface HiveAgentMeta {
   id: string;
   name: string;
-  /** Which CLI this agent runs on (claude/codex/grok/antigravity/custom); defaults claude. */
+  /** Which CLI this agent runs on (claude/codex/gemini); defaults claude. */
   provider?: AgentProvider;
   role?: string;
   capabilities?: string[];
@@ -99,11 +91,11 @@ export interface HiveMessage {
   created_at: string;
 }
 
-/** A hive message reshaped for the voice read-layer (`hive:messages`). `subject`
- *  and `body` are REDACTED in the main process before crossing this boundary —
- *  the renderer never receives a raw body or a secret. Mirror of `VoiceMessage`
+/** A hive message as the Messages tab reads it (`hive:history`). `subject` and
+ *  `body` are REDACTED in the main process before crossing this boundary: the
+ *  renderer never receives a raw body or a secret. Mirror of `RedactedMessage`
  *  in src/main/hive.ts. */
-export interface VoiceMessage {
+export interface RedactedMessage {
   id: string;
   conversation: string;
   from: string;
@@ -132,43 +124,6 @@ export interface HiveRegistry {
   }>;
 }
 
-/** One row of the consolidated voice read-layer directory (`hive:agentDirectory`):
- *  everything the office-floor sidebar + telemetry know for an agent, joined into
- *  one PII-free record. Includes archived agents. */
-export interface AgentDirectoryEntry {
-  id: string;
-  name: string;
-  role: string;
-  provider: string;
-  /** Live model id (normalized), if any usage has been recorded — else null. */
-  model: string | null;
-  status: string;
-  cwd: string | null;
-  /** Whether `cwd` is an absolute, existing directory (spawn-usable). */
-  cwdValid: boolean | null;
-  archived: boolean;
-  isGod: boolean;
-  isAssistant: boolean;
-  sessionId: string | null;
-  /** Whether the agent has recorded non-trivial memory beyond the seed header. */
-  hasMemory: boolean;
-  inboxBacklog: number;
-  breaker: string;
-  tokens: number;
-  /** Aggregate spend; carried for completeness — the voice layer speaks tokens. */
-  usd: number;
-  lastTool: string | null;
-  lastActiveSecAgo: number | null;
-  contextTokens: number | null;
-  contextLimit: number | null;
-  contextPct: number | null;
-}
-
-export interface AgentDirectory {
-  godId: string | null;
-  agents: AgentDirectoryEntry[];
-}
-
 /** One question→answer exchange with the human, recorded ON the task card. */
 export interface HumanQA {
   q: string;
@@ -193,13 +148,8 @@ export interface HiveTask {
   /** First-class human feedback: god appends {q}, the harness UI fills {a};
    *  the full history stays on the card. */
   humanQA?: HumanQA[];
-  /** Outcome summary used for the Slack done-notification. */
+  /** Outcome summary: the card's result when it is done. */
   result?: string;
-  /** Origin thread for a Slack-sourced task (drives the done-summary reply). */
-  slack?: { channel: string; thread_ts: string };
-  /** SHA-256 of the capability token for a generic-webhook-sourced task (drives
-   *  the GET status lookup; the raw token is never persisted). */
-  webhook?: { tokenHash: string };
   /** Ended by the owner's decision, not finished work (card-lifecycle.md D2). */
   closedBy?: 'owner';
   closedAt?: string;
@@ -247,7 +197,7 @@ export interface SpawnPtyOptions {
   /** When true (and cwd is a git repo), spawn the agent in its own git worktree. */
   isolate?: boolean;
   /** When true, continue the agent's prior CLI session if one was recorded
-   *  (provider-aware: Claude/Grok `--resume`, Antigravity `--conversation`). For
+   *  (provider-aware: Claude/Gemini `--resume`, Codex `resume`). For
    *  Claude the main process looks up the session id from the hive registry and
    *  seeds its transcript into the cwd's project dir (#1 — restore on restart). */
   resume?: boolean;
@@ -329,9 +279,6 @@ export interface HarnessConfig {
    *  'claude' / 'claude-opus-5-5'. Mirrors src/main/config.ts. */
   godProvider?: AgentProvider;
   godModel?: string;
-  /** Per-server consent for the default MCP bundle, keyed by catalog id. Mirrors
-   *  src/main/config.ts. */
-  mcpDefaults?: { [id: string]: { enabled: boolean } };
   mailboxes?: MailboxRecord[];
   agentCapabilities?: { [agentId: string]: AgentCapabilities };
   /** The QuickBooks row's switch under Settings > Connections > Claude connectors.
@@ -355,31 +302,6 @@ export interface HarnessConfig {
   strongKeepalive?: boolean;
   /** @deprecated Ignored since 2026-10-02: updates are always checked. */
   autoUpdate?: boolean;
-  /** Anonymous product analytics (see TELEMETRY.md). Ignored while
-   *  COLLECT_USAGE_STATS (buildFeatures.ts) is false, as it is in this build.
-   *  Mirrors main + renderer HarnessConfig. */
-  telemetryEnabled?: boolean;
-  slackEnabled?: boolean;
-  slackSigningSecret?: string;
-  slackBotToken?: string;
-  slackChannelId?: string;
-  slackPort?: number;
-  slackProactivePosting?: boolean;
-  webhookEnabled?: boolean;
-  webhookSecret?: string;
-  webhookPort?: number;
-  /** Free Flow voice dictation — master flag (default off), user Groq key, model.
-   *  Entry point B (hold-Option-to-talk) is handled in the renderer, no hotkey. */
-  freeflowEnabled?: boolean;
-  groqApiKey?: string;
-  freeflowModel?: string;
-  /** Realtime Michael voice loop — true ONLY while a session holds the mic
-   *  (renderer session sets it at start()/stop()); the main mic permission gate
-   *  reads it. Default off. */
-  realtimeVoiceEnabled?: boolean;
-  /** Realtime voice idle auto-disconnect (ms); default 180000 (3 min), 0 = never.
-   *  Tuned in Settings → Realtime Michael; the cost cap stays the runaway guard. */
-  realtimeIdleDisconnectMs?: number;
   costCapUsd?: number;
   costCapTokens?: number;
   agentTokenCaps?: Record<string, number>;
@@ -392,12 +314,6 @@ export interface HarnessConfig {
   terminalTheme?: 'light' | 'dark';
   /** TV-show office themes feature flag (Settings picker + switch flow). Default OFF. */
   tvShowOffices?: boolean;
-  /** Active office map/cast theme (honored only when tvShowOffices is on). */
-  officeTheme?: 'office' | 'friends' | 'brooklyn99' | 'siliconvalley' | 'got' | 'hogwarts';
-  /** Per-CLI-provider local/self-hosted base URL (Ollama/LM Studio/vLLM, …) for the
-   *  OpenCode/Crush/pi/qwen engines; applied at spawn. API KEYS are NOT stored here —
-   *  they live write-only in the secret broker. */
-  providerBaseUrls?: Partial<Record<AgentProvider, string>>;
   /** Per-CLI-provider default model slug, used to pre-fill the model picker. */
   providerDefaultModels?: Partial<Record<AgentProvider, string>>;
 }
@@ -436,65 +352,10 @@ export interface KnowledgeDoc {
   /** When an edit the owner saved was last read in. */
   updatedAt?: string;
 }
-export interface KnowledgeHit {
-  docId: string;
-  title: string;
-  source: string;
-  modality: string;
-  chunkIdx: number;
-  score: number;
-  snippet: string;
-}
 export interface KnowledgeIngestResult {
   ok: boolean;
   results: Array<{ ok: boolean; srcPath: string; docId?: string; chunkCount?: number; error?: string }>;
   error?: string;
-}
-
-export interface DirEntry {
-  name: string;
-  isDir: boolean;
-  size: number;
-  mtime: number;
-}
-
-export interface GitCommit {
-  sha: string;
-  shortSha: string;
-  parents: string[];
-  subject: string;
-  author: string;
-  time: number;
-  refs: string[];
-}
-export interface GitStatusEntry { path: string; index: string; worktree: string }
-export interface GitStatus { staged: GitStatusEntry[]; unstaged: GitStatusEntry[]; untracked: string[] }
-/** A single file's two sides for a working-tree-vs-HEAD diff (see main git.getDiff). */
-export interface GitDiff {
-  ok: true;
-  path: string;
-  relPath: string;
-  head: string;
-  working: string;
-  headExists: boolean;
-  workingExists: boolean;
-  isBinary: boolean;
-}
-
-/** v0.3.4 git visualization — mirrors src/main/git.ts GitCommit / GitCommitFile. */
-export interface GitCommitRow {
-  sha: string;
-  shortSha: string;
-  parents: string[];
-  subject: string;
-  author: string;
-  time: number;
-  refs: string[];
-}
-export interface GitFileChange {
-  path: string;
-  status: string;
-  oldPath?: string;
 }
 
 /** Real token usage + estimated USD cost summed from an agent's Claude Code
@@ -598,15 +459,6 @@ export interface TelemetrySnapshot {
   spans: Record<string, ToolSpan[]>;
 }
 
-/** One captured user prompt from the SQLite command_history table. */
-export interface CommandHistoryEntry {
-  id: number;
-  agentId: string;
-  cwd: string | null;
-  text: string;
-  ts: number;
-}
-
 /** A GitHub issue, normalized for the renderer (labels/assignees flattened to names). */
 export interface GHIssue {
   number: number;
@@ -617,48 +469,8 @@ export interface GHIssue {
   assignees: string[];
 }
 
-/** A CI (GitHub Actions) workflow run, normalized for the renderer. */
-export interface CIRun {
-  name: string;
-  status: string;
-  conclusion: string | null;
-  url: string;
-}
-
-/** One live god-triggered ephemeral worker, as shown in the Workers tab. */
-export interface WorkerSnapshot {
-  workerId: string;
-  reqId: string;
-  name: string;
-  baseBranch: string;
-  spawnedAt: number;
-  ageMs: number;
-  idleMs: number | null;        // null = PTY already gone
-  tokensUsed: number;
-  tokenCap: number | null;      // effective cap; null = unlimited (the default)
-  hasSlack: boolean;
-  releasing: boolean;
-  status: 'releasing' | 'working';
-}
-/** A worker worktree preserved at teardown, awaiting integration + GC. */
-export interface PreservedWorktreeSnapshot {
-  workerId: string;
-  wtPath: string;
-  baseBranch: string;
-  preservedAt: number;
-}
-
 const api = {
   version: __APP_VERSION__,
-
-  // ─── Analytics ───────────────────────────────────────────────────────────
-  /** Count ONE human-sent message (TELEMETRY.md → `message_sent`). Carries a
-   *  surface name and nothing else — no text, no length, no agent id — and main
-   *  accepts only 'terminal' and 'composer' here (steer and hive are counted in
-   *  main, at their own handlers). Never awaited by callers and never allowed to
-   *  throw: a telemetry hiccup must not break sending a message. */
-  trackMessageSent: (surface: 'terminal' | 'composer'): Promise<void> =>
-    ipcRenderer.invoke('analytics:messageSent', surface).then(() => undefined, () => undefined),
 
   // ─── Office Packs ────────────────────────────────────────────────────────
   /** The business types onboarding offers, each with its core agents already
@@ -724,6 +536,8 @@ const api = {
     handoffList?: Array<{ toId: string; scope: string; line: string; toTitle?: string }>;
     /** Edit agent only: ask where tracked numbers live when the job doesn't say. */
     askHome?: boolean;
+    /** A pack update worked into the member's current job (WORK_STYLE_UPDATES). */
+    update?: boolean;
   }): Promise<
     | { kind: 'ok'; instructions: string; plain: string; handles: string | null; summary: string[]; oneTimeTask?: string;
       handoffs?: Array<{ toId: string; scope: string }>; drops?: Array<{ toId: string; scope: string }> }
@@ -757,7 +571,7 @@ const api = {
   // ─── PTY ─────────────────────────────────────────────────────────────────
   /** `cwd` in the result is the TILDE-EXPANDED absolute path main actually spawned
    *  into — the renderer stores that, not the raw `~/…` the user typed. */
-  spawnPty: (opts: SpawnPtyOptions): Promise<{ ok: boolean; error?: string; cwd?: string; worktreePath?: string; resumeNotFound?: boolean; resumed?: boolean; seedPrompt?: string; name?: string }> =>
+  spawnPty: (opts: SpawnPtyOptions): Promise<{ ok: boolean; error?: string; cwd?: string; worktreePath?: string; resumeNotFound?: boolean; resumed?: boolean; name?: string }> =>
     ipcRenderer.invoke('pty:spawn', opts),
   writePty: (id: string, data: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('pty:write', id, data),
@@ -892,13 +706,7 @@ const api = {
     ipcRenderer.invoke('config:startOverHere'),
 
   // ─── Filesystem (sandboxed to cwd) ───────────────────────────────────────
-  listDir: (root: string, rel: string): Promise<
-    { ok: true; entries: DirEntry[]; path: string } | { ok: false; error: string }
-  > => ipcRenderer.invoke('fs:listDir', root, rel),
-  readFile: (root: string, rel: string): Promise<
-    { ok: true; content: string; path: string; size: number } | { ok: false; error: string }
-  > => ipcRenderer.invoke('fs:readFile', root, rel),
-  /** Raw bytes for files `readFile` refuses (images). The renderer has no way to
+  /** Raw bytes for files the text reader refuses (images). The renderer has no way to
    *  load them off disk — the CSP allows no `file:` source and no file protocol
    *  is registered — so images travel as bytes and become a `blob:` URL in the
    *  renderer, which `img-src` already permits. Root-confined and size-capped in
@@ -911,9 +719,6 @@ const api = {
     { ok: true; bytes: Uint8Array<ArrayBuffer>; mime: string; path: string; size: number }
     | { ok: false; error: string }
   > => ipcRenderer.invoke('fs:readBinary', root, rel),
-  writeFile: (root: string, rel: string, content: string): Promise<
-    { ok: true; path: string } | { ok: false; error: string }
-  > => ipcRenderer.invoke('fs:writeFile', root, rel, content),
   /** v0.3.4: existence check for an absolute path (expands ~) — backs the
    *  terminal ⌘-click markdown flow. Metadata only, never contents. */
   statAbs: (p: string): Promise<{ exists: boolean; isFile: boolean; path: string }> =>
@@ -958,45 +763,6 @@ const api = {
 
   // ─── Git ─────────────────────────────────────────────────────────────────
   gitIsRepo: (cwd: string): Promise<boolean> => ipcRenderer.invoke('git:isRepo', cwd),
-  /** Absolute path of the MAIN working tree `cwd` belongs to — a linked worktree
-   *  resolves to the original repo, not to itself. null when not a git repo. */
-  gitMainRepo: (cwd: string): Promise<string | null> => ipcRenderer.invoke('git:mainRepo', cwd),
-  gitBranch: (cwd: string) =>
-    ipcRenderer.invoke('git:branch', cwd) as Promise<{ current: string | null; detached: boolean } | { error: string }>,
-  gitStatus: (cwd: string) =>
-    ipcRenderer.invoke('git:status', cwd) as Promise<GitStatus | { error: string }>,
-  gitLog: (cwd: string, n?: number) =>
-    ipcRenderer.invoke('git:log', cwd, n ?? 50) as Promise<GitCommit[] | { error: string }>,
-  gitBranches: (cwd: string) =>
-    ipcRenderer.invoke('git:branches', cwd) as Promise<{ local: string[]; remote: string[]; current: string | null } | { error: string }>,
-  gitAheadBehind: (cwd: string) =>
-    ipcRenderer.invoke('git:aheadBehind', cwd) as Promise<{ ahead: number; behind: number; upstream: string | null } | { error: string }>,
-  /** Diff one repo-root-relative file: its HEAD content vs its working-tree content.
-   *  Path-validated main-side against `cwd`; the renderer only ever gets the two
-   *  text sides. Backs the IDE's git-diff (Monaco DiffEditor) view. */
-  gitDiff: (cwd: string, relPath: string) =>
-    ipcRenderer.invoke('git:diff', cwd, relPath) as Promise<GitDiff | { ok: false; error: string }>,
-  // ── v0.3.4: history / compare / checkout (git visualization) ──
-  gitLogGraph: (cwd: string, n: number, skip?: number) =>
-    ipcRenderer.invoke('git:logGraph', cwd, n, skip ?? 0) as Promise<GitCommitRow[] | { error: string }>,
-  gitCommitFiles: (cwd: string, sha: string) =>
-    ipcRenderer.invoke('git:commitFiles', cwd, sha) as Promise<GitFileChange[] | { error: string }>,
-  gitShowFile: (cwd: string, rev: string, relPath: string) =>
-    ipcRenderer.invoke('git:showFile', cwd, rev, relPath) as Promise<
-      { ok: true; exists: boolean; isBinary: boolean; content: string } | { ok: false; error: string }
-    >,
-  gitCompareRefs: (cwd: string, base: string, head: string, mode?: 'two' | 'three') =>
-    ipcRenderer.invoke('git:compareRefs', cwd, base, head, mode ?? 'three') as Promise<
-      { ahead: number; behind: number; mergeBase: string | null; files: GitFileChange[] } | { error: string }
-    >,
-  gitWorktrees: (cwd: string) =>
-    ipcRenderer.invoke('git:worktrees', cwd) as Promise<
-      Array<{ path: string; head: string; branch: string | null }> | { error: string }
-    >,
-  gitCheckout: (cwd: string, ref: string, detach?: boolean) =>
-    ipcRenderer.invoke('git:checkout', cwd, ref, detach === true) as Promise<
-      { ok: true; detached: boolean } | { ok: false; error: string }
-    >,
 
   // ─── Hive (multi-agent coordination) ─────────────────────────────────────
   hiveRegistry: (): Promise<HiveRegistry> => ipcRenderer.invoke('hive:registry'),
@@ -1080,6 +846,16 @@ const api = {
   /** Company knowledge has no switch now: whether this owner, who had turned it off, is still to be told. */
   kgNotice: (): Promise<{ notice: boolean }> => ipcRenderer.invoke('kg:notice'),
   kgNoticeSeen: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('kg:noticeSeen'),
+  /** The page's first script ran: main's boot watchdog stops waiting. */
+  rendererStarted: (): void => ipcRenderer.send('app:rendererStarted'),
+  /** Members that started with something missing: Michael's report cards on Ask me. */
+  degradedNotices: (): Promise<DegradedNotice[]> => ipcRenderer.invoke('degraded:list'),
+  degradedDismiss: (agentId: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('degraded:dismiss', agentId),
+  onDegradedChanged: (cb: (list: DegradedNotice[]) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, list: DegradedNotice[]) => cb(Array.isArray(list) ? list : []);
+    ipcRenderer.on('degraded:changed', listener);
+    return () => ipcRenderer.removeListener('degraded:changed', listener);
+  },
   /** Agents whose connectors changed since they started (missed pushes). */
   connectorsPendingRestarts: (): Promise<string[]> => ipcRenderer.invoke('connectors:pendingRestarts'),
   /** An agent's connectors changed since it started: restart it when idle. */
@@ -1123,24 +899,7 @@ const api = {
   quickbooksSetAccess: (agentId: string, cap: { enabled: boolean; changes: boolean }, opts?: { hiring?: boolean }): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('quickbooks:setAccess', agentId, cap, opts),
   /** Received and sent messages for an agent's Messages tab, newest first, redacted. */
-  hiveHistory: (id: string): Promise<Array<VoiceMessage & { dir: 'in' | 'out' }>> => ipcRenderer.invoke('hive:history', id),
-  /** Voice read-layer: recent message CONTENT (inbox/outbox bodies), REDACTED in
-   *  main. Pass { id } for one message, { agentId } to scope to one mailbox, or
-   *  {} for the whole floor. Backs Realtime Michael's get_messages. The renderer
-   *  never sees a raw body or a secret — stripping happens main-side. */
-  hiveMessages: (opts?: { agentId?: string; id?: string; limit?: number; includeArchived?: boolean }): Promise<VoiceMessage[]> =>
-    ipcRenderer.invoke('hive:messages', opts ?? {}),
-  /** Consolidated per-agent directory (registry + telemetry + context), incl.
-   *  archived agents. Backs Realtime Michael's get_agent_detail / list_agents. */
-  hiveAgentDirectory: (): Promise<AgentDirectory> => ipcRenderer.invoke('hive:agentDirectory'),
-
-  // ─── Ephemeral workers (P4 — Slack-triggered isolated workers) ───────────
-  /** Live ephemeral workers + worktrees preserved awaiting integration/GC. */
-  listWorkers: (): Promise<{ live: WorkerSnapshot[]; preserved: PreservedWorktreeSnapshot[]; maxWorkers: number }> =>
-    ipcRenderer.invoke('workers:list'),
-  /** Manually stop a live ephemeral worker (safety-gated teardown; work preserved). */
-  stopWorker: (workerId: string): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke('workers:stop', workerId),
+  hiveHistory: (id: string): Promise<Array<RedactedMessage & { dir: 'in' | 'out' }>> => ipcRenderer.invoke('hive:history', id),
 
   // ─── Semantic memory (MemPalace CLI) ─────────────────────────────────────
   memoryStatus: (): Promise<MemoryStatus> => ipcRenderer.invoke('hive:memoryStatus'),
@@ -1174,38 +933,10 @@ const api = {
   modelCatalog: (force?: boolean): Promise<{
     catalog: ModelCatalog | null; fetchedAt: number; stale: boolean;
   }> => ipcRenderer.invoke('models:catalog', force),
-  /** Skills already installed for the coding agents on this machine. */
-  skillsLocal: (cwd?: string): Promise<LocalSkill[]> => ipcRenderer.invoke('skills:local', cwd),
-  /** The browsable skills catalog (cached; `force` re-fetches). */
-  skillsCatalog: (force?: boolean): Promise<{
-    skills: CatalogSkill[]; fetchedAt: number; stale: boolean; error?: string;
-  }> => ipcRenderer.invoke('skills:catalog', force),
-  /** Install a catalog skill into ~/.claude/skills. `unsupported` distinguishes
-   *  "there is no downloadable source" from "the download failed". */
-  skillsInstall: (url: string, name: string): Promise<
-    { ok: true; path: string } | { ok: false; error: string; unsupported?: boolean }
-  > => ipcRenderer.invoke('skills:install', url, name),
-  /** Delete an installed skill. Main refuses any path outside a skills root. */
-  skillsUninstall: (path: string): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke('skills:uninstall', path),
-  /** Show a skill's folder in the OS file manager. */
-  skillsReveal: (path: string): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke('skills:reveal', path),
-  memoryWakeUp: (wing?: string): Promise<{ ok: boolean; output: string; error?: string }> =>
-    ipcRenderer.invoke('hive:memoryWakeUp', wing),
-  mineNow: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('hive:mineNow'),
-  /** Tidy agents' memory notes into their index now (memoryTidy.ts). With an
-   *  id, that agent is tidied if it has anything to tidy. */
-  reflectNow: (id?: string): Promise<Array<{ id: string; tidied: boolean; reason: string }>> =>
-    ipcRenderer.invoke('memory:reflectNow', id),
 
   // ─── Enterprise Knowledge Graph (multimodal context for agents) ───────────
   kgStatus: (): Promise<KnowledgeStatus> => ipcRenderer.invoke('kg:status'),
   kgList: (): Promise<KnowledgeDoc[]> => ipcRenderer.invoke('kg:list'),
-  kgSearch: (query: string, limit?: number): Promise<KnowledgeHit[]> =>
-    ipcRenderer.invoke('kg:search', query, limit),
-  kgGet: (id: string): Promise<{ meta: KnowledgeDoc; text: string } | null> =>
-    ipcRenderer.invoke('kg:get', id),
   kgRemove: (id: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('kg:remove', id),
   /** Open a document in the owner's own app; a save there is read in again.
    *  Company foundations opens as a read only copy. */
@@ -1218,9 +949,6 @@ const api = {
   },
   /** Open an OS file picker and ingest the chosen artifacts in one round-trip. */
   kgAddFiles: (): Promise<KnowledgeIngestResult> => ipcRenderer.invoke('kg:addFiles'),
-  /** Ingest explicit file paths (e.g. drag-and-drop). */
-  kgIngestFiles: (paths: string[], tags?: string[]): Promise<KnowledgeIngestResult> =>
-    ipcRenderer.invoke('kg:ingestFiles', { paths, tags }),
 
   // ─── Composer attachments (images + files, sent to agents by PATH) ─────────
   /** Open an OS picker for images/files; returns chosen absolute paths + names. */
@@ -1236,14 +964,6 @@ const api = {
 
   // ─── Command history (SQLite — every prompt submitted to an agent) ─────────
   /** Record one submitted prompt. Fire-and-forget from the prompt-detection hook. */
-  historyAdd: (entry: { agentId: string; cwd?: string; text: string }): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke('history:add', entry),
-  /** Most-recent-first history, optionally scoped to one agent. */
-  historyList: (agentId?: string, limit?: number): Promise<CommandHistoryEntry[]> =>
-    ipcRenderer.invoke('history:list', agentId, limit),
-  /** Substring search over prompt text, most-recent-first. */
-  historySearch: (query: string, limit?: number): Promise<CommandHistoryEntry[]> =>
-    ipcRenderer.invoke('history:search', query, limit),
   hiveSend: (msg: Partial<HiveMessage>, from?: string): Promise<{ ok: boolean; error?: string; message?: HiveMessage }> =>
     ipcRenderer.invoke('hive:send', msg, from),
   /** Michael's open requests from the owner, oldest first (card-lifecycle.md). */
@@ -1270,34 +990,6 @@ const api = {
     const listener = (_e: IpcRendererEvent, payload: HiveRouteEvent) => cb(payload);
     ipcRenderer.on('hive:message', listener);
     return () => ipcRenderer.removeListener('hive:message', listener);
-  },
-  /** Register a listener for hive tasks routed to non-Claude agents (e.g.
-   *  Codex). Main emits this instead of bouncing; the renderer enqueues the
-   *  raw text so the drain effect types it into the agent's REPL when idle. */
-  onHiveEnqueue: (cb: (e: { targetId: string; text: string }) => void): (() => void) => {
-    const listener = (_e: IpcRendererEvent, payload: { targetId: string; text: string }) => cb(payload);
-    ipcRenderer.on('hive:enqueueToAgent', listener);
-    return () => ipcRenderer.removeListener('hive:enqueueToAgent', listener);
-  },
-  /** A MAIN-initiated agent spawn (e.g. a voice hire via rt-5) — the renderer adds
-   *  the floor card from this descriptor since it didn't initiate the hire itself. */
-  onHiveAgentSpawned: (
-    cb: (rec: {
-      id: string; name: string; provider?: string; cwd: string;
-      command?: string; role?: string; worktreePath?: string;
-      character?: string; accent?: string;
-    }) => void
-  ): (() => void) => {
-    const listener = (_e: IpcRendererEvent, payload: Parameters<typeof cb>[0]) => cb(payload);
-    ipcRenderer.on('hive:agentSpawned', listener);
-    return () => ipcRenderer.removeListener('hive:agentSpawned', listener);
-  },
-  /** A MAIN-initiated agent kill/archive (e.g. a voice kill via rt-5) — the renderer
-   *  archives the floor card since it didn't initiate the kill itself. */
-  onHiveAgentArchived: (cb: (e: { id: string }) => void): (() => void) => {
-    const listener = (_e: IpcRendererEvent, payload: { id: string }) => cb(payload);
-    ipcRenderer.on('hive:agentArchived', listener);
-    return () => ipcRenderer.removeListener('hive:agentArchived', listener);
   },
   /** Register a listener for terminal work-order handoffs (#53) — hive mail to a
    *  hookless provider that can't drain an inbox; the renderer types it into the
@@ -1401,10 +1093,6 @@ const api = {
   memoryResetFolders: (): Promise<string[]> => ipcRenderer.invoke('app:memoryResetFolders'),
 
   // ─── Token telemetry (real usage + est. cost from CC transcripts) ──────────
-  /** Sum input/output/cache tokens + estimated USD cost for an agent from its
-   *  Claude Code transcripts (reconciler/fallback). Returns null for an invalid cwd. */
-  agentUsage: (cwd: string): Promise<AgentUsage | null> =>
-    ipcRenderer.invoke('hive:agentUsage', cwd),
   /** Current context size (tokens) of an agent's live session, read from the
    *  last assistant message of its transcript. Null until the agent's hooks
    *  have fired at least once (the transcript path is learned from them). */
@@ -1412,12 +1100,6 @@ const api = {
     ipcRenderer.invoke('hive:agentContext', agentId),
 
   // ─── Live telemetry (OTel collector — the usage-provider seam + spans) ──────
-  /** Live cumulative usage for an agent (OTel-preferred, transcript fallback). */
-  telemetryUsage: (agentId: string): Promise<AgentUsageSample | null> =>
-    ipcRenderer.invoke('telemetry:usage', agentId),
-  /** Recent tool spans for an agent's waterfall (#7B.2). */
-  telemetrySpans: (agentId: string): Promise<ToolSpan[]> =>
-    ipcRenderer.invoke('telemetry:spans', agentId),
   /** Cold-start backfill of all agents' usage + recent spans. */
   telemetrySnapshot: (): Promise<TelemetrySnapshot> =>
     ipcRenderer.invoke('telemetry:snapshot'),
@@ -1435,9 +1117,6 @@ const api = {
     ipcRenderer.on('control:breakerState', listener);
     return () => ipcRenderer.removeListener('control:breakerState', listener);
   },
-  /** Push a breaker state to the renderer (Lane A's policy / interim glue calls this). */
-  setBreakerState: (state: BreakerState): Promise<{ ok: boolean }> =>
-    ipcRenderer.invoke('control:setBreakerState', state),
 
   // ─── Operator control over agents (#7C.1–7C.3) ──────────────────────────────
   /** Pause/unpause an agent — paused → its tool calls are denied at PreToolUse. */
@@ -1449,9 +1128,6 @@ const api = {
   /** Clear pause + halt so the agent can run again. */
   controlResume: (agentId: string): Promise<AgentControlSnapshot | null> =>
     ipcRenderer.invoke('control:resume', agentId),
-  /** Gate/ungate a specific tool for an agent (denied at PreToolUse). */
-  controlGateTool: (agentId: string, tool: string, on: boolean): Promise<AgentControlSnapshot | null> =>
-    ipcRenderer.invoke('control:gateTool', agentId, tool, on),
   /** Queue a steer note — injected as context on the agent's next hook (#7C.2). */
   controlSteer: (agentId: string, text: string): Promise<AgentControlSnapshot | null> =>
     ipcRenderer.invoke('control:steer', agentId, text),
@@ -1463,9 +1139,6 @@ const api = {
     ipcRenderer.invoke('control:snapshot', agentId),
 
   // ─── Task kanban (hive/tasks.json) ───────────────────────────────────────
-  /** Atomically append one card against the latest main-process ledger. */
-  hiveAddTask: (task: HiveTask): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke('hive:addTask', task),
   /** Record the owner's Ask me answer to question `index` on one card, merged
    *  against the card on disk. `landed`: it was added to that question, still
    *  open there. */
@@ -1578,8 +1251,6 @@ const api = {
   runCompareSuggestions: (): Promise<RunSuggestion[]> => ipcRenderer.invoke('runCompare:suggestions'),
   /** Not now on a suggestion. */
   runCompareDismiss: (runId: number): Promise<boolean> => ipcRenderer.invoke('runCompare:dismiss', runId),
-  /** Whether Pulse's points are flowing: the last batch, failed writes, refused hook frames. */
-  telemetryHealth: (): Promise<PulseHealthView> => ipcRenderer.invoke('telemetry:health'),
   /** Fires when new telemetry was folded, so an open Pulse view refreshes. */
   onPulseUpdated: (cb: () => void): (() => void) => {
     const listener = (): void => cb();
@@ -1671,13 +1342,6 @@ const api = {
   githubIssues: (cwd: string): Promise<{ ok: boolean; issues?: GHIssue[]; error?: string }> =>
     ipcRenderer.invoke('github:issues', cwd),
 
-  // ─── GitHub CI status watcher (gh CLI) ─────────────────────────────────────
-  /** List up to 5 recent CI (GitHub Actions) runs in the repo at `cwd` via the
-   *  `gh` CLI. Returns `{ ok: false, error }` if `gh` is missing/unauthenticated,
-   *  `cwd` isn't a repo, or the repo has no Actions. */
-  githubCIRuns: (cwd: string): Promise<{ ok: boolean; runs?: CIRun[]; error?: string }> =>
-    ipcRenderer.invoke('github:ciRuns', cwd),
-
   // ─── Desktop notifications ───────────────────────────────────────────────────
   /** Toggle native desktop notifications for agent lifecycle events. */
   setNotifications: (v: boolean): Promise<HarnessConfig> =>
@@ -1697,138 +1361,6 @@ const api = {
    *  archives it automatically via pty:kill; this is the explicit primitive. */
   hiveSetArchived: (id: string, archived: boolean): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('hive:setArchived', id, archived),
-
-  // ─── Slack integration (Slack message → Michael's queue) ─────────────────────
-  /** Register a listener for inbound Slack messages; returns an unsubscribe fn.
-   *  The message carries the thread coordinates needed to reply in-thread. */
-  onSlackMessage: (cb: (msg: { text: string; channel: string; ts: string; thread_ts: string; autonomyPreamble?: string; files?: { path: string; name: string; mimetype: string }[] }) => void): (() => void) => {
-    const listener = (_e: IpcRendererEvent, msg: { text: string; channel: string; ts: string; thread_ts: string; autonomyPreamble?: string; files?: { path: string; name: string; mimetype: string }[] }) => cb(msg);
-    ipcRenderer.on('slack:incomingMessage', listener);
-    return () => ipcRenderer.removeListener('slack:incomingMessage', listener);
-  },
-  /** Start the Slack webhook server; returns the public tunnel URL to paste into
-   *  the Slack app's Event Subscriptions → Request URL. */
-  slackStart: (): Promise<{ ok: boolean; url?: string; error?: string }> =>
-    ipcRenderer.invoke('slack:start'),
-  /** Stop the Slack webhook server + tunnel. */
-  slackStop: (): Promise<{ ok: boolean }> =>
-    ipcRenderer.invoke('slack:stop'),
-  /** Current connection state + last Request URL (so Settings can hydrate the
-   *  "Connected" badge and re-show the persisted tunnel URL on reopen). */
-  slackStatus: (): Promise<{ running: boolean; url?: string }> =>
-    ipcRenderer.invoke('slack:status'),
-  /** Post a reply into a Slack thread (the bot token stays in main). Used for the
-   *  renderer's immediate "queued" ack. */
-  slackReply: (m: { channel: string; thread_ts: string; text: string }): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke('slack:reply', m),
-  /** Absolute path to the bundled reply helper, for the office worker's
-   *  end-of-run "post your summary back to Slack" instruction. */
-  slackReplyScriptPath: (): Promise<string> =>
-    ipcRenderer.invoke('slack:replyScriptPath'),
-  /** Persist Slack settings (and stop the server if disabled / secret cleared). */
-  slackSetConfig: (patch: {
-    signingSecret?: string; botToken?: string; channelId?: string; port?: number; enabled?: boolean;
-    proactivePosting?: boolean;
-  }): Promise<{ ok: boolean }> =>
-    ipcRenderer.invoke('slack:setConfig', patch),
-
-  // ─── Generic webhook + status API (POST → work, GET → status) ────────────────
-  /** Start the generic webhook server; returns the public endpoint URL callers
-   *  POST to (secret-gated) and GET a token's status from. */
-  webhookStart: (): Promise<{ ok: boolean; url?: string; error?: string }> =>
-    ipcRenderer.invoke('webhook:start'),
-  /** Stop the generic webhook server + tunnel. */
-  webhookStop: (): Promise<{ ok: boolean }> =>
-    ipcRenderer.invoke('webhook:stop'),
-  /** Current state + last endpoint URL (so Settings can hydrate the badge/URL). */
-  webhookStatus: (): Promise<{ running: boolean; url?: string }> =>
-    ipcRenderer.invoke('webhook:status'),
-  /** Mint + persist a fresh secret and return it for the user to copy. */
-  webhookGenerateSecret: (): Promise<{ ok: boolean; secret?: string }> =>
-    ipcRenderer.invoke('webhook:generateSecret'),
-  /** Persist webhook settings (and stop the server if disabled / secret cleared). */
-  webhookSetConfig: (patch: {
-    secret?: string; port?: number; enabled?: boolean;
-  }): Promise<{ ok: boolean }> =>
-    ipcRenderer.invoke('webhook:setConfig', patch),
-
-  // ─── Triggers: context (auto-compact / auto-clear) ──────────────────────────
-  /** The two context rules (cadence + pressure gate + message), deep-filled. */
-  getContextTrigger: (): Promise<ContextTriggerConfig> =>
-    ipcRenderer.invoke('triggers:getContext'),
-  /** Persist both rules and RE-ARM main's timers; resolves to what was stored
-   *  (main clamps the cadence/percentages, so the echo is authoritative). */
-  setContextTrigger: (cfg: ContextTriggerConfig): Promise<ContextTriggerConfig> =>
-    ipcRenderer.invoke('triggers:setContext', cfg),
-  /** Fires when a context rule comes due. `rule` rides along because main owns
-   *  only the CADENCE — the renderer applies the per-agent pressure gate and
-   *  queues the command for each agent that qualifies. */
-  onContextTrigger: (cb: (evt: { action: 'compact' | 'clear'; rule: ContextRule }) => void): (() => void) => {
-    const listener = (_e: IpcRendererEvent, payload: { action: 'compact' | 'clear'; rule: ContextRule }) => cb(payload);
-    ipcRenderer.on('trigger:context', listener);
-    return () => ipcRenderer.removeListener('trigger:context', listener);
-  },
-
-  // ─── Triggers: webhook endpoints (many endpoints, one server + tunnel) ──────
-  /** Every configured endpoint, enabled or not. */
-  listWebhooks: (): Promise<WebhookTrigger[]> => ipcRenderer.invoke('webhooks:list'),
-  /** Replace the whole list; main normalises each row (a blank secret keeps the
-   *  stored one, an unknown mode keeps the stored one) and hot-swaps the running
-   *  server's endpoints WITHOUT a restart, so no other caller's URL changes. */
-  saveWebhooks: (list: WebhookTrigger[]): Promise<WebhookTrigger[]> =>
-    ipcRenderer.invoke('webhooks:save', list),
-  /** Revoke one endpoint; resolves to the remaining list. */
-  deleteWebhook: (id: string): Promise<WebhookTrigger[]> =>
-    ipcRenderer.invoke('webhooks:delete', id),
-  /** Mint a 256-bit secret for the operator to paste into their caller. Not
-   *  persisted until the endpoint carrying it is saved. */
-  generateWebhookSecret: (): Promise<string> => ipcRenderer.invoke('webhooks:generateSecret'),
-  /** Server state, the tunnel root, and each endpoint's full public URL (`url` is
-   *  '' until a tunnel has come up). */
-  webhooksStatus: (): Promise<{ running: boolean; url?: string; endpoints: { id: string; url: string }[] }> =>
-    ipcRenderer.invoke('webhooks:status'),
-
-  // ─── Triggers: organisation (clone-node peer messaging) ─────────────────────
-  /** PERSISTENCE ONLY — the peer transport does not exist yet, so setting this
-   *  stores the key and mode and starts nothing. */
-  getOrgTrigger: (): Promise<OrgTriggerConfig> => ipcRenderer.invoke('org:getTrigger'),
-  setOrgTrigger: (cfg: OrgTriggerConfig): Promise<OrgTriggerConfig> =>
-    ipcRenderer.invoke('org:setTrigger', cfg),
-
-  // ─── Triggers: history ledger + approval gate ───────────────────────────────
-  /** The whole ledger, newest first (both directions, both sources). */
-  listTriggerHistory: (): Promise<TriggerHistoryEntry[]> =>
-    ipcRenderer.invoke('triggerHistory:list'),
-  /** Answer a held message. 'approved' RELEASES it to the hive (card + god
-   *  request, the same path an auto-allowed message takes); 'rejected' only flips
-   *  the verdict. Deciding an already-decided entry is a no-op, never a second
-   *  dispatch. Resolves to the updated row, or null when the id is gone. */
-  decideTriggerHistory: (arg: { id: string; decision: 'approved' | 'rejected' }): Promise<TriggerHistoryEntry | null> =>
-    ipcRenderer.invoke('triggerHistory:decide', arg),
-  /** Wipe the ledger, or just one source's half of it. */
-  clearTriggerHistory: (source?: 'webhook' | 'org'): Promise<void> =>
-    ipcRenderer.invoke('triggerHistory:clear', source),
-  /** Fires whenever the ledger changes (an inbound arrived, a verdict landed, a
-   *  reply was paired), so the history tab live-refreshes. */
-  onTriggerHistoryUpdated: (cb: () => void): (() => void) => {
-    const listener = (): void => cb();
-    ipcRenderer.on('triggerHistory:updated', listener);
-    return () => ipcRenderer.removeListener('triggerHistory:updated', listener);
-  },
-
-  // ─── Free Flow (voice dictation → message queue) ─────────────────────────────
-  /** Persist Free Flow settings (flag / Groq key / model). The Groq key is stored
-   *  in main config; entry point B (hold-Option) is renderer-side, no hotkey here. */
-  freeflowSetConfig: (patch: {
-    enabled?: boolean; apiKey?: string; model?: string;
-  }): Promise<{ ok: boolean }> =>
-    ipcRenderer.invoke('freeflow:setConfig', patch),
-  /** Transcribe one captured audio clip via Groq (the key stays in main; only the
-   *  audio bytes go in and the transcript comes back). Gated on the flag + a key. */
-  freeflowTranscribe: (arg: {
-    audio: ArrayBuffer | Uint8Array; mimeType?: string; filename?: string; language?: string;
-  }): Promise<{ ok: boolean; text?: string; error?: string }> =>
-    ipcRenderer.invoke('freeflow:transcribe', arg),
 
   // ─── Integrations registry (Phase 2 — labeled REST endpoints via the secret broker) ──
   // Bridges the §6 IPC surface for the Settings UI. WRITE-ONLY secret contract end to
@@ -1852,77 +1384,8 @@ const api = {
     ipcRenderer.invoke('integrations:remove', req),
   integrationsTest: (req: { id: string; path?: string }): Promise<{ ok: boolean; status?: number; error?: string }> =>
     ipcRenderer.invoke('integrations:test', req),
-  // Per-CLI-provider BYOK keys — WRITE-ONLY. `providerKeySet` stores a backend key one
-  // way (never echoed); `providerKeyHas` returns only a boolean; no method ever returns
-  // the plaintext. Keys are materialized MAIN-ONLY at spawn.
-  providerKeySet: (req: { backend: string; key: string }): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke('providerKey:set', req),
-  providerKeyHas: (backend: string): Promise<boolean> =>
-    ipcRenderer.invoke('providerKey:has', backend),
-  providerKeyClear: (backend: string): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke('providerKey:clear', backend),
-  // Realtime Michael (voice orchestrator) — MAIN mints a short-lived EPHEMERAL token
-  // from the BYOK OpenAI key; the real key NEVER crosses IPC. `realtimeHasOpenAiKey`
-  // is a presence boolean only (gates the voice toggle, like providerKeyHas).
-  realtimeHasOpenAiKey: (): Promise<boolean> =>
-    ipcRenderer.invoke('realtime:hasKey'),
-  realtimeMintToken: (
-    req?: { model?: string }
-  ): Promise<
-    | { ok: true; token: string; expiresAt: number | null; sessionConfig: { model: string } }
-    | { ok: false; error: string; code?: string }
-  > => ipcRenderer.invoke('realtime:mintToken', req ?? {}),
-  // rt-5 voice ACTIONS — the renderer holds NO policy; main (realtimeActions.ts) owns
-  // the tiering, two-step verbal confirm, hard allowlist, and michael-voice
-  // attribution. These just forward {verb,...args} and speak back `spoken`.
-  realtimeAction: (
-    payload: { verb: string } & Record<string, unknown>
-  ): Promise<{ ok: boolean; spoken: string; needsConfirm?: boolean }> =>
-    ipcRenderer.invoke('realtime:action', payload),
-  realtimeActionConfirm: (
-    req: { phrase: string }
-  ): Promise<{ ok: boolean; spoken: string; needsConfirm?: boolean }> =>
-    ipcRenderer.invoke('realtime:action:confirm', req),
-  realtimeActionCancel: (): Promise<{ ok: boolean; spoken: string; needsConfirm?: boolean }> =>
-    ipcRenderer.invoke('realtime:action:cancel'),
-  // rt-12 completion seam — a voice-dispatched task finished. `summary` is the
-  // human-speakable line Michael relays; the rest is context for a toast/log.
-  onRealtimeCompletion: (
-    cb: (evt: { correlationId: string; kind: string; targetAgentId: string; taskId?: string; summary: string; completedAt: number; objective?: string }) => void
-  ): (() => void) => {
-    const listener = (_e: IpcRendererEvent, payload: Parameters<typeof cb>[0]) => cb(payload);
-    ipcRenderer.on('realtime:completion', listener);
-    return () => ipcRenderer.removeListener('realtime:completion', listener);
-  },
-  /** Tell main whether a live voice session is open (drives queue-vs-push for completions). */
-  realtimeSetSessionLive: (live: boolean): Promise<{ ok: boolean }> =>
-    ipcRenderer.invoke('realtime:setSessionLive', live),
-  /** Drain completions that arrived while no session was open (warm-start catch-up). */
-  realtimeDrainCompletions: (): Promise<
-    { correlationId: string; kind: string; targetAgentId: string; taskId?: string; summary: string; completedAt: number; objective?: string }[]
-  > => ipcRenderer.invoke('realtime:drainCompletions'),
-  /** Block until a tracked task completes (or times out) — backs the wait_for tool. */
-  realtimeWaitFor: (
-    taskId: string,
-    timeoutMs?: number
-  ): Promise<{ summary: string; targetAgentId: string; taskId?: string } | { timedOut: true; taskId: string }> =>
-    ipcRenderer.invoke('realtime:waitFor', taskId, timeoutMs),
-  /** v0.3.4: coalesced floor deltas pushed while a voice session is live — the
-   *  renderer injects them into the conversation as silent items. */
-  onRealtimeFloorDelta: (cb: (evt: { text: string }) => void): (() => void) => {
-    const listener = (_e: IpcRendererEvent, payload: { text: string }) => cb(payload);
-    ipcRenderer.on('realtime:floorDelta', listener);
-    return () => ipcRenderer.removeListener('realtime:floorDelta', listener);
-  },
-  /** v0.3.4: main-staged queue insertions (voice clear_context) — the renderer
-   *  enqueues so delivery rides every existing safety gate. */
-  onRealtimeEnqueue: (cb: (evt: { agentId: string; text: string }) => void): (() => void) => {
-    const listener = (_e: IpcRendererEvent, payload: { agentId: string; text: string }) => cb(payload);
-    ipcRenderer.on('realtime:enqueue', listener);
-    return () => ipcRenderer.removeListener('realtime:enqueue', listener);
-  },
-  /** v0.3.4: app self-knowledge — version + newest changelog sections. */
-  appInfo: (): Promise<{ version: string; changelog: string; packaged?: boolean }> =>
+  /** The app version, and whether this is an installed build (Settings → Updates). */
+  appInfo: (): Promise<{ version: string; packaged?: boolean }> =>
     ipcRenderer.invoke('app:info'),
   // ─── Roster mirror (agents + notes + queues, shared dev ↔ packaged) ─────────
   /** Read the roster file beside the hive. SYNCHRONOUS on purpose: the zustand
@@ -2018,19 +1481,15 @@ const api = {
   arch: process.arch as string,
   /** The OS version (e.g. 10.0.26100 on Windows 11), for a prefilled problem report. */
   osVersion: (typeof process.getSystemVersion === 'function' ? process.getSystemVersion() : '') as string,
-  /** DEV ONLY — fabricate an update status so the toast can be inspected without
+  /** DEV ONLY — fabricate an update status so the update card can be inspected without
    *  cutting a release. Refused (`{ok:false}`) in a packaged build; see the
    *  handler in updater.ts. Call it from the devtools console:
    *    await window.cth.updateSimulate()                       // Michael's Download card on Ask me
-   *    await window.cth.updateSimulate({ state: 'downloaded' }) // Michael's Restart card on Ask me
-   *    await window.cth.updateSimulate({ drop: true })          // the centered release page
-   *    await window.cth.updateSimulate({ notes: '<!-- drop -->…' }) // your own drop */
+   *    await window.cth.updateSimulate({ state: 'downloaded' }) // Michael's Restart card on Ask me */
   updateSimulate: (opts?: {
     state?: 'downloaded' | 'available-manual';
     version?: string;
     notes?: string;
-    /** Preview the centered release page using the default drop template. */
-    drop?: boolean;
   }): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('update:simulate', opts)
 };
 

@@ -42,7 +42,7 @@ test('toggles stage their change instead of writing it', () => {
   // The specific toggles that used to persist the instant you clicked them.
   // semanticMemory left with its switch: search by meaning runs whenever
   // MemPalace is installed (owner, 2026-10-19).
-  for (const key of ['strongKeepalive', 'autoMode', 'orchestratorMaySpawn', 'telemetryEnabled']) {
+  for (const key of ['strongKeepalive', 'autoMode']) {
     // autoUpdate left with its switch: every installed build checks (owner, 2026-10-02).
     const re = new RegExp(`stage\\(\\{ ${key}:`);
     assert.match(MODAL, re, `${key} is not staged`);
@@ -98,11 +98,10 @@ function profileSettings(write = async () => {}, readConfig) {
   const render = () => {
     const deps = {
       companyDraft: state.draft, savedCompanyDraft: state.saved, pending: state.pending,
-      autoCompactPending: null, config, cleanCompanyProfile, cityLine, mergeEditedProfile,
+      config, cleanCompanyProfile, cityLine, mergeEditedProfile,
       setCompanyDraft: (next) => { state.draft = next; },
       setSavedCompanyDraft: (next) => { state.saved = next; },
       setPending: (next) => { state.pending = next; },
-      setAutoCompactPending: () => {},
       setSaveBusy: (next) => { state.busy = next; },
       setSaveNote: (next) => { state.note = next; },
       maxTurnsPatch: () => ({}), planPricePatch: () => ({}), budgetPatch: () => ({}),
@@ -202,21 +201,7 @@ test('finishing a save keeps a newer profile edit dirty and ready to save', asyn
   assert.equal(app.state.closed, 0);
 });
 
-// --- the two deliberate exceptions ------------------------------------------
-
-test('API keys still save immediately: there is no staged value to hold', () => {
-  // The broker is write-only — nothing can read a key back to diff it — so a
-  // key cannot participate in a staged form.
-  const engines = read('src/renderer/src/components/AiEnginesSettings.tsx');
-  assert.match(engines, /saveKey\(/, 'the per-provider key save was removed');
-  assert.match(MODAL, /saveOpenAiVoiceKey/, 'the voice key save was folded into saveAll');
-});
-
-test('Free Flow still saves immediately: it arms a global hotkey', () => {
-  // Staging it would leave main's hotkey and the checkbox disagreeing until
-  // someone pressed Save.
-  assert.match(MODAL, /window\.cth\.freeflowSetConfig\(/, 'freeflow no longer persists on its own');
-});
+// --- the deliberate exception -----------------------------------------------
 
 // --- A2: Connections tidying -------------------------------------------------
 
@@ -226,18 +211,10 @@ test('every Settings section is a named group on the soft panel, with no small c
   assert.doesNotMatch(MODAL, /sectionHead|sectionRule/, 'the old head and rule are retired');
   assert.doesNotMatch(MODAL, /fontSize: 10, fontWeight: 600|textTransform: 'uppercase'/, 'no small caps');
   assert.doesNotMatch(MODAL, /\{\{ height: (1|2), background: 'var\(--cth-(line|ink-300)\)'/, 'no hairlines between sections');
-  assert.ok((MODAL.match(/<h3 style=\{groupName\}>/g) ?? []).length >= 12, 'each section names itself');
+  assert.ok((MODAL.match(/<h3 style=\{groupName\}>/g) ?? []).length >= 7, 'each section names itself');
   for (const f of ['MailboxesSettings', 'ClaudeConnectorsSettings', 'IntegrationsRegistry', 'ResearchPrivacySettings', 'SetupPanel', 'SettingsHeroCard']) {
     const src = fs.readFileSync(path.join(__dirname, '..', `src/renderer/src/components/${f}.tsx`), 'utf8');
     assert.match(src, /panelStyle/, `${f} sits on the soft panel`);
     assert.match(src, /groupName/, `${f} names its group`);
   }
-});
-
-test('no integration was removed from Connections', () => {
-  // The founder was explicit: nothing is deleted from this tab.
-  for (const key of ['settings.connections.slack', 'settings.connections.webhooks']) {
-    assert.ok(MODAL.includes(key), `${key} vanished from the Connections tab`);
-  }
-  assert.match(MODAL, /slackStart|slackStop/, 'the Slack lifecycle controls are gone');
 });

@@ -118,10 +118,8 @@ test('the row cuts a run of marks in the agent\'s detail, and leaves the app\'s 
 test('the detail line is quoted as the agent\'s own words, never shown as the app\'s', () => {
   // Value: protects=an agent writing "safe to close without me" reads as a claim, not as the app's advice, where the owner decides to close without it; fails_when=the detail is shown bare; why_new=TODOS "Mark the detail line as the agent's own words"; seam=none
   const locale = (l) => JSON.parse(fs.readFileSync(path.join(__dirname, `../src/renderer/src/i18n/locales/${l}.json`), 'utf8'));
-  for (const [l, open, close] of [['en', '“', '”'], ['ar', '«', '»'], ['zh-CN', '“', '”']]) {
-    assert.equal(locale(l).closingTime.agentWords, `${open}{{text}}${close}`, l);
-  }
   const en = locale('en');
+  assert.equal(en.closingTime.agentWords, '“{{text}}”');
   const tt = (key, opts = {}) => key.split('.').reduce((o, k) => o[k], en).replace(/\{\{(\w+)\}\}/g, (_, k) => String(opts[k]));
   const say = (a) => describeRow(a, NOW, tt, AT_PROMPT, caption).line;
   assert.equal(say({ status: 'working', action: 'using Bash', actionDetail: 'Safe to close without me', actionAt: NOW }), '“Safe to close without me”');

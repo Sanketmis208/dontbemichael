@@ -11,19 +11,16 @@ import { ProfileTab } from './ProfileTab';
 import { MemoryNotes, memorySummary } from './MemoryNotes';
 import { MarkdownPreview } from '@/markdown/MarkdownPreview';
 import { memoryView } from '@shared/memoryIndex';
-import { SHOW_FOCUS_MODE, SHOW_IDE, ALLOW_TEMP_WORKERS, SHOW_OPEN_TERMINAL, SHOW_DELIVERY_SWITCH } from '@shared/buildFeatures';
+import { SHOW_OPEN_TERMINAL, SHOW_DELIVERY_SWITCH } from '@shared/buildFeatures';
 import { TriggersTab } from './triggers/TriggersTab';
-import { TriggerHistoryTab } from './triggers/TriggerHistoryTab';
 import { TriggerCard } from './triggers/ui';
-import { WorkersTab } from './WorkersTab';
 import { acquireTerminal, disposeTerminal, resetTerminal } from './terminalPool';
 import { terminalInstanceKey } from './terminalRecovery';
 import { areLogsEqual, type LogEntry } from './activityLog';
 import { Icon } from './Icon';
 import { useFleetTelemetry } from '@/hooks/useTelemetry';
-import { COMMAND_GROUPS } from '@shared/claudeCommands';
 import { roleForHiveSpawn } from '@shared/agentRole';
-import { useStore, triggerHistoryVisible, type Agent } from '@/store/store';
+import { useStore, type Agent } from '@/store/store';
 import { releaseBindingsOf } from '@/shell/releaseBindings';
 import { usePtyParser } from '@/hooks/usePtyParser';
 import {
@@ -31,7 +28,6 @@ import {
   decodeProviderModel,
   encodeProviderModel,
   inferAgentProvider,
-  isClaudeProvider,
   modelProvidersForAgent,
   modelsForProvider,
   providerPreset,
@@ -42,7 +38,6 @@ import {
 import { BUILD_ENGINES, canReceiveInbox } from '@shared/agentProvider';
 import { isComposingKey } from '@shared/imeGuard';
 import { fmtTokens } from '@shared/tokenFormat';
-import { useRtl } from '@/i18n/useDirection';
 import { SilentPanelLine } from './SilentEngine';
 import { fieldLabel, groupName, hint } from './fieldText';
 
@@ -59,8 +54,8 @@ import { fieldLabel, groupName, hint } from './fieldText';
 // with that card expanded (see the ccTabRequest effect).
 // TASKS and GRAPH are not tabs: they are the floor's TASKS and GRAPH views
 // (App.tsx), and a request for either switches the floor to it.
-type CCTab = 'profile' | 'capabilities' | 'terminal' | 'triggers' | 'trigger-history'
-  | 'memory' | 'workers' | 'advanced';
+type CCTab = 'profile' | 'capabilities' | 'terminal' | 'triggers'
+  | 'memory' | 'advanced';
 
 /** Fallback denominator for the per-agent token meter when no floor token budget
  *  is configured — so the bar reads as a budget estimate (filled + remaining)
@@ -77,7 +72,7 @@ interface GHIssue {
   assignees: string[];
 }
 
-/** Canonical tab order. Not every entry is always shown — see `visibleTabs`.
+/** Canonical tab order.
  *  PROFILE is first on every agent (owner, 2026-09-25), then ASK ME. The panel
  *  still OPENS on ASK ME (`defaultTab`): it is what the team needs from the
  *  owner, and a business owner opening Michael should land there. */
@@ -90,40 +85,18 @@ const TABS: { key: CCTab; labelKey: string; icon: Parameters<typeof Icon>[0]['na
   // Everyone's jobs on a clock, read only. Michael's own are on his
   // Capabilities tab like everyone's (owner, 2026-09-26).
   { key: 'triggers', labelKey: 'commandCenter.tabs.officeSchedule', icon: 'clock' },
-  { key: 'trigger-history', labelKey: 'commandCenter.tabs.history', icon: 'ledger' },
   { key: 'memory', labelKey: 'commandCenter.tabs.memory', icon: 'sparkle' },
-  { key: 'workers', labelKey: 'commandCenter.tabs.workers', icon: 'gear' },
   // Last on purpose: the floor's inner workings, which an owner rarely needs.
   { key: 'advanced', labelKey: 'commandCenter.tabs.advanced', icon: 'mcp' }
 ];
 
-/** @param fullscreen this instance IS the fullscreen overlay, so it owns the pty
- *  and renders the real terminal. The docked instance renders the "open in
- *  fullscreen" placeholder instead — two live xterms on one pty fight over its
- *  cols/rows and corrupt the display. */
-export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent; fullscreen?: boolean }) {
+export function CommandCenterPanel({ agent }: { agent: Agent }) {
   const { t } = useTranslation();
   // Design v2: Ask me is no longer a tab here; it is the Needs you board in the
-  // right column (branding/DESIGN.md 7.6). The docked panel opens on Profile: a
-  // terminal is the least friendly thing a business owner can meet first. Focus
-  // mode opens on the terminal, because reaching it means asking for it.
-  const defaultTab: CCTab = fullscreen ? 'terminal' : 'profile';
+  // right column (branding/DESIGN.md 7.6). The panel opens on Profile: a
+  // terminal is the least friendly thing a business owner can meet first.
+  const defaultTab: CCTab = 'profile';
   const [tab, setTab] = useState<CCTab>(defaultTab);
-  // The trigger-history ledger has nothing to say until an outside party can
-  // reach us, so its tab appears only once an org key or a webhook exists. This
-  // is the first config-gated tab in the panel: TABS stays the canonical order
-  // and the gate is applied at render, so nothing else has to know about it.
-  // The rule itself lives in the store (`triggerHistoryVisible`) beside the two
-  // mirrors it reads — a second copy here would drift from Settings.
-  const showHistory = useStore(triggerHistoryVisible);
-  // Never leave the panel parked on a tab that has just been hidden.
-  useEffect(() => {
-    if (!showHistory && tab === 'trigger-history') setTab(defaultTab);
-  }, [showHistory, tab, defaultTab]);
-  // WORKERS lists Michael's temporary helpers, which this build does not have
-  // (ALLOW_TEMP_WORKERS in buildFeatures.ts).
-  const visibleTabs = TABS.filter((t) =>
-    (t.key !== 'trigger-history' || showHistory) && (t.key !== 'workers' || ALLOW_TEMP_WORKERS));
 
   // External tab requests (the boss-room calendar → 'triggers'; a 'tasks'
   // request switches the floor to its TASKS view). seq-keyed so clicking again re-opens the tab even
@@ -142,10 +115,6 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
     }
     const key = ccTabRequest.tab as CCTab;
     if (!TABS.some((t) => t.key === key)) return;
-    // Read the gate live rather than depending on it — as a dependency it would
-    // re-fire a stale request the moment the tab appeared.
-    if (key === 'trigger-history' && !triggerHistoryVisible(useStore.getState())) return;
-    if (key === 'workers' && !ALLOW_TEMP_WORKERS) return;
     setTab(key);
   }, [ccTabRequest]);
   // A task-detail "assign" pre-fills the Floor dispatch box and jumps to it.
@@ -164,11 +133,7 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
     if (memoryFocusRequest) setSelectedMemoryAgent(memoryFocusRequest.agentId);
   }, [memoryFocusRequest]);
   const updateAgent = useStore((s) => s.updateAgent);
-  const setFullscreen = useStore((s) => s.setFullscreen);
-  const fullscreenAgentId = useStore((s) => s.fullscreenAgentId);
   const onPtyStream = usePtyParser(agent.id);
-  // True only for the DOCKED panel while the overlay holds this agent.
-  const isFullscreenedHere = fullscreenAgentId === agent.id && !fullscreen;
   // v0.3.4: ONE floor-wide auto-delivery switch, moved off the per-agent
   // control strips — toggling applies to every live agent, god included.
   // Seeded from the god's own control state (the floor is kept in sync by
@@ -190,8 +155,8 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
 
   return (
     <PanelCard>
-      {/* Design v2 header (branding/DESIGN.md 7.10). Floor-wide delivery and
-          the IDE stay behind their build flags, beside close. */}
+      {/* Design v2 header (branding/DESIGN.md 7.10). Floor-wide delivery
+          stays behind its build flag, beside close. */}
       <PanelHeader
         agent={agent}
         role={t('studio.officeManager')}
@@ -208,28 +173,18 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
               </span>
             </PixelButton>
           )}
-          {SHOW_IDE && (
-            <PixelButton variant="secondary" size="md" onClick={() => { const st = useStore.getState(); st.setIdeOpen(true, st.selectedId); }}>
-              <span className="cth-tip cth-tip-wrap" data-tip={t('commandCenter.ideTitle')} aria-label={t('commandCenter.openIdeAria')}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                <Icon name="code" /> {t('commandCenter.ide')}
-              </span>
-            </PixelButton>
-          )}
         </>}
       />
 
-      {/* Tabs (DESIGN.md 7.11): Profile, Access, Work, Office schedule, History
-          (only once a webhook exists), Memory, Advanced. */}
+      {/* Tabs (DESIGN.md 7.11): Profile, Access, Work, Office schedule, Memory,
+          Advanced. */}
       <SilentPanelLine agentId={agent.id} name={agent.name} />
-      <PanelTabs tabs={visibleTabs.map((tabDef) => ({ key: tabDef.key, label: t(tabDef.labelKey) }))} current={tab} onChange={setTab} />
+      <PanelTabs tabs={TABS.map((tabDef) => ({ key: tabDef.key, label: t(tabDef.labelKey) }))} current={tab} onChange={setTab} />
 
       {/* Body (data-panel-body: see AgentDetailPanel). */}
       <div data-panel-body data-tab={tab} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         {tab === 'terminal' && (
-          isFullscreenedHere ? (
-            <Centered>{t('commandCenter.terminalFullscreen')}</Centered>
-          ) : agent.ptyId ? (
+          agent.ptyId ? (
             <>
               <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
                 <PtyTerminalView
@@ -241,11 +196,8 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
                     if (t.trim().toLowerCase() === '/clear') {
                       updateAgent(agent.id, { contextTokens: 0, contextLimit: undefined, progress: 0 });
                     }
-                    void window.cth.historyAdd({ agentId: agent.id, cwd: agent.cwd, text: t });
                   }}
-                  onToggleFullscreen={SHOW_FOCUS_MODE || fullscreen ? () => setFullscreen(fullscreen ? null : agent.id) : undefined}
-                  fullscreen={fullscreen}
-                  embedded={!fullscreen}
+                  embedded
                 />
               </div>
               <MessageQueueComposer agent={agent} />
@@ -257,12 +209,10 @@ export function CommandCenterPanel({ agent, fullscreen = false }: { agent: Agent
         {tab === 'profile' && <ProfileTab agent={agent} />}
         {tab === 'capabilities' && <CapabilitiesTab agent={agent} />}
         {tab === 'triggers' && <TriggersTab />}
-        {tab === 'trigger-history' && <TriggerHistoryTab />}
         {tab === 'memory' && (
           <MemoryTab godId={agent.id} who={selectedMemoryAgent ?? undefined} onWho={setSelectedMemoryAgent} />
         )}
         {tab === 'advanced' && <AdvancedTab key={advancedFocus.seq} focus={advancedFocus.card} seed={dispatchSeed} />}
-        {ALLOW_TEMP_WORKERS && tab === 'workers' && <WorkersTab />}
       </div>
     </PanelCard>
   );
@@ -312,7 +262,6 @@ function Bare({ children }: { children: React.ReactNode }) {
 function FloorTab({ seed, embedded = false }: { seed: { text: string; seq: number }; embedded?: boolean }) {
   const Wrap = embedded ? Bare : Scroll;
   const { t } = useTranslation();
-  const rtl = useRtl();
   const agents = useStore((s) => s.agents);
   const godName = agents.find((a) => a.isGod)?.name ?? t('common.orchestrator');
   const select = useStore((s) => s.select);
@@ -388,7 +337,7 @@ function FloorTab({ seed, embedded = false }: { seed: { text: string; seq: numbe
     try {
       const cfg = await window.cth.getConfig();
       // Respawn on the same CLI this agent already runs on (inferred from its
-      // command if not explicitly tagged) so an Antigravity/Codex worker stays
+      // command if not explicitly tagged) so a Codex or Gemini worker stays
       // on its own binary. tokenizeCommand keeps quoted model labels one arg.
       // opts.provider overrides the inferred provider — used when changing GOD's engine.
       const previousProvider = inferAgentProvider(a.command, a.provider);
@@ -621,7 +570,6 @@ function FloorTab({ seed, embedded = false }: { seed: { text: string; seq: numbe
           </Select>
         </div>
         <textarea
-          dir={rtl ? 'auto' : undefined}
           value={dispatchText}
           onChange={(e) => setDispatchText(e.target.value)}
           rows={2}
@@ -1359,7 +1307,6 @@ function Muted({ children }: { children: React.ReactNode }) {
 /** `fill`: grow into the space its flex parent has left, instead of stopping at
  *  200px. The memory file uses it; search results keep the cap. */
 function Pre({ children, fill = false }: { children: React.ReactNode; fill?: boolean }) {
-  const rtl = useRtl();
   return (
     <pre style={{
       borderRadius: 'var(--cth-r-md)',
@@ -1368,7 +1315,7 @@ function Pre({ children, fill = false }: { children: React.ReactNode; fill?: boo
       background: 'var(--cth-paper-100)', boxShadow: 'inset 0 0 0 1px var(--cth-line-2)',
       fontFamily: 'var(--cth-font-mono)', fontSize: 12, lineHeight: '16px',
       color: 'var(--cth-ink-900)', whiteSpace: 'pre-wrap', wordBreak: 'break-word'
-    }} dir={rtl ? 'auto' : undefined}>{children}</pre>
+    }}>{children}</pre>
   );
 }
 

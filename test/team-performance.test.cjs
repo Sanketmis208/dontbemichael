@@ -147,6 +147,28 @@ test('saved by your changes is measured after a week, and can be negative', () =
   const both = [...days, day('toby', '2026-10-08', { usd: 5, checks: 10 })];
   assert.deepEqual(P.measuredSaving(both, applied, NOW, second), { state: 'measured', usd: 10 }, 'Oct 8 belongs to the second change');
   assert.deepEqual(P.measuredSaving(both, applied, NOW), { state: 'measured', usd: 25 }, 'without the bound it would count Oct 8 too');
+  // Under MIN_PIECES on either side it is too little to tell (owner, 2026-11-09: 10 pieces read as a $62 verdict).
+  const few = [day('toby', '2026-09-25', { usd: 20, checks: 4 }), day('toby', '2026-10-05', { usd: 10, checks: 10 })];
+  assert.deepEqual(P.measuredSaving(few, applied, NOW), { state: 'thin' });
+});
+
+test('a schedule change is measured by its runs\' cost a day, never by the piece (owner, 2026-11-09)', () => {
+  // Value: protects=D16 for schedule changes; fails_when=running less often reads as costing more because fewer runs did work, the change's own day or today's partial day counts, or a member with a few days of records is judged; why_new=the owner saw "Saved −$49.53" for two run less changes; seam=none; no_claim=what else ran inside the run windows
+  const applied = new Date(2026, 9, 1, 12).getTime();
+  const iso = (base, n) => { const d = new Date(`${base}T12:00:00`); d.setDate(d.getDate() + n); return P.dayKey(d.getTime()); };
+  // Before: $4 a day over 2 runs that did work. After (every other run): $3 a day over 1.
+  const before = Array.from({ length: 14 }, (_, i) => day('pam', iso('2026-09-17', i), { usd: 9, runUsd: 4, checks: 2 }));
+  const after = Array.from({ length: 14 }, (_, i) => day('pam', iso('2026-10-02', i), { usd: 9, runUsd: 3, checks: 1 }));
+  const noise = [day('pam', '2026-10-01', { runUsd: 100, checks: 1 }), day('pam', '2026-10-16', { runUsd: 100, checks: 1 })];
+  const days = [...before, ...after, ...noise];
+  assert.deepEqual(P.measuredScheduleSaving(days, applied, NOW), { state: 'measured', usd: 14 }, '$1 a day less for 14 whole days');
+  assert.ok(P.measuredSaving(days, applied, NOW).usd < 0, 'per piece the same change looks like it cost more: why schedules are not measured that way');
+  assert.equal(P.measuredScheduleSaving(days, applied, applied + 86_400_000).state, 'measuring');
+  // Only a few days on record before: not judged.
+  assert.deepEqual(P.measuredScheduleSaving([...before.slice(-3), ...after], applied, NOW), { state: 'thin' });
+  // Up to the member's next change: Oct 2 only; a next change the same day leaves no whole day.
+  assert.deepEqual(P.measuredScheduleSaving(days, applied, NOW, new Date(2026, 9, 2, 12).getTime()), { state: 'measured', usd: 1 });
+  assert.deepEqual(P.measuredScheduleSaving(days, applied, NOW, new Date(2026, 9, 1, 18).getTime()), { state: 'thin' });
 });
 
 test('the cost fold counts a restart whole, the same rule as the lifetime ledger', () => {

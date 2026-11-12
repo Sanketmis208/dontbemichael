@@ -41,9 +41,6 @@ import { answerLeave, setLeaveGuard } from '@/store/leaveGuard';
 export interface EditAgentModalProps {
   agent: Agent;
   onClose: () => void;
-  /** False from the fullscreen view: no panel to lay over, so no wide mode
-   *  and no panel changes to hold. */
-  docked?: boolean;
   /** Open with the engine unfolded (Change engine on a not reporting card). */
   engineOpen?: boolean;
   /** Open with "What should change?" filled in (a run comparison from Pulse). */
@@ -63,7 +60,7 @@ export interface EditAgentModalProps {
  * lays over the wide panel in two columns, and leaving with unsaved changes,
  * by any way out, asks first.
  */
-export function EditAgentModal({ agent, onClose, docked = true, engineOpen: openEngine = false, initialChange }: EditAgentModalProps) {
+export function EditAgentModal({ agent, onClose, engineOpen: openEngine = false, initialChange }: EditAgentModalProps) {
   const { t, i18n } = useTranslation();
   const researchName = useResearchName();
   const updateAgent = useStore((s) => s.updateAgent);
@@ -73,9 +70,8 @@ export function EditAgentModal({ agent, onClose, docked = true, engineOpen: open
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [config, setConfig] = useState<HarnessConfig | null>(null);
-  // Opened over a panel in the right column it can go wide; opened from the
-  // fullscreen view there is no panel, so it keeps today's box.
-  const [inColumn] = useState(() => docked && !!panelBehind());
+  // Opened over a panel in the right column it can go wide.
+  const [inColumn] = useState(() => !!panelBehind());
   const panelWide = useStore((s) => s.panelWide);
   const wide = inColumn && panelWide;
   // "Discard changes?": 'close' from this dialog's own ways out, 'leave' when
@@ -372,7 +368,6 @@ export function EditAgentModal({ agent, onClose, docked = true, engineOpen: open
   const afterClose = useRef<(() => void) | null>(null);
   const goToSchedules = (): void => {
     const go = (): void => {
-      if (!docked) useStore.getState().setFullscreen(null);
       useStore.getState().openSchedules(agent.id);
     };
     if (dirtyRef.current) { afterClose.current = go; setAsking('close'); return; }
@@ -383,7 +378,6 @@ export function EditAgentModal({ agent, onClose, docked = true, engineOpen: open
   // something is unsaved (eng re-run D1).
   const goToAccess = (): void => {
     const go = (): void => {
-      if (!docked) useStore.getState().setFullscreen(null);
       useStore.getState().setSidebarTab('capabilities');
     };
     if (dirtyRef.current) { afterClose.current = go; setAsking('close'); return; }
@@ -624,7 +618,7 @@ export function EditAgentModal({ agent, onClose, docked = true, engineOpen: open
       width={640}
       fill
       align="end"
-      over={docked ? panelBehind : undefined}
+      over={panelBehind}
       zIndex={500}
       // Wide, the office is already dimmed under the top bar, and a click on
       // the margins does nothing (WD4, WD8).
@@ -649,7 +643,7 @@ export function EditAgentModal({ agent, onClose, docked = true, engineOpen: open
           stay in the column keyed "job", so React keeps them, and their run,
           when the panel goes wide or back. Wide (WD2): two columns, who they
           are, their timers and engine at 300 to 360 px, the whole job beside
-          them at most 720 px across; in Arabic the grid mirrors with the page.
+          them at most 720 px across.
           One column (DR4, H2): name and role, the job with what should change
           under it, then the scheduled jobs and the engine. Each group sits on
           its own soft panel, field labels only (mockup 2B; edit-agent-hierarchy.md

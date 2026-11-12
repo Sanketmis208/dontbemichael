@@ -27,13 +27,15 @@ export function openPlace(place: Place): void {
     window.dispatchEvent(new CustomEvent('cth:open-settings', { detail: { section: place.section, group: place.group, add: place.add } }));
     return;
   }
+  if (place.kind === 'hire') { useStore.getState().openHire(place.card); return; }
+  if (place.card === 'job') { useStore.getState().requestEditAgent(place.agentId); return; }
   useStore.getState().openAgentEmail(place.agentId);
 }
 
 export function PlaceChip({ place, children, words }: { place: Place; children: ReactNode; words: string }) {
   const { t } = useTranslation();
   // A member that is gone shows as the words alone: nothing to open.
-  const known = useStore((s) => place.kind !== 'member' || s.agents.some((a) => a.id === place.agentId));
+  const known = useStore((s) => place.kind !== 'member' || s.agents.some((a) => a.id === place.agentId && !a.archived));
   if (!known) return <>{children}</>;
   return (
     <button
@@ -45,7 +47,7 @@ export function PlaceChip({ place, children, words }: { place: Place; children: 
       aria-label={t('markdown.openPlace', { place: words })}
       style={placeChipStyle}
     >
-      <span aria-hidden style={{ color: 'var(--cth-ink-3)', display: 'grid', placeItems: 'center' }}><Icon name={place.kind === 'member' ? 'lock' : 'gear'} size={0.875} /></span>
+      <span aria-hidden style={{ color: 'var(--cth-ink-3)', display: 'grid', placeItems: 'center' }}><Icon name={place.kind === 'hire' ? 'plus' : place.kind === 'member' ? (place.card === 'job' ? 'edit' : 'lock') : 'gear'} size={0.875} /></span>
       <span dir="auto" style={{ overflow: 'hidden', textOverflow: 'ellipsis', unicodeBidi: 'isolate' }}>{children}</span>
     </button>
   );

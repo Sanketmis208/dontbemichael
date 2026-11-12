@@ -9,12 +9,12 @@ import '../../src/renderer/src/design/global.css';
 // only the main-process boundary replaced. Nothing is read from an office.
 const H = 3_600_000;
 const facts = {
-  lang: 'en', paper: 'letter', showName: true, businessName: 'Harbor Bakery', businessType: 'Bakery', city: 'Austin',
+  paper: 'letter', showName: true, businessName: 'Harbor Bakery', businessType: 'Bakery', city: 'Austin',
   members: [{ id: 'pam', name: 'Pam', role: 'Front desk', jobs: [], figure: { kind: 'email', count: 640 }, isMichael: false }],
   figures: { email: 1284, sent: 0, task: 96, check: 0, routed: 0, ranMs: 40 * H, awayMs: 20 * H, spendUsd: 12 },
   days: [{ day: '2026-10-04', ms: 9 * H, awayMs: 6 * H }], range: { from: '2026-10-04', to: '2026-11-02', days: 30 }, appVersion: '0.3.5'
 };
-const input = { lang: 'en', period: 'last-30', showName: true };
+const input = { period: 'last-30', showName: true };
 const draft = { subtitle: "A bakery that runs its office with Don't Be Michael", about: 'Bakes bread for cafes', why: "Don't Be Michael frees the owner", headlines: { email: { before: 'The AI office at Harbor Bakery handled', after: 'emails' } }, team: { pam: 'Sorts the inbox' } };
 const ready = { state: 'ready', input, draft, logo: { ok: false, reason: 'no-site' }, hasWork: true };
 const calls: string[] = [];

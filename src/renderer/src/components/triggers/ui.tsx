@@ -1,8 +1,6 @@
 import { useId, useState, type CSSProperties, type ReactNode, type Ref } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useRtl } from '@/i18n/useDirection';
 import { fieldLabel, groupName, hint, panelStyle } from '../fieldText';
-import { TRIGGER_MODES, type TriggerMode } from '@shared/triggers';
 import { MAX_INTERVAL_MS } from '@shared/missions';
 import {
   WEEKDAY_INITIALS, WEEKDAY_LABELS, formatMinute, normalizeWeekly,
@@ -69,17 +67,6 @@ export function Chip({ children, tone = 'plain' }: { children: ReactNode; tone?:
       fontFamily: 'var(--cth-font-ui)', fontSize: 10.5, fontWeight: 600, lineHeight: '15px',
       background: bg, color: fg
     }}>{children}</span>
-  );
-}
-
-export function Callout({ children, tone = 'warn' }: { children: ReactNode; tone?: 'warn' | 'note' }) {
-  const warn = tone === 'warn';
-  return (
-    <div style={{
-      marginTop: 6, padding: '8px 10px', borderRadius: 'var(--cth-r-md)',
-      fontSize: 12.5, lineHeight: '18px', color: warn ? 'var(--cth-coral-text)' : 'var(--cth-ink-2)',
-      background: warn ? 'var(--cth-coral-soft)' : 'var(--cth-neutral-soft)'
-    }}>{children}</div>
   );
 }
 
@@ -206,11 +193,10 @@ export function Scroll({ children }: { children: ReactNode }) {
  *  2026-09-26: a row with no sign could not be found). Readable size and dark
  *  ink; points toward the text in right-to-left. */
 export function Disclosure({ open }: { open: boolean }) {
-  const rtl = useRtl();
   return (
     <span aria-hidden="true" style={{ flexShrink: 0, width: 16, height: 20, display: 'inline-grid', placeItems: 'center', color: 'var(--cth-ink-3)' }}>
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"
-        style={{ transform: `rotate(${open ? 0 : rtl ? 90 : -90}deg)`, transition: 'transform var(--cth-dur-fast) var(--cth-ease)' }}>
+        style={{ transform: `rotate(${open ? 0 : -90}deg)`, transition: 'transform var(--cth-dur-fast) var(--cth-ease)' }}>
         <path d="M6 9l6 6 6-6" />
       </svg>
     </span>
@@ -255,64 +241,6 @@ export function TriggerCard({ title, blurb, summary, action, defaultOpen = false
       </div>
       <div id={bodyId} style={{ display: open ? 'block' : 'none', padding: '0 16px 14px' }}>{children}</div>
     </div>
-  );
-}
-
-/** A card inside a card — one webhook, one context rule. */
-export function SubCard({ children }: { children: ReactNode }) {
-  return (
-    <div style={{
-      marginBottom: 8, padding: '10px 12px', borderRadius: 'var(--cth-r-lg)',
-      background: 'var(--cth-card-2)', boxShadow: 'inset 0 0 0 1px var(--cth-line)'
-    }}>{children}</div>
-  );
-}
-
-/** Header row inside a SubCard: a disclosure caret, a title, and controls. */
-export function SubHeader({ open, onToggle, title, sub, right }: {
-  open: boolean; onToggle: () => void; title: ReactNode; sub?: ReactNode; right?: ReactNode;
-}) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <button
-        onClick={onToggle}
-        style={{
-          flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6, textAlign: 'left',
-          padding: 0, border: 'none', background: 'transparent', cursor: 'pointer'
-        }}
-      >
-        <Disclosure open={open} />
-        <span style={{ flex: 1, minWidth: 0 }}>
-          <span style={{
-            display: 'block', fontFamily: 'var(--cth-font-ui)', fontSize: 12, lineHeight: '16px',
-            color: 'var(--cth-ink-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
-          }}>{title}</span>
-          {sub !== undefined && (
-            <span style={{
-              display: 'block', fontSize: 11, lineHeight: '15px', color: 'var(--cth-ink-500)',
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
-            }}>{sub}</span>
-          )}
-        </span>
-      </button>
-      {right}
-    </div>
-  );
-}
-
-/* ──────────────────────────── trigger mode ───────────────────────────────── */
-
-/** The shared `strict / allow-all / communication-only` gate. Labels and blurbs
- *  come from `TRIGGER_MODES` so webhooks and org can never drift apart. */
-export function ModePicker({ value, onChange }: { value: TriggerMode; onChange: (m: TriggerMode) => void }) {
-  const current = TRIGGER_MODES.find((m) => m.value === value) ?? TRIGGER_MODES[0];
-  return (
-    <>
-      <Select value={value} onChange={(v) => onChange(v as TriggerMode)} style={{ width: '100%' }}>
-        {TRIGGER_MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-      </Select>
-      <Hint>{current.blurb}</Hint>
-    </>
   );
 }
 
@@ -395,67 +323,6 @@ export function IntervalPicker({ value, onChange, minMs = MINUTE, maxMs = MAX_IN
           <span style={{ fontSize: 11, color: 'var(--cth-ink-500)' }}>{t('triggersUi.min')}</span>
         </span>
       )}
-    </div>
-  );
-}
-
-/* ───────────────────────────── percent field ─────────────────────────────── */
-
-export function PctField({ value, onChange }: { value: number; onChange: (pct: number) => void }) {
-  const pct = Math.max(0, Math.min(100, Math.round(value)));
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <input
-        type="number"
-        min={0}
-        max={100}
-        value={pct}
-        onChange={(e) => {
-          const n = Number(e.target.value);
-          onChange(Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : 0);
-        }}
-        style={{ ...monoInputStyle, width: 60, padding: '3px 5px' }}
-      />
-      <span style={{ fontSize: 11, color: 'var(--cth-ink-500)' }}>%</span>
-      <div style={{
-        flex: 1, minWidth: 40, height: 6, borderRadius: 3, overflow: 'hidden',
-        background: 'var(--cth-neutral-soft)'
-      }}>
-        <div style={{ width: `${pct}%`, height: '100%', background: pct === 0 ? 'var(--cth-ink-4)' : 'var(--cth-indigo)' }} />
-      </div>
-    </div>
-  );
-}
-
-/* ────────────────────────────── secret field ─────────────────────────────── */
-
-/** Masked by default; reveals only on demand. The value never lands in a
- *  `title`/tooltip — those leak into screenshots and accessibility trees. */
-export function SecretField({ value, revealed, onReveal, onCopy, copied, placeholder, onChange, onBlur }: {
-  value: string;
-  revealed: boolean;
-  onReveal: () => void;
-  onCopy?: () => void;
-  copied?: boolean;
-  placeholder?: string;
-  onChange?: (v: string) => void;
-  onBlur?: () => void;
-}) {
-  const { t } = useTranslation();
-  const readOnly = !onChange;
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <input
-        type={revealed ? 'text' : 'password'}
-        value={value}
-        readOnly={readOnly}
-        placeholder={placeholder}
-        onChange={(e) => onChange?.(e.target.value)}
-        onBlur={onBlur}
-        style={{ ...monoInputStyle, flex: 1, minWidth: 0, padding: '4px 6px' }}
-      />
-      <MiniButton onClick={onReveal}>{revealed ? t('common.hide') : t('common.show')}</MiniButton>
-      {onCopy && <MiniButton onClick={onCopy} tone={copied ? 'good' : 'plain'}>{copied ? `${t('common.copy')} ✓` : t('common.copy')}</MiniButton>}
     </div>
   );
 }

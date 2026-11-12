@@ -70,7 +70,7 @@ test('the request stays Michael\'s open work until he replies, and is sent only 
   assert.deepEqual(openOwnerRequests([msg], []).map((r) => r.taskId), ['first-pam']);
   assert.deepEqual(openOwnerRequests([msg], [{ id: 'r1', from: 'god', act: 'done', to: 'human', in_reply_to: 'm1', created_at: '2026-10-03T10:05:00Z' }]), []);
   const main = read('src/main/index.ts');
-  const handler = main.slice(main.indexOf("ipcMain.handle('hive:firstTask'"), main.indexOf("ipcMain.handle('hive:addTask'"));
+  const handler = main.slice(main.indexOf("ipcMain.handle('hive:firstTask'"), main.indexOf('/** The digest an answer is recorded by'));
   assert.match(handler, /if \(!hive\.addTask\(first\.card\)\) \{\n\s+if \(!rawAsk\) return \{ ok: true, sent: false \};/, 'an existing card stops a pack first task');
   assert.match(handler, /hive\.send\(\{ to: MICHAEL_ID, act: 'request', subject: first\.card\.title, body: first\.body, conversation: cardConversation\(first\.card\.id\), requires_reply: true \}, 'human'\)/);
   assert.match(read('src/preload/index.ts'), /hiveFirstTask: \(sourceCard: string \| undefined, agentId: string, name: string, edited\?: \{ ask: string; role\?: string; existing\?: boolean \}\)/);

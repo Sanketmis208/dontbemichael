@@ -607,9 +607,3 @@ export function readDistinctAnswer(text: string, teamNames: string[]): { verdict
     }
   };
 }
-
-/** The verdict, or null when the answer holds none (readDistinctAnswer). */
-export function parseDistinctAnswer(text: string, teamNames: string[]): DistinctVerdict | null {
-  const r = readDistinctAnswer(text, teamNames);
-  return 'verdict' in r ? r.verdict : null;
-}

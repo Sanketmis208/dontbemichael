@@ -92,7 +92,7 @@ test('Edit agent shows the Danger zone under the engine, behind canDeleteTeamMem
 
 test('the delete strings exist in every language, with no dashes', () => {
   const keys = ['danger', 'delete', 'deleting', 'deleteInfo', 'deleteConfirm', 'deleteConfirmSchedules', 'deleteConfirmSchedulesPlural'];
-  for (const loc of ['en', 'ar', 'zh-CN']) {
+  for (const loc of ['en']) {
     const d = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).editAgent;
     for (const k of keys) {
       assert.equal(typeof d[k], 'string', `${loc} editAgent.${k}`);
@@ -165,7 +165,7 @@ test('Task detail says a deleted member\'s question was withdrawn, in every lang
   const kanban = read('src/renderer/src/components/TasksKanban.tsx');
   assert.match(kanban, /e\.dismissedBy === 'member-deleted'\s*\? t\('kanban\.askWithdrawnMemberDeleted'\)/);
   assert.match(read('src/renderer/src/components/hiveTasks.ts'), /e\.dismissedBy === 'card-closed' \|\| e\.dismissedBy === 'member-deleted'/);
-  for (const loc of ['en', 'ar', 'zh-CN']) {
+  for (const loc of ['en']) {
     const v = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).kanban.askWithdrawnMemberDeleted;
     assert.equal(typeof v, 'string', loc);
     assert.doesNotMatch(v, /[–—]| - /, loc);

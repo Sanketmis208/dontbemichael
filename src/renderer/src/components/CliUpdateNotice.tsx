@@ -1,115 +1,78 @@
 /**
- * "Claude Code updated underneath the team" — the business-owner half of
+ * "Claude Code updated underneath the team": Michael's card on Ask me
+ * (owner, 2026-11-05: the top bar chip is not required, and the popup should be
+ * an Ask me card; docs/designs/team-upgrade-card.md). The business-owner half of
  * src/shared/cliUpdate.ts.
  *
  * Claude Code updates itself on disk, and each agent's terminal footer then says
  * "Update installed · Restart to update". Owners never read the terminal tab, so
- * the app says it here instead: a corner toast plus a title-bar chip. Nothing
- * restarts on its own. The only action is the owner's click, which runs closing
- * time (every agent saves its work and confirms) and then reopens the app, so
- * every agent starts again on the new version.
+ * Michael says it on Ask me instead, like the app update card (UpdateCard).
+ * Nothing restarts on its own. The only action is the owner's click, which runs
+ * closing time (every agent saves its work and confirms) and then reopens the
+ * app, so every agent starts again on the new version.
  *
- * "Later" hides the toast until a NEWER Claude Code arrives, not until the next
- * app start: Claude Code ships several times a week, and a notice that returns
- * every morning gets ignored. The chip stays up while agents are behind, and a
- * click on it brings the toast back.
+ *   status (main push) ── behind > 0, not put off ──► card on Ask me (counted)
+ *     Later ──────────────► off until a newer Claude Code (putOffCliUpdate)
+ *     close and reopen ──► closing time; the card steps aside while it is
+ *                              open, and comes back on a refused start or a
+ *                              cancel (the agents are still behind)
+ *     everyone caught up (null push) ─► the card leaves
+ *
+ * The app makes this card: nothing goes in tasks.json, so no agent can write it,
+ * answer it or restart the office through it.
  */
-import { useEffect, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Spark } from '@/components/UpdateToast';
 import { cliUpdateToastVisible, type CliUpdateStatus } from '@shared/cliUpdate';
+import { useResolvedGodName } from '@/hooks/useResolvedGodName';
+import { useStore } from '@/store/store';
+import { putOffCliUpdate } from '@/shell/useNeedsYou';
+import { AgentAvatar } from './AgentAvatar';
+import { PixelButton } from './PixelButton';
 
-/** The installed version the owner said "later" to. `cth.`-prefixed renderer
- *  memory, like UpdateToast's star ask. */
-const LATER_KEY = 'cth.cliUpdateLaterFor';
-const SHOW_EVENT = 'cth:show-cli-update';
-
-function readLater(): string | null {
-  try { return window.localStorage.getItem(LATER_KEY); } catch { return null; }
+/** App's close and reopen, registered once at start (App.tsx), so the card
+ *  never waits on an event nobody answers. */
+let closeAndReopen: (() => Promise<boolean>) | null = null;
+export function setCloseAndReopen(fn: () => Promise<boolean>): void {
+  closeAndReopen = fn;
 }
 
-function writeLater(version: string | null): void {
-  try {
-    if (version) window.localStorage.setItem(LATER_KEY, version);
-    else window.localStorage.removeItem(LATER_KEY);
-  } catch { /* storage unavailable: the toast just comes back next time */ }
-}
-
-function useCliUpdate(): CliUpdateStatus | null {
-  const [status, setStatus] = useState<CliUpdateStatus | null>(null);
-  useEffect(() => {
-    // Subscribe first, then pull: main may have pushed before this window loaded.
-    const off = window.cth.onCliUpdateStatus?.(setStatus);
-    void window.cth.cliUpdateCurrent?.().then((cur) => setStatus((prev) => prev ?? cur)).catch(() => { /* push still works */ });
-    return off;
-  }, []);
-  return status;
-}
-
-export function CliUpdateToast({ onCloseAndReopen }: { onCloseAndReopen: (liveAgents: number) => Promise<boolean> }) {
+export function CliUpdateCard({ status, later }: { status: CliUpdateStatus | null; later: string | null }) {
   const { t } = useTranslation();
-  const status = useCliUpdate();
-  const [laterFor, setLaterFor] = useState<string | null>(readLater);
+  const godName = useResolvedGodName();
+  const godId = useStore((s) => s.agents.find((a) => a.isGod)?.id);
+  // Closing time open (its bar up): the bar is the one thing to read. A
+  // refused start or a cancel closes the bar, and the card is back.
+  const closing = useStore((s) => s.officeClosing);
+  if (!status || !cliUpdateToastVisible(status, later) || closing) return null;
 
-  useEffect(() => {
-    const onShow = () => { writeLater(null); setLaterFor(null); };
-    window.addEventListener(SHOW_EVENT, onShow);
-    return () => window.removeEventListener(SHOW_EVENT, onShow);
-  }, []);
-
-  if (!status || !cliUpdateToastVisible(status, laterFor)) return null;
-
-  const later = () => { writeLater(status.installed); setLaterFor(status.installed); };
-  // Hidden only once closing time really started: a refused start (Michael's
-  // terminal ended) keeps the toast, so the offer is still there after.
-  const go = () => { void onCloseAndReopen(status.live).then((ok) => { if (ok) later(); }); };
-
+  const title = t('cliUpdate.title');
   return (
-    // Top right, under the top bar: the bottom right corner belongs to the
-    // app update and completion toasts, and these can all be up at once.
-    <div className="cth-toast" style={{ right: 16, top: 64 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <Spark />
-        <span className="cth-toast-title">
-          {t('cliUpdate.title')}
-        </span>
+    <section aria-label={title} data-askme-id="team-upgrade" style={card}>
+      <div style={{ fontSize: 13, fontWeight: 600, lineHeight: '18px', letterSpacing: '-0.01em', color: 'var(--cth-ink)' }}>{title}</div>
+      {/* From Michael, like every ask: only Michael speaks to the owner. */}
+      <div style={{ marginTop: 6 }}>
+        <span style={personChip}><AgentAvatar id={godId} name={godName} size={16} />{godName}</span>
       </div>
-      <span role="status" className="cth-toast-body">
+      <p style={{ margin: '10px 0 0', fontSize: 12.5, lineHeight: '18px', color: 'var(--cth-ink)' }}>
         {status.behind === 1
           ? t('cliUpdate.body', { version: status.installed })
           : t('cliUpdate.bodyPlural', { version: status.installed, count: status.behind })}
-      </span>
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <button className="cth-toast-btn" onClick={later}>
-          {t('cliUpdate.later')}
-        </button>
-        <button className="cth-toast-btn primary" onClick={go}>
-          {t('cliUpdate.closeAndReopen')}
-        </button>
+      </p>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap', marginTop: 12 }}>
+        <PixelButton variant="secondary" size="sm" onClick={() => putOffCliUpdate(status.installed)}>{t('cliUpdate.later')}</PixelButton>
+        {/* Starting the close is not a Later: a cancel brings the card back. */}
+        <PixelButton variant="primary" size="sm" onClick={() => { void closeAndReopen?.(); }}>{t('cliUpdate.closeAndReopen')}</PixelButton>
       </div>
-    </div>
+    </section>
   );
 }
 
-/** Title-bar chip: quiet, but there for as long as agents are behind. */
-export function CliUpdateBadge() {
-  const { t } = useTranslation();
-  const status = useCliUpdate();
-  if (!status) return null;
-  return (
-    <button
-      className="cth-titlebar-nodrag"
-      onClick={() => window.dispatchEvent(new Event(SHOW_EVENT))}
-      title={t('cliUpdate.chipTitle', { version: status.installed })}
-      style={{
-        display: 'inline-flex', alignItems: 'center', gap: 6,
-        height: 26, padding: '0 10px', margin: 0,
-        background: 'var(--cth-green-soft)', color: 'var(--cth-green-text)',
-        border: 'none', borderRadius: 999,
-        fontFamily: 'var(--cth-font-ui)', fontSize: 12, fontWeight: 600, cursor: 'pointer'
-      }}
-    >
-      {t('cliUpdate.chip')}
-    </button>
-  );
-}
+const card: CSSProperties = {
+  position: 'relative', flexShrink: 0, padding: '13px 14px', borderRadius: 'var(--cth-r-xl)',
+  background: 'var(--cth-card)', boxShadow: 'inset 0 0 0 1px var(--cth-line-2), var(--cth-shadow-md)'
+};
+const personChip: CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: 5, height: 22, padding: '0 9px 0 3px', borderRadius: 'var(--cth-r-pill)',
+  background: 'var(--cth-neutral-soft)', fontSize: 11.5, fontWeight: 600, color: 'var(--cth-ink-2)'
+};

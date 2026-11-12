@@ -283,7 +283,10 @@ test('in every office no other agent runs a command outside its sandbox', async 
   const bash = (id, outside) => hook(id, 'PreToolUse', { tool_name: 'Bash', tool_input: { command: `cat ${o.desk}/notes.md`, ...(outside ? { dangerouslyDisableSandbox: true } : {}) } });
   for (const id of ['god', 'pam']) {
     assert.equal(reason(bash(id, true)), R.RESEARCH_SANDBOX_ONLY, id);
-    assert.ok(!denied(bash(id, false)), `${id} in its sandbox is the sandbox's call`);
+    // On Windows there is no sandbox to make that call: a member's command
+    // naming another member's folder is refused by the app (owner, 2026-11-07).
+    if (process.platform === 'win32' && id !== 'god') assert.match(reason(bash(id, false)), /names another team member's folder/, `${id} on Windows`);
+    else assert.ok(!denied(bash(id, false)), `${id} in its sandbox is the sandbox's call`);
   }
   const off = await office(t, { on: false });
   assert.equal(reason(hookFor(off)('god', 'PreToolUse', { tool_name: 'Bash', tool_input: { command: 'curl https://example.com', dangerouslyDisableSandbox: true } })), R.RESEARCH_SANDBOX_ONLY, 'Research off too: Michael\'s shell reaches no host (owner, D9.1)');
@@ -304,8 +307,13 @@ test('while Research is on, agents save scratch work in their own folder, not th
   assert.ok(!denied(write('pam', path.join(o.home, F.AGENT_TMP_DIR, 'pam', 'draft.md'))), 'its own scratch folder');
   assert.ok(!denied(write('pam', path.join(o.pamDir, 'draft.md'))), 'its own folder, though this office sits in a temp folder');
   assert.ok(!denied(hook('pam', 'PreToolUse', { tool_name: 'Read', tool_input: { file_path: '/tmp/x' } })), 'reading is not this rule');
+  // Research off: the shared temp folders are still outside every folder of
+  // hers, so the file tools save nothing there either (owner, 2026-11-09).
   const off = await office(t, { on: false });
-  assert.ok(!denied(hookFor(off)('pam', 'PreToolUse', { tool_name: 'Write', tool_input: { file_path: '/tmp/draft.md', content: 'x' } })), 'Research off: as before');
+  const offWrite = hookFor(off)('pam', 'PreToolUse', { tool_name: 'Write', tool_input: { file_path: '/tmp/draft.md', content: 'x' } });
+  assert.ok(denied(offWrite), 'Research off: outside her own folders');
+  assert.match(reason(offWrite), /outside your own folders/);
+  assert.ok(!denied(hookFor(off)('pam', 'PreToolUse', { tool_name: 'Write', tool_input: { file_path: path.join(off.home, F.AGENT_TMP_DIR, 'pam', 'draft.md'), content: 'x' } })), 'Research off: her own scratch folder');
 });
 
 test('after the owner renames Research, the hook\'s folder refusals name the new name', async (t) => {

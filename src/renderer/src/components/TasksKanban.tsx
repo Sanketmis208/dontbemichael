@@ -7,7 +7,6 @@ import { PixelButton } from './PixelButton';
 import { useStore } from '@/store/store';
 import { AgentAvatar } from './AgentAvatar';
 import { MarkdownPreview } from '@/markdown/MarkdownPreview';
-import { useRtl } from '@/i18n/useDirection';
 import { useDialog } from '@/shell/useDialog';
 import { useBackdropClose } from '@/hooks/useBackdropClose';
 
@@ -15,6 +14,7 @@ export { openQuestion, openQuestions, waitsOnHuman, parseTasks, type HiveTask, t
 import { refreshNeedsYou, updateNeedsYouTasks, useNeedsYou } from '@/shell/useNeedsYou';
 import { resultHeadline, waitsOnHuman, type HiveTask, type TaskStatus, nextAtLabel, filterActive, taskMatches, byNext, nextGroup, type NextGroup } from './hiveTasks';
 import { FileText, useAskFileChecks } from './FileChip';
+import { SourceRow } from './SourceRow';
 import { blockedWithNothingAsked, michaelCardState, type WorkHours } from '@shared/ownerRequests';
 import { askAsText, isAnswered, isWithdrawn, readAskShape } from '@shared/askMeRouting';
 
@@ -449,7 +449,6 @@ export function TaskDetail({ task, all, assigneeName, onMove, onReopen, onAssign
   const [reopening, setReopening] = useState(false);
   const [why, setWhy] = useState('');
   const next = nextAtLabel(task.nextAt, i18n.language);
-  const rtl = useRtl();
   const detailGodName = useResolvedGodName();
   // Every file the Q&A trail names, checked in one go rather than per question.
   const qaAssignee = typeof task.assignee === 'string' ? task.assignee : undefined;
@@ -550,7 +549,7 @@ export function TaskDetail({ task, all, assigneeName, onMove, onReopen, onAssign
               never checked or invented, and nothing when he wrote none. */}
           {task.status === 'done' && task.result && (
             <div data-result>{label(t('kanban.result'))}
-              <div dir={rtl ? 'auto' : undefined} style={{
+              <div style={{
                 padding: '10px 12px', borderRadius: 'var(--cth-r-lg)', background: 'var(--cth-green-soft)',
                 boxShadow: 'inset 0 0 0 1px color-mix(in srgb, var(--cth-green) 30%, transparent)',
                 fontSize: 12.5, lineHeight: '18px', color: 'var(--cth-ink)'
@@ -580,7 +579,7 @@ export function TaskDetail({ task, all, assigneeName, onMove, onReopen, onAssign
               (owner, 2026-10-11). */}
           {task.description?.trim() && (
             <div>{label(t('kanban.description'))}
-              <div style={{ fontSize: 12.5, lineHeight: '19px', color: 'var(--cth-ink)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }} dir={rtl ? 'auto' : undefined}>
+              <div style={{ fontSize: 12.5, lineHeight: '19px', color: 'var(--cth-ink)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                 {task.description.trim()}
               </div>
             </div>
@@ -613,6 +612,8 @@ export function TaskDetail({ task, all, assigneeName, onMove, onReopen, onAssign
                       </div>
                       {/* With its options or questions, which no longer sit in the text (ask-me-options.md). */}
                       <FileText source={qaShown?.[i]?.q ?? e.q} who={{ raisedBy: e.raisedBy, assignee: qaAssignee }} checks={qaFiles[e.raisedBy ?? ''] ?? {}} />
+                      {/* Its sources stay with it once answered (ask-me-source-links.md). */}
+                      <SourceRow entry={e} who={{ raisedBy: e.raisedBy, assignee: qaAssignee }} margin="8px 0 0" />
                       {isAnswered(e) ? (
                         <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--cth-line)' }}>
                           <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--cth-green-text)', marginBottom: 2 }}>{t('kanban.answer')}</div>
@@ -621,7 +622,7 @@ export function TaskDetail({ task, all, assigneeName, onMove, onReopen, onAssign
                       ) : isWithdrawn(e) ? (
                         // Closing the card withdrew it: said in the owner's language. Michael's
                         // own reason is his text, isolated so its direction cannot reorder the line.
-                        <div dir={rtl ? 'auto' : undefined} style={{ marginTop: 6, fontSize: 12, color: 'var(--cth-ink-3)' }}>
+                        <div style={{ marginTop: 6, fontSize: 12, color: 'var(--cth-ink-3)' }}>
                           {e.dismissedBy === 'card-closed'
                             ? t('kanban.askWithdrawnCardClosed')
                             : e.dismissedBy === 'member-deleted'
@@ -682,19 +683,3 @@ function PriorityDots({ level }: { level: number }) {
     </span>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  width: '100%', padding: '6px 8px', background: 'var(--cth-paper-100)', border: 'none',
-  boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', fontFamily: 'var(--cth-font-ui)',
-  fontSize: 12, lineHeight: '17px', color: 'var(--cth-ink-900)', outline: 'none', boxSizing: 'border-box'
-};
-
-const selectStyle: React.CSSProperties = {
-  padding: '3px 6px', background: 'var(--cth-paper-100)', border: 'none',
-  boxShadow: 'inset 0 0 0 1px var(--cth-ink-100)', fontFamily: 'var(--cth-font-ui)',
-  fontSize: 12, color: 'var(--cth-ink-900)', cursor: 'pointer'
-};
-
-const labelStyle: React.CSSProperties = {
-  fontFamily: 'var(--cth-font-display)', fontSize: 10, fontWeight: 600, color: 'var(--cth-ink-500)'
-};

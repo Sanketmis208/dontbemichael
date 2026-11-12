@@ -137,7 +137,7 @@ test('Settings lists the documents with Open, and a removed document stops being
   const main = read('src/main/index.ts');
   assert.match(main, /ipcMain\.handle\('kg:open'/);
   assert.match(main, /if \(typeof id === 'string'\) knowledgeEdits\.stop\(id\);/);
-  for (const lang of ['en', 'ar', 'zh-CN']) {
+  for (const lang of ['en']) {
     const docs = JSON.parse(read(`src/renderer/src/i18n/locales/${lang}.json`)).settings.memory.docs;
     for (const text of Object.values(docs)) assert.doesNotMatch(text, /[–—]| - /, `${lang}: ${text}`);
   }

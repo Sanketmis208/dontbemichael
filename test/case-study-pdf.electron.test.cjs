@@ -3,9 +3,8 @@
 // The case study's PDF copy and web page (docs/designs/case-study.md, D27,
 // D28): the landing page zoomed to the paper lists every member, a big team
 // (24 members, every part at its cap) runs onto more pages than a typical one
-// (5 members) rather than cutting anyone, at Letter and A4 in English, Arabic
-// and Chinese. Arabic mirrors, the strip runs latest day on the left, and the
-// headline keeps its number between its words. The web page has no sideways
+// (5 members) rather than cutting anyone, at Letter and A4. The strip runs
+// first day on the left, and the headline keeps its number between its words. The web page has no sideways
 // scroll at phone width. Real Chromium layout, so macOS only (platform scoped
 // tests).
 
@@ -25,44 +24,38 @@ function fonts() {
   return [f('Sora', 'sora-latin-var.woff2', '100 800'), f('IBM Plex Mono', 'ibm-plex-mono-regular.woff2', '400'), f('IBM Plex Mono', 'ibm-plex-mono-medium.woff2', '500')];
 }
 
-const FILL = {
-  en: 'Answers order questions, sorts the morning inbox and keeps the supplier invoices filed on time for the owner every week',
-  ar: 'يرد على أسئلة الطلبات ويرتب البريد الصباحي ويحفظ فواتير الموردين في موعدها للمالك كل أسبوع دون تأخير أو نسيان',
-  'zh-CN': '回答订单问题，整理早上的收件箱，每周按时为老板归档供应商发票，从不延误也不遗漏任何一封邮件'
-};
-const fill = (lang, n) => { let s = ''; while ([...s].length < n) s += FILL[lang] + ' '; return [...s].slice(0, n).join(''); };
+const FILL = 'Answers order questions, sorts the morning inbox and keeps the supplier invoices filed on time for the owner every week';
+const fill = (n) => { let s = ''; while ([...s].length < n) s += FILL + ' '; return [...s].slice(0, n).join(''); };
 
-function build(lang, paper, size, mode = 'print') {
+function build(paper, size, mode = 'print') {
   const big = size === 'big';
-  const c = big ? cs.CAPS[lang] : Object.fromEntries(Object.entries(cs.CAPS[lang]).map(([k, v]) => [k, Math.floor(v / 2)]));
+  const c = big ? cs.CAPS : Object.fromEntries(Object.entries(cs.CAPS).map(([k, v]) => [k, Math.floor(v / 2)]));
   const members = Array.from({ length: big ? 24 : 5 }, (_, i) => ({
     id: `m${i}`, name: `Member${i}`, role: 'Bookkeeping lead', jobs: [], figure: { kind: 'email', count: 12345 }, isMichael: i === 0,
-    tools: ['Email', 'QuickBooks'], schedules: [{ label: 'Morning inbox sweep', when: cs.caseWhen({ intervalMs: 0, weekly: { days: [1, 2, 3, 4, 5], minute: 450 } }, lang) }, { label: 'Supplier invoices', when: cs.caseWhen({ intervalMs: 86_400_000 }, lang) }]
+    tools: ['Email', 'QuickBooks'], schedules: [{ label: 'Morning inbox sweep', when: cs.caseWhen({ intervalMs: 0, weekly: { days: [1, 2, 3, 4, 5], minute: 450 } }) }, { label: 'Supplier invoices', when: cs.caseWhen({ intervalMs: 86_400_000 }) }]
   }));
   const days = Array.from({ length: 31 }, (_, i) => ({ day: `2026-10-${String(i + 1).padStart(2, '0')}`, ms: (8 + (i % 7)) * 3_600_000, awayMs: (3 + (i % 5)) * 3_600_000 }));
   const facts = {
-    lang, paper, showName: true, businessName: 'Harbor Bakery and Cafe Company', website: 'harborbakeryandcafe.example', businessType: 'Bakery', city: 'San Francisco',
+    paper, showName: true, businessName: 'Harbor Bakery and Cafe Company', website: 'harborbakeryandcafe.example', businessType: 'Bakery', city: 'San Francisco',
     members, figures: { email: 123456, sent: 23456, task: 34567, check: 4567, routed: 9999, ranMs: 744 * 3_600_000, awayMs: 500 * 3_600_000, spendUsd: 12345 },
     days, range: { from: '2026-10-01', to: '2026-10-31', days: 31 }, appVersion: '0.3.5',
     palette: cs.heroPalette('#8C5A2B')
   };
   const edits = {
     // The longest built in headline with a long business name: the owner can't shorten it (D24).
-    headline: { figure: 'away', ...cs.builtInHeadline({ lang, showName: true, businessName: 'Harbor Bakery and Cafe Company' }, 'away') },
-    subtitle: fill(lang, c.subtitle), about: fill(lang, c.about), quote: fill(lang, c.quote), why: fill(lang, c.why),
-    team: Object.fromEntries(members.map((m) => [m.id, fill(lang, c.teamLine)]))
+    headline: { figure: 'away', ...cs.builtInHeadline({ showName: true, businessName: 'Harbor Bakery and Cafe Company' }, 'away') },
+    subtitle: fill(c.subtitle), about: fill(c.about), quote: fill(c.quote), why: fill(c.why),
+    team: Object.fromEntries(members.map((m) => [m.id, fill(c.teamLine)]))
   };
   return cs.pageHtml(facts, edits, { fontCss: cs.fontFaceCss(fonts()), mode });
 }
 
 test('the PDF copy lists every member and a big team runs onto more pages; the web page fits a phone', { skip: process.platform === 'darwin' ? false : 'macOS only (platform scoped tests)', timeout: 120000 }, async () => {
-  // Value: protects=every member on the published page, its Arabic layout and its phone fit; fails_when=a style drops a card, RTL stops mirroring, or the web page scrolls sideways on a phone; why_new=the unit tests can't lay out; seam=none; no_claim=Windows fonts (macOS only)
+  // Value: protects=every member on the published page and its phone fit; fails_when=a style drops a card, the strip runs the wrong way, or the web page scrolls sideways on a phone; why_new=the unit tests can't lay out; seam=none; no_claim=Windows fonts (macOS only)
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'case pdf '));
   try {
-    for (const lang of ['en', 'ar', 'zh-CN']) {
-      for (const paper of ['letter', 'a4']) for (const size of ['typical', 'big']) fs.writeFileSync(path.join(dir, `${lang}-${paper}-${size}.html`), build(lang, paper, size));
-      fs.writeFileSync(path.join(dir, `phone-${lang}.html`), build(lang, 'letter', 'big', 'web'));
-    }
+    for (const paper of ['letter', 'a4']) for (const size of ['typical', 'big']) fs.writeFileSync(path.join(dir, `en-${paper}-${size}.html`), build(paper, size));
+    fs.writeFileSync(path.join(dir, 'phone-en.html'), build('letter', 'big', 'web'));
     const env = { ...process.env };
     delete env.ELECTRON_RUN_AS_NODE;
     const child = spawn(require('electron'), [path.join(__dirname, 'fixtures', 'case-study-pdf-main.cjs'), dir], { env, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -88,14 +81,9 @@ test('the PDF copy lists every member and a big team runs onto more pages; the w
       assert.equal(r.rows, big ? 24 : 5, `${name}: every member has a card`);
       if (big) assert.ok(r.pages > res[name.replace('-big', '-typical')].pages, `${name} runs onto more pages than a typical office (${r.pages})`);
       assert.deepEqual(r.headline, ['words', 'lock', 'words'], `${name}: the number sits between the headline's words`);
-      if (name.startsWith('ar-')) {
-        assert.equal(r.dir, 'rtl');
-        assert.equal(r.firstBarRight, true, `${name}: the first day is on the right, the latest on the left`);
-      } else {
-        assert.equal(r.firstBarRight, false);
-      }
+      assert.equal(r.firstBarRight, false);
     }
-    assert.equal(Object.keys(res).length, 15);
+    assert.equal(Object.keys(res).length, 5);
   } finally {
     try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch { /* temp folder */ }
   }

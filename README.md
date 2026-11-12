@@ -41,9 +41,9 @@ runs on your computer.
 > brings you only the calls that need you.
 
 > [!TIP]
-> **New in 0.3.6: Anything your team finds for you reaches Needs you.**
-> A question you leave open comes back when it matters. In 0.3.5, Pulse builds a case study of
-> your office.
+> **New in 0.3.8: a lighter app.** Features owners never used are gone, and when nothing needs you,
+> Michael offers one tip from your office. In 0.3.7, Ask me cards show the pages and files they
+> rest on.
 
 ## Contents
 
@@ -255,7 +255,6 @@ and signs you in where you can see it, or takes an Anthropic API key instead.
 - **Integrations.** Add an outside service with a custom REST integration in Settings. Nobody has it until you give it to a team member on its Access tab, as Read only or Can change, and taking it away holds on the next call. The app keeps the key. A connection can hold one saved call: the team member sends only its words, and the app builds the request. For team members on Claude.
 - **Every team member's panel.** Profile first (the job, its folder and the instructions it works from), then Access (email, Claude connectors, integrations and schedules), Messages as a day by day history, Memory as readable notes, and Work, its session live.
 - **Office, Tasks, Pulse, Who talks to whom.** Tabs in the top bar switch between the office, the whole task board, Pulse (what the office got done and what each team member costs, with ways to save that change nothing until you click Apply), and who talks to whom. Get featured in Pulse builds a case study page of your office in your own brand, for you to send us; it opens as a tab of its own. A file Michael names shows as a chip; open it, and Markdown, text, JSON, CSV and pictures get a tab of their own beside these. Word files show in a tab with their headings, lists and tables, and Excel, PowerPoint and PDF files show their words, each with Open in app for the file itself. A document a team member writes from an email or its attachment links the original file and the email. A team folder named on a card opens that folder.
-- **Webhooks.** Another app sends a webhook (set it up in Settings, Connections) and Michael picks it up; the sender can check on the work and get its result.
 - **A fresh start without losing work.** A team member that has sat idle with a long conversation writes a handoff of anything unfinished, then starts fresh. You can bring the old conversation back.
 
 **Your business, known to everyone**
@@ -367,11 +366,11 @@ If `node-pty` fails to load after an Electron upgrade, run `npm install` again.
 ### What this build leaves out
 
 Setup offers only Claude Code, signed in with a Claude account or an Anthropic API key. The code
-still carries presets for other agent CLIs (Codex, Gemini, Antigravity, Grok, Kimi, Qwen, OpenCode, Crush, pi,
-Copilot and Cursor), API keys for other providers and local models,
-but this build doesn't offer them. Some developer features are switched off because business
-owners don't use them: git views, the built in code editor, temporary helper agents, voice, the
-Skills page in Settings (skills keep working), and opening a Terminal in an agent's folder. Each one has a switch in
+still carries presets for two other agent CLIs (Codex, the ChatGPT engine, and Gemini CLI),
+but this build doesn't offer them. A team member saved on any other engine moves to Claude Code. The app is in English only.
+Features business owners didn't use were removed in 0.3.8: voice, webhooks, Slack, git views, the
+built in code editor, temporary helper agents and the Skills page (skills keep working). A few
+developer controls, such as opening a Terminal in an agent's folder, are switched off in
 [`src/shared/buildFeatures.ts`](./src/shared/buildFeatures.ts).
 
 ## Contributing
@@ -383,13 +382,11 @@ idea? [Open an issue](https://github.com/agentvivekkumar/dontbemichael/issues).
 
 ## License
 
-The **source code** is licensed under the **MIT License**. See [`LICENSE`](./LICENSE). The original
-copyright notice of Munder Difflin, the project this grew out of, is kept in `LICENSE`, as the
-MIT license requires.
+The **source code** is licensed under the **MIT License**. See [`LICENSE`](./LICENSE).
 
 *Don't Be Michael* is not affiliated with NBC, *The Office*, or Dunder Mifflin.
 
 ## Acknowledgements
 
-- [Munder Difflin](https://github.com/chaitanyagiri/munder-difflin) by Chaitanya Giri and its contributors, the open-source project this product grew out of.
+- [Munder Difflin](https://github.com/chaitanyagiri/munder-difflin) by Chaitanya Giri, for the inspiration. Don't Be Michael is a complete rewrite, built from the ground up so AI agents can run the everyday work of a small business.
 - [xterm.js](https://xtermjs.org/) · [node-pty](https://github.com/microsoft/node-pty) · [electron-vite](https://electron-vite.org/) · [CodeMirror](https://codemirror.net/) for the libraries this is built on.

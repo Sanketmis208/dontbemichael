@@ -832,9 +832,8 @@ export class PtyManager {
    *
    *  On Windows the tree sweep runs SYNCHRONOUSLY here, unlike kill():
    *  ensureKilled's grace timer is unref'd, and on the quit path the main
-   *  process exits (will-quit caps the analytics flush at ~1.2s) long before
-   *  the 4s grace — so the deferred `taskkill /T /F` never ran and agent trees
-   *  survived the app. conpty's own kill is async and best-effort (and our
+   *  process exits long before the 4s grace — so the deferred `taskkill /T /F`
+   *  never ran and agent trees survived the app. conpty's own kill is async and best-effort (and our
    *  conpty patch degrades a failed console enumeration to killing nothing),
    *  so the synchronous sweep is the only reliable reaper at quit. POSIX keeps
    *  the graceful path: closing the pty HUPs the foreground process group, so
