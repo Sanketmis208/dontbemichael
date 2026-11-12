@@ -22,15 +22,17 @@
  * folder may hold a link or a pipe, and this runs with the owner's rights.
  *
  * A scan that met a file it meant to read and could not (locked, being moved,
- * a slow volume) is not done: the mark says how many it missed and the next
- * open scans again, adding only rows it did not have. Links, pipes and files
- * too big to be a message are left out on purpose and never count as missed.
+ * a slow volume, or caught half written) is not done: the mark keeps the
+ * scan's window, how many it missed and when it may run again, and an open
+ * after that scans the same window again. Its rows replace the earlier scan's
+ * rows for the same messages. Links, pipes and files too big to be a message
+ * are left out on purpose and never count as missed.
  */
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { CHECKED_FILE, CHECKED_KEEP_MS, keepText, parseChecked, type CheckedRow } from '../shared/checkedRecord';
 import { RESEARCH_REPLY_LABEL, researchText } from '../shared/research';
-import { MAX_MESSAGE_FILE_BYTES, readMessageFile, realFolderIn, researchDeliveredId } from './messageFile';
+import { readMessageFileOrWhy, realFolderIn, researchDeliveredId } from './messageFile';
 
 export interface BackfillInput {
   hiveRoot: string;
@@ -49,20 +51,15 @@ export interface BackfillInput {
 
 type Missed = ((path: string) => void) | undefined;
 
-/** A file `readMessageFile` gave nothing for that should have read: a plain
- *  file of a message's size, or one locked, or one a folder listing named that
- *  was gone by the read (moved on mid-scan). A link, a pipe, a folder or a file
- *  too big is left out on purpose, and a file never listed may just not exist. */
-function missedByChance(file: string, listed: boolean): boolean {
-  try {
-    const st = lstatSync(file);
-    return st.isFile() && st.size <= MAX_MESSAGE_FILE_BYTES;
-  } catch (e) { return listed || (e as NodeJS.ErrnoException)?.code !== 'ENOENT'; }
-}
+/** A file's text, telling `missed` of one that should have read and did not:
+ *  locked, or one a folder listing named that was gone by the read (moved on
+ *  mid-scan). A link, a pipe, a folder or a file too big is left out on
+ *  purpose, and a file never listed may just not exist. */
 const readCounted = (file: string, missed: Missed, listed = true): string | null => {
-  const raw = readMessageFile(file);
-  if (raw === null && missed && missedByChance(file, listed)) missed(file);
-  return raw;
+  const r = readMessageFileOrWhy(file);
+  if ('text' in r) return r.text;
+  if (r.skip === 'failed' || (r.skip === 'missing' && listed)) missed?.(file);
+  return null;
 };
 /** A folder's names; a folder that is there and cannot be listed is missed,
  *  one that isn't there has nothing to read. */
@@ -73,11 +70,15 @@ const listCounted = (dir: string, missed: Missed): string[] => {
   }
 };
 
-const parseJson = (raw: string | null): Record<string, unknown> | null => {
+/** An object from a file's text. Text that is not JSON at all is a file caught
+ *  half written, so `file` is missed; JSON that is not an object is not. */
+const parseJson = (raw: string | null, file: string, missed: Missed): Record<string, unknown> | null => {
   if (raw === null) return null;
-  try { const v = JSON.parse(raw) as unknown; return v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : null; } catch { return null; }
+  let v: unknown;
+  try { v = JSON.parse(raw); } catch { missed?.(file); return null; }
+  return v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : null;
 };
-const readJson = (file: string, missed?: Missed, listed = true): Record<string, unknown> | null => parseJson(readCounted(file, missed, listed));
+const readJson = (file: string, missed?: Missed, listed = true): Record<string, unknown> | null => parseJson(readCounted(file, missed, listed), file, missed);
 const str = (v: unknown): string => (typeof v === 'string' ? v : v === undefined || v === null ? '' : JSON.stringify(v));
 /** The .json files in `parts` under `base`, only while each step is a real folder. */
 const jsonFiles = (missed: Missed, base: string, ...parts: string[]): string[] => {
@@ -130,10 +131,15 @@ export function backfillChecked(i: BackfillInput): CheckedRow[] {
   const answers = ownerAnswers(i.hiveRoot, i.researchId, missed);
   const used = new Set<string>();
   const sentBy = new Map<string, Array<{ file: string; at: number; m: Record<string, unknown> }>>();
+  // A sender with a sent copy this scan could not read is left for the next
+  // scan: pairing with the copies that did read could give a question another
+  // question's words.
+  const shaky = new Set<string>();
   const sentOf = (id: string) => {
     if (!sentBy.has(id)) {
-      sentBy.set(id, jsonFiles(missed, agentsDir, id, 'outbox', '.sent').flatMap((file) => {
-        const m = readJson(file, missed);
+      const missedHere = (p: string): void => { shaky.add(id); missed?.(p); };
+      sentBy.set(id, jsonFiles(missedHere, agentsDir, id, 'outbox', '.sent').flatMap((file) => {
+        const m = readJson(file, missedHere);
         if (!m || !names.has(str(m.to).trim().toLowerCase())) return [];
         let at = NaN;
         try { at = lstatSync(file).mtimeMs; } catch { /* skipped */ }
@@ -158,7 +164,9 @@ export function backfillChecked(i: BackfillInput): CheckedRow[] {
     }
     if (from === 'human' || from === 'system') continue;
     // A teammate's question: its sent copy, the latest one before Research got it.
-    const sent = sentOf(from).filter((s) => !used.has(s.file) && s.at <= at + 5_000 && at - s.at < 35 * 60_000).sort((x, y) => y.at - x.at)[0];
+    const copies = sentOf(from);
+    if (shaky.has(from)) continue;
+    const sent = copies.filter((s) => !used.has(s.file) && s.at <= at + 5_000 && at - s.at < 35 * 60_000).sort((x, y) => y.at - x.at)[0];
     if (!sent) continue;
     used.add(sent.file);
     rows.push(row(at, 'in', from, i.researchId, texts({ subject: sent.m.subject, body: sent.m.body }, got)));
@@ -177,7 +185,7 @@ export function backfillChecked(i: BackfillInput): CheckedRow[] {
   const sentAnswers = [...(i.researchSentDir ? jsonFiles(missed, i.researchSentDir) : []), ...jsonFiles(missed, agentsDir, i.researchId, 'outbox', '.sent')];
   for (const file of sentAnswers) {
     const raw = readCounted(file, missed);
-    const m = parseJson(raw);
+    const m = parseJson(raw, file, missed);
     if (!m || raw === null) continue;
     const id = researchDeliveredId(`${basename(file)}\n${raw}`);
     const d = delivered.get(id);
@@ -197,49 +205,84 @@ export const CHECKED_BACKFILL_MARK = 'checked-backfill.json';
  *  is taken as done: a file no scan can read must not rescan forever. */
 export const CHECKED_BACKFILL_TRIES = 3;
 
-/** What the mark says: done, or how many scans missed files so far. A mark
- *  from before scans were retried, or one that does not read, is done. */
-function readMark(file: string): { done: boolean; tries: number } | null {
-  if (!existsSync(file)) return null;
-  try {
-    const m = JSON.parse(readFileSync(file, 'utf8')) as { done?: unknown; tries?: unknown };
-    if (m && typeof m === 'object' && m.done === false) return { done: false, tries: typeof m.tries === 'number' && m.tries > 0 ? m.tries : 1 };
-  } catch { /* a mark that does not read still means a scan ran */ }
-  return { done: true, tries: 0 };
+/** How long after a scan that missed files the next may run. Pulse reads the
+ *  list again on every filter change; a file locked for a minute (a sync
+ *  client, a slow volume) must not use up every try at once. */
+export const CHECKED_BACKFILL_RETRY_MS = 10 * 60_000;
+
+/** checked-backfill.json. Done unless `done` is false. A scan that missed files
+ *  keeps its window (`from`, `until`) for the next scan, so a retry never takes
+ *  in a message kept live since, and the time the next scan may run (`next`). */
+export interface BackfillMark {
+  at: number;
+  rows: number;
+  missed?: number;
+  done?: false;
+  tries?: number;
+  from?: number;
+  until?: number;
+  next?: number;
 }
 
-/** A found row's identity, so a scan run again adds only rows it lacked. */
-const foundKey = (r: CheckedRow): string => JSON.stringify([r.at, r.way, r.from, r.to, r.wrote]);
+const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
 
-/** Once per office: rows for the 62 days before the lists kept words, put in
- *  front of the rows kept since, then a mark so it never runs again. A scan
- *  that missed files runs again on the next open, up to CHECKED_BACKFILL_TRIES
- *  scans. Sync, on the main process like the hive's own appends, so nothing
- *  interleaves. */
+/** The mark, or null before the first scan. A mark from before scans were
+ *  retried, or one that does not read, is done. */
+function readMark(file: string): BackfillMark | null {
+  if (!existsSync(file)) return null;
+  try {
+    const m = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
+    if (m && typeof m === 'object' && m.done === false) {
+      const tries = num(m.tries);
+      return { at: num(m.at) ?? 0, rows: num(m.rows) ?? 0, done: false, tries: tries && tries > 0 ? tries : 1, from: num(m.from), until: num(m.until), next: num(m.next) };
+    }
+  } catch { /* a mark that does not read still means a scan ran */ }
+  return { at: 0, rows: 0 };
+}
+
+/** Which message a found row stands for. Not what it says: a scan that missed a
+ *  file can pair a question with the wrong sent copy, and the next scan's row
+ *  for the same message replaces it. */
+const foundKey = (r: CheckedRow): string => JSON.stringify([r.at, r.way, r.from, r.to]);
+
+/** Write through a file beside it, so a crash never leaves half a file. */
+function writeWhole(file: string, text: string): void {
+  const tmp = `${file}.${process.pid}.tmp`;
+  writeFileSync(tmp, text, 'utf8');
+  renameSync(tmp, file);
+}
+
+/** Rows for the 62 days before the lists kept words, put in front of the rows
+ *  kept since, then a mark. A scan that missed files runs again on an open at
+ *  least CHECKED_BACKFILL_RETRY_MS later, over the same window, up to
+ *  CHECKED_BACKFILL_TRIES scans; after a done mark it never runs again. Sync,
+ *  on the main process like the hive's own appends, so nothing interleaves. */
 export function ensureCheckedBackfill(privateDir: string, input: Omit<BackfillInput, 'from' | 'until' | 'researchSentDir' | 'onMissed'>, now = Date.now()): void {
-  const mark = join(privateDir, CHECKED_BACKFILL_MARK);
-  const was = readMark(mark);
-  if (was?.done) return;
+  const markFile = join(privateDir, CHECKED_BACKFILL_MARK);
+  const was = readMark(markFile);
+  if (was && was.done !== false) return;
+  if (was?.next !== undefined && now < was.next) return;
   const live = join(privateDir, CHECKED_FILE);
   let existing: string[] = [];
   try { existing = readFileSync(live, 'utf8').split('\n').filter((l) => l.trim()); } catch { /* none yet */ }
   const parsed = existing.map(parseChecked);
-  // Rows an earlier scan found are not where keeping began.
-  const kept = parsed.filter((r): r is CheckedRow => !!r && !r.found);
-  const until = kept.reduce((m, r) => Math.min(m, r.at), now);
+  // The first scan's window, kept for every retry. Rows an earlier scan found
+  // are not where keeping began.
+  const from = was?.from ?? now - CHECKED_KEEP_MS;
+  const until = was?.until ?? parsed.reduce((m, r) => (r && !r.found ? Math.min(m, r.at) : m), now);
   let missed = 0;
-  const rows = backfillChecked({ ...input, researchSentDir: join(privateDir, 'research-outbox', 'sent'), from: now - CHECKED_KEEP_MS, until, onMissed: () => { missed++; } });
-  const had = new Set(parsed.filter((r): r is CheckedRow => !!r && !!r.found).map(foundKey));
-  const fresh = rows.filter((r) => !had.has(foundKey(r)));
+  const rows = backfillChecked({ ...input, researchSentDir: join(privateDir, 'research-outbox', 'sent'), from, until, onMissed: () => { missed++; } });
+  const newer = new Set(rows.map(foundKey));
+  const kept = existing.flatMap((line, n) => (parsed[n]?.found && !newer.has(foundKey(parsed[n]!)) ? [{ at: parsed[n]!.at, line }] : []));
   mkdirSync(privateDir, { recursive: true });
-  if (fresh.length) {
+  if (rows.length) {
     // Found rows first, in time order, then every other line as it was.
-    const earlier = existing.flatMap((line, n) => (parsed[n]?.found ? [{ at: parsed[n]!.at, line }] : []));
-    const found = [...earlier, ...fresh.map((r) => ({ at: r.at, line: JSON.stringify(r) }))]
+    const found = [...kept, ...rows.map((r) => ({ at: r.at, line: JSON.stringify(r) }))]
       .sort((a, b) => a.at - b.at).map((x) => x.line);
-    writeFileSync(live, `${[...found, ...existing.filter((_, n) => !parsed[n]?.found)].join('\n')}\n`, 'utf8');
+    writeWhole(live, `${[...found, ...existing.filter((_, n) => !parsed[n]?.found)].join('\n')}\n`);
   }
   const tries = (was?.tries ?? 0) + 1;
   const done = missed === 0 || tries >= CHECKED_BACKFILL_TRIES;
-  writeFileSync(mark, JSON.stringify({ at: now, rows: had.size + fresh.length, ...(missed ? { missed } : {}), ...(done ? {} : { done: false, tries }) }), 'utf8');
+  const mark: BackfillMark = { at: now, rows: kept.length + rows.length, ...(missed ? { missed } : {}), ...(done ? {} : { done: false, tries, from, until, next: now + CHECKED_BACKFILL_RETRY_MS }) };
+  writeWhole(markFile, JSON.stringify(mark));
 }
