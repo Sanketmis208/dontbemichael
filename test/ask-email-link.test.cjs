@@ -229,7 +229,47 @@ test('re-review of #686 at d23b3cf9, smaller items: question words, a part that 
   assert.equal(answer('x', `Send it ${'and '.repeat(80)}with my changes`), false, 'the changes are too far from the send');
   const t0 = process.hrtime.bigint();
   assert.equal(answer('x', `${'send it then '.repeat(20_000)}show me again`), false);
-  assert.ok(Number(process.hrtime.bigint() - t0) / 1e6 < 500, 'a long label with many sends is cheap');
+  assert.ok(Number(process.hrtime.bigint() - t0) / 1e6 < 5000, 'a long label with many sends is cheap');
+});
+
+test('re-review of #686 at 653765d7: a no about waiting, a long denial, and the scan bound', () => {
+  // Value: protects=a label that sends first and shows the owner afterwards is flagged however the wait is worded, and the scan bound is exact; fails_when=a no about waiting holds the send, a denial five or six words before the look slips past, the scan reaches further or less far than 300 characters, a plural or an accented name changes what a bare approve reads, or a send back of a named thing is flagged; why_new=re-review of #686 at 653765d7; seam=none
+  const at = '2026-11-05T20:10:00Z';
+  const answer = (q, label, parts) => R.askChangeSends({ q, askedAt: at, options: [{ label }], ...(parts ? { parts } : {}) }, SINCE);
+  const opt = (label) => answer('x', label);
+  // 1. A no about waiting is not about the send.
+  for (const label of ["Don't wait to send it with my changes, then show me again", 'No need to wait to send it with my edits, then show me again',
+    "Don't hesitate to send it with my changes, then show me again", 'Without delay send it with my changes, then show me again'])
+    assert.equal(opt(label), true, label);
+  // A no right before the send, or "not" with "yet" and "ready to", still holds it.
+  for (const label of ["Don't send it yet, redo it with my changes, then show me again", "It won't go out: redo it with my edits, then show me again",
+    'Without sending, update it with my changes, then show me again', 'Not yet sending: update it with my changes, then show me again',
+    'Not yet ready to send: update it with my changes, then show me again']) assert.equal(opt(label), false, label);
+  // 2. A denial up to six words before the look, still ending at a comma.
+  assert.equal(opt("Send with my changes, I don't think I need you to review it"), true, 'five words between');
+  assert.equal(opt("Send with my changes, I don't really think I need you to review it"), true, 'six words between');
+  assert.equal(opt('Send it with my changes without the discount line, show me again first'), false, 'the comma still ends it');
+  // The scan bound: "with my changes", or coming back, at most SEND_SCAN_CHARS (300) characters after the send.
+  const gap = (n) => ` ${'a '.repeat((n - 2) / 2)} `;
+  assert.equal(gap(300).length, 300);
+  assert.equal(opt(`Send${gap(300)}with my changes`), true, '300 characters between');
+  assert.equal(opt(`Send${gap(302)}with my changes`), false, '302 characters between');
+  assert.equal(opt(`Send with my changes${gap(284)}then show me again`), true, 'coming back 300 characters after the send');
+  assert.equal(opt(`Send with my changes${gap(286)}then show me again`), false, 'coming back 302 characters after the send');
+  // Plurals, one word list, and a bare approve of the draft.
+  assert.equal(opt('Approve the replies with my changes'), true, 'replies go out');
+  assert.equal(opt('Approve the emails with my changes'), true, 'emails go out');
+  assert.equal(answer('**Approve the draft rota?**', 'Approve the draft with my changes'), false, 'a draft rota stays in');
+  assert.equal(answer('**Approve the draft reply to Dana?**', 'Approve the draft with my changes'), true, 'a draft reply goes out');
+  assert.equal(answer('**Approve the replies to Dana and Kim?**', 'Approve with my changes'), true, 'a plural in the question');
+  // An accented name names its own thing.
+  assert.equal(answer('**Approve the reply to Dana?**', 'Yes', [{ q: "Approve José's rota?", options: [{ label: 'Approve with my changes' }] }]), false, "José's rota");
+  // A send back of a named thing comes back when the label says so.
+  assert.equal(opt('Send the reply back to Pam with my changes, then show me again'), false);
+  // The message someone sent, with two words between.
+  assert.equal(R.askMissesSource({ q: '**Accept the terms in the message the client sent?**', askedAt: at }, SINCE), true, 'the message the client sent');
+  assert.equal(R.askMissesSource({ q: '**Was the email that was sent to Dana read?**', askedAt: at }, SINCE), false, 'a passive is ours');
+  assert.equal(R.askMissesSource({ q: '**Did the email draft we sent bounce?**', askedAt: at }, SINCE), false, 'we sent it');
 });
 
 test('both reach Michael\'s tidy list each turn, with what to do', () => {

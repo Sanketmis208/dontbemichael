@@ -503,9 +503,10 @@ const EMAIL_ASK = new RegExp([
   String.raw`(?<!\b(?:be|is|was|were|are|been|being)(?: [\p{L}\p{M}\p{N}'’]+){0,2} )\be-?mailed (us|me|you|the office|in(?! time\b)|back)\b`,
   // "Dana sent us an email".
   String.raw`\bsent (us|me|you|the office) an? (e-?mail|message)\b`,
-  // "the message Will sent", "the email Dana wrote", but not "the quote email be
-  // sent", "the email we sent" or "the quote email already sent".
-  String.raw`\b(?:message|e-?mail) (?!(?:be|is|was|were|been|being|has|had|have|gets?|got|we|i|you|they|already|just|never|not|also|still)\b)[\p{L}\p{M}]+ (?:sent|wrote)\b`
+  // "the message Will sent", "the email Dana wrote", "the message the client
+  // sent", but not "the quote email be sent", "the email we sent", "the email
+  // that was sent" or "the quote email already sent".
+  String.raw`\b(?:message|e-?mail) (?:(?!(?:be|is|was|were|been|being|has|had|have|gets?|got|we|i|you|they|already|just|never|not|also|still)\b)[\p{L}\p{M}]+ ){1,2}(?:sent|wrote)\b`
 ].join('|'), 'iu');
 /** A chat context ("the Slack thread", "in Teams"), whose replies have no email:
  *  link. Plain "teams" or "a quick chat" are ordinary words, not a chat. */
@@ -594,40 +595,47 @@ export function askClaimsUnsearched(entry: AskText | null | undefined): boolean 
 const SEND_VERB = String.raw`(?:\b(?:send|publish)\w*|\bgo(?:es)? out|(?<!\b(?:the|a|an|this|that|my|your|our|their|its) )\bpost(?:s|ed|ing)?(?!-))\b`;
 /** Words that say no. */
 const NEG = String.raw`(?:don['’]?t|doesn['’]?t|do not|does not|won['’]?t|will not|never|without|no need(?: for \w+)?(?: to)?)`;
-/** A send that has not happened yet: after before, until, instead of or a
- *  no, within two words, with no comma or "and" between ("Before it goes
- *  out", "Not ready to send"). "Ready to post" alone is a send, and so is
- *  "Don't wait, send" or "don't wait and send". */
-const SEND_HELD = String.raw`(?<!\b(?:before|until|till|unless|instead of|not|${NEG})(?: (?!(?:and|then|but|or|so|just|now)\b)[\w'’]+){0,2} )`;
+/** A send that has not happened yet: a no right before the send ("don't
+ *  send", "won't go out", "without sending"), "not" with an optional "yet"
+ *  and "ready to" ("Not ready to send", "not yet sending"), or before, until,
+ *  till, unless or instead of within two words, with no comma or "and"
+ *  between ("Before it goes out"). A no about waiting is not about the send,
+ *  so "Don't wait to send", "No need to wait to send", "Don't hesitate to
+ *  send" and "Without delay send" are sends, and so is "Ready to post". */
+const SEND_HELD = String.raw`(?<!\b(?:before|until|till|unless|instead of)(?: (?!(?:and|then|but|or|so|just|now)\b)[\w'’]+){0,2} |\b${NEG} |\bnot (?:yet )?(?:ready to )?)`;
 const WITH_CHANGES = String.raw`with (my |your |the )?(changes|edits)\b`;
-/** What leaves the office when the owner approves it with changes. */
-const OUTBOUND = String.raw`(?:reply|email|e-mail|post|quote|message|draft|letter|invoice|newsletter)`;
+/** How far a send scans for "with my changes" or for coming back after it, so
+ *  a long label costs little. */
+const SEND_SCAN_CHARS = 300;
+/** What leaves the office when the owner approves it with changes, in a label
+ *  ("Approve the replies with my changes") and in a question ("Approve the
+ *  reply to Dana?"). Not "the draft rota" or "the post-holiday schedule". */
+const OUTBOUND = String.raw`(?:repl(?:y|ies)|e-?mails?|quotes?|messages?|letters?|invoices?|newsletters?|posts?(?!-))\b`;
 /** An option that sends with the changes. "approve" counts for what leaves
  *  the office (a reply, an email, a post, a quote, an invoice), so "Approve
  *  the rota with my changes" is not a send. A send back to someone ("Send it
  *  back to Pam with my edits") counts too: the label can't say whether that
- *  someone is in the office or out of it, so it says it comes back if it does.
- *  The scan stops 300 characters on, so a long label costs little. */
-const CHANGE_SENDS = new RegExp(String.raw`${SEND_VERB}[^.]{0,300}?\b${WITH_CHANGES}|\bapprove the ${OUTBOUND} ${WITH_CHANGES}|\b(edit|change)\w* (it |them )?(and|then) (send|post|publish)`, 'i');
-/** "Approve with my changes" or "Approve it with my changes": a send when the
- *  question it answers names something that leaves the office, or names
- *  nothing and the ask it is part of does. For "Approve the new rota?" the
- *  label can't say what goes out, and nothing does. */
-const APPROVE_BARE = new RegExp(String.raw`\bapprove( it)? ${WITH_CHANGES}`, 'i');
-/** A question about something that leaves the office. Not "the draft rota" or
- *  "the post-holiday schedule". */
-const OUTBOUND_ASK = /\b(?:reply|email|e-mail|quote|message|letter|invoice|newsletter)s?\b|\bposts?\b(?!-)|\brepl(y|ies)\b/i;
+ *  someone is in the office or out of it, so it says it comes back if it does. */
+const CHANGE_SENDS = new RegExp(String.raw`${SEND_VERB}[^.]{0,${SEND_SCAN_CHARS}}?\b${WITH_CHANGES}|\bapprove the ${OUTBOUND} ${WITH_CHANGES}|\b(edit|change)\w* (it |them )?(and|then) (send|post|publish)`, 'i');
+/** "Approve with my changes", "Approve it with my changes" or "Approve the
+ *  draft with my changes": a send when the question it answers names something
+ *  that leaves the office, or names nothing and the ask it is part of does.
+ *  For "Approve the new rota?" the label can't say what goes out, and nothing
+ *  does. */
+const APPROVE_BARE = new RegExp(String.raw`\bapprove( it| the draft)? ${WITH_CHANGES}`, 'i');
+/** A question about something that leaves the office. */
+const OUTBOUND_ASK = new RegExp(String.raw`\b${OUTBOUND}`, 'i');
 /** A question that names its own thing ("Approve the new rota?", "Pam's
- *  rota?"), so the top question does not speak for it. "Send it?" names
- *  nothing. */
-const NAMES_A_THING = /\b(?:the|a|an|this|that|these|those|my|your|our|their|his|her|its) [a-z]|\b[a-z]+['’]s [a-z]/i;
+ *  rota?", "José's rota?"), so the top question does not speak for it. "Send
+ *  it?" names nothing. */
+const NAMES_A_THING = /\b(?:the|a|an|this|that|these|those|my|your|our|their|his|her|its) \p{L}|(?<![\p{L}\p{M}\p{N}])[\p{L}\p{M}]+['’]s \p{L}/iu;
 const COMES_BACK = String.raw`(show me (it )?again|comes? back|for (another|a) look|review it)`;
 const CHANGE_COMES_BACK = new RegExp(String.raw`\b${COMES_BACK}\b`, 'i');
-/** A no within four words before coming back: "don't show me again", "I don’t
+/** A no within six words before coming back: "don't show me again", "I don’t
  *  need it to come back", "don't wait until I review it". The words must run
  *  without a comma, so in "...without the discount line, show me again first"
  *  the comma ends it and the "without" is about the change, not the look. */
-const CHANGE_DENIAL = new RegExp(String.raw`\b${NEG}((?: [\w'’]+){0,4}?) ${COMES_BACK}`, 'gi');
+const CHANGE_DENIAL = new RegExp(String.raw`\b${NEG}((?: [\w'’]+){0,6}?) ${COMES_BACK}`, 'gi');
 /** A send held for the look between the no and the look: "it won't go out
  *  until you show me again", "don't post till I review it". */
 const HELD_FOR_LOOK = /\b(?:go(?:es)? out|send\w*|post(?:s|ed|ing)?|publish\w*|leaves?)\b.*\b(?:until|before|till|unless)\b/i;
@@ -637,10 +645,11 @@ const changeDenied = (label: string): boolean =>
  *  went out first. A look before the send ("Fix it, then show me again, then
  *  send") is the look rule 10 asks for, and so is a send not made yet ("Before
  *  it goes out, redo it with my edits, then show me again"). */
-const CHANGE_AFTER_SEND = new RegExp(String.raw`${SEND_HELD}${SEND_VERB}[^.]{0,300}?\b(then|afterwards|after that),? ${COMES_BACK}`, 'i');
-/** A send back to someone ("Send it back to Pam"), which comes back by itself
- *  when it then says it shows the owner again. */
-const SENDS_BACK = /\bsend (it |them )?back\b/i;
+const CHANGE_AFTER_SEND = new RegExp(String.raw`${SEND_HELD}${SEND_VERB}[^.]{0,${SEND_SCAN_CHARS}}?\b(then|afterwards|after that),? ${COMES_BACK}`, 'i');
+/** A send back to someone ("Send it back to Pam", "Send the reply back to
+ *  Pam"), which comes back by itself when it then says it shows the owner
+ *  again. */
+const SENDS_BACK = /\bsend (?:it |them |the [\p{L}\p{M}-]+ )?back\b/iu;
 
 /** A choice that sends something with the owner's changes before they see
  *  them again, which house rule 10 forbids (owner, 2026-11-04). Coming back
