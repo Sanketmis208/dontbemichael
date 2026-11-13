@@ -966,7 +966,8 @@ function registerMarkdownLinkProvider(term: Terminal, ptyId: string): void {
             activate: (event: MouseEvent | undefined) => {
               // ⌘/Ctrl+click only — a plain click must keep going to the TUI.
               if (event && !(event.metaKey || event.ctrlKey)) return;
-              void (unchecked ? activateUnchecked(abs, nameAbs) : activatePath(abs));
+              if (unchecked) { void activateUnchecked(abs, nameAbs); return; }
+              void activatePath(abs);
             }
           });
         }

@@ -189,10 +189,12 @@ test('the terminal gives an unchecked match no underline and looks at the disk o
   // Value: protects=the provider wires the unchecked token to a click time look instead of dropping it (re-review of #687 at 7f6d371f, item 1); fails_when=an unchecked token is underlined, skipped, or its click reveals without asking the disk; why_new=the provider skipped unchecked tokens; seam=source pin, since the provider needs a live xterm
   const src = fs.readFileSync(path.resolve(__dirname, '..', 'src/renderer/src/components/terminalPool.ts'), 'utf8');
   assert.match(src, /decorations: \{ underline: !unchecked, pointerCursor: !unchecked \}/);
-  assert.match(src, /unchecked \? activateUnchecked\(abs, nameAbs\) : activatePath\(abs\)/);
+  assert.match(src, /if \(unchecked\) \{ void activateUnchecked\(abs, nameAbs\); return; \}/);
   const fn = src.slice(src.indexOf('async function activateUnchecked'), src.indexOf('function quotedKnownOnDisk'));
   assert.match(fn, /await pathStats\.lookForClick\(abs\)/);
   assert.match(fn, /if \(res && nameAbs\) await activatePath\(nameAbs\)/, 'the name is tried only on a definite miss');
+  assert.match(fn, /void window\.cth\.revealPath\(res\.path\)/, 'the whole path is only revealed');
+  assert.doesNotMatch(fn, /openPath|openExternal|openFile|openAskFile/);
 });
 
 test('quoted versions and prose do not become file paths', () => {
