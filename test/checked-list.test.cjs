@@ -494,6 +494,7 @@ test('a backfill that could not read a file runs again and adds only what it mis
     fs.utimesSync(sent, (at - 2000) / 1000, (at - 2000) / 1000);
     const got = path.join(peteDone, `${name}.json`);
     fs.writeFileSync(got, JSON.stringify({ id: name, from: 'pam', to: 'research', subject, body: `${subject} for a customer`, created_at: new Date(at).toISOString() }));
+    fs.utimesSync(got, at / 1000, at / 1000);
     return got;
   };
   question('q1', now - 7_200_000, 'Rate');
@@ -588,7 +589,9 @@ function retryOffice(t, tag) {
     const sent = path.join(sentDir, `${name}.json`);
     fs.writeFileSync(sent, JSON.stringify({ to: 'research', act: 'query', subject, body: `${subject} for Rosa Diaz` }));
     fs.utimesSync(sent, (at - 2000) / 1000, (at - 2000) / 1000);
-    fs.writeFileSync(path.join(box, `${name}.json`), JSON.stringify({ id: name, from: 'pam', to: 'research', subject, body: `${subject} for a customer`, created_at: new Date(at).toISOString() }));
+    const got = path.join(box, `${name}.json`);
+    fs.writeFileSync(got, JSON.stringify({ id: name, from: 'pam', to: 'research', subject, body: `${subject} for a customer`, created_at: new Date(at).toISOString() }));
+    fs.utimesSync(got, at / 1000, at / 1000);
     return sent;
   };
   const input = { hiveRoot, researchId: 'research', researchNames: ['Pete'], nameOf: () => null };
@@ -612,7 +615,7 @@ test('a question whose sent copy could not be read is never paired with another 
   fs.chmodSync(lockedSent, 0o000);
   t.after(() => { try { fs.chmodSync(lockedSent, 0o644); } catch { /* gone */ } });
   B.ensureCheckedBackfill(o.priv, o.input, now);
-  assert.deepEqual(rows(o.home), [], 'Pam is left for the next scan, not paired with the copies that read');
+  assert.deepEqual(rows(o.home).map((r) => [r.sent.subject, r.wrote.subject]), [['Rate', 'Rate']], 'only the question whose window holds the unread copy waits; the earlier one pairs with its own');
   assert.equal(o.mark().done, false);
   fs.chmodSync(lockedSent, 0o644);
   B.ensureCheckedBackfill(o.priv, o.input, now + B.CHECKED_BACKFILL_RETRY_MS);
@@ -636,6 +639,7 @@ test('a retry replaces an earlier scan\'s row for the same message, and the last
   const live = { at: now + 1000, way: 'in', from: 'pam', to: 'research', outcome: 'pass', wrote: { subject: 'kept', body: 'kept' } };
   o.seed({ at: now, rows: 1, missed: 1, done: false, tries: 2, from, until: now, next: now }, [wrong, live]);
   fs.writeFileSync(path.join(o.peteDone, 'half.json'), '{"id":"half","from":"pam","to":"rese');
+  fs.utimesSync(path.join(o.peteDone, 'half.json'), (at + 60_000) / 1000, (at + 60_000) / 1000);
   B.ensureCheckedBackfill(o.priv, o.input, now + 60_000);
   assert.deepEqual(rows(o.home).map((r) => [r.wrote.subject, !!r.found]), [['Rate', true], ['kept', false]], 'the right row in place of the wrong one, the live row as it was');
   assert.equal(o.mark().done, undefined, 'the third scan is the last');
@@ -665,6 +669,7 @@ test('a scan that missed a file waits before the next, so flipping the list does
   o.question('a', now - 3_600_000, 'Rate');
   const half = path.join(o.peteDone, 'half.json');
   fs.writeFileSync(half, '{"id":"half","from":"pam"');
+  fs.utimesSync(half, (now - 60_000) / 1000, (now - 60_000) / 1000);
   B.ensureCheckedBackfill(o.priv, o.input, now);
   assert.deepEqual([o.mark().tries, o.mark().next], [1, now + B.CHECKED_BACKFILL_RETRY_MS]);
   for (const later of [1, 1000, B.CHECKED_BACKFILL_RETRY_MS - 1]) B.ensureCheckedBackfill(o.priv, o.input, now + later);
@@ -688,6 +693,98 @@ test('a file caught half written counts as missed; JSON that is not a message do
   const missed = [];
   B.backfillChecked({ ...o.input, researchSentDir: sentAnswers, from: 0, until: Date.now() + 1e9, onMissed: (p) => missed.push(p) });
   assert.deepEqual(missed.sort(), [...files].sort());
+});
+
+// ── Re-review of #695 at aa7130fd, 2026-11-12 ──
+
+test('a retry days later starts no earlier than the live list keeps, so archived rows stay archived', (t) => {
+  // Value: protects=a check the daily archive moved out is not brought back to the live list and archived twice (re-review of #695 at aa7130fd, item 1); fails_when=a retry reuses the first scan's from after rows aged past CHECKED_KEEP_MS; why_new=re-review of #695; seam=temporary office folders, splitForArchive run by hand as recordChecked runs it, a half written file for one that could not be read
+  const B = loadTs('src/main/checkedBackfill.ts');
+  const o = retryOffice(t, 'archive');
+  const now = Date.UTC(2026, 9, 16, 23, 0);
+  const DAY = 86_400_000;
+  o.question('old', now - C.CHECKED_KEEP_MS + DAY, 'Rate');
+  o.question('new', now - 3_600_000, 'Late fee');
+  const half = path.join(o.peteDone, 'half.json');
+  fs.writeFileSync(half, '{"id":"half","from":"pam"');
+  fs.utimesSync(half, (now - 60_000) / 1000, (now - 60_000) / 1000);
+  B.ensureCheckedBackfill(o.priv, o.input, now);
+  assert.deepEqual(rows(o.home).map((r) => r.wrote.subject), ['Rate', 'Late fee'], 'the first scan finds both');
+  assert.equal(o.mark().done, false);
+
+  // Three days on, the daily archive moves Rate out; then Pulse opens and the retry runs.
+  const later = now + 3 * DAY;
+  const live = path.join(o.priv, 'checked.jsonl');
+  const { keep, archive } = C.splitForArchive(fs.readFileSync(live, 'utf8').split('\n'), later);
+  assert.equal([...archive.values()].flat().length, 1, 'Rate is archived');
+  fs.writeFileSync(live, keep.join('\n'));
+  B.ensureCheckedBackfill(o.priv, o.input, later);
+  assert.ok(rows(o.home).every((r) => r.at >= later - C.CHECKED_KEEP_MS), 'no live row older than the list keeps');
+  assert.deepEqual(rows(o.home).map((r) => r.wrote.subject), ['Late fee']);
+  assert.equal(o.mark().from, later - C.CHECKED_KEEP_MS, 'the window starts where keeping does');
+  assert.equal(o.mark().until, now, "and still ends where the first scan's did");
+});
+
+test('a busy office: a message moved to .done mid-scan, or changed after the window, is not missed', (t) => {
+  // Value: protects=a first scan in an office where agents are working finishes in one go instead of rescanning every folder three times for nothing (re-review of #695 at aa7130fd, item 2); fails_when=an inbox file the hive moved to .done after the listing counts as missed or loses its row, a message read twice, or a file changed at or after until counts as missed; why_new=re-review of #695; seam=nameOf runs after the first question is read, so it moves the rest of the inbox to .done mid-scan as the hive would
+  const B = loadTs('src/main/checkedBackfill.ts');
+  const o = retryOffice(t, 'busy');
+  const now = Date.UTC(2026, 9, 16, 23, 0);
+  o.question('a', now - 3_600_000, 'Rate', o.inbox);
+  o.question('b', now - 1_800_000, 'Late fee', o.inbox);
+  let moved = false;
+  const nameOf = () => {
+    if (!moved) {
+      moved = true;
+      for (const f of fs.readdirSync(o.inbox)) if (f.endsWith('.json')) fs.renameSync(path.join(o.inbox, f), path.join(o.peteDone, f));
+    }
+    return null;
+  };
+  // A message being written right now: half written, and changed after the window ends.
+  const writing = path.join(o.inbox, 'writing.json');
+  fs.writeFileSync(writing, '{"id":"writing","from":"pam"');
+  fs.utimesSync(writing, (now + 1000) / 1000, (now + 1000) / 1000);
+  const missed = [];
+  const found = B.backfillChecked({ ...o.input, nameOf, researchSentDir: null, from: now - C.CHECKED_KEEP_MS, until: now, onMissed: (p) => missed.push(p) });
+  assert.ok(moved, 'the inbox moved mid-scan');
+  assert.deepEqual(missed, [], 'nothing missed');
+  assert.deepEqual(found.map((r) => r.wrote.subject), ['Rate', 'Late fee'], 'each message once, the moved one read from .done');
+  // The same half written file, changed before the window ends, still counts.
+  fs.utimesSync(path.join(o.peteDone, 'writing.json'), (now - 1000) / 1000, (now - 1000) / 1000);
+  const again = [];
+  B.backfillChecked({ ...o.input, researchSentDir: null, from: now - C.CHECKED_KEEP_MS, until: now, onMissed: (p) => again.push(p) });
+  assert.deepEqual(again, [path.join(o.peteDone, 'writing.json')]);
+});
+
+test('on the last try, a sender\'s questions far from an unread sent copy still get rows', (t) => {
+  // Value: protects=one sent copy that never reads drops only the questions it could have paired with, not every question from that sender for good (re-review of #695 at aa7130fd, item 3); fails_when=an unread copy holds back questions outside its 35 minute window, or a question inside it is paired with another copy; why_new=re-review of #695; seam=a half written sent copy stands in for one that cannot be read, so it runs on Windows and as root; a seeded mark makes this the last try
+  const B = loadTs('src/main/checkedBackfill.ts');
+  const o = retryOffice(t, 'last');
+  const now = Date.UTC(2026, 9, 16, 23, 0);
+  o.question('far', now - 4 * 3_600_000, 'Rate');
+  const near = o.question('near', now - 3_600_000, 'Late fee');
+  // Another copy of Pam's near Late fee, readable, so a pairing in its window would give it the wrong words.
+  const other = path.join(path.dirname(near), 'other.json');
+  fs.writeFileSync(other, JSON.stringify({ to: 'research', act: 'query', subject: 'Deposit', body: 'Deposit for Rosa Diaz' }));
+  fs.utimesSync(other, (now - 3_600_000 - 600_000) / 1000, (now - 3_600_000 - 600_000) / 1000);
+  fs.writeFileSync(near, '{"to":"research","subj');
+  fs.utimesSync(near, (now - 3_600_000 - 2000) / 1000, (now - 3_600_000 - 2000) / 1000);
+  o.seed({ at: now, rows: 0, missed: 1, done: false, tries: B.CHECKED_BACKFILL_TRIES - 1, from: now - C.CHECKED_KEEP_MS, until: now, next: now });
+  B.ensureCheckedBackfill(o.priv, o.input, now + 60_000);
+  assert.deepEqual(rows(o.home).map((r) => [r.sent.subject, r.wrote.subject]), [['Rate', 'Rate']], 'the far question pairs; the near one gets no row rather than Deposit');
+  assert.equal(o.mark().done, undefined, 'the last try is done');
+  assert.equal(o.mark().missed, 1);
+});
+
+test('a temp file whose rename fails is removed', (t) => {
+  // Value: protects=check texts never outlive a factory reset in a temp file it does not know (re-review of #695 at aa7130fd, smaller); fails_when=checked.jsonl.<pid>.tmp stays behind after the rename throws; why_new=re-review of #695; seam=checked.jsonl is a folder, so the rename onto it fails on every platform
+  const B = loadTs('src/main/checkedBackfill.ts');
+  const o = retryOffice(t, 'tmp');
+  const now = Date.UTC(2026, 9, 16, 23, 0);
+  o.question('a', now - 3_600_000, 'Rate');
+  fs.mkdirSync(path.join(o.priv, 'checked.jsonl', 'x'), { recursive: true });
+  assert.throws(() => B.ensureCheckedBackfill(o.priv, o.input, now));
+  assert.deepEqual(fs.readdirSync(o.priv).filter((f) => f.endsWith('.tmp')), []);
 });
 
 test('word changes put back together give both texts, whatever is shared at the ends', () => {

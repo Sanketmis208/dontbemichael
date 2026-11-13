@@ -2,7 +2,8 @@
  * Reading a file an agent could have written, with the owner's rights: never
  * through a link, never waiting on a pipe, never a file too big to be a
  * message (red team, third ship). Shared by the hive's router and Pulse's
- * one-time backfill of its lists (ship review 2026-10-17).
+ * backfill of its lists, which runs until a scan reads every file or its tries
+ * run out (ship review 2026-10-17).
  */
 import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
