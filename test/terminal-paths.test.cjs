@@ -8,6 +8,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const loadTs = require('./load-ts.cjs');
 
 const {
@@ -159,19 +161,38 @@ test('the fallback links only bare file names, and each quoted match is judged o
   }
 });
 
-test('a quoted match not checked yet links nothing, so a real spaced path never links a file of the same name elsewhere', () => {
-  // Value: protects=the first hover on "/Users/Jane/Q3 summary.md" does not link summary.md in the agent's folder, which ⌘-click would then reveal (review of #687, item 5); fails_when=an unknown answer falls back to the file names inside, or stops other matches on the line from linking; why_new=onDisk had only two answers; seam=the onDisk callback stands in for the terminal's stat cache
+test('a quoted match not checked yet links whole with no underline, and names the one file inside it for the click', () => {
+  // Value: protects=the first ⌘-click on a real quoted path with a space reveals it, though xterm keeps the row's first answer while the pointer stays (re-review of #687 at 7f6d371f, item 1), and the first hover on "/Users/Jane/Q3 summary.md" never underlines summary.md in the agent's folder (item 5 before it); fails_when=an unknown answer gives no link over the whole match, falls back to the file names inside, names a file when there are two or one with a separator, or stops other matches on the line from linking; why_new=an unchecked match linked nothing, so the first click did nothing; seam=the onDisk callback stands in for the terminal's stat cache
   const { linkableTokens } = loadTs('src/shared/terminalPaths.ts');
   const unknown = () => undefined;
-  assert.deepEqual(linkableTokens('saved "/Users/Jane/Q3 summary.md"', unknown), [], 'a real file with a space in its name');
-  assert.deepEqual(linkableTokens('warn: "/tmp is full, see notes.md" now', unknown), [], 'quoted prose waits one hover too');
+  const realLine = 'saved "/Users/Jane/Q3 summary.md"';
+  const real = '"/Users/Jane/Q3 summary.md"';
+  assert.deepEqual(linkableTokens(realLine, unknown), [
+    { raw: real, index: realLine.indexOf(real), unchecked: true, onlyName: { raw: 'summary.md', index: realLine.indexOf('summary.md') } }
+  ], 'the whole match, unchecked, with the one name inside for a miss');
+  const prose = 'warn: "/tmp is full, see notes.md" now';
+  assert.deepEqual(linkableTokens(prose, unknown), [
+    { raw: '"/tmp is full, see notes.md"', index: prose.indexOf('"'), unchecked: true, onlyName: { raw: 'notes.md', index: prose.indexOf('notes.md') } }
+  ], 'quoted prose links on the first click too');
+  assert.deepEqual(linkableTokens('note: "/tmp has a.md and b.md"', unknown).map((t) => [t.unchecked, t.onlyName]), [[true, undefined]], 'two names inside: none is guessed');
+  assert.deepEqual(linkableTokens('Writing "/Users/Jane/Q3 Reports/summary.md"', unknown).map((t) => [t.unchecked, t.onlyName]), [[true, undefined]], 'a piece with a separator is never named');
 
   const line = 'open src/a.ts, "/Users/Jane/Q3 summary.md" and "/tmp/x.md"';
-  assert.deepEqual(linkableTokens(line, unknown).map((t) => t.raw), ['src/a.ts', '"/tmp/x.md"'], 'other matches on the line still link');
+  assert.deepEqual(linkableTokens(line, unknown).map((t) => [t.raw, !!t.unchecked]), [['src/a.ts', false], [real, true], ['"/tmp/x.md"', false]], 'other matches on the line link as before');
 
-  // Once the check is back, the same line links by the answer.
-  assert.deepEqual(linkableTokens('saved "/Users/Jane/Q3 summary.md"', () => true).map((t) => t.raw), ['"/Users/Jane/Q3 summary.md"']);
-  assert.deepEqual(linkableTokens('warn: "/tmp is full, see notes.md" now', () => false).map((t) => t.raw), ['notes.md']);
+  // Once the check is back, the same line links by the answer, underlined.
+  assert.deepEqual(linkableTokens(realLine, () => true), [{ raw: real, index: realLine.indexOf(real) }]);
+  assert.deepEqual(linkableTokens(prose, () => false).map((t) => t.raw), ['notes.md']);
+});
+
+test('the terminal gives an unchecked match no underline and looks at the disk on click', () => {
+  // Value: protects=the provider wires the unchecked token to a click time look instead of dropping it (re-review of #687 at 7f6d371f, item 1); fails_when=an unchecked token is underlined, skipped, or its click reveals without asking the disk; why_new=the provider skipped unchecked tokens; seam=source pin, since the provider needs a live xterm
+  const src = fs.readFileSync(path.resolve(__dirname, '..', 'src/renderer/src/components/terminalPool.ts'), 'utf8');
+  assert.match(src, /decorations: \{ underline: !unchecked, pointerCursor: !unchecked \}/);
+  assert.match(src, /unchecked \? activateUnchecked\(abs, nameAbs\) : activatePath\(abs\)/);
+  const fn = src.slice(src.indexOf('async function activateUnchecked'), src.indexOf('function quotedKnownOnDisk'));
+  assert.match(fn, /await pathStats\.lookForClick\(abs\)/);
+  assert.match(fn, /if \(res && nameAbs\) await activatePath\(nameAbs\)/, 'the name is tried only on a definite miss');
 });
 
 test('quoted versions and prose do not become file paths', () => {

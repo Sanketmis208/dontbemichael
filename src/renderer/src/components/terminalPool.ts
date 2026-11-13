@@ -906,13 +906,27 @@ async function activatePath(abs: string): Promise<void> {
   void window.cth.revealPath(hit).catch(() => { /* file browser refused */ });
 }
 
+/** ⌘-click on a quoted match with a space whose disk answer was not known when
+ *  the row was hovered (xterm keeps that row's links while the pointer stays).
+ *  The click looks now: the whole path if it is on disk, or else, when the disk
+ *  says it is not there, the one bare file name inside it (quoted prose). A
+ *  failed check reveals nothing. */
+async function activateUnchecked(abs: string, nameAbs: string | null): Promise<void> {
+  const res = await pathStats.lookForClick(abs);
+  if (res && res.exists) {
+    void window.cth.revealPath(res.path).catch(() => { /* file browser refused */ });
+    return;
+  }
+  if (res && nameAbs) await activatePath(nameAbs);
+}
+
 /** Is a quoted match with a space inside known to be a real path on disk, so it
  *  links whole? Answered now, from what is already known, because the link
  *  provider must answer for the line as it is (a late answer can land on a line
  *  that has scrolled or on another hovered line). A path not checked yet is
- *  undefined, so nothing in it links this time, and a check may start in the
- *  background; a later hover knows. A path that does not resolve (no cwd yet)
- *  is never on disk and is never checked. */
+ *  undefined: it gets a link with no underline that looks at the disk on click,
+ *  and a check may start in the background, so a later hover knows. A path
+ *  that does not resolve (no cwd yet) is never on disk and is never checked. */
 function quotedKnownOnDisk(ptyId: string, raw: string): boolean | undefined {
   return pathStats.knownOnDisk(resolvePathCandidate(ptyId, raw));
 }
@@ -935,9 +949,10 @@ function registerMarkdownLinkProvider(term: Terminal, ptyId: string): void {
         const text = line ? line.translateToString(true) : '';
         if (!text || !text.includes('.')) { callback(undefined); return; }
         const links: Parameters<typeof callback>[0] = [];
-        for (const { raw, index } of linkableTokens(text, (raw) => quotedKnownOnDisk(ptyId, raw))) {
+        for (const { raw, index, unchecked, onlyName } of linkableTokens(text, (raw) => quotedKnownOnDisk(ptyId, raw))) {
           const abs = resolvePathCandidate(ptyId, raw);
           if (!abs) continue;
+          const nameAbs = onlyName ? resolvePathCandidate(ptyId, onlyName.raw) : null;
           const span = line ? linkCellRange(cellsOf(line), index, index + raw.length, raw) : null;
           if (!span) continue;
           links!.push({
@@ -946,11 +961,12 @@ function registerMarkdownLinkProvider(term: Terminal, ptyId: string): void {
               end: { x: span.endX, y: bufferLineNumber }
             },
             text: raw,
-            decorations: { underline: true, pointerCursor: true },
+            // Not known on disk yet: no underline until the disk says so.
+            decorations: { underline: !unchecked, pointerCursor: !unchecked },
             activate: (event: MouseEvent | undefined) => {
               // ⌘/Ctrl+click only — a plain click must keep going to the TUI.
               if (event && !(event.metaKey || event.ctrlKey)) return;
-              void activatePath(abs);
+              void (unchecked ? activateUnchecked(abs, nameAbs) : activatePath(abs));
             }
           });
         }
