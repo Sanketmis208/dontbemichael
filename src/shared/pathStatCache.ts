@@ -15,11 +15,16 @@
  *   share), and Node's file thread pool is small, so unbounded hover checks
  *   could stall every file read in the main process. A click is the owner
  *   asking, so it always looks, and its checks take no hover slot.
- * - A hover check still running after PATH_STAT_DEADLINE_MS frees its slot and
- *   counts as failed for the hover, so a hung stat cannot hold a slot for the
- *   rest of the session. Its path is remembered as slow for SLOW_PATH_MS, and a
- *   hover starts no stat on it until then. A click joins the stat still
- *   running for that path rather than stacking a second one beside it.
+ * - A hover check holds its slot until its stat settles, past the deadline or
+ *   not. A stat cannot be cancelled, so a hung one keeps its file thread, and
+ *   freeing its slot early would let hovers pile hung stats onto the pool. With
+ *   both slots held by hung stats a hover only loses the underline: the
+ *   unchecked link still looks at the disk on click.
+ * - A hover check still running after PATH_STAT_DEADLINE_MS marks its path slow
+ *   for SLOW_PATH_MS, and the hover keeps answering undefined for it. Once that
+ *   stat fails, a hover starts no new stat on the path until the window ends. A
+ *   click joins the stat still running for a path rather than stacking a
+ *   second one beside it.
  * - A click trusts a kept hit but looks again after a miss, so a path printed
  *   just before its file was written works as soon as the file exists.
  */
@@ -40,9 +45,9 @@ export interface PathStatCache {
   /**
    * For a hover, answered now from what is already known: true or false when
    * the path has been checked recently, undefined when it has not (a check may
-   * have started in the background, so a later hover knows) or its last check
-   * passed the deadline. A path that did
-   * not resolve (null) is never on disk and is never checked.
+   * have started in the background, so a later hover knows) or its check is
+   * slow. A path that did not resolve (null) is never on disk and is never
+   * checked.
    */
   knownOnDisk(abs: string | null): boolean | undefined;
   /**
@@ -63,17 +68,19 @@ export function createPathStatCache(opts: PathStatCacheOptions): PathStatCache {
   const maxEntries = opts.maxEntries ?? MAX_ENTRIES;
   const kept = new Map<string, { at: number; res: PathStat }>();
   const running = new Map<string, Promise<PathStat | null>>();
-  /** Checks a hover started and still holding a slot, with when they started. */
-  const hoverSlots = new Map<string, number>();
+  /** Checks a hover started whose stat has not settled, with when they started
+   *  and whether they have passed the deadline. */
+  const hoverSlots = new Map<string, { at: number; late: boolean }>();
   /** Paths whose hover check passed the deadline, until when they count as slow. */
   const slowUntil = new Map<string, number>();
 
-  /** Frees the slot of each hover check past its deadline and marks its path slow. */
-  function expireSlots(): void {
+  /** Marks the path of each hover check past its deadline as slow. The slot
+   *  stays held until the stat settles. */
+  function markLate(): void {
     const t = now();
-    for (const [abs, at] of hoverSlots) {
-      if (t - at < PATH_STAT_DEADLINE_MS) continue;
-      hoverSlots.delete(abs);
+    for (const [abs, slot] of hoverSlots) {
+      if (slot.late || t - slot.at < PATH_STAT_DEADLINE_MS) continue;
+      slot.late = true;
       if (slowUntil.size >= maxEntries) slowUntil.clear();
       slowUntil.set(abs, t + SLOW_PATH_MS);
     }
@@ -124,9 +131,9 @@ export function createPathStatCache(opts: PathStatCacheOptions): PathStatCache {
       if (!abs) return false;
       const res = fresh(abs);
       if (res) return res.exists;
-      expireSlots();
+      markLate();
       if (running.has(abs) || isSlow(abs) || hoverSlots.size >= MAX_HOVER_STAT_CHECKS) return undefined;
-      hoverSlots.set(abs, now());
+      hoverSlots.set(abs, { at: now(), late: false });
       void check(abs);
       return undefined;
     },
