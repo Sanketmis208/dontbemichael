@@ -7,7 +7,8 @@
  * window or a real disk (test/path-stat-cache.test.cjs).
  *
  * - An answer is kept for a few seconds. A check that fails (the IPC rejected)
- *   is not an answer and is never kept, so the next look tries again.
+ *   is not an answer and is never kept, so the next look tries again (a hover
+ *   waits out a slow path, below).
  * - A check already running for a path is shared by hover and click alike, so
  *   hovering again never stacks another stat on a slow path.
  * - A hover starts a new check only while fewer than MAX_HOVER_STAT_CHECKS
@@ -20,13 +21,11 @@
  *   freeing its slot early would let hovers pile hung stats onto the pool. With
  *   both slots held by hung stats a hover only loses the underline: the
  *   unchecked link still looks at the disk on click.
- * - A hover that finds a hover check still running after PATH_STAT_DEADLINE_MS
- *   marks its path slow for SLOW_PATH_MS, and the hover keeps answering
- *   undefined for it. When a hover check fails at least PATH_STAT_DEADLINE_MS
- *   after it started, its path is slow for SLOW_PATH_MS from the failure,
- *   whether or not a hover landed in between, so a hover starts no new stat on
- *   it until that window ends. A click joins the stat still running for a path
- *   rather than stacking a second one beside it.
+ * - Every running check keeps when it started. When a check fails at least
+ *   PATH_STAT_DEADLINE_MS after it started, a hover's or a click's, its path is
+ *   slow for SLOW_PATH_MS from the failure, so a hover starts no new stat on it
+ *   until that window ends. While a stat runs, a hover answers undefined for
+ *   its path, and a click joins it rather than stacking a second one beside it.
  * - A click trusts a kept hit but looks again after a miss, so a path printed
  *   just before its file was written works as soon as the file exists.
  */
@@ -70,22 +69,13 @@ export function createPathStatCache(opts: PathStatCacheOptions): PathStatCache {
   const maxEntries = opts.maxEntries ?? MAX_ENTRIES;
   const kept = new Map<string, { at: number; res: PathStat }>();
   const running = new Map<string, Promise<PathStat | null>>();
-  /** Checks a hover started whose stat has not settled, with when they started
-   *  and whether they have passed the deadline. */
-  const hoverSlots = new Map<string, { at: number; late: boolean }>();
-  /** Paths whose hover check passed the deadline, until when they count as slow. */
+  /** When each running check started, a hover's or a click's. */
+  const started = new Map<string, number>();
+  /** Paths whose hover check has not settled; they count against
+   *  MAX_HOVER_STAT_CHECKS. */
+  const hoverSlots = new Set<string>();
+  /** Paths whose check failed past the deadline, until when they count as slow. */
   const slowUntil = new Map<string, number>();
-
-  /** Marks the path of each hover check past its deadline as slow. The slot
-   *  stays held until the stat settles. */
-  function markLate(): void {
-    const t = now();
-    for (const [abs, slot] of hoverSlots) {
-      if (slot.late || t - slot.at < PATH_STAT_DEADLINE_MS) continue;
-      slot.late = true;
-      markSlow(abs, t);
-    }
-  }
 
   /** The path counts as slow for SLOW_PATH_MS from t. */
   function markSlow(abs: string, t: number): void {
@@ -112,11 +102,13 @@ export function createPathStatCache(opts: PathStatCacheOptions): PathStatCache {
   function check(abs: string): Promise<PathStat | null> {
     const already = running.get(abs);
     if (already) return already;
+    started.set(abs, now());
     let look: Promise<PathStat>;
     try { look = Promise.resolve(opts.stat(abs)); } catch (err) { look = Promise.reject(err); }
     const p = look.then(
       (res) => {
         running.delete(abs);
+        started.delete(abs);
         hoverSlots.delete(abs);
         slowUntil.delete(abs);
         if (kept.size >= maxEntries) kept.clear();
@@ -124,13 +116,14 @@ export function createPathStatCache(opts: PathStatCacheOptions): PathStatCache {
         return res;
       },
       () => {
+        const at = started.get(abs);
         running.delete(abs);
-        const slot = hoverSlots.get(abs);
+        started.delete(abs);
         hoverSlots.delete(abs);
-        // A hover check that failed past its deadline: the slow window runs from
-        // the failure, not from whichever hover happened to see it late.
+        // A check that failed past its deadline, whoever started it: the slow
+        // window runs from the failure.
         const t = now();
-        if (slot && t - slot.at >= PATH_STAT_DEADLINE_MS) markSlow(abs, t);
+        if (at !== undefined && t - at >= PATH_STAT_DEADLINE_MS) markSlow(abs, t);
         return null;
       }
     );
@@ -143,9 +136,8 @@ export function createPathStatCache(opts: PathStatCacheOptions): PathStatCache {
       if (!abs) return false;
       const res = fresh(abs);
       if (res) return res.exists;
-      markLate();
       if (running.has(abs) || isSlow(abs) || hoverSlots.size >= MAX_HOVER_STAT_CHECKS) return undefined;
-      hoverSlots.set(abs, { at: now(), late: false });
+      hoverSlots.add(abs);
       void check(abs);
       return undefined;
     },

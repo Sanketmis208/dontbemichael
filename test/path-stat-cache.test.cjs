@@ -173,8 +173,6 @@ test('a hover check that never returns keeps its slot past the deadline, and its
   clock += 1;
   assert.equal(cache.knownOnDisk('/Users/Jane/My Reports/3.md'), undefined, 'not known yet');
   assert.equal(disk.calls.length, 2, 'past the deadline the hung checks still hold their slots');
-  assert.equal(cache.knownOnDisk('/Volumes/share/a b/2.md'), undefined, 'slow and still running: no answer');
-  assert.equal(disk.calls.length, 2, 'a hover on a slow path whose stat is still running starts nothing');
 
   // A click joins the hung stat instead of stacking another.
   const click = cache.lookForClick('/Volumes/share/a b/2.md');
@@ -183,16 +181,25 @@ test('a hover check that never returns keeps its slot past the deadline, and its
   // Only a settled stat frees its slot, and a click still pending takes none.
   disk.fail('/Volumes/share/a b/1.md');
   await tick();
+  // 1.md failed past its deadline, so it is slow, and one slot is free. A click
+  // still looks; while that stat runs, a hover on 1.md starts nothing and takes
+  // no slot, so the free slot still starts the hover on 5.md below.
+  const recheck = cache.lookForClick('/Volumes/share/a b/1.md');
+  assert.equal(disk.calls.length, 3, 'a click on a slow path still looks');
+  assert.equal(cache.knownOnDisk('/Volumes/share/a b/1.md'), undefined, 'slow and still running: no answer');
+  assert.equal(disk.calls.length, 3, 'a hover on a slow path whose stat is still running starts nothing');
   const other = cache.lookForClick('/Volumes/share/c d/9.md');
-  assert.equal(disk.calls.length, 3, 'a click on a new path looks');
+  assert.equal(disk.calls.length, 4, 'a click on a new path looks');
   cache.knownOnDisk('/x y/5.md');
-  assert.equal(disk.calls.at(-1), '/x y/5.md', 'with the click on 9.md still pending, the freed slot starts this hover stat');
+  assert.equal(disk.calls.at(-1), '/x y/5.md', 'the hover on slow 1.md took no slot, and the click on 9.md takes none, so the freed slot starts this hover stat');
   disk.answer('/Volumes/share/c d/9.md', true);
   assert.equal((await other).exists, true);
   disk.answer('/Volumes/share/a b/2.md', false);
   assert.equal((await click).exists, false);
   disk.answer('/x y/5.md', false);
   await tick();
+  disk.fail('/Volumes/share/a b/1.md');
+  assert.equal(await recheck, null, 'the recheck fails inside its own deadline, so the window still runs from the first failure');
 
   // The path whose stat failed past the deadline stays slow for SLOW_PATH_MS from the failure.
   const before = disk.calls.length;
@@ -218,7 +225,7 @@ test('hovering many paths on a hung share never has more hover stats in flight t
 });
 
 test('a hover check that fails past its deadline makes its path slow from the failure, with or without a hover in between', async () => {
-  // Value: protects=a path whose hover stat hung past the deadline is not stat'ed again by a hover for SLOW_PATH_MS after that stat fails, so it cannot take a slot and a file thread again at once (re-review of #687 at f7311548, worth doing 1); fails_when=the slow window needs a hover between the deadline and the failure, runs from that hover instead of the failure, or a failure before the deadline counts as slow; why_new=slowUntil was set only by a hover that saw the check late; seam=stat is a stub that fails when told, clock is a stub
+  // Value: protects=a path whose hover stat hung past the deadline is not stat'ed again by a hover for SLOW_PATH_MS after that stat fails, so it cannot take a slot and a file thread again at once (re-review of #687 at f7311548, worth doing 1; at 93621993, test note 2); fails_when=the slow window needs a hover between the deadline and the failure, runs from that hover instead of the failure, a failure at exactly the deadline is not slow, or a failure before the deadline counts as slow; why_new=slowUntil was set only by a hover that saw the check late; seam=stat is a stub that fails when told, clock is a stub
   const disk = fakeDisk();
   let clock = 0;
   const cache = createPathStatCache({ stat: disk.stat, now: () => clock });
@@ -262,6 +269,17 @@ test('a hover check that fails past its deadline makes its path slow from the fa
   disk.answer(hung, false);
   await tick();
 
+  // No hover lands between the start and a failure at exactly the deadline.
+  const edge = '/Volumes/share/Old Reports/q2.md';
+  cache.knownOnDisk(edge);
+  clock += PATH_STAT_DEADLINE_MS;
+  disk.fail(edge);
+  await tick();
+  const atEdge = disk.calls.length;
+  assert.equal(cache.knownOnDisk(edge), undefined, 'slow: no answer');
+  assert.equal(disk.calls.length, atEdge, 'a failure at exactly the deadline is slow');
+  clock += SLOW_PATH_MS;
+
   // A check that fails just before its deadline is not slow.
   const quick = '/Volumes/share/Old Reports/q1.md';
   cache.knownOnDisk(quick);
@@ -271,4 +289,28 @@ test('a hover check that fails past its deadline makes its path slow from the fa
   const n = disk.calls.length;
   cache.knownOnDisk(quick);
   assert.equal(disk.calls.length, n + 1, 'a failure before the deadline is retried by the next hover');
+});
+
+test('a click check that fails past its deadline makes its path slow for hovers from the failure', async () => {
+  // Value: protects=a ⌘-click on a stale mount that isNetworkPath does not catch (sshfs, another FUSE mount) whose stat hangs and then fails is not stat'ed again by the next hover for SLOW_PATH_MS, so a hover cannot start a second long hang on it (re-review of #687 at 93621993, worth doing 1); fails_when=only a check a hover started can mark its path slow, the window runs from anything but the failure, or a hover starts no stat once it ends; why_new=the failure handler marked a path slow only when a hover slot held it; seam=stat is a stub that fails when told, clock is a stub
+  const disk = fakeDisk();
+  let clock = 0;
+  const cache = createPathStatCache({ stat: disk.stat, now: () => clock });
+
+  const mount = '/mnt/sshfs/Team Notes/plan.md';
+  const click = cache.lookForClick(mount);
+  assert.equal(disk.calls.length, 1, 'the click looks');
+  clock += PATH_STAT_DEADLINE_MS + 1_000;
+  disk.fail(mount);
+  assert.equal(await click, null);
+  const failedAt = clock;
+
+  assert.equal(cache.knownOnDisk(mount), undefined, 'slow: no answer');
+  assert.equal(disk.calls.length, 1, 'no hover stat right after the failure');
+  clock = failedAt + SLOW_PATH_MS - 1;
+  cache.knownOnDisk(mount);
+  assert.equal(disk.calls.length, 1, 'still slow just before SLOW_PATH_MS from the failure');
+  clock += 1;
+  cache.knownOnDisk(mount);
+  assert.deepEqual(disk.calls, [mount, mount], 'a hover checks again once SLOW_PATH_MS from the failure has passed');
 });
