@@ -329,22 +329,56 @@ export function isNetworkPath(p: string, platform: string = process.platform): b
   return /^\/(net|network)(\/|$)/i.test(n);
 }
 
+/** Path checks from agent text that may wait on the disk at once. Node's file
+ *  thread pool has 4 threads and a stat cannot be cancelled, so a stat on a
+ *  share gone stale can hold its thread for minutes. With this cap, ⌘-clicks
+ *  and link hovers on such a share always leave a thread free for the rest of
+ *  the app's file reads and writes (config saves, card files, attachments). */
+export const MAX_PATH_CHECKS = 3;
+
+/** An error a check that was never made rejects with: `code` says why. */
+function notChecked(code: 'ENETPATH' | 'EBUSY', why: string): NodeJS.ErrnoException {
+  return Object.assign(new Error(why), { code });
+}
+
+/** Runs `look` for a path at most `max` at a time; a second check for a path
+ *  already being looked at joins it. Past the cap it rejects with EBUSY at
+ *  once rather than queueing behind stats that may never return. */
+export function pathCheckLimiter<T>(look: (abs: string) => Promise<T>, max = MAX_PATH_CHECKS): (abs: string) => Promise<T> {
+  const running = new Map<string, Promise<T>>();
+  return (abs) => {
+    const already = running.get(abs);
+    if (already) return already;
+    if (running.size >= max) return Promise.reject(notChecked('EBUSY', 'too many path checks waiting'));
+    let p: Promise<T>;
+    try { p = Promise.resolve(look(abs)); } catch (e) { p = Promise.reject(e); }
+    const done = p.finally(() => { running.delete(abs); });
+    running.set(abs, done);
+    return done;
+  };
+}
+
+const statLimited = pathCheckLimiter((abs: string) => stat(abs));
+
 /** Existence/metadata check for an ABSOLUTE path (v0.3.4 — backs the terminal
  *  ⌘-click markdown flow). `~/` is expanded here (the renderer doesn't know
  *  the home dir). Read-only metadata: returns whether a regular file exists and
- *  the normalized absolute path; never file contents. A network path is never
- *  looked at (isNetworkPath).
+ *  the normalized absolute path; never file contents.
  *
  *  "Not there" (exists false) only when the disk says so: ENOENT or ENOTDIR. A
- *  check it could not make (no permission, a share timing out) rejects, so a
- *  caller never reads it as a miss and falls back to another file, such as
- *  the one file name inside a quoted path (PR 687 review, 2026-11-13). */
+ *  check it could not make rejects, so a caller never reads it as a miss and
+ *  falls back to another file, such as the one file name inside a quoted path
+ *  (PR 687 review, 2026-11-13):
+ *  - a network path is never looked at (isNetworkPath) and rejects ENETPATH;
+ *  - past MAX_PATH_CHECKS waiting at once it rejects EBUSY;
+ *  - no permission, or a share timing out, rejects with the disk's error. */
 export async function statAbs(p: string): Promise<{ exists: boolean; isFile: boolean; path: string }> {
-  if (isNetworkPath(p)) return { exists: false, isFile: false, path: p };
+  if (isNetworkPath(p)) throw notChecked('ENETPATH', 'a network path is not looked at');
   const abs = expandTilde(p);
-  if (!isAbsolute(abs) || isNetworkPath(abs)) return { exists: false, isFile: false, path: p };
+  if (!isAbsolute(abs)) return { exists: false, isFile: false, path: p };
+  if (isNetworkPath(abs)) throw notChecked('ENETPATH', 'a network path is not looked at');
   try {
-    const s = await stat(abs);
+    const s = await statLimited(abs);
     return { exists: true, isFile: s.isFile(), path: abs };
   } catch (e) {
     const code = (e as NodeJS.ErrnoException)?.code;
