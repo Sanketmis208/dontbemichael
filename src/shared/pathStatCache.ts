@@ -20,11 +20,13 @@
  *   freeing its slot early would let hovers pile hung stats onto the pool. With
  *   both slots held by hung stats a hover only loses the underline: the
  *   unchecked link still looks at the disk on click.
- * - A hover check still running after PATH_STAT_DEADLINE_MS marks its path slow
- *   for SLOW_PATH_MS, and the hover keeps answering undefined for it. Once that
- *   stat fails, a hover starts no new stat on the path until the window ends. A
- *   click joins the stat still running for a path rather than stacking a
- *   second one beside it.
+ * - A hover that finds a hover check still running after PATH_STAT_DEADLINE_MS
+ *   marks its path slow for SLOW_PATH_MS, and the hover keeps answering
+ *   undefined for it. When a hover check fails at least PATH_STAT_DEADLINE_MS
+ *   after it started, its path is slow for SLOW_PATH_MS from the failure,
+ *   whether or not a hover landed in between, so a hover starts no new stat on
+ *   it until that window ends. A click joins the stat still running for a path
+ *   rather than stacking a second one beside it.
  * - A click trusts a kept hit but looks again after a miss, so a path printed
  *   just before its file was written works as soon as the file exists.
  */
@@ -81,9 +83,14 @@ export function createPathStatCache(opts: PathStatCacheOptions): PathStatCache {
     for (const [abs, slot] of hoverSlots) {
       if (slot.late || t - slot.at < PATH_STAT_DEADLINE_MS) continue;
       slot.late = true;
-      if (slowUntil.size >= maxEntries) slowUntil.clear();
-      slowUntil.set(abs, t + SLOW_PATH_MS);
+      markSlow(abs, t);
     }
+  }
+
+  /** The path counts as slow for SLOW_PATH_MS from t. */
+  function markSlow(abs: string, t: number): void {
+    if (slowUntil.size >= maxEntries) slowUntil.clear();
+    slowUntil.set(abs, t + SLOW_PATH_MS);
   }
 
   function isSlow(abs: string): boolean {
@@ -118,7 +125,12 @@ export function createPathStatCache(opts: PathStatCacheOptions): PathStatCache {
       },
       () => {
         running.delete(abs);
+        const slot = hoverSlots.get(abs);
         hoverSlots.delete(abs);
+        // A hover check that failed past its deadline: the slow window runs from
+        // the failure, not from whichever hover happened to see it late.
+        const t = now();
+        if (slot && t - slot.at >= PATH_STAT_DEADLINE_MS) markSlow(abs, t);
         return null;
       }
     );
