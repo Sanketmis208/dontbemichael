@@ -193,7 +193,8 @@ export function EmailTabView({ tab }: { tab: FileTab }) {
   );
 }
 
-function sizeWords(bytes: number): string {
+/** A file's size in short words, as its email tab and its card show it. */
+export function sizeWords(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }

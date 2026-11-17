@@ -141,6 +141,11 @@ moving, and brings you only the decisions that need you.
   there. Programs, scripts and archives are refused, and what is saved is marked as a download and
   never run. A teammate who needs the file asks for it, and the app copies it across, so nobody
   opens another member's folder.
+- A team member attaches files from its own folder, or a folder you named for its job, to an
+  email it writes, as its Sending allows: on Send on approval the card lists each file with the
+  folder it came from, opens it in its own app, and lets you take one off before you approve.
+  The app reads each file inside the member's own folder walls and sends the copy it took then,
+  so a file changed later never goes out in its place.
 
 ### 4. Jobs on a clock
 - Each team member's schedules sit on its Access tab. Name the job ("Check the support

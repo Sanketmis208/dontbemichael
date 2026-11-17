@@ -59,7 +59,9 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, 'src/main/index.ts'),
           // Agent-facing `doc-text` CLI (F6): same converter, same bundled libraries.
-          docTextCli: resolve(__dirname, 'src/main/docTextCli.ts')
+          docTextCli: resolve(__dirname, 'src/main/docTextCli.ts'),
+          // Reads a file a member attaches to an email, inside its folder walls (agent-attach-files.md).
+          fileReaderCli: resolve(__dirname, 'src/main/fileReaderCli.ts')
         }
       }
     }

@@ -115,8 +115,9 @@ test('a draft or Sent copy that timed out is not told to simply try again', () =
   // Value: protects=an agent doesn't save a second draft after a timed out append the server may have kept; fails_when=the read-timeout note goes out on appends again; why_new=state machine review; seam=none; no_claim=source pin on the mail service
   const mail = read('src/main/mail.ts');
   assert.match(mail, /if \(err\.kind === 'timeout' && !append\) throw new MailError\('timeout', `\$\{err\.message\} \$\{READ_TIMEOUT_NOTE\}`\);/);
-  assert.match(mail, /'Saving the draft', true\);/);
-  assert.match(mail, /'Saving to Sent', true\)/);
+  // Still appends (true); a limit for a large email may follow (agent-attach-files.md).
+  assert.match(mail, /'Saving the draft', true(, sendTimeoutFor\(input\))?\);/);
+  assert.match(mail, /'Saving to Sent', true(, sendTimeoutFor\(input\))?\)/);
 });
 
 test('design fixes: sentence case group names, a real Profile heading, reduced motion, a readable floor mark', () => {

@@ -16,6 +16,37 @@ import { unfoundedWhen, unfoundedWhenLine } from './standingFacts';
  *  attachment is proposed, so the send still finds it once it is archived. */
 export interface ProposalRef { mailbox: string; id: string; messageId?: string }
 
+/** One file attached from a member's folder: what the owner's card shows and
+ *  what the copy must still be. `from` is the folder it came from. */
+export interface ProposalFile { name: string; size: number; kind: string; sha256: string; from: string }
+
+/** An email's attached files: the key of their copies in the app's private
+ *  folder, and each file in order. */
+export interface ProposalFiles { key: string; items: ProposalFile[] }
+
+/** States in which an email's file copies are still needed: it may yet go out,
+ *  or is going out now. */
+const FILES_LIVE: ReadonlySet<ProposalState> = new Set(['waiting', 'approved', 'sending']);
+
+/** The copy keys still needed; every other copy is deleted. A card stuck
+ *  sending keeps its copies until the owner settles it. */
+export function liveFileKeys(list: MailProposal[]): string[] {
+  return list.filter((p) => FILES_LIVE.has(p.state) && p.files?.key).map((p) => p.files!.key);
+}
+
+/** The bytes of copies one member holds for emails waiting or approved. One
+ *  stuck sending after an uncertain send is not counted, so it never blocks
+ *  the member's next email with files. */
+export function heldFileBytes(list: MailProposal[], agentId: string): number {
+  return list.filter((p) => p.agentId === agentId && (p.state === 'waiting' || p.state === 'approved')).reduce((n, p) => n + (p.files?.items ?? []).reduce((m, f) => m + (f.size || 0), 0), 0);
+}
+
+/** The files that go out with an approved email: those the owner left on it. */
+export function approvedFiles(p: MailProposal): number[] | undefined {
+  if (!p.files?.items.length) return undefined;
+  return p.approved?.files ?? p.files.items.map((_, i) => i);
+}
+
 /** `cancelled`: withdrawn by the app, never by the owner's no: its grant ended
  *  or was set to Draft only, or it names mail from another mailbox
  *  (shared-mailboxes.md, ER6). `sending`: recorded before the email goes out,
@@ -37,14 +68,18 @@ export interface MailProposal {
   replyTo?: ProposalRef;
   forward?: ProposalRef;
   attachFrom?: ProposalRef[];
+  /** Files the member attached from its folder (agent-attach-files.md): the
+   *  copies the app took when it was proposed, which are what go out. */
+  files?: ProposalFiles;
   /** A reply's thread headers: from the member's own send record under a Send
    *  only grant, or read from the email it answers when it was proposed. */
   thread?: ThreadHeaders;
   createdAt: number;
   state: ProposalState;
   decidedAt?: number;
-  /** What the owner approved: the subject and body as they left the card. */
-  approved?: { subject: string; body: string };
+  /** What the owner approved: the subject and body as they left the card,
+   *  and the positions of the files left on it when the owner took any off. */
+  approved?: { subject: string; body: string; files?: number[] };
   /** The owner's note with Ask for changes. */
   note?: string;
   sentAt?: number;
@@ -207,7 +242,7 @@ const quote = (s: string): string => `"${s.replace(/\s+/g, ' ').trim().slice(0, 
 
 /** The message the agent gets for the owner's decision. Approve and Ask for
  *  changes need the agent to act, so they are requests. */
-export function decisionMessage(p: MailProposal, decision: ProposalDecision, edits: string, note: string, standing?: StandingApproval): { act: 'request' | 'inform'; subject: string; body: string } {
+export function decisionMessage(p: MailProposal, decision: ProposalDecision, edits: string, note: string, standing?: StandingApproval, removed: string[] = []): { act: 'request' | 'inform'; subject: string; body: string } {
   const about = `your email to ${p.to.slice(0, 200)}, ${quote(p.subject)}`;
   // Fixed subjects: message subjects are written to the office log, which is
   // committed to git, so the email's own subject stays in the body (D14).
@@ -218,6 +253,7 @@ export function decisionMessage(p: MailProposal, decision: ProposalDecision, edi
       body: [
         `The owner approved ${about}${edits ? ', with changes' : ''}. Send it now: call send with mailbox "${p.mailbox}" and proposal "${p.id}". It sends the approved version exactly as the owner left it.`,
         ...(edits ? ['What the owner changed, so you can write it their way next time (it is in your memory notes):', edits] : []),
+        ...(removed.length ? [`The owner took ${removed.length === 1 ? 'this file' : 'these files'} off the email, so ${removed.length === 1 ? 'it does' : 'they do'} not go: ${removed.map((n) => quote(n)).join(', ')}.`] : []),
         ...(standing ? [`The owner also let you send this kind of email without approval from now on: ${standing.kind}. For those, call send with the full email and standing "${standing.id}"; the app checks each one fits, and one that doesn't goes to the owner for approval. It is in your memory notes.`] : [])
       ].join('\n')
     };
@@ -317,11 +353,11 @@ export function standingProblem(
   rule: StandingApproval | undefined,
   agentId: string,
   mailbox: string,
-  email: { forward?: unknown; attachFrom?: unknown[] }
+  email: { forward?: unknown; attachFrom?: unknown[]; files?: unknown[] }
 ): string | null {
   if (!rule || rule.agentId !== agentId || rule.mailbox !== mailbox) return 'No standing approval of yours from this mailbox has that id. Use propose instead.';
   if (rule.revokedAt) return 'The owner revoked that standing approval. Use propose instead.';
-  if (email.forward || (email.attachFrom?.length ?? 0) > 0) return 'A standing approval never covers forwards or attachments.';
+  if (email.forward || (email.attachFrom?.length ?? 0) > 0 || (email.files?.length ?? 0) > 0) return 'A standing approval never covers forwards or attachments. Use propose instead.';
   return null;
 }
 

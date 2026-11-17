@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Email Card Files</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --cth-bg:#F7F7FB;--cth-card:#FFFFFF;--cth-card-2:#FAFAFD;--cth-ink:#1E1B2E;--cth-ink-2:#4A4660;--cth-ink-3:#6C6884;--cth-ink-4:#B4B1C6;
+  --cth-line:#E8E6F2;--cth-line-2:#DAD7EA;--cth-neutral-soft:#F0EFF5;
+  --cth-indigo:#6C5CE7;--cth-indigo-soft:#EEEBFD;--cth-indigo-text:#4338CA;
+  --cth-coral-text:#C2410C;
+  --cth-r-sm:6px;--cth-r-md:9px;--cth-r-lg:12px;--cth-r-xl:14px;
+  --ui:"Sora",-apple-system,system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --cth-bg:#14131C;--cth-card:#1F1E2B;--cth-card-2:#24233A;--cth-ink:#ECEAF4;--cth-ink-2:#C9C6D9;--cth-ink-3:#A5A2B8;--cth-ink-4:#5E5B73;
+  --cth-line:rgba(255,255,255,.09);--cth-line-2:rgba(255,255,255,.14);--cth-neutral-soft:#2A2938;
+  --cth-indigo-soft:rgba(157,144,255,.16);--cth-indigo-text:#A99FFF;--cth-coral-text:#FDBA8C;}}
+:root[data-theme="dark"]{
+  --cth-bg:#14131C;--cth-card:#1F1E2B;--cth-card-2:#24233A;--cth-ink:#ECEAF4;--cth-ink-2:#C9C6D9;--cth-ink-3:#A5A2B8;--cth-ink-4:#5E5B73;
+  --cth-line:rgba(255,255,255,.09);--cth-line-2:rgba(255,255,255,.14);--cth-neutral-soft:#2A2938;
+  --cth-indigo-soft:rgba(157,144,255,.16);--cth-indigo-text:#A99FFF;--cth-coral-text:#FDBA8C;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--cth-bg);color:var(--cth-ink);font-family:var(--ui);padding:24px 16px 56px}
+.wrap{max-width:980px;margin:0 auto}
+h1{font-size:18px;margin:0 0 4px}
+.lead{color:var(--cth-ink-3);font-size:13px;margin:0 0 26px;line-height:19px;max-width:85ch}
+.row{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 360px;min-width:0;max-width:440px}
+.col h2{font-size:14px;margin:0 0 4px}
+.col .why{font-size:12px;color:var(--cth-ink-3);margin:0 0 10px;line-height:17px}
+/* the Ask me card */
+.card{background:var(--cth-card);border-radius:var(--cth-r-lg);box-shadow:inset 0 0 0 1px var(--cth-line),0 2px 10px rgba(30,27,46,.05);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.title{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;line-height:17px}
+.av{width:17px;height:17px;border-radius:50%;background:#F9D3E3;display:grid;place-items:center;font-size:9px}
+.caret{margin-left:auto;color:var(--cth-ink-3);font-size:11px}
+.meta{font-size:11.5px;line-height:17px;color:var(--cth-ink-3)}
+.chip{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 7px;border-radius:var(--cth-r-sm);font-size:11px;font-weight:500;background:var(--cth-indigo-soft);color:var(--cth-indigo-text)}
+.lbl{font-size:11px;font-weight:600;color:var(--cth-ink-3);display:flex;align-items:center;gap:5px}
+.tip{width:14px;height:14px;border-radius:50%;box-shadow:inset 0 0 0 1px var(--cth-ink-4);display:inline-grid;place-items:center;font-size:9px;color:var(--cth-ink-3);font-weight:700}
+.field{border-radius:var(--cth-r-md);box-shadow:inset 0 0 0 1px var(--cth-line-2);padding:7px 9px;font-size:12px;line-height:18px;color:var(--cth-ink)}
+.body{white-space:pre-line;max-height:150px;overflow:hidden}
+.files{border-radius:var(--cth-r-md);box-shadow:inset 0 0 0 1px var(--cth-line-2);overflow:hidden}
+.file{display:flex;align-items:center;gap:8px;padding:5px 9px;font-size:11.5px;min-height:30px}
+.file+.file{box-shadow:inset 0 1px 0 var(--cth-line)}
+.file .n{font-family:var(--mono);font-size:11px;color:var(--cth-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.file .s{color:var(--cth-ink-3);font-size:10.5px;margin-left:auto;flex-shrink:0}
+.file .o{font-size:11px;font-weight:600;color:var(--cth-indigo-text);flex-shrink:0}
+.file .x{width:20px;height:20px;border-radius:var(--cth-r-sm);display:grid;place-items:center;color:var(--cth-ink-3);font-size:12px;flex-shrink:0}
+.file .x:hover{background:var(--cth-neutral-soft)}
+.more{padding:5px 9px;font-size:11px;font-weight:600;color:var(--cth-indigo-text);box-shadow:inset 0 1px 0 var(--cth-line)}
+.btns{display:flex;gap:7px;justify-content:flex-end;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:var(--cth-r-sm);font-size:11.5px;font-weight:600;background:var(--cth-card);box-shadow:inset 0 0 0 1px var(--cth-line-2);color:var(--cth-ink)}
+.btn.pri{background:var(--cth-ink);color:var(--cth-bg);box-shadow:none}
+.pop{margin-top:6px;font-size:11px;line-height:16px;color:var(--cth-ink-2);background:var(--cth-card-2);box-shadow:inset 0 0 0 1px var(--cth-line-2);border-radius:var(--cth-r-md);padding:7px 9px}
+.notes{font-size:11.5px;color:var(--cth-ink-3);margin-top:10px;line-height:17px}
+.folded .sum{font-size:11.5px;line-height:17px;color:var(--cth-ink-3)}
+.err{font-size:11px;line-height:15px;color:var(--cth-coral-text)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Files on the email approval card</h1>
+<p class="lead">Pam proposes the reply to Shivam with the ten statements attached. Pam is on Send on approval, so the card lists the files under the subject, with the folder they came from; nothing goes out until the owner approves. Every other part of the card is as it is today.</p>
+
+<div class="row">
+  <div class="col">
+    <h2>Open</h2>
+    <p class="why">Five files show, then "Show all 10". Open hands the copy taken when Pam asked to its own app (Preview for a PDF), marked as from outside. ✕ takes that file off this email.</p>
+    <section class="card">
+      <div class="title"><span class="av">🎨</span>Pam wants to send an email<span class="caret">⌃</span></div>
+      <div class="meta">
+        <div>From: books@moblize.example</div>
+        <div>To: shivam@accounts.example</div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">Replying to <span class="chip">✉ Shivam, 16 Nov</span></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:3px">
+        <span class="lbl">Subject</span>
+        <div class="field">Re: Interactive Brokers statements</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:3px">
+        <span class="lbl">Files: 10, from interactiveBrokers <span class="tip" title="Copied when Pam asked. These exact files go out.">i</span></span>
+        <div class="files">
+          <div class="file"><span>📄</span><span class="n">ib_jan2026.pdf</span><span class="s">212 KB</span><span class="o">Open</span><span class="x" aria-label="Take off">✕</span></div>
+          <div class="file"><span>📄</span><span class="n">ib_feb2026.pdf</span><span class="s">198 KB</span><span class="o">Open</span><span class="x">✕</span></div>
+          <div class="file"><span>📄</span><span class="n">ib_mar2026.pdf</span><span class="s">231 KB</span><span class="o">Open</span><span class="x">✕</span></div>
+          <div class="file"><span>📄</span><span class="n">ib_apr2026.pdf</span><span class="s">205 KB</span><span class="o">Open</span><span class="x">✕</span></div>
+          <div class="file"><span>📄</span><span class="n">ib_may2026.pdf</span><span class="s">219 KB</span><span class="o">Open</span><span class="x">✕</span></div>
+          <div class="more">Show all 10</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:3px">
+        <span class="lbl">Message</span>
+        <div class="field body">Hi Shivam,
+
+Thank you. Attached are all of Moblize.it LLC's Interactive Brokers statements since the account was opened in January 2026, one for each month from January through October 2026 (ten statements).
+
+Please let us know if you need anything else.</div>
+      </div>
+      <div class="btns"><span class="btn">Don't send</span><span class="btn">Ask for changes</span><span class="btn pri">Approve</span></div>
+    </section>
+    <p class="notes">The info tip, opened: <span class="pop">Copied when Pam asked. These exact files go out.</span></p>
+  </div>
+
+  <div class="col">
+    <h2>Folded</h2>
+    <p class="why">The summary line adds the count, so a folded card still says files go with it.</p>
+    <section class="card folded">
+      <div class="title"><span class="av">🎨</span>Pam wants to send an email<span class="caret">⌄</span></div>
+      <div class="sum">To: shivam@accounts.example<br>Re: Interactive Brokers statements<br>Files: 10</div>
+    </section>
+
+    <h2 style="margin-top:26px">A file taken off</h2>
+    <p class="why">The row goes. Approve sends the rest, and Pam hears which file the owner took off.</p>
+    <section class="card">
+      <div style="display:flex;flex-direction:column;gap:3px">
+        <span class="lbl">Files: 9, from interactiveBrokers <span class="tip">i</span></span>
+        <div class="files">
+          <div class="file"><span>📄</span><span class="n">ib_feb2026.pdf</span><span class="s">198 KB</span><span class="o">Open</span><span class="x">✕</span></div>
+          <div class="file"><span>📄</span><span class="n">ib_mar2026.pdf</span><span class="s">231 KB</span><span class="o">Open</span><span class="x">✕</span></div>
+          <div class="more">Show all 9</div>
+        </div>
+        <div style="font-size:11px;font-weight:600;color:var(--cth-indigo-text);margin-top:4px">Put back files taken off: 1</div>
+      </div>
+    </section>
+
+    <h2 style="margin-top:26px">A copy that is gone</h2>
+    <p class="why">Only if the app lost its copy, such as after a factory reset. Open says so on that row; a send with it is refused and the email withdrawn, and Pam is told to propose it again.</p>
+    <section class="card">
+      <div class="files">
+        <div class="file" style="flex-direction:column;align-items:flex-start;gap:2px"><div style="display:flex;gap:8px;width:100%"><span>📄</span><span class="n">ib_jan2026.pdf</span><span class="s">212 KB</span></div><span style="font-size:11px;color:var(--cth-ink-3);padding-left:22px">This file is no longer kept.</span></div>
+      </div>
+    </section>
+  </div>
+</div>
+</div>
+</body>
+</html>

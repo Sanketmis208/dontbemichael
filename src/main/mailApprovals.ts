@@ -12,6 +12,8 @@ import {
   decisionMessage,
   describeEdits,
   fileProposal,
+  heldFileBytes,
+  liveFileKeys,
   memoryLine,
   pruneProposals,
   sendingChangeMessage,
@@ -50,6 +52,10 @@ export interface MailApprovalDeps {
   /** Every owner decision and withdrawal, for Pulse's kept as is (E2). No
    *  subject or body: the member, the decision and whether it was edited. */
   onDecision?: (agentId: string, decision: 'approve' | 'approve-edited' | 'changes' | 'decline' | 'cancelled') => void;
+  /** After every save: the file copy keys still needed (agent-attach-files.md),
+   *  so the copies of an email that left waiting or approved, whatever the
+   *  move, are deleted in this one place. */
+  filesLive?: (keys: string[]) => void;
   now?: () => number;
 }
 
@@ -153,6 +159,9 @@ export class MailApprovals implements ProposalStore {
     renameSync(tmp, this.deps.path);
     const st = this.stamp();
     this.cache = st ? { ...st, store: data } : null;
+    if (next.proposals) {
+      try { this.deps.filesLive?.(liveFileKeys(data.proposals)); } catch (e) { console.error('[mail] outgoing copies sweep:', e); }
+    }
     // Paused-grant notices are only Michael's bookkeeping; nothing on screen shows them.
     if (next.proposals || next.standing || next.sends) {
       try { this.deps.changed(); } catch { /* window gone */ }
@@ -318,6 +327,16 @@ export class MailApprovals implements ProposalStore {
 
   get(id: string): MailProposal | undefined { return this.read().find((p) => p.id === id); }
 
+  /** Bytes of file copies this member holds for emails not yet sent. */
+  heldFileBytes(agentId: string): number { return heldFileBytes(this.read(), agentId); }
+
+  /** The copy keys still needed, for the sweep at start. Null when the store
+   *  can't be read: then nothing is known to be dead, and nothing is swept. */
+  liveFileKeys(): string[] | null {
+    const store = this.current();
+    return store ? liveFileKeys(store.proposals) : null;
+  }
+
   file(p: Omit<MailProposal, 'id' | 'createdAt' | 'state'>): MailProposal {
     const list = this.read();
     const draft: MailProposal = { ...p, id: `mp_${this.now().toString(36)}_${randomBytes(3).toString('hex')}`, createdAt: this.now(), state: 'waiting' };
@@ -352,7 +371,7 @@ export class MailApprovals implements ProposalStore {
    * owner left them; the agent is told, and anything the owner changed or
    * said goes into its memory notes so it learns their way of writing.
    */
-  decide(id: string, decision: ProposalDecision, edit: { subject?: unknown; body?: unknown }, rawNote: unknown, rawStanding?: unknown): { ok: true } | { ok: false; error: string } {
+  decide(id: string, decision: ProposalDecision, edit: { subject?: unknown; body?: unknown; files?: unknown }, rawNote: unknown, rawStanding?: unknown): { ok: true } | { ok: false; error: string } {
     const list = this.read();
     const p = list.find((x) => x.id === id);
     if (!p) return { ok: false, error: 'not found' };
@@ -367,6 +386,18 @@ export class MailApprovals implements ProposalStore {
     const subject = typeof edit.subject === 'string' && edit.subject.trim() ? edit.subject.slice(0, SUBJECT_MAX) : p.subject;
     const body = typeof edit.body === 'string' && edit.body.trim() ? edit.body.slice(0, BODY_MAX) : p.body;
     const edits = decision === 'approve' ? describeEdits({ subject: p.subject, body: p.body }, { subject, body }) : '';
+    // The files the owner left on the card, by position; any other list is
+    // refused rather than read generously.
+    const items = p.files?.items ?? [];
+    let keptFiles: number[] | undefined;
+    if (decision === 'approve' && edit.files !== undefined && items.length) {
+      const raw = edit.files;
+      if (!Array.isArray(raw) || raw.some((n) => !Number.isInteger(n) || n < 0 || n >= items.length) || new Set(raw).size !== raw.length) {
+        return { ok: false, error: 'files not understood' };
+      }
+      if (raw.length < items.length) keptFiles = [...(raw as number[])].sort((a, b) => a - b);
+    }
+    const removed = keptFiles ? items.filter((_, i) => !keptFiles!.includes(i)).map((f) => f.name) : [];
     // The owner ticked the agent's offer: this kind goes out without asking
     // from now on, in the words the owner left on the card.
     const kind = decision === 'approve' && typeof rawStanding === 'string' ? rawStanding.replace(/\s+/g, ' ').trim().slice(0, STANDING_KIND_MAX) : '';
@@ -377,12 +408,12 @@ export class MailApprovals implements ProposalStore {
       ...p,
       state: decision === 'approve' ? 'approved' : decision === 'changes' ? 'changes' : 'declined',
       decidedAt: this.now(),
-      ...(decision === 'approve' ? { approved: { subject, body } } : {}),
+      ...(decision === 'approve' ? { approved: { subject, body, ...(keptFiles ? { files: keptFiles } : {}) } } : {}),
       ...(note ? { note } : {}),
       ...(standing ? { standingId: standing.id } : {})
     };
     this.save({ proposals: list.map((x) => (x.id === id ? next : x)), ...(standing ? { standing: [...this.load().standing, standing] } : {}) });
-    const msg = decisionMessage(p, decision, edits, note, standing);
+    const msg = decisionMessage(p, decision, edits, note, standing, removed);
     try { this.deps.send({ to: p.agentId, ...msg }); } catch (e) { console.error('[mail] approval message:', e); }
     try { this.deps.onDecision?.(p.agentId, decision === 'approve' ? (edits ? 'approve-edited' : 'approve') : decision === 'changes' ? 'changes' : 'decline'); } catch { /* best-effort */ }
     const line = memoryLine(p, decision, edits, note, this.today());

@@ -200,7 +200,7 @@ test('mail, schedule and Work style cards fold under the board\'s one open card 
     assert.match(src, /<FoldBody open=\{f\.open\} pin=\{f\.pin\}>/, f);
     assert.match(src, /className=\{foldCardClass\(f\.open\)\}/, f);
   }
-  assert.match(read('src/renderer/src/components/MailProposalCards.tsx'), /summary=\{<>\{t\('askMe\.mailTo', \{ to: isolate\(p\.to\) \}\)\}<br \/>\{subject\}<\/>\}/, 'folded mail shows the recipient and subject');
+  assert.match(read('src/renderer/src/components/MailProposalCards.tsx'), /summary=\{<>\{t\('askMe\.mailTo', \{ to: isolate\(p\.to\) \}\)\}<br \/>\{subject\}\{kept\.length > 0 && <><br \/>\{t\('askMe\.mailFilesCount', \{ count: kept\.length \}\)\}<\/>\}<\/>\}/, 'folded mail shows the recipient and subject, and the file count when files go with it (agent-attach-files.md)');
   const ask = read('src/renderer/src/components/AskMeTab.tsx');
   for (const k of ['schedule:', 'offer:', 'mail:']) assert.ok(ask.includes(`fold={foldFor('${k}')}`), k);
   assert.match(ask, /toggle: \(\) => setOpenId\(openKey === key \? null : key\), pin: \(\) => setOpenId\(key\)/);
