@@ -17,7 +17,7 @@ const loadTs = require('./load-ts.cjs');
 const outgoing = loadTs('src/main/outgoingFiles.ts');
 const { OutgoingFiles, OutgoingFileError, parseAttachPaths, sandboxProfile, bwrapArgs, readerLaunch, realWalls, readApart, NO_BWRAP, OUTGOING_FILES_MAX } = outgoing;
 const { readOneFile } = loadTs('src/main/fileReader.ts');
-const { handleMailRequest, sendTimeoutFor } = loadTs('src/main/mail.ts');
+const { handleMailRequest, sendTimeoutFor, MailError } = loadTs('src/main/mail.ts');
 const { MailApprovals } = loadTs('src/main/mailApprovals.ts');
 const { liveFileKeys, heldFileBytes, approvedFiles, standingProblem } = loadTs('src/shared/mailProposals.ts');
 const read = (p) => fs.readFileSync(path.resolve(__dirname, '..', p), 'utf8');
@@ -366,7 +366,9 @@ test('review fixes: an unreadable store sweeps nothing, a card stuck sending hol
   assert.match(read('src/main/index.ts'), /const live = mailApprovals\.liveFileKeys\(\);\n\s+if \(live\) outgoingFiles\.sweep\(live\);/);
   const mail = read('src/main/mail.ts');
   assert.match(mail, /'Saving the draft', true, sendTimeoutFor\(input\)\)/);
-  assert.match(mail, /'Saving to Sent', true, sendTimeoutFor\(input\)\)/);
+  assert.match(mail, /'Saving to Sent', true, sentLimit\)/);
+  // The Sent copy gets only what is left of the send's own time (review, pass 1).
+  assert.match(mail, /const sentLimit = Math\.max\(5_000, Math\.min\(sendTimeoutFor\(input\), SEND_TIMEOUT_MAX_MS - \(Date\.now\(\) - sendStarted\)\)\);/);
   assert.ok(outgoing.OUTGOING_READ_BUDGET_MS + sendTimeoutFor({ files: [{ content: Buffer.alloc(18 * 1024 * 1024) }] }) < 180_000, 'read and send fit inside md-mail\'s three minutes');
 });
 
@@ -469,6 +471,7 @@ test('every file of one email is read inside one time budget, however long each 
   const started = Date.now();
   const got = await files(o, { launch: () => hang, readMs: 20_000, budgetMs: 400 }).read('pam', ['a.pdf', 'b.pdf', 'c.pdf', 'd.pdf']);
   assert.match(got.error, /^Not attached: "[^"]*a\.pdf" took too long to read/);
+  // gstack-timing-ok: the bound (8 s) is 20x the budget (400 ms) and far under one file's own limit (20 s), so only the regression it targets can cross it.
   assert.ok(Date.now() - started < 8_000, `stopped at the budget, not each file's own limit: ${Date.now() - started} ms`);
 });
 
@@ -502,4 +505,129 @@ test('a proposal that can\'t be kept or filed leaves no copies and no card', asy
   const f2 = await failing.call('pam', 'propose', email);
   assert.notEqual(f2.status, 200);
   assert.deepEqual(fs.existsSync(o.outgoing) ? fs.readdirSync(o.outgoing) : [], [], 'the copies go with the failed filing');
+});
+
+
+test('Linux readers get their own process space, so a fresh /proc mounts and no other process root is reachable', () => {
+  // Value: protects=bubblewrap reads work unprivileged and /proc/<pid>/root never leads past the hidden folders; fails_when=--unshare-pid is dropped; why_new=review pass 1 (security); seam=none; no_claim=a real bubblewrap run (Linux only)
+  const args = bwrapArgs({ deny: [], allow: [] }, () => null);
+  assert.ok(args.indexOf('--unshare-pid') > -1 && args.indexOf('--unshare-pid') < args.indexOf('--'), 'before the command');
+  assert.ok(args.indexOf('--proc') > -1);
+});
+
+test('reader processes are limited for the whole app, and reading stops once the email\'s bytes are spent', async (t) => {
+  // Value: protects=many attach calls or hand-offs never run more than three readers at once, and one call never reads far past one email's worth; fails_when=the shared slot or the running total goes; why_new=review pass 1 (red team); seam=none; no_claim=memory use measured in the packaged app
+  const o = office(t);
+  for (const n of ['a', 'b', 'c', 'd', 'e', 'f']) fs.writeFileSync(path.join(o.own, `${n}.pdf`), PDF);
+  const log = path.join(o.root, 'readers.log');
+  const code = `const fs=require('fs');fs.appendFileSync(${JSON.stringify(log)},'+');setTimeout(()=>{fs.appendFileSync(${JSON.stringify(log)},'-');process.stderr.write('missing');process.exitCode=3},250)`;
+  const f = files(o, { launch: () => ({ file: process.execPath, args: ['-e', code] }) });
+  await Promise.all([f.read('pam', ['a.pdf', 'b.pdf', 'c.pdf']), f.read('pam', ['d.pdf', 'e.pdf', 'f.pdf'])]);
+  let now = 0;
+  let most = 0;
+  for (const ch of fs.readFileSync(log, 'utf8')) { now += ch === '+' ? 1 : -1; most = Math.max(most, now); }
+  assert.equal(most, 3, 'six files from two calls, at most three readers at once');
+  const big = Buffer.concat([PDF, Buffer.alloc(7 * 1024 * 1024)]);
+  for (const n of ['g', 'h', 'i', 'j']) fs.writeFileSync(path.join(o.own, `${n}.pdf`), big);
+  const over = await files(o).read('pam', ['g.pdf', 'h.pdf', 'i.pdf', 'j.pdf']);
+  assert.equal(over.ok, false);
+  assert.match(over.error, /together, more than one email carries/);
+});
+
+function heldRoute(t, o) {
+  // A mail service whose send can be held open, fail once, or be stopped by
+  // the access check the route passes in, as the real one is.
+  const r = route(t, o);
+  const ctl = { hold: null, failOnce: false, sends: [] };
+  const svc = {
+    send: async (agentId, id, input, beforeSmtp) => {
+      if (ctl.hold) await ctl.hold;
+      if (ctl.failOnce) { ctl.failOnce = false; throw new MailError('network', 'Not sent. The line dropped before the server.'); }
+      const stop = beforeSmtp?.();
+      if (stop) throw new MailError('refused', `Not sent. ${stop}`);
+      ctl.sends.push({ input });
+      return { sent: true, messageId: `<h${ctl.sends.length}@x.com>` };
+    },
+    draft: async () => ({ saved: true })
+  };
+  const call = (agent, op, body) => handleMailRequest(svc, { getConfig: () => cfg, proposals: r.approvals, outgoing: r.f, audit: () => {}, present: () => true }, agent, op, body);
+  return { ...r, call, ctl };
+}
+
+async function filedCard(call, approvals, o, subject = 'Statements') {
+  fs.writeFileSync(path.join(o.own, 'a.pdf'), PDF);
+  fs.writeFileSync(path.join(o.own, 'b.pdf'), Buffer.concat([PDF, Buffer.from('b')]));
+  const p = await call('pam', 'propose', { mailbox: 'ceo', to: 'shivam@acct.com', subject, body: 'Attached.', attach_files: ['a.pdf', 'b.pdf'] });
+  assert.equal(p.status, 200, JSON.stringify(p.body));
+  return approvals.get(p.body.proposal);
+}
+
+const copies = (o) => (fs.existsSync(o.outgoing) ? fs.readdirSync(o.outgoing) : []);
+
+test('a card with files: declined, replaced or handed back, its copies go; the new card keeps its own', async (t) => {
+  // Value: protects=copies live only while their email may still go, through every way a waiting card ends; fails_when=a decline, a re-propose or a Can send hand back leaves its copies; why_new=state cells files x decline/replace/handback had no test; seam=none; no_claim=none beyond protects
+  const o = office(t);
+  const { call, approvals } = heldRoute(t, o);
+  const one = await filedCard(call, approvals, o);
+  approvals.decide(one.id, 'decline', {}, '');
+  assert.deepEqual(copies(o), [], 'declined: copies gone');
+  const two = await filedCard(call, approvals, o, 'Again');
+  const three = await filedCard(call, approvals, o, 'Again');
+  assert.equal(three.replaces, two.id);
+  assert.deepEqual(copies(o), [three.files.key], 'replaced: only the new card keeps copies');
+  approvals.sendingChanged('pam', 'ceo', 'ceo@x.com', 'send');
+  assert.equal(approvals.get(three.id).state, 'cancelled');
+  assert.deepEqual(copies(o), [], 'handed back: copies gone');
+});
+
+test('a card with files: every file taken off sends the email bare and says so; a failed send keeps the copies for the retry', async (t) => {
+  // Value: protects=an email the owner stripped of files goes with none, and a send that failed sends the very same copies on retry; fails_when=approve with [] still attaches, or a failed send frees the copies; why_new=state cells files x approve-none/send-fail had no test; seam=none; no_claim=none beyond protects
+  const o = office(t);
+  const { call, approvals, ctl, out } = heldRoute(t, o);
+  const bare = await filedCard(call, approvals, o);
+  approvals.decide(bare.id, 'approve', { files: [] }, '');
+  assert.match(out.messages.at(-1).body, /took these files off the email, so they do not go: "a\.pdf", "b\.pdf"/);
+  const sent = await call('pam', 'send', { mailbox: 'ceo', proposal: bare.id });
+  assert.equal(sent.status, 200, JSON.stringify(sent.body));
+  assert.equal(ctl.sends.at(-1).input.files?.length ?? 0, 0, 'no files go');
+  const card = await filedCard(call, approvals, o, 'Retry');
+  approvals.decide(card.id, 'approve', {}, '');
+  ctl.failOnce = true;
+  const failed = await call('pam', 'send', { mailbox: 'ceo', proposal: card.id });
+  assert.notEqual(failed.status, 200);
+  assert.equal(approvals.get(card.id).state, 'approved', 'back to approved after a failure that never reached the server');
+  assert.deepEqual(copies(o), [card.files.key], 'copies kept for the retry');
+  const retry = await call('pam', 'send', { mailbox: 'ceo', proposal: card.id });
+  assert.equal(retry.status, 200, JSON.stringify(retry.body));
+  assert.deepEqual(ctl.sends.at(-1).input.files.map((x) => [x.filename, x.content.equals(PDF) || 'b']), [['a.pdf', true], ['b.pdf', 'b']]);
+  assert.deepEqual(copies(o), [], 'sent: copies gone');
+});
+
+test('a card with files withdrawn while it is being sent never reaches the server, and its copies go', async (t) => {
+  // Value: protects=a withdraw during the send stops it before the server and frees the copies; fails_when=the late access check is skipped or a cancelled sending card keeps its copies; why_new=state cell files x cancel-sending had no test; seam=held fake send; no_claim=a real SMTP server
+  const o = office(t);
+  const { call, approvals, ctl } = heldRoute(t, o);
+  const card = await filedCard(call, approvals, o);
+  approvals.decide(card.id, 'approve', {}, '');
+  let open;
+  ctl.hold = new Promise((r) => { open = r; });
+  const sending = call('pam', 'send', { mailbox: 'ceo', proposal: card.id });
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(approvals.get(card.id).state, 'sending');
+  approvals.cancel({ id: card.id }, 'The owner withdrew it.');
+  assert.deepEqual(copies(o), [], 'withdrawn: copies gone at once');
+  open();
+  const res = await sending;
+  assert.notEqual(res.status, 200);
+  assert.equal(ctl.sends.length, 0, 'nothing reached the server');
+});
+
+test('a kept copy is found only by a file the card has', (t) => {
+  // Value: protects=Open on a card names only its own copies, never a path outside them; fails_when=copyPath accepts an index past the list or a bad key; why_new=state cell files x open-file had only a source pin; seam=none; no_claim=the IPC's waiting-only check, pinned in the wiring test
+  const o = office(t);
+  const f = files(o);
+  const set = { key: 'aaaaaaaaaaaaaaaaaa', items: [{ name: 'a.pdf', size: 1, kind: 'pdf', sha256: 'x', from: o.own }] };
+  assert.equal(f.copyPath(set, 0), path.join(o.outgoing, set.key, '0'));
+  assert.equal(f.copyPath(set, 1), null);
+  assert.equal(f.copyPath({ ...set, key: '../x' }, 0), null);
 });

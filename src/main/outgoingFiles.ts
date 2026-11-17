@@ -113,7 +113,10 @@ export function sandboxProfile(walls: ReaderWalls): string {
  *  closed folder hidden behind an empty one (a closed file behind an empty
  *  file), the open ones inside put back, and no network. */
 export function bwrapArgs(walls: ReaderWalls, kindOf: (p: string) => 'dir' | 'file' | null): string[] {
-  const args = ['--ro-bind', '/', '/', '--dev', '/dev', '--proc', '/proc', '--unshare-net', '--die-with-parent', '--new-session'];
+  // Its own process space: a fresh /proc mounts only inside one (unprivileged
+  // bwrap refuses it otherwise), and /proc/<pid>/root of the app or another
+  // process would lead past the hidden folders.
+  const args = ['--ro-bind', '/', '/', '--dev', '/dev', '--proc', '/proc', '--unshare-pid', '--unshare-net', '--die-with-parent', '--new-session'];
   for (const d of walls.deny) {
     const k = kindOf(d);
     if (k === 'dir') args.push('--tmpfs', d);
@@ -239,6 +242,22 @@ export function parseAttachPaths(raw: unknown): { ok: true; paths: string[] } | 
 export class OutgoingFiles {
   /** Copy sets written but not yet on a proposal: a sweep leaves them. */
   private pending = new Set<string>();
+  /** Reader processes running now, for every caller together (email tool and
+   *  teammate hand-offs), and those waiting their turn. */
+  private readers = 0;
+  private waiters: Array<() => void> = [];
+
+  private async readerSlot(): Promise<() => void> {
+    if (this.readers >= AT_ONCE) await new Promise<void>((go) => this.waiters.push(go));
+    this.readers++;
+    let freed = false;
+    return () => {
+      if (freed) return;
+      freed = true;
+      this.readers--;
+      this.waiters.shift()?.();
+    };
+  }
 
   constructor(private deps: OutgoingDeps) {}
 
@@ -288,13 +307,26 @@ export class OutgoingFiles {
     const perFile = this.deps.readMs ?? OUTGOING_READ_MS;
     const out: Array<OutgoingFile | { error: string }> = new Array(targets.length);
     let next = 0;
+    // Bytes read so far: each read may take only what is left of the email's
+    // total, and once it is spent nothing more is read, so one call never
+    // holds much more than one email's worth.
+    let used = 0;
+    let overTotal = false;
     const worker = async (): Promise<void> => {
-      while (next < targets.length) {
+      while (next < targets.length && !overTotal) {
         const i = next++;
         const t = targets[i];
-        const left = deadline - now();
-        const r = left <= 0 ? { ok: false as const, why: 'slow' as const } : await readApart(launch, t.real, OUTGOING_BYTES_MAX, Math.min(perFile, left));
+        const room = OUTGOING_BYTES_MAX - used;
+        if (room <= 0) { overTotal = true; continue; }
+        const release = await this.readerSlot();
+        let r: Awaited<ReturnType<typeof readApart>>;
+        try {
+          const left = deadline - now();
+          r = left <= 0 ? { ok: false as const, why: 'slow' as const } : await readApart(launch, t.real, room, Math.min(perFile, left));
+        } finally { release(); }
+        if (!r.ok && r.why === 'too-big' && room < OUTGOING_BYTES_MAX) { overTotal = true; continue; }
         if (!r.ok) { out[i] = { error: `${words.lead}: ${shown(t.asked)} ${REFUSED[r.why]}` }; continue; }
+        used += r.bytes.length;
         const kind = attachmentKind(r.bytes, basename(t.real));
         if (!kind) {
           out[i] = { error: `${words.lead}: ${shown(t.asked)} is not a kind of file the office sends. PDF, Word, Excel, PowerPoint, plain text, CSV and pictures are.` };
@@ -311,7 +343,9 @@ export class OutgoingFiles {
       }
     };
     await Promise.all(Array.from({ length: Math.min(AT_ONCE, targets.length) }, worker));
-    const failed = out.find((x): x is { error: string } => 'error' in x);
+    const tooMuch = `These files come to over ${mb(OUTGOING_BYTES_MAX)} together, more than one email carries. Split them across emails.`;
+    if (overTotal) return { ok: false, error: tooMuch };
+    const failed = out.find((x): x is { error: string } => !!x && 'error' in x);
     if (failed) return { ok: false, error: failed.error };
     const files = out as OutgoingFile[];
     const total = files.reduce((n, f) => n + f.size, 0);

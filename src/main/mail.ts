@@ -1381,6 +1381,7 @@ export class MailService {
     const stop = beforeSmtp?.();
     if (stop) throw new MailError('refused', `Not sent. ${stop}`);
     const smtp = this.createSmtp(rec.smtp, rec.address, this.password(id));
+    const sendStarted = Date.now();
     try {
       // Saved before the server sees it, so a stop before its answer never
       // leads to a second copy. If that can't be saved, nothing goes out.
@@ -1413,7 +1414,10 @@ export class MailService {
     // Gmail files sent mail itself; other services need the copy appended.
     if (rec.provider !== 'gmail' && rec.provider !== 'google-workspace') {
       const raw = await MailService.build(msg).catch(() => null);
-      if (raw) await this.inFolder(id, MailService.sentBox, async (c, path) => { await c.append(path, raw, ['\\Seen']); }, 'Saving to Sent', true, sendTimeoutFor(input)).catch(() => undefined);
+      // Only what is left of the send's own time, so a big email's copy never
+      // carries the call past md-mail's three minutes (it is best-effort).
+      const sentLimit = Math.max(5_000, Math.min(sendTimeoutFor(input), SEND_TIMEOUT_MAX_MS - (Date.now() - sendStarted)));
+      if (raw) await this.inFolder(id, MailService.sentBox, async (c, path) => { await c.append(path, raw, ['\\Seen']); }, 'Saving to Sent', true, sentLimit).catch(() => undefined);
     }
     return { sent: true, messageId };
   }

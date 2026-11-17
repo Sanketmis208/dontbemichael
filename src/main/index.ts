@@ -6517,15 +6517,21 @@ function bootstrapHiveServices(): void {
     const parsed = parseAttachPaths(typeof file === 'string' ? [file] : file);
     if (!parsed.ok) return { error: parsed.error.replace('"attach_files"', '"file"') };
     if (!parsed.paths.length) return { error: 'Send a file as its full path, or several as a list of full paths.' };
+    // Always settles to paths or an error, never a rejection: the teammate was
+    // told files are coming, so both must hear how it ended.
     const coming = (async (): Promise<{ paths: string[] } | { error: string }> => {
-      const got = await outgoingFiles.read(from, parsed.paths, { lead: 'Not sent', goes: 'go to a teammate' });
-      if (!got.ok) return { error: got.error };
+      const saved: string[] = [];
       try {
-        const paths = got.files.map((f) => saveAttachmentFile({ folder: toFolder, name: f.name, ending: f.kind, bytes: f.bytes, subfolder: TEAMMATE_FILES_FOLDER }, () => {}));
+        const got = await outgoingFiles.read(from, parsed.paths, { lead: 'Not sent', goes: 'go to a teammate' });
+        if (!got.ok) return { error: got.error };
+        for (const f of got.files) saved.push(saveAttachmentFile({ folder: toFolder, name: f.name, ending: f.kind, bytes: f.bytes, subfolder: TEAMMATE_FILES_FOLDER }, () => {}));
         // By count only: the office log is committed and agents read it (D14).
-        hive.appendLog({ kind: 'files-handed-over', from, to, files: paths.length });
-        return { paths };
+        hive.appendLog({ kind: 'files-handed-over', from, to, files: saved.length });
+        return { paths: saved };
       } catch (e) {
+        // All or none: copies already written would sit unannounced in the
+        // teammate's folder while both are told nothing arrived.
+        for (const p of saved) { try { rmSync(p, { force: true }); } catch { /* best-effort */ } }
         if (e instanceof AttachmentSaveError) return { error: e.message };
         console.error('[hive] teammate files', e);
         return { error: 'The app hit an error. Try again later.' };

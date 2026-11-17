@@ -117,7 +117,7 @@ test('a draft or Sent copy that timed out is not told to simply try again', () =
   assert.match(mail, /if \(err\.kind === 'timeout' && !append\) throw new MailError\('timeout', `\$\{err\.message\} \$\{READ_TIMEOUT_NOTE\}`\);/);
   // Still appends (true); a limit for a large email may follow (agent-attach-files.md).
   assert.match(mail, /'Saving the draft', true(, sendTimeoutFor\(input\))?\);/);
-  assert.match(mail, /'Saving to Sent', true(, sendTimeoutFor\(input\))?\)/);
+  assert.match(mail, /'Saving to Sent', true(, (sendTimeoutFor\(input\)|sentLimit))?\)/);
 });
 
 test('design fixes: sentence case group names, a real Profile heading, reduced motion, a readable floor mark', () => {
