@@ -5,7 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const loadTs = require('./load-ts.cjs');
 const schema = loadTs('src/shared/failureReport.ts');
-const { runPromotion, newer } = require('../tools/failure-reports/promote.cjs');
+const { runPromotion, newer, retrying, RETRY_DELAYS_MS, RUN_RETRIES } = require('../tools/failure-reports/promote.cjs');
 const { buildCanary } = require('../tools/failure-reports/canary.cjs');
 
 const REPORTS = 'dontbemichael-reports/failures';
@@ -500,4 +500,32 @@ test('a deleted main issue is forgotten instead of failing every run', async () 
   const out = await runPromotion({ gh: gone, schemaFor: async () => schema, state: carried, now: () => T0, reportsRepo: REPORTS, reportsToken: 'r', mainToken: 'm' });
   assert.deepEqual(out.state.seenDirty, []);
   assert.equal(out.state.mainIssue[FP], undefined);
+});
+
+test('a GitHub 5xx on a read or a PATCH is tried again; a POST, a 4xx and a network error are not', async () => {
+  // Value: protects=one GitHub 502 no longer fails a whole run (reports run 43642099386), and a retried POST never makes a second issue or comment; fails_when=5xx reads are not retried, POSTs are, or the run's retries are unbounded; why_new=a single 502 on the release list failed the run; seam=fake send and sleep; no_claim=real GitHub timing
+  const waits = [];
+  const sleep = async (ms) => { waits.push(ms); };
+  const answers = (list) => { const sent = []; return { sent, send: async (t, method, p) => { sent.push(`${method} ${p}`); return list.shift() ?? { status: 200, json: [] }; } }; };
+
+  const blip = answers([{ status: 502, json: null }, { status: 503, json: null }]);
+  assert.deepEqual(await retrying(blip.send, sleep)('m', 'GET', '/releases'), { status: 200, json: [] });
+  assert.equal(blip.sent.length, 3);
+  assert.deepEqual(waits, RETRY_DELAYS_MS);
+
+  const down = answers([{ status: 502, json: null }, { status: 502, json: null }, { status: 502, json: null }, { status: 200, json: [] }]);
+  assert.equal((await retrying(down.send, sleep)('m', 'PATCH', '/issues/1', {})).status, 502, 'gives up after the last delay');
+  assert.equal(down.sent.length, RETRY_DELAYS_MS.length + 1);
+
+  for (const [method, status] of [['POST', 502], ['GET', 404], ['GET', 0]]) {
+    const once = answers([{ status, json: null }]);
+    assert.equal((await retrying(once.send, sleep)('m', method, '/x')).status, status, `${method} ${status}`);
+    assert.equal(once.sent.length, 1, `${method} ${status} is sent once`);
+  }
+
+  waits.length = 0;
+  const outage = answers(Array.from({ length: 100 }, () => ({ status: 502, json: null })));
+  const gh = retrying(outage.send, sleep);
+  for (let i = 0; i < 20; i++) await gh('m', 'GET', `/r${i}`);
+  assert.equal(waits.length, RUN_RETRIES, 'a run spends at most its retry budget');
 });

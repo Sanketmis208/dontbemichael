@@ -98,7 +98,15 @@ src/
                              own app (docs/designs/source-attachments.md)
     attachmentSave.ts        writes an email attachment into a member's Email attachments folder (never replaces, never
                              executable, marked as a download) and knows which files the app saved, so only those go on
-                             to a teammate (docs/designs/agent-save-attachment.md)
+                             to a teammate (docs/designs/agent-save-attachment.md); it also writes the files a teammate
+                             hands over from its own folder into the receiver's From teammates folder
+                             (docs/designs/agent-attach-files.md)
+    outgoingFiles.ts         files a member attaches to an email from its folder or a folder named for its job
+                             (docs/designs/agent-attach-files.md): the member's own file check, the limits, the kind
+                             from the bytes, and the copies with their sha256 in the app's private folder that the
+                             email sends, freed when it leaves waiting or approved
+    fileReader.ts / fileReaderCli.ts   reads one such file in a short lived process of its own, started inside the
+                             member's own folder walls, with a time limit
     integrationBroker.ts     loopback secret broker; answers md-mail calls, holds mailbox passwords, enforces Capabilities,
                              and checks a member's integration grant and level live on every call
     brokerThrottle.ts        rate limits from connected apps: when one answers 429, or 503 with Retry-After, the broker stops
@@ -142,7 +150,9 @@ src/
                              with Remind and Close without them (never pty:kill: that archives the agent).
                              start({relaunch}) reopens the app once closed (a Claude Code update, shared/cliUpdate.ts)
     fs.ts / git.ts           sandboxed filesystem + git bridges; fs.ts also checks a file Michael names
-                             (askFileVerdict) and reads it for a file tab (readAskFile), office and team folders only
+                             (askFileVerdict) and reads it for a file tab (readAskFile), office and team folders only;
+                             a path check from agent text (statAbs) waits on the disk at most 3 at a time and never
+                             looks at a network path
     packs.ts                 loads and validates the bundled Office Packs (resources/packs/)
     agentFolders.ts          each agent's folder under ~/Documents/<Business> (Michael's), plus the Office folder
     homeFolder.ts            office (harness home) folder checks behind the "can't find your office" screen

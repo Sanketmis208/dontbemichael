@@ -1340,6 +1340,12 @@ export class HookServer {
     return windowsShellWallDecision(process.platform, command, peers, own);
   }
 
+  /** A read of `path` judged as this member's own file tools would be, before
+   *  the app reads a file the member named for an email (agent-attach-files.md). */
+  readCheck(agentId: string, path: string): { deny: boolean; reason?: string } {
+    return this.folderCheck(agentId, 'Read', { file_path: path }, undefined);
+  }
+
   private folderCheck(agentId: string, tool: string, input: unknown, cwd: string | undefined): { deny: boolean; reason?: string } {
     const cfg = this.getConfig();
     // Without a business folder there are no team folders to keep apart, but

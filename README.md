@@ -41,8 +41,8 @@ runs on your computer.
 > brings you only the calls that need you.
 
 > [!TIP]
-> **New in 0.4.1: job changes work in every office.** In 0.3.9, Pulse can change a job's set times
-> for you, ready to apply with Undo.
+> **New in 0.4.2: team members attach files from their folder to an email.** On Send on approval
+> the card lists each file, to open or take off before you approve.
 
 ## Contents
 
@@ -127,6 +127,10 @@ business runs on, and each team member works from the one that matches its job.
   copies it across, so nobody opens another team member's folder. When you open an email a card
   is built on, a click on one of its attachments opens a read only copy in its own app; programs,
   scripts and other kinds the office doesn't take in stay in your mail app.
+- **Files from its folder go with its email.** A team member attaches files from its own folder,
+  or a folder you named for its job, as its Sending allows. On Send on approval the card lists each
+  file: open it in its own app, or take it off before you approve. A file a teammate keeps is
+  handed over first, into the sender's From teammates folder.
 - **Put it on a clock.** Add a schedule like "Check the support inbox" every hour in the same tab,
   with a focus area for each run, and the team member sorts new mail, answers it as its Sending
   setting allows and tells Michael what needs you. A new Executive Admin arrives with an Inbox to zero job already set.

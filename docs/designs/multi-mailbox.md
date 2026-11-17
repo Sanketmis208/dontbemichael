@@ -230,6 +230,11 @@ The 2am Friday test: two agents, two mailboxes, a Draft only agent tries to send
 
 ## Answered: MB-8 = A (refs only, gap stated)
 
+
+Files from a member's own folder (2026-11-16, `agent-attach-files.md`): `attach_files` takes paths,
+not bytes. The app reads each one inside the member's own folder walls, so only files the member
+could already read go, and never under a Send only grant. MB-8 stands as it was for files from
+other emails.
 ## Decision ledger
 
 | ID and owner | Contract and evidence | Current | Proposed | Status | Exact approval and scope |

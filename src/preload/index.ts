@@ -1304,8 +1304,10 @@ const api = {
   skipNotice: (taskId: string, index: number): Promise<{ ok: boolean }> => ipcRenderer.invoke('hive:skipNotice', taskId, index),
   /** Send on approval: emails waiting for the owner on Ask me, and the owner's decision. */
   listMailProposals: (): Promise<MailProposal[]> => ipcRenderer.invoke('mailProposals:list'),
-  decideMailProposal: (id: string, decision: ProposalDecision, edit: { subject?: string; body?: string }, note?: string, standing?: string): Promise<{ ok: boolean; error?: string }> =>
+  decideMailProposal: (id: string, decision: ProposalDecision, edit: { subject?: string; body?: string; files?: number[] }, note?: string, standing?: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('mailProposals:decide', id, decision, edit, note, standing),
+  /** One file on an email card, opened in its own app from the copy the app kept (agent-attach-files.md). */
+  openMailProposalFile: (id: string, index: number): Promise<{ ok: boolean; reason?: 'gone' | 'failed' }> => ipcRenderer.invoke('mailProposals:openFile', id, index),
   /** Standing approvals: kinds of email an agent may send without asking. */
   listMailStanding: (agentId: string): Promise<StandingApproval[]> => ipcRenderer.invoke('mailStanding:list', agentId),
   /** A Send only member's latest sends from that mailbox, newest first (at most 5). */
