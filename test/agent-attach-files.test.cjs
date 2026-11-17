@@ -22,7 +22,7 @@ const { MailApprovals } = loadTs('src/main/mailApprovals.ts');
 const { liveFileKeys, heldFileBytes, approvedFiles, standingProblem } = loadTs('src/shared/mailProposals.ts');
 const read = (p) => fs.readFileSync(path.resolve(__dirname, '..', p), 'utf8');
 
-const FIXTURE = path.resolve(__dirname, 'fixtures', 'file-reader-run.cjs');
+const FIXTURE = path.resolve(__dirname, '..', 'test/fixtures/file-reader-run.cjs');
 /** The reader under plain Node with no walls, as on Windows. */
 const plainLaunch = { file: process.execPath, args: [FIXTURE] };
 const PDF = Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n');
@@ -323,6 +323,8 @@ test('wiring: walls kept at spawn, the reader built, copies swept, the tool and 
   assert.match(index, /filesLive: \(keys\) => outgoingFiles\.sweep\(keys\)/);
   assert.match(index, /if \(live\) outgoingFiles\.sweep\(live\);/);
   assert.match(read('electron.vite.config.ts'), /fileReaderCli: resolve\(__dirname, 'src\/main\/fileReaderCli\.ts'\)/);
+  // The reader's command runs the same readerMain the tests run under Node.
+  assert.match(read('src/main/fileReaderCli.ts'), /readerMain\(process\.argv\.slice\(2\)\)/);
   assert.match(read('resources/md-mail-mcp.cjs'), /attach_files: \{ type: 'array'/);
   const hive = read('src/main/hive.ts');
   assert.match(hive, /attach it with attach_files on draft, propose or send; never ask the owner to attach it and send the email themselves/);
