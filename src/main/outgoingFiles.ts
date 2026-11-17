@@ -198,7 +198,7 @@ export function readApart(launch: ReaderLaunch, path: string, max: number, timeo
 
 const REFUSED: Record<ReadRefusal | 'slow', string> = {
   missing: 'was not found.',
-  denied: 'is in a folder you can\'t open, so it can\'t go with an email.',
+  denied: 'is in a folder you can\'t open.',
   link: 'is a link. Attach the file it points to, from your own folder.',
   'not-file': 'is not a file.',
   links: 'has more than one name on disk, so the app does not send it. Copy it to a new file in your folder and attach that.',
@@ -257,10 +257,10 @@ export class OutgoingFiles {
    * time budget. Every file is checked before any is kept, so one refusal
    * leaves nothing behind and the member hears which file and why.
    */
-  async read(agentId: string, paths: string[]): Promise<{ ok: true; files: OutgoingFile[] } | { ok: false; error: string }> {
+  async read(agentId: string, paths: string[], words: { lead: string; goes: string } = { lead: 'Not attached', goes: 'go with an email' }): Promise<{ ok: true; files: OutgoingFile[] } | { ok: false; error: string }> {
     if (!paths.length) return { ok: true, files: [] };
     const folder = this.deps.memberFolder(agentId);
-    if (!folder) return { ok: false, error: 'You have no folder to attach files from. Tell Michael.' };
+    if (!folder) return { ok: false, error: 'You have no folder to send files from. Tell Michael.' };
     const launch = this.deps.launch(agentId);
     if ('refused' in launch) return { ok: false, error: launch.refused };
     const roots = this.roots(agentId);
@@ -272,14 +272,14 @@ export class OutgoingFiles {
     for (const p of paths) {
       const abs = resolve(isAbsolute(p) ? p : join(folder, p));
       const asked = this.deps.check(agentId, abs);
-      if (asked.deny) return { ok: false, error: `Not attached: ${shown(p)}. ${asked.reason ?? 'You can\'t open that file.'}` };
+      if (asked.deny) return { ok: false, error: `${words.lead}: ${shown(p)}. ${asked.reason ?? 'You can\'t open that file.'}` };
       const real = this.real(abs);
-      if (!real) return { ok: false, error: `Not attached: ${shown(p)} ${REFUSED.missing}` };
+      if (!real) return { ok: false, error: `${words.lead}: ${shown(p)} ${REFUSED.missing}` };
       if (!roots.some((r) => isSameOrInside(r, real))) {
-        return { ok: false, error: `Not attached: ${shown(p)}. Only files in your own folder, or in a folder the owner named for your job, go with an email.` };
+        return { ok: false, error: `${words.lead}: ${shown(p)}. Only files in your own folder, or in a folder the owner named for your job, ${words.goes}.` };
       }
       const asReal = real === abs ? asked : this.deps.check(agentId, real);
-      if (asReal.deny) return { ok: false, error: `Not attached: ${shown(p)}. ${asReal.reason ?? 'You can\'t open that file.'}` };
+      if (asReal.deny) return { ok: false, error: `${words.lead}: ${shown(p)}. ${asReal.reason ?? 'You can\'t open that file.'}` };
       if (!targets.some((t) => t.real === real)) targets.push({ asked: abs, real });
     }
 
@@ -294,10 +294,10 @@ export class OutgoingFiles {
         const t = targets[i];
         const left = deadline - now();
         const r = left <= 0 ? { ok: false as const, why: 'slow' as const } : await readApart(launch, t.real, OUTGOING_BYTES_MAX, Math.min(perFile, left));
-        if (!r.ok) { out[i] = { error: `Not attached: ${shown(t.asked)} ${REFUSED[r.why]}` }; continue; }
+        if (!r.ok) { out[i] = { error: `${words.lead}: ${shown(t.asked)} ${REFUSED[r.why]}` }; continue; }
         const kind = attachmentKind(r.bytes, basename(t.real));
         if (!kind) {
-          out[i] = { error: `Not attached: ${shown(t.asked)} is not a kind of file the office sends. PDF, Word, Excel, PowerPoint, plain text, CSV and pictures are.` };
+          out[i] = { error: `${words.lead}: ${shown(t.asked)} is not a kind of file the office sends. PDF, Word, Excel, PowerPoint, plain text, CSV and pictures are.` };
           continue;
         }
         out[i] = {

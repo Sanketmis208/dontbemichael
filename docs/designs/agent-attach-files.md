@@ -134,6 +134,35 @@ The proposal card gains a Files list under the subject (mockup:
 If a copy is gone or changed, Open on its row says the file is no longer kept, and the send
 refuses it: the email is withdrawn and the member is told to propose it again with the files.
 
+## A file another member keeps (owner, 2026-11-16, option A)
+
+Found on the first live try. Shivam's statements sit in Oscar's folder (`Finance`). Pam sends the
+reply from the `vikram@` mailbox, and her walls don't reach Finance. Oscar has no mailbox. Owner:
+"A: teammate hand-off", the same rule as 2026-10-31 for email attachments. Members ask each other
+for files, the app does the copying, and nobody opens another member's folder.
+
+```
+Pam   -- query: the ten statements --> Oscar
+Oscar -- inform, "file": [paths] -----> Pam      (the message goes at once, with a note)
+         app: reads them inside Oscar's walls (the same reader as above), kinds from the bytes
+         app: saves them in Admin/From teammates/, then tells Pam where
+Pam   -- propose, attach_files: From teammates/... --> the owner's card
+```
+
+- `"file"` on an `inform` or `query` may now be a list of up to 20 full paths. A file in the
+  sender's own `Email attachments` still goes as before, by its identity.
+- Any other path goes through `OutgoingFiles.read` for the sender. So it must be in the sender's
+  own folder or a folder the owner named for its job, and pass the sender's file tool check, read
+  inside the sender's walls. The same kinds and limits apply. Research sends no files.
+- The message goes at once with a note. The copy runs in the background, then the receiver gets
+  "Files from <name>" with each path. A refusal reaches the sender with the reason, and the receiver
+  is told the files did not come.
+- The office log records the count only.
+- Michael's rule: when an answer or a card needs files attached to an email, he hands it to the
+  member who sends from that mailbox. He never decides it can't be done, whatever an earlier answer
+  on the card says. That is what happened on the first try: he answered from the card's history,
+  and nobody tried.
+
 ## Behavior changes
 
 | Who | Today | Proposed | What the owner sees |
@@ -142,6 +171,8 @@ refuses it: the email is withdrawn and the member is told to propose it again wi
 | Members on Can send | Ask the owner to attach and send | Send the email with the files (decision 1) | The email in Sent; a log line with the count |
 | Members on Draft only | Draft without files | Draft with the files in their own mailbox's Drafts | The draft in his mail app, files on it |
 | Members and Michael | No rule | New rule: never ask the owner to attach and send a file from a folder; attach it. Ask only when it was refused, and say why | Fewer cards; a refused file still reaches him, with the reason |
+| Members | A teammate hands over only files saved from email | Also files from its own folder, on request, into the asker's From teammates folder | Nothing new; the email card shows the files |
+| Michael | Could answer an attach question himself | Hands it to the member who sends from that mailbox | No "nobody can attach" answers from card history |
 | New hires | No mailbox | Unchanged: the tool needs a mailbox the owner gave | Nothing new |
 
 Agents already running get the field at their next start. Engines without md-mail (TODOS.md,

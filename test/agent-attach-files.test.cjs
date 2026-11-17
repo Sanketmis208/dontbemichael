@@ -367,3 +367,61 @@ test('review fixes: an unreadable store sweeps nothing, a card stuck sending hol
   assert.match(mail, /'Saving to Sent', true, sendTimeoutFor\(input\)\)/);
   assert.ok(outgoing.OUTGOING_READ_BUDGET_MS + sendTimeoutFor({ files: [{ content: Buffer.alloc(18 * 1024 * 1024) }] }) < 180_000, 'read and send fit inside md-mail\'s three minutes');
 });
+
+test('teammate hand-off: files from the sender\'s folder follow the message once copied, and a refusal reaches both', async (t) => {
+  // Value: protects=a file one member keeps reaches the member who sends the email, without either opening the other's folder (owner, 2026-11-16, option A); fails_when=a list of files is refused, the message waits on the copy, the teammate never hears where the files are, or a refusal is silent; why_new=new hand-off kind; seam=the handover is a stand in
+  const { HiveManager } = loadTs('src/main/hive.ts');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'md-teammate-files-'));
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const hive = new HiveManager(() => home);
+  await hive.ensureAgent({ id: 'oscar', name: 'Oscar', provider: 'claude', cwd: home });
+  await hive.ensureAgent({ id: 'pam', name: 'Pam', provider: 'claude', cwd: home });
+  let release;
+  hive.onFileHandover((from, to, file) => {
+    if (file === '/bad') return { count: 1, coming: Promise.resolve({ error: 'Not sent: "/bad" was not found.' }) };
+    return { count: file.length, coming: new Promise((r) => { release = () => r({ paths: file.map((f) => `/office/Admin/From teammates/${path.basename(f)}`) }); }) };
+  });
+  const root = hive.root();
+  const send = (name, m) => fs.writeFileSync(path.join(root, 'agents', 'oscar', 'outbox', name), JSON.stringify({ to: 'pam', act: 'inform', subject: 'IB statements', body: 'Here they are.', ...m }));
+  const inbox = (who) => fs.readdirSync(path.join(root, 'agents', who, 'inbox')).filter((f) => f.endsWith('.json')).map((f) => JSON.parse(fs.readFileSync(path.join(root, 'agents', who, 'inbox', f), 'utf8')));
+
+  send('a.json', { file: ['/office/Finance/2026/ib/ib_jan2026.pdf', '/office/Finance/2026/ib/ib_feb2026.pdf'] });
+  hive.routeOnce();
+  const got = inbox('pam').find((m) => m.subject === 'IB statements');
+  assert.match(got.body, /\[2 files from Oscar's folder come with this message\. The app copies them into your folder and tells you where in a moment\.\]/);
+  assert.equal(inbox('pam').some((m) => m.subject === 'Files from Oscar'), false, 'not before the copy is done');
+  release();
+  await new Promise((r) => setTimeout(r, 20));
+  const files = inbox('pam').find((m) => m.subject === 'Files from Oscar');
+  assert.match(files.body, /\/office\/Admin\/From teammates\/ib_jan2026\.pdf\n\/office\/Admin\/From teammates\/ib_feb2026\.pdf/);
+  assert.match(files.body, /attach them to an email with attach_files/);
+  assert.equal(files.in_reply_to, got.id);
+
+  send('b.json', { subject: 'Second', file: '/bad' });
+  hive.routeOnce();
+  await new Promise((r) => setTimeout(r, 20));
+  assert.match(inbox('oscar').find((m) => m.subject === 'File not delivered').body, /its files did not: Not sent: "\/bad" was not found\./);
+  assert.match(inbox('pam').find((m) => m.subject === 'Files not delivered').body, /Oscar was told why/);
+});
+
+test('teammate hand-off: saved under From teammates, an email file still goes the old way, and main reads inside the sender\'s walls', (t) => {
+  // Value: protects=files land in one known folder of the receiver's own, saved email files keep their identity rule, and the sender's walls decide what can go; fails_when=the subfolder is ignored, every path takes the folder route, or main reads without the sender's walls; why_new=new hand-off kind; seam=real files, source pins
+  const { saveAttachmentFile, inAttachmentsFolder, TEAMMATE_FILES_FOLDER, ATTACHMENTS_FOLDER } = loadTs('src/main/attachmentSave.ts');
+  const o = office(t);
+  const saved = saveAttachmentFile({ folder: o.own, name: 'ib_jan2026.pdf', ending: 'pdf', bytes: PDF, subfolder: TEAMMATE_FILES_FOLDER }, () => {});
+  assert.equal(saved, path.join(o.own, 'From teammates', 'ib_jan2026.pdf'));
+  const email = saveAttachmentFile({ folder: o.own, name: 'x.pdf', ending: 'pdf', bytes: PDF }, () => {});
+  assert.equal(path.dirname(email), path.join(o.own, ATTACHMENTS_FOLDER));
+  assert.equal(inAttachmentsFolder(email, o.own), true);
+  assert.equal(inAttachmentsFolder(saved, o.own), false);
+  const index = read('src/main/index.ts');
+  const handler = index.slice(index.indexOf('hive.onFileHandover('));
+  assert.match(handler, /if \(typeof file === 'string' && inAttachmentsFolder\(file, fromFolder\)\)/);
+  assert.match(handler, /outgoingFiles\.read\(from, parsed\.paths, \{ lead: 'Not sent', goes: 'go to a teammate' \}\)/);
+  assert.match(handler, /subfolder: TEAMMATE_FILES_FOLDER/);
+  assert.match(handler, /if \(from === RESEARCH_ID\) return/);
+  const hive = read('src/main/hive.ts');
+  assert.match(hive, /When a teammate asks for files from your own folder, or a folder the owner named for your job, answer the same way with "file" set to the file's full path, or to a list of full paths/);
+  assert.match(hive, /A file a teammate keeps you ask that teammate for first/);
+  assert.match(hive, /never decide yourself that it can\\'t be done, whatever an earlier answer on the card says/);
+});

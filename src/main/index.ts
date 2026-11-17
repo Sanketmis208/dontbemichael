@@ -19,8 +19,8 @@ import { resolveCommand as resolveCliCommand, userShellPath, userShellDoNotTrack
 import { buildPtyEnv } from './ptyEnv';
 import { isSameOrInside } from './pathInside';
 import { extractDocumentTextApart } from './docTextProcess';
-import { AttachmentSaveError, handOverAttachment, markFromOutsideNow, saveAttachmentFile } from './attachmentSave';
-import { OutgoingFiles, readerLaunch, realWalls, type ReaderWalls } from './outgoingFiles';
+import { AttachmentSaveError, TEAMMATE_FILES_FOLDER, handOverAttachment, inAttachmentsFolder, markFromOutsideNow, saveAttachmentFile } from './attachmentSave';
+import { OutgoingFiles, parseAttachPaths, readerLaunch, realWalls, type ReaderWalls } from './outgoingFiles';
 import { readOneFile } from './fileReader';
 import { attachmentKind } from '../shared/attachmentKind';
 import { Foundations, publishCopy } from './foundations';
@@ -6498,14 +6498,40 @@ function bootstrapHiveServices(): void {
     const toFolder = attachmentFolder(to);
     // Folders are known from a member's start, and a member may not have started yet.
     if (!toFolder) return { error: memberWork.has(to) ? `${reg.agents[to].name}'s folder cannot take files.` : `${reg.agents[to].name} has not started yet, so the file stayed with you. Send it again once they are working.` };
-    try {
-      const path = handOverAttachment({ file, fromFolder, toFolder });
-      hive.appendLog({ kind: 'file-handed-over', from, to, name: basename(path) });
-      return { path };
-    } catch (e) {
-      if (e instanceof AttachmentSaveError) return { error: e.message };
-      throw e;
+    // A file it saved from an email: checked and copied at once, as before.
+    if (typeof file === 'string' && inAttachmentsFolder(file, fromFolder)) {
+      try {
+        const path = handOverAttachment({ file, fromFolder, toFolder });
+        hive.appendLog({ kind: 'file-handed-over', from, to, name: basename(path) });
+        return { path };
+      } catch (e) {
+        if (e instanceof AttachmentSaveError) return { error: e.message };
+        throw e;
+      }
     }
+    // Files from its own folder, or a folder the owner named for its job
+    // (agent-attach-files.md, owner 2026-11-16): read inside the sender's own
+    // walls, then copied into the teammate's From teammates folder, so a
+    // teammate who holds the mailbox can attach them.
+    if (from === RESEARCH_ID) return { error: 'Files go only between team members.' };
+    const parsed = parseAttachPaths(typeof file === 'string' ? [file] : file);
+    if (!parsed.ok) return { error: parsed.error.replace('"attach_files"', '"file"') };
+    if (!parsed.paths.length) return { error: 'Send a file as its full path, or several as a list of full paths.' };
+    const coming = (async (): Promise<{ paths: string[] } | { error: string }> => {
+      const got = await outgoingFiles.read(from, parsed.paths, { lead: 'Not sent', goes: 'go to a teammate' });
+      if (!got.ok) return { error: got.error };
+      try {
+        const paths = got.files.map((f) => saveAttachmentFile({ folder: toFolder, name: f.name, ending: f.kind, bytes: f.bytes, subfolder: TEAMMATE_FILES_FOLDER }, () => {}));
+        // By count only: the office log is committed and agents read it (D14).
+        hive.appendLog({ kind: 'files-handed-over', from, to, files: paths.length });
+        return { paths };
+      } catch (e) {
+        if (e instanceof AttachmentSaveError) return { error: e.message };
+        console.error('[hive] teammate files', e);
+        return { error: 'The app hit an error. Try again later.' };
+      }
+    })();
+    return { count: parsed.paths.length, coming };
   });
   hive.onFoundations((actor, payload) => foundations.handle(actor, payload));
   try { foundations.seed(); } catch (e) { console.error('[foundations] seed', e); }

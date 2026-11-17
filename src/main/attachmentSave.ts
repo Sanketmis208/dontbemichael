@@ -9,7 +9,7 @@
 import { execFile, execFileSync } from 'node:child_process';
 import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readSync, realpathSync, rmSync, writeFileSync, type Stats } from 'node:fs';
 import { openNoFollow } from './noFollow';
-import { basename, join, relative } from 'node:path';
+import { basename, dirname, join, relative } from 'node:path';
 import { attachmentKind } from '../shared/attachmentKind';
 import { cleanFolderName } from '../shared/folderName';
 
@@ -18,6 +18,10 @@ export const ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
 
 /** The subfolder saved attachments go to, inside the member's own folder. */
 export const ATTACHMENTS_FOLDER = 'Email attachments';
+
+/** Where files a teammate handed over from its own folder land, inside the
+ *  receiving member's folder (agent-attach-files.md, teammate hand-off). */
+export const TEAMMATE_FILES_FOLDER = 'From teammates';
 
 const COPIES_MAX = 50;
 
@@ -58,34 +62,34 @@ export function attachmentStem(name: string): string {
 
 /** The subfolder when it is a plain folder of the member's own, else null. A
  *  member's shell writes its folder, so a link here could lead anywhere. */
-function plainAttachmentsDir(realFolder: string): string | null {
-  const dir = join(realFolder, ATTACHMENTS_FOLDER);
+function plainAttachmentsDir(realFolder: string, sub = ATTACHMENTS_FOLDER): string | null {
+  const dir = join(realFolder, sub);
   const st = lstatSync(dir);
   return st.isDirectory() && !st.isSymbolicLink() && realpathSync(dir) === dir ? dir : null;
 }
 
 /** The subfolder, made if need be. Refused when anything on the way is a link
  *  that leads out of the member's folder. */
-function attachmentsDir(folder: string): string {
+function attachmentsDir(folder: string, sub = ATTACHMENTS_FOLDER): string {
   let real: string;
   try { real = realpathSync(folder); } catch { throw new AttachmentSaveError('Your folder could not be found.'); }
-  const dir = join(real, ATTACHMENTS_FOLDER);
+  const dir = join(real, sub);
   try {
     mkdirSync(dir, { recursive: true });
-    if (plainAttachmentsDir(real)) return dir;
+    if (plainAttachmentsDir(real, sub)) return dir;
   } catch (e) {
-    throw new AttachmentSaveError(`The ${ATTACHMENTS_FOLDER} folder could not be made: ${(e as NodeJS.ErrnoException).code ?? 'unknown error'}.`);
+    throw new AttachmentSaveError(`The ${sub} folder could not be made: ${(e as NodeJS.ErrnoException).code ?? 'unknown error'}.`);
   }
-  throw new AttachmentSaveError(`${ATTACHMENTS_FOLDER} in your folder is not a plain folder, so nothing was saved.`);
+  throw new AttachmentSaveError(`${sub} in your folder is not a plain folder, so nothing was saved.`);
 }
 
 /** Saves the bytes under a name of their own and returns its path. The same
  *  file saved again returns the first copy, so a retry leaves no duplicates. */
 export function saveAttachmentFile(
-  input: { folder: string; name: string; ending: string; bytes: Buffer },
+  input: { folder: string; name: string; ending: string; bytes: Buffer; subfolder?: string },
   mark: (path: string) => void = markFromOutside
 ): string {
-  const dir = attachmentsDir(input.folder);
+  const dir = attachmentsDir(input.folder, input.subfolder);
   const stem = attachmentStem(input.name);
   for (let n = 1; n <= COPIES_MAX; n++) {
     const path = join(dir, `${stem}${n === 1 ? '' : ` (${n})`}.${input.ending}`);
@@ -139,6 +143,15 @@ function readPlainFile(path: string): { bytes: Buffer; st: Stats } | null {
     }
     return { bytes: bytes.subarray(0, got), st };
   } finally { closeSync(fd); }
+}
+
+/** Whether a path sits directly in the member's own Email attachments, the
+ *  only place a saved email file is handed on from. */
+export function inAttachmentsFolder(file: string, fromFolder: string): boolean {
+  try {
+    const own = plainAttachmentsDir(realpathSync(fromFolder));
+    return !!own && dirname(realpathSync(file)) === own;
+  } catch { return false; }
 }
 
 /**
