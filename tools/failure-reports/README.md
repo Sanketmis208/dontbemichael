@@ -31,6 +31,13 @@ The release workflow files a canary report. Within 3 hours the hourly run
 must see it; if not, the run fails and GitHub emails you. The run summary
 shows the last check and how many reports wait.
 
+When a release changes `promote.cjs` or `promote.yml`, copy it to the
+reports repo again: the run there uses its own copy, never this folder.
+
+A GitHub 5xx on a read or an in place edit is tried again after 1 and 3
+seconds, at most 8 extra tries a run; a new issue or comment is sent once,
+and a report whose send failed waits for the next run.
+
 ## Stop everything
 
 Revoke the bot's token: every install stops sending at once. A release with

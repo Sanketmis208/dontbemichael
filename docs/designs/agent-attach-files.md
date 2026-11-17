@@ -156,7 +156,8 @@ Pam   -- propose, attach_files: From teammates/... --> the owner's card
   inside the sender's walls. The same kinds and limits apply. Research sends no files.
 - The message goes at once with a note. The copy runs in the background, then the receiver gets
   "Files from <name>" with each path. A refusal reaches the sender with the reason, and the receiver
-  is told the files did not come.
+  is told the files did not come. A copy that fails partway deletes nothing: the files already
+  copied stay, the sender hears which came, and the receiver is told they did not all arrive.
 - The office log records the count only.
 - Michael's rule: when an answer or a card needs files attached to an email, he hands it to the
   member who sends from that mailbox. He never decides it can't be done, whatever an earlier answer
@@ -209,7 +210,7 @@ folder placed in a member's folder is refused.
    time limit grows with size.
 4. `MailProposal.files` and cleanup on every state move in `mailApprovals.ts`.
 5. The md-mail tool schema and descriptions.
-6. The card's Files list, Open and remove. Strings in English and the other languages.
+6. The card's Files list, Open and remove. Strings in English, the app's one locale file.
 7. Rules in `hive.ts` for members and Michael. The office floor keeps its words for sending,
    proposing and drafting; attaching is part of those calls.
 8. `docs/FEATURES.md`. A note in `multi-mailbox.md` under MB-8 that files from a folder are now

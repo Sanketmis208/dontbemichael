@@ -145,7 +145,8 @@ moving, and brings you only the decisions that need you.
   email it writes, as its Sending allows: on Send on approval the card lists each file with the
   folder it came from, opens it in its own app, and lets you take one off before you approve.
   The app reads each file inside the member's own folder walls and sends the copy it took then,
-  so a file changed later never goes out in its place.
+  so a file changed later never goes out in its place. For a file a teammate keeps, the member
+  asks that teammate, and the app copies it into the member's From teammates folder to attach.
 
 ### 4. Jobs on a clock
 - Each team member's schedules sit on its Access tab. Name the job ("Check the support
