@@ -1,3 +1,4 @@
-- **Job changes work in every office.**
-- The hire check, work style writing and memory tidy no longer stop at a Claude Code question.
-- A check that ends early now says why in its report.
+- **Team members attach files from their folder to an email.**
+- The approval card lists each file to open or take off.
+- A teammate hands over a file it keeps.
+- Slow shares no longer stall a turn.

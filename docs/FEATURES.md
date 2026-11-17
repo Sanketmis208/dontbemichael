@@ -1,6 +1,6 @@
 # Don't Be Michael: features and changes
 
-Everything the app does today, and every release that got it here (0.0.1 to 0.4.1). Part 1 is
+Everything the app does today, and every release that got it here (0.0.1 to 0.4.2). Part 1 is
 written to be lifted onto the GitHub page and the website as it is; Part 2 is the full list, release
 by release.
 
@@ -309,6 +309,14 @@ moving, and brings you only the decisions that need you.
   as a picture, and a part you select pastes as clean as the whole, in light or dark mode.
 
 ## Part 2: Every change, release by release
+
+### 0.4.2 (2026-11-17)
+- A team member attaches files from its own folder, or a folder you named for its job, to an email.
+  On Send on approval the card lists each file to open or take off. A file a teammate keeps is
+  handed over into the member's From teammates folder first.
+- A path check waits on the disk at most three at a time and never looks at a network path.
+- Quoted text in the terminal that starts with a folder links the file inside it (#687).
+- The failure reports promotion run tries a GitHub server error again.
 
 ### 0.4.1 (2026-11-13)
 - Job changes, the hire check, writing a work style, the focus check and memory tidy work in every

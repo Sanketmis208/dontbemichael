@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format is based on
 
 Don't Be Michael keeps its own version line, starting at 0.0.1.
 
+## [0.4.2] (2026-11-17)
+
+### Added
+- **Team members attach files from their folder to an email.** A team member attaches files from its own folder, or a folder you named for its job, to a draft, a send or a send on approval, as its Sending allows. Each file is checked by what it holds, copied as it was, and that copy is what goes out, so a file changed later never goes in its place. On Send on approval the card lists each file: Open shows it in its own app, and you can take one off before you approve.
+- **A teammate hands over a file it keeps.** When the file sits with a teammate, the member asks that teammate, and the app copies it into the member's From teammates folder to attach. A copy that fails partway deletes nothing and says how far it got. Michael and the team never ask you to attach a file themselves.
+
+### Fixed
+- A path a team member names is checked on the disk at most three at a time, so a slow share no longer stalls a turn, and a network path is never shown as missing.
+- In the terminal, quoted text that starts with a folder links the file inside it when the whole quote is not a path (#687, with thanks to @Sanketmis208).
+- The failure reports promotion run tries a GitHub server error again before giving up.
+
 ## [0.4.1] (2026-11-13)
 
 ### Fixed

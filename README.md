@@ -41,8 +41,8 @@ runs on your computer.
 > brings you only the calls that need you.
 
 > [!TIP]
-> **New in 0.4.1: job changes work in every office.** In 0.3.9, Pulse can change a job's set times
-> for you, ready to apply with Undo.
+> **New in 0.4.2: team members attach files from their folder to an email.** On Send on approval
+> the card lists each file, to open or take off before you approve.
 
 ## Contents
 
