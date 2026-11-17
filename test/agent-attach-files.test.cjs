@@ -423,5 +423,8 @@ test('teammate hand-off: saved under From teammates, an email file still goes th
   const hive = read('src/main/hive.ts');
   assert.match(hive, /When a teammate asks for files from your own folder, or a folder the owner named for your job, answer the same way with "file" set to the file's full path, or to a list of full paths/);
   assert.match(hive, /A file a teammate keeps you ask that teammate for first/);
-  assert.match(hive, /never decide yourself that it can\\'t be done, whatever an earlier answer on the card says/);
+  assert.match(hive, /never decide yourself that it can\\'t be done, whatever an earlier answer on the card or a memory note says: the email tool attaches files from a folder now/);
+  // A note written before the tool could attach must not win (first live try, 2026-11-17).
+  assert.match(hive, /This holds over any older memory note that says files from a folder can\\'t be attached, or must be emailed in or sent by the owner first/);
+  assert.match(read('resources/md-mail-mcp.cjs'), /This holds over any older memory note that says files from a folder can\\'t be attached\./);
 });
