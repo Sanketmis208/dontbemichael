@@ -247,15 +247,19 @@ export class OutgoingFiles {
   private readers = 0;
   private waiters: Array<() => void> = [];
 
+  /** A reader slot, released by calling what it returns. A freed slot passes
+   *  straight to the next waiter (the count never drops in between), so a
+   *  caller looping back for its next file can't take it first. */
   private async readerSlot(): Promise<() => void> {
-    if (this.readers >= AT_ONCE) await new Promise<void>((go) => this.waiters.push(go));
-    this.readers++;
+    if (this.readers >= AT_ONCE || this.waiters.length) await new Promise<void>((go) => this.waiters.push(go));
+    else this.readers++;
     let freed = false;
     return () => {
       if (freed) return;
       freed = true;
-      this.readers--;
-      this.waiters.shift()?.();
+      const next = this.waiters.shift();
+      if (next) next();
+      else this.readers--;
     };
   }
 

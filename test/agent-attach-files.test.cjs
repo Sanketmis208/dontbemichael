@@ -631,3 +631,41 @@ test('a kept copy is found only by a file the card has', (t) => {
   assert.equal(f.copyPath(set, 1), null);
   assert.equal(f.copyPath({ ...set, key: '../x' }, 0), null);
 });
+
+test('regression: the reader limit holds when a call has more files than readers and another call waits', async (t) => {
+  // Value: protects=never more than three readers hold a slot at once, even when a worker loops back for its next file while another call waits; fails_when=a releasing worker takes a slot back ahead of the woken waiter; why_new=review pass 2 (queue jump; the 3+3 case cannot loop); seam=none (counts slots held through the instance's own slot method); no_claim=none beyond protects
+  const o = office(t);
+  const names = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'];
+  for (const n of names) fs.writeFileSync(path.join(o.own, `${n}.pdf`), PDF);
+  const f = files(o, { launch: () => ({ file: process.execPath, args: ['-e', 'setTimeout(()=>{process.stderr.write("missing");process.exitCode=3},100)'] }) });
+  let held = 0;
+  let most = 0;
+  const slot = f.readerSlot.bind(f);
+  f.readerSlot = async () => {
+    const release = await slot();
+    most = Math.max(most, ++held);
+    return () => { held--; release(); };
+  };
+  await Promise.all([f.read('pam', names.slice(0, 6).map((n) => `${n}.pdf`)), f.read('pam', names.slice(6).map((n) => `${n}.pdf`))]);
+  assert.ok(most <= 3, `at most three readers at once, saw ${most}`);
+});
+
+test('regression: a hand-off that fails partway removes only the copies it made, never one a teammate already had', (t) => {
+  // Value: protects=a failed hand-off never deletes a file an earlier hand-off delivered; fails_when=the rollback removes a reused identical copy; why_new=review pass 2 (data loss, both readers); seam=none; no_claim=the hive messages, covered above
+  const { saveFilesAllOrNone, TEAMMATE_FILES_FOLDER, AttachmentSaveError } = loadTs('src/main/attachmentSave.ts');
+  const o = office(t);
+  const dir = path.join(o.own, TEAMMATE_FILES_FOLDER);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'a.pdf'), PDF);
+  // No free name left for b.pdf: every one holds other bytes.
+  for (let n = 1; n <= 50; n++) fs.writeFileSync(path.join(dir, n === 1 ? 'b.pdf' : `b (${n}).pdf`), `other ${n}`);
+  const c = Buffer.concat([PDF, Buffer.from('c')]);
+  assert.throws(() => saveFilesAllOrNone({ folder: o.own, subfolder: TEAMMATE_FILES_FOLDER, files: [
+    { name: 'c.pdf', ending: 'pdf', bytes: c },
+    { name: 'a.pdf', ending: 'pdf', bytes: PDF },
+    { name: 'b.pdf', ending: 'pdf', bytes: PDF }
+  ] }), AttachmentSaveError);
+  assert.ok(fs.existsSync(path.join(dir, 'a.pdf')), 'the earlier identical copy stays');
+  assert.equal(fs.existsSync(path.join(dir, 'c.pdf')), false, 'the copy this call made is gone');
+  assert.deepEqual(saveFilesAllOrNone({ folder: o.own, subfolder: TEAMMATE_FILES_FOLDER, files: [{ name: 'a.pdf', ending: 'pdf', bytes: PDF }] }), [path.join(fs.realpathSync(dir), 'a.pdf')]);
+});

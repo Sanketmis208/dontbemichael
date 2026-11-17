@@ -19,7 +19,7 @@ import { resolveCommand as resolveCliCommand, userShellPath, userShellDoNotTrack
 import { buildPtyEnv } from './ptyEnv';
 import { isSameOrInside } from './pathInside';
 import { extractDocumentTextApart } from './docTextProcess';
-import { AttachmentSaveError, TEAMMATE_FILES_FOLDER, handOverAttachment, inAttachmentsFolder, markFromOutsideNow, saveAttachmentFile } from './attachmentSave';
+import { AttachmentSaveError, TEAMMATE_FILES_FOLDER, handOverAttachment, inAttachmentsFolder, markFromOutsideNow, saveAttachmentFile, saveFilesAllOrNone } from './attachmentSave';
 import { OutgoingFiles, parseAttachPaths, readerLaunch, realWalls, type ReaderWalls } from './outgoingFiles';
 import { readOneFile } from './fileReader';
 import { attachmentKind } from '../shared/attachmentKind';
@@ -6520,18 +6520,17 @@ function bootstrapHiveServices(): void {
     // Always settles to paths or an error, never a rejection: the teammate was
     // told files are coming, so both must hear how it ended.
     const coming = (async (): Promise<{ paths: string[] } | { error: string }> => {
-      const saved: string[] = [];
       try {
         const got = await outgoingFiles.read(from, parsed.paths, { lead: 'Not sent', goes: 'go to a teammate' });
         if (!got.ok) return { error: got.error };
-        for (const f of got.files) saved.push(saveAttachmentFile({ folder: toFolder, name: f.name, ending: f.kind, bytes: f.bytes, subfolder: TEAMMATE_FILES_FOLDER }, () => {}));
+        // All or none: a half delivery would sit unannounced in the teammate's
+        // folder while both are told nothing arrived. Only copies this call
+        // made are removed, never one an earlier hand-off delivered.
+        const paths = saveFilesAllOrNone({ folder: toFolder, subfolder: TEAMMATE_FILES_FOLDER, files: got.files.map((f) => ({ name: f.name, ending: f.kind, bytes: f.bytes })) });
         // By count only: the office log is committed and agents read it (D14).
-        hive.appendLog({ kind: 'files-handed-over', from, to, files: saved.length });
-        return { paths: saved };
+        try { hive.appendLog({ kind: 'files-handed-over', from, to, files: paths.length }); } catch { /* the files are delivered */ }
+        return { paths };
       } catch (e) {
-        // All or none: copies already written would sit unannounced in the
-        // teammate's folder while both are told nothing arrived.
-        for (const p of saved) { try { rmSync(p, { force: true }); } catch { /* best-effort */ } }
         if (e instanceof AttachmentSaveError) return { error: e.message };
         console.error('[hive] teammate files', e);
         return { error: 'The app hit an error. Try again later.' };

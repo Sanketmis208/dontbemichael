@@ -145,6 +145,25 @@ function readPlainFile(path: string): { bytes: Buffer; st: Stats } | null {
   } finally { closeSync(fd); }
 }
 
+/**
+ * Several files saved together, all or none (teammate hand-off): if one can't
+ * be saved, the copies this call made are removed again. A file that was
+ * already there with the same bytes is reused and never removed, since an
+ * earlier hand-off may have delivered it. Returns every file's path.
+ */
+export function saveFilesAllOrNone(input: { folder: string; subfolder: string; files: Array<{ name: string; ending: string; bytes: Buffer }> }): string[] {
+  const made: string[] = [];
+  const paths: string[] = [];
+  try {
+    // The mark runs only for a file this call created, never for a reused one.
+    for (const f of input.files) paths.push(saveAttachmentFile({ folder: input.folder, name: f.name, ending: f.ending, bytes: f.bytes, subfolder: input.subfolder }, (p) => made.push(p)));
+    return paths;
+  } catch (e) {
+    for (const p of made) { try { rmSync(p, { force: true }); } catch { /* best-effort */ } }
+    throw e;
+  }
+}
+
 /** Whether a path sits directly in the member's own Email attachments, the
  *  only place a saved email file is handed on from. */
 export function inAttachmentsFolder(file: string, fromFolder: string): boolean {
