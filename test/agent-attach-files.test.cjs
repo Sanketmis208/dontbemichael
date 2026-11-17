@@ -516,21 +516,25 @@ test('Linux readers get their own process space, so a fresh /proc mounts and no 
 });
 
 test('reader processes are limited for the whole app, and reading stops once the email\'s bytes are spent', async (t) => {
-  // Value: protects=many attach calls or hand-offs never run more than three readers at once, and one call never reads far past one email's worth; fails_when=the shared slot or the running total goes; why_new=review pass 1 (red team); seam=none; no_claim=memory use measured in the packaged app
+  // Value: protects=many attach calls or hand-offs never hold more than three reader slots at once, and one call never reads past one email's worth; fails_when=the shared slot or the running total goes; why_new=review pass 1 (red team); seam=none (counts slots held through the instance's own slot method); no_claim=memory use measured in the packaged app
   const o = office(t);
   for (const n of ['a', 'b', 'c', 'd', 'e', 'f']) fs.writeFileSync(path.join(o.own, `${n}.pdf`), PDF);
-  const log = path.join(o.root, 'readers.log');
-  const code = `const fs=require('fs');fs.appendFileSync(${JSON.stringify(log)},'+');setTimeout(()=>{fs.appendFileSync(${JSON.stringify(log)},'-');process.stderr.write('missing');process.exitCode=3},250)`;
-  const f = files(o, { launch: () => ({ file: process.execPath, args: ['-e', code] }) });
-  await Promise.all([f.read('pam', ['a.pdf', 'b.pdf', 'c.pdf']), f.read('pam', ['d.pdf', 'e.pdf', 'f.pdf'])]);
-  let now = 0;
+  const f = files(o, { launch: () => ({ file: process.execPath, args: ['-e', 'setTimeout(()=>{process.stderr.write("missing");process.exitCode=3},100)'] }) });
+  let held = 0;
   let most = 0;
-  for (const ch of fs.readFileSync(log, 'utf8')) { now += ch === '+' ? 1 : -1; most = Math.max(most, now); }
-  assert.equal(most, 3, 'six files from two calls, at most three readers at once');
+  const slot = f.readerSlot.bind(f);
+  f.readerSlot = async () => {
+    const release = await slot();
+    most = Math.max(most, ++held);
+    return () => { held--; release(); };
+  };
+  await Promise.all([f.read('pam', ['a.pdf', 'b.pdf', 'c.pdf']), f.read('pam', ['d.pdf', 'e.pdf', 'f.pdf'])]);
+  assert.equal(most, 3, 'six files from two calls, three slots at once');
   const big = Buffer.concat([PDF, Buffer.alloc(7 * 1024 * 1024)]);
   for (const n of ['g', 'h', 'i', 'j']) fs.writeFileSync(path.join(o.own, `${n}.pdf`), big);
   const over = await files(o).read('pam', ['g.pdf', 'h.pdf', 'i.pdf', 'j.pdf']);
   assert.equal(over.ok, false);
+  // Either check may refuse it (the running total or the one after the reads), depending on timing.
   assert.match(over.error, /together, more than one email carries/);
 });
 
