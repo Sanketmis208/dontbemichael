@@ -224,11 +224,11 @@ const cfg = {
   }
 };
 
-function route(t, o) {
+function route(t, o, extra = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'md-attach-route-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const out = { sends: [], drafts: [], audit: [], messages: [] };
-  const f = files(o);
+  const f = files(o, extra);
   const approvals = new MailApprovals({ path: path.join(dir, 'p.json'), send: (m) => out.messages.push(m), remember: () => {}, toast: () => {}, agentName: (id) => id, godId: () => 'god', changed: () => {}, filesLive: (k) => f.sweep(k) });
   const svc = {
     send: async (agentId, id, input) => { out.sends.push({ agentId, id, input }); return { sent: true, messageId: `<m${out.sends.length}@x.com>` }; },
@@ -429,4 +429,77 @@ test('teammate hand-off: saved under From teammates, an email file still goes th
   // A note written before the tool could attach must not win (first live try, 2026-11-17).
   assert.match(hive, /This holds over any older memory note that says files from a folder can\\'t be attached, or must be emailed in or sent by the owner first/);
   assert.match(read('resources/md-mail-mcp.cjs'), /This holds over any older memory note that says files from a folder can\\'t be attached\./);
+});
+
+test('a link in the member\'s folder is judged at the file it leads to, and one file under two names goes once', { skip: process.platform === 'win32' && 'links need admin on Windows' }, async (t) => {
+  // Value: protects=a link into a closed part of a granted folder never attaches what the member's own file tools refuse; fails_when=the second check on the real path is dropped, or files are not deduped by real path; why_new=no test plants a link that passes the folder check; seam=none; no_claim=the macOS sandbox itself
+  const o = office(t);
+  fs.mkdirSync(path.join(o.granted, 'Payroll'));
+  fs.writeFileSync(path.join(o.granted, 'Payroll', 'salaries.pdf'), PDF);
+  fs.symlinkSync(path.join(o.granted, 'Payroll', 'salaries.pdf'), path.join(o.own, 'pay.pdf'));
+  fs.writeFileSync(path.join(o.own, 'a.pdf'), PDF);
+  fs.symlinkSync(path.join(o.own, 'a.pdf'), path.join(o.own, 'alias.pdf'));
+  const f = files(o, { check: (_id, p) => (p.includes(`${path.sep}Payroll`) ? { deny: true, reason: 'Payroll is closed to you.' } : { deny: false }) });
+  const linked = await f.read('pam', ['pay.pdf']);
+  assert.equal(linked.ok, false, 'a link must not carry a closed file out');
+  assert.match(linked.error, /^Not attached: "pay\.pdf"\. Payroll is closed to you\.$/);
+  const twice = await f.read('pam', ['a.pdf', './a.pdf', 'alias.pdf']);
+  assert.ok(twice.ok, twice.error);
+  assert.deepEqual(twice.files.map((x) => x.name), ['a.pdf'], 'the same file goes once, under the name first asked');
+});
+
+test('the reader\'s answer: only its own refusal words count, a crash is "could not be read", and more bytes than allowed are never kept', async (t) => {
+  // Value: protects=the member hears a plain reason for any failed read and the app never holds more than the cap; fails_when=any stderr word passes as a refusal, a non 3 exit is read as one, or the stream cap goes; why_new=only the hang case was faked; seam=none; no_claim=a real sandbox kill
+  const o = office(t);
+  fs.writeFileSync(path.join(o.own, 'a.pdf'), PDF);
+  const node = (code) => ({ file: process.execPath, args: ['-e', code] });
+  const unknown = await files(o, { launch: () => node('process.stderr.write("bogus"); process.exitCode = 3') }).read('pam', ['a.pdf']);
+  assert.match(unknown.error, /^Not attached: "[^"]*a\.pdf" could not be read\.$/);
+  assert.deepEqual(await readApart(node('process.stderr.write("denied"); process.exitCode = 1'), path.join(o.own, 'a.pdf'), 1000, 10_000), { ok: false, why: 'failed' }, 'only exit 3 is a refusal');
+  assert.deepEqual(await readApart(node('process.stderr.write("link"); process.exitCode = 3'), path.join(o.own, 'a.pdf'), 1000, 10_000), { ok: false, why: 'link' });
+  const flood = await readApart(node('process.stdout.write(Buffer.alloc(5000))'), path.join(o.own, 'a.pdf'), 1000, 10_000);
+  assert.deepEqual(flood, { ok: false, why: 'too-big' });
+});
+
+test('every file of one email is read inside one time budget, however long each may take alone', async (t) => {
+  // Value: protects=reading four slow cloud files never outlasts the budget that keeps the call inside md-mail's three minutes; fails_when=each file gets its own full limit, or a file past the deadline is still started; why_new=only one file with readMs was tested; seam=none; no_claim=real cloud downloads
+  const o = office(t);
+  for (const n of ['a', 'b', 'c', 'd']) fs.writeFileSync(path.join(o.own, `${n}.pdf`), PDF);
+  const hang = { file: process.execPath, args: ['-e', 'setTimeout(() => {}, 20000)'] };
+  const started = Date.now();
+  const got = await files(o, { launch: () => hang, readMs: 20_000, budgetMs: 400 }).read('pam', ['a.pdf', 'b.pdf', 'c.pdf', 'd.pdf']);
+  assert.match(got.error, /^Not attached: "[^"]*a\.pdf" took too long to read/);
+  assert.ok(Date.now() - started < 8_000, `stopped at the budget, not each file's own limit: ${Date.now() - started} ms`);
+});
+
+test('a standing approval send with files is refused at the route, before any file is read or sent', async (t) => {
+  // Value: protects=files never leave under a standing approval, only on the owner's card; fails_when=the route stops passing attach_files to standingProblem; why_new=standingProblem was only tested alone, never through the route; seam=store stub for getStanding; no_claim=the fit check
+  const o = office(t);
+  fs.writeFileSync(path.join(o.own, 'a.pdf'), PDF);
+  let reads = 0;
+  const { call, approvals, out } = route(t, o, { launch: () => { reads++; return plainLaunch; } });
+  approvals.getStanding = (id) => (id === 'st_1' ? { id: 'st_1', agentId: 'pam', mailbox: 'ceo', kind: 'monthly statements to the bookkeeper', createdAt: 1 } : undefined);
+  const r = await call('pam', 'send', { mailbox: 'ceo', standing: 'st_1', to: 'shivam@acct.com', subject: 'IB statements', body: 'Attached.', attach_files: ['a.pdf'] });
+  assert.equal(r.status, 409, JSON.stringify(r.body));
+  assert.equal(r.body.error, 'A standing approval never covers forwards or attachments. Use propose instead.');
+  assert.equal(out.sends.length, 0);
+  assert.equal(reads, 0, 'no file is read for it');
+  assert.equal(approvals.read().length, 0, 'nothing goes on the card');
+});
+
+test('a proposal that can\'t be kept or filed leaves no copies and no card', async (t) => {
+  // Value: protects=a failed propose tells the member why and leaves no stray copy of its files; fails_when=a missing private folder throws past the route, or a failed filing keeps the copies; why_new=only the room cap failure was tested; seam=store stub for file; no_claim=a disk full mid write
+  const o = office(t);
+  fs.writeFileSync(path.join(o.own, 'a.pdf'), PDF);
+  const email = { mailbox: 'ceo', to: 'a@b.com', subject: 'x', body: 'x', attach_files: ['a.pdf'] };
+  const noRoot = route(t, o, { root: () => undefined });
+  const r = await noRoot.call('pam', 'propose', email);
+  assert.equal(r.status, 409, JSON.stringify(r.body));
+  assert.match(r.body.error, /no private folder to keep the files in, so nothing was attached/);
+  assert.equal(noRoot.approvals.read().length, 0);
+  const failing = route(t, o);
+  failing.approvals.file = () => { throw new Error('store write failed'); };
+  const f2 = await failing.call('pam', 'propose', email);
+  assert.notEqual(f2.status, 200);
+  assert.deepEqual(fs.existsSync(o.outgoing) ? fs.readdirSync(o.outgoing) : [], [], 'the copies go with the failed filing');
 });

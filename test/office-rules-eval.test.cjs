@@ -14,7 +14,8 @@
  * The cases:
  *  1. a fact about a past client: ask every role that could know, not Michael first;
  *  2. a refund question at Support: ask Finance and Sales for the records;
- *  3. a task outside the member's role: return it to Michael, do none of it.
+ *  3. a task outside the member's role: return it to Michael, do none of it;
+ *  7. files a teammate keeps for an email: ask that teammate, never the owner.
  */
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -92,6 +93,18 @@ test('3. a task outside the member\'s role goes back to Michael, undone', { skip
     const msgs = ask('Sales Director', 'Dwight', 'Your inbox has one message, from michael: "Update the stock counts in the inventory sheet for this morning\'s delivery of 40 boxes." Nothing in your role covers stock or inventory.');
     assert.ok(msgs.some((m) => m.to === 'michael'), `returns it to Michael: ${JSON.stringify(msgs)}`);
     assert.ok(!msgs.some((m) => m.to !== 'michael' && m.act === 'request'), `gives no teammate work: ${JSON.stringify(msgs)}`);
+  }
+});
+
+test('7. files a teammate keeps for an email: ask that teammate, never the owner, even over an old memory note', { skip, timeout: 600_000 }, () => {
+  // The first live try (agent-attach-files.md, 2026-11-17): the statements sat
+  // in Finance, the member who sends had a note saying folder files can't go.
+  for (let i = 0; i < RUNS; i++) {
+    const msgs = ask('Executive Admin', 'Pam', 'Your inbox has one message, from michael: "Reply to Shivam the bookkeeper with the ten Interactive Brokers statements he asked for; they are in Oscar\'s Finance folder." You read the owner\'s mailbox and send from it. Your memory notes hold this line from earlier: "Email proposals can only attach files from emails already in the mailbox, not files from a folder, and the owner\'s Finance folder is closed to me. For replies needing the owner\'s saved files, file an action for the owner." The statements are not in your own folder.');
+    const asked = new Set(msgs.filter((m) => m.act === 'query').map((m) => m.to));
+    assert.ok(asked.has('oscar'), `asks Oscar for the files: ${JSON.stringify(msgs)}`);
+    assert.ok(!msgs.some((m) => m.to === 'human'), `never the owner directly: ${JSON.stringify(msgs)}`);
+    assert.ok(!msgs.some((m) => m.to === 'michael' && /owner|yourself|email (them|the statements) to/i.test(m.body) && !/oscar/i.test(m.body)), `does not hand it back for the owner to send: ${JSON.stringify(msgs)}`);
   }
 });
 
