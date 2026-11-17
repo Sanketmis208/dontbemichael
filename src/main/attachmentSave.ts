@@ -146,22 +146,23 @@ function readPlainFile(path: string): { bytes: Buffer; st: Stats } | null {
 }
 
 /**
- * Several files saved together, all or none (teammate hand-off): if one can't
- * be saved, the copies this call made are removed again. A file that was
- * already there with the same bytes is reused and never removed, since an
- * earlier hand-off may have delivered it. Returns every file's path.
+ * Several files saved in order (teammate hand-off). The first one that can't
+ * be saved stops the rest; those already saved stay where they are and are
+ * named in the answer. Nothing is ever removed: the folder is the member's own,
+ * and its shell can swap it for a link at any moment, so a delete by path could
+ * reach a file outside it (review, ship 2026-11-17).
  */
-export function saveFilesAllOrNone(input: { folder: string; subfolder: string; files: Array<{ name: string; ending: string; bytes: Buffer }> }): string[] {
-  const made: string[] = [];
+export function saveFilesInOrder(input: { folder: string; subfolder: string; files: Array<{ name: string; ending: string; bytes: Buffer }> }): { paths: string[]; error?: string } {
   const paths: string[] = [];
-  try {
-    // The mark runs only for a file this call created, never for a reused one.
-    for (const f of input.files) paths.push(saveAttachmentFile({ folder: input.folder, name: f.name, ending: f.ending, bytes: f.bytes, subfolder: input.subfolder }, (p) => made.push(p)));
-    return paths;
-  } catch (e) {
-    for (const p of made) { try { rmSync(p, { force: true }); } catch { /* best-effort */ } }
-    throw e;
+  for (const f of input.files) {
+    try {
+      paths.push(saveAttachmentFile({ folder: input.folder, name: f.name, ending: f.ending, bytes: f.bytes, subfolder: input.subfolder }, () => {}));
+    } catch (e) {
+      if (!(e instanceof AttachmentSaveError)) throw e;
+      return { paths, error: e.message };
+    }
   }
+  return { paths };
 }
 
 /** Whether a path sits directly in the member's own Email attachments, the

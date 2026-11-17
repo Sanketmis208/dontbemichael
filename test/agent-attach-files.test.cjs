@@ -654,9 +654,9 @@ test('regression: the reader limit holds when a call has more files than readers
   assert.ok(most <= 3, `at most three readers at once, saw ${most}`);
 });
 
-test('regression: a hand-off that fails partway removes only the copies it made, never one a teammate already had', (t) => {
-  // Value: protects=a failed hand-off never deletes a file an earlier hand-off delivered; fails_when=the rollback removes a reused identical copy; why_new=review pass 2 (data loss, both readers); seam=none; no_claim=the hive messages, covered above
-  const { saveFilesAllOrNone, TEAMMATE_FILES_FOLDER, AttachmentSaveError } = loadTs('src/main/attachmentSave.ts');
+test('regression: a hand-off that fails partway deletes nothing, keeps what it copied and says how far it got', (t) => {
+  // Value: protects=a failed hand-off never deletes a file by path in a folder a member's shell controls (a swapped link could aim it elsewhere), and the sender hears which files came; fails_when=a rollback deletes copies again, or the partial result is lost; why_new=ship review, native adversarial #1 (owner D6: drop the rollback); seam=none; no_claim=the hive messages, covered above
+  const { saveFilesInOrder, TEAMMATE_FILES_FOLDER } = loadTs('src/main/attachmentSave.ts');
   const o = office(t);
   const dir = path.join(o.own, TEAMMATE_FILES_FOLDER);
   fs.mkdirSync(dir, { recursive: true });
@@ -664,12 +664,17 @@ test('regression: a hand-off that fails partway removes only the copies it made,
   // No free name left for b.pdf: every one holds other bytes.
   for (let n = 1; n <= 50; n++) fs.writeFileSync(path.join(dir, n === 1 ? 'b.pdf' : `b (${n}).pdf`), `other ${n}`);
   const c = Buffer.concat([PDF, Buffer.from('c')]);
-  assert.throws(() => saveFilesAllOrNone({ folder: o.own, subfolder: TEAMMATE_FILES_FOLDER, files: [
+  const real = fs.realpathSync(dir);
+  const got = saveFilesInOrder({ folder: o.own, subfolder: TEAMMATE_FILES_FOLDER, files: [
     { name: 'c.pdf', ending: 'pdf', bytes: c },
     { name: 'a.pdf', ending: 'pdf', bytes: PDF },
-    { name: 'b.pdf', ending: 'pdf', bytes: PDF }
-  ] }), AttachmentSaveError);
-  assert.ok(fs.existsSync(path.join(dir, 'a.pdf')), 'the earlier identical copy stays');
-  assert.equal(fs.existsSync(path.join(dir, 'c.pdf')), false, 'the copy this call made is gone');
-  assert.deepEqual(saveFilesAllOrNone({ folder: o.own, subfolder: TEAMMATE_FILES_FOLDER, files: [{ name: 'a.pdf', ending: 'pdf', bytes: PDF }] }), [path.join(fs.realpathSync(dir), 'a.pdf')]);
+    { name: 'b.pdf', ending: 'pdf', bytes: PDF },
+    { name: 'd.pdf', ending: 'pdf', bytes: PDF }
+  ] });
+  assert.match(got.error, /Too many files/);
+  assert.deepEqual(got.paths, [path.join(real, 'c.pdf'), path.join(real, 'a.pdf')], 'the first two, then it stopped');
+  assert.ok(fs.existsSync(path.join(dir, 'a.pdf')) && fs.existsSync(path.join(dir, 'c.pdf')), 'nothing removed');
+  assert.equal(fs.existsSync(path.join(dir, 'd.pdf')), false, 'nothing after the failure');
+  assert.doesNotMatch(read('src/main/attachmentSave.ts').slice(read('src/main/attachmentSave.ts').indexOf('export function saveFilesInOrder')).split('\n/**')[0], /rmSync/, 'no delete in the hand-off save');
 });
+

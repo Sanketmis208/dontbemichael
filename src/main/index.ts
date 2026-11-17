@@ -19,7 +19,7 @@ import { resolveCommand as resolveCliCommand, userShellPath, userShellDoNotTrack
 import { buildPtyEnv } from './ptyEnv';
 import { isSameOrInside } from './pathInside';
 import { extractDocumentTextApart } from './docTextProcess';
-import { AttachmentSaveError, TEAMMATE_FILES_FOLDER, handOverAttachment, inAttachmentsFolder, markFromOutsideNow, saveAttachmentFile, saveFilesAllOrNone } from './attachmentSave';
+import { AttachmentSaveError, TEAMMATE_FILES_FOLDER, handOverAttachment, inAttachmentsFolder, markFromOutsideNow, saveAttachmentFile, saveFilesInOrder } from './attachmentSave';
 import { OutgoingFiles, parseAttachPaths, readerLaunch, realWalls, type ReaderWalls } from './outgoingFiles';
 import { readOneFile } from './fileReader';
 import { attachmentKind } from '../shared/attachmentKind';
@@ -6523,13 +6523,17 @@ function bootstrapHiveServices(): void {
       try {
         const got = await outgoingFiles.read(from, parsed.paths, { lead: 'Not sent', goes: 'go to a teammate' });
         if (!got.ok) return { error: got.error };
-        // All or none: a half delivery would sit unannounced in the teammate's
-        // folder while both are told nothing arrived. Only copies this call
-        // made are removed, never one an earlier hand-off delivered.
-        const paths = saveFilesAllOrNone({ folder: toFolder, subfolder: TEAMMATE_FILES_FOLDER, files: got.files.map((f) => ({ name: f.name, ending: f.kind, bytes: f.bytes })) });
+        // In order; a failure keeps what was already copied (nothing is deleted
+        // in a folder a member's shell controls) and says how far it got.
+        const saved = saveFilesInOrder({ folder: toFolder, subfolder: TEAMMATE_FILES_FOLDER, files: got.files.map((f) => ({ name: f.name, ending: f.kind, bytes: f.bytes })) });
         // By count only: the office log is committed and agents read it (D14).
-        try { hive.appendLog({ kind: 'files-handed-over', from, to, files: paths.length }); } catch { /* the files are delivered */ }
-        return { paths };
+        if (saved.paths.length) {
+          try { hive.appendLog({ kind: 'files-handed-over', from, to, files: saved.paths.length }); } catch (e) { console.error('[hive] hand-off log', e); }
+        }
+        if (saved.error) {
+          return { error: saved.paths.length ? `${saved.error} The first ${saved.paths.length} of ${got.files.length} files were copied already: ${saved.paths.map((p) => basename(p)).join(', ')}.` : saved.error };
+        }
+        return { paths: saved.paths };
       } catch (e) {
         if (e instanceof AttachmentSaveError) return { error: e.message };
         console.error('[hive] teammate files', e);

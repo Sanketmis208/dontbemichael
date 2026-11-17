@@ -2622,7 +2622,7 @@ export class HiveManager {
           this.routeMessage(this.normalize({ to, act: 'inform', subject: `Files from ${sender}`, body: FILES_CAME(sender, r.paths), ...thread }, 'system'));
         } else {
           this.routeMessage(this.normalize({ to: from, act: 'inform', subject: 'File not delivered', body: `Your message to ${msg.to} went, but its files did not: ${r.error}`, ...thread }, 'system'));
-          this.routeMessage(this.normalize({ to, act: 'inform', subject: 'Files not delivered', body: `The files ${sender} meant to send with that message did not arrive; ${sender} was told why. Ask again if you still need them.`, ...thread }, 'system'));
+          this.routeMessage(this.normalize({ to, act: 'inform', subject: 'Files not delivered', body: `The files ${sender} meant to send with that message did not all arrive; ${sender} was told why and which, if any, came. Ask again if you still need them.`, ...thread }, 'system'));
         }
       }).catch((e) => console.error('[hive] files after handover', e));
       return;
