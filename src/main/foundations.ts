@@ -110,6 +110,12 @@ const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 
 const monthName = (m: number): string => MONTHS[m - 1].charAt(0).toUpperCase() + MONTHS[m - 1].slice(1);
 
 /** The profile fields a question shares, both ways. */
+/** The seen items a list answer does not name yet, matched on their key. */
+function notListed(items: SeenItem[], text: string): SeenItem[] {
+  const on = new Set(listLines(text).map(itemKey));
+  return items.filter((s) => !on.has(itemKey(s.item)));
+}
+
 const PROFILE_LINKS: Array<{ id: FoundationId; read: (p: ProfileFacts) => string | undefined; write: (text: string) => ProfileFacts | null }> = [
   {
     id: 'hours',
@@ -338,11 +344,12 @@ export class Foundations {
   }
 
   /** What the owner's save of a list card means (design review D4): the seen
-   *  items added go; every other one must be put off, and then the list stays
-   *  known so far. One left undecided refuses the save. */
-  private ownerCoverage(rec: FoundationsRecord, id: FoundationId, added: unknown): CoverageDecision {
+   *  items added go, and so does any the saved list already names (the card
+   *  may have lost which ones it added); every other one must be put off, and
+   *  then the list stays known so far. One left undecided refuses the save. */
+  private ownerCoverage(rec: FoundationsRecord, id: FoundationId, added: unknown, text: string): CoverageDecision {
     const ids = new Set(Array.isArray(added) ? added.filter((x): x is string => typeof x === 'string') : []);
-    const remaining = (rec.seen[id] ?? []).filter((s) => !ids.has(s.id));
+    const remaining = notListed(rec.seen[id] ?? [], text).filter((s) => !ids.has(s.id));
     const now = this.now();
     if (remaining.some((s) => !isLater(s, now))) return { ok: false };
     return { ok: true, remaining, coverage: remaining.length ? 'known' : 'complete' };
@@ -363,6 +370,19 @@ export class Foundations {
     const answers = { ...rec.answers };
     let history = rec.history;
     let changed = first;
+    // A seen item the saved list already names is settled: an older card
+    // saved the item but kept it waiting (owner report, 18 Nov).
+    let seen = rec.seen;
+    for (const id of Object.keys(rec.seen) as FoundationId[]) {
+      const a = answers[id];
+      const items = rec.seen[id] ?? [];
+      if (!a || !isListQuestion(id) || !items.length) continue;
+      const kept = notListed(items, a.text);
+      if (kept.length === items.length) continue;
+      seen = { ...seen };
+      if (kept.length) seen[id] = kept; else delete seen[id];
+      changed = true;
+    }
     for (const id of Object.keys(answers) as FoundationId[]) {
       const a = answers[id];
       if (!a || !isListQuestion(id)) continue;
@@ -377,7 +397,7 @@ export class Foundations {
         changed = true;
       }
     }
-    if (changed) { this.save({ ...rec, answers, history, ...(first ? { listsAt: this.iso() } : {}) }); this.publishSoon(); }
+    if (changed) { this.save({ ...rec, answers, history, seen, ...(first ? { listsAt: this.iso() } : {}) }); this.publishSoon(); }
   }
 
   /**
@@ -527,7 +547,7 @@ export class Foundations {
       this.publishSoon();
       return { ok: true };
     }
-    const cov = this.ownerCoverage(rec, id, added);
+    const cov = this.ownerCoverage(rec, id, added, a.text);
     if (!cov.ok) return { ok: false, error: 'undecided' };
     this.save(this.withAnswer(rec, id, { ...a, ...this.coverageFields(id, cov.coverage) }, null, { seen: cov.remaining }));
     if (typed) this.toProfile(id, typed, true);

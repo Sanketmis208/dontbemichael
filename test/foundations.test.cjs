@@ -1055,6 +1055,27 @@ test('Add on a seen item is saved at once: on the list, off the seen items, know
   assert.deepEqual(o.w.seenAction('customers', 'x', 'add'), { ok: false });
 });
 
+test('a seen item the saved list already names is settled: on save, and at launch for lists an older card saved', (t) => {
+  // Value: protects=an item the owner saved never waits as a suggestion (owner report 2026-11-18: Apple iCloud+ was on the saved list and still in Seen); fails_when=a save that lost its added ids keeps or refuses on items its text names, or an existing record keeps them; why_new=the old card kept added ids only in the window; seam=a record written as the old card left it; no_claim=the card UI
+  const o = writer(t);
+  const file = officeFile(o);
+  o.w.ownerAnswer('tools', 'Google Firebase');
+  o.w.handle('sadiq', { question: 'tools', gap: 'x', item: 'Apple iCloud+ 2 TB', source: { file } });
+  o.w.handle('sadiq', { question: 'tools', gap: 'x', item: 'Slack', source: { file } });
+  o.w.handle('sadiq', { question: 'tools', gap: 'x', item: 'Marcaria', source: { file } });
+  const slack = o.w.read().seen.tools.find((s) => s.item === 'Slack');
+  o.w.seenAction('tools', slack.id, 'later');
+  // No added ids, as a card that lost them sends: the text still settles it.
+  assert.deepEqual(o.w.ownerAnswer('tools', 'Google Firebase\napple iCloud+ 2 TB\nMarcaria', []), { ok: true, complete: false });
+  assert.deepEqual(o.w.read().seen.tools.map((s) => s.item), ['Slack'], 'only the put off one waits');
+  // A record an older card left: saved on the list, still waiting.
+  const rec = o.w.read();
+  const stale = { ...rec, answers: { ...rec.answers, tools: { ...rec.answers.tools, text: 'Google Firebase; Slack' } } };
+  o.w.save(stale);
+  o.w.migrateLists();
+  assert.equal(o.w.read().seen.tools, undefined, 'launch takes off what the list names');
+});
+
 test('Michael makes a list whole only with "complete": true from the owner\'s own words', (t) => {
   // Value: protects=a passing mention relayed by Michael never closes a list (eng R2); fails_when=Michael's owner relay always or never closes it; why_new=R2; seam=ownerSaid is the writer's injected owner list, as today; no_claim=Michael choosing the flag
   const o = writer(t);
