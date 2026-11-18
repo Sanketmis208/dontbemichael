@@ -1014,6 +1014,47 @@ test('the owner\'s save makes a list whole; an undecided seen item holds it; a p
   assert.deepEqual(o.w.ownerAnswer('hours', 'x'.repeat(F.FOUNDATION_CAP + 1)), { ok: false, error: 'too-long' }, 'a single answer keeps 300');
 });
 
+test('Add on a seen item is saved at once: on the list, off the seen items, known so far, and Undo takes it back', (t) => {
+  // Value: protects=an owner who adds a few seen items today keeps them without saving the whole list (owner report 2026-11-18: an added item came back as a suggestion); fails_when=Add lives only in the window until Save, makes the list whole, or Undo leaves the line; why_new=Add was the one seen action not saved at once; seam=none; no_claim=the card UI (source pins)
+  const o = writer(t);
+  const file = officeFile(o);
+  o.w.ownerAnswer('tools', 'Google Firebase');
+  o.w.handle('sadiq', { question: 'tools', gap: 'x', item: 'Stripe', source: { file } });
+  o.w.handle('sadiq', { question: 'tools', gap: 'x', item: 'Apple iCloud+ 2 TB', source: { file } });
+  const hitBefore = o.w.read().hits.tools;
+  const [stripe, icloud] = o.w.read().seen.tools;
+  o.told.length = 0;
+  assert.deepEqual(o.w.seenAction('tools', icloud.id, 'add'), { ok: true, text: 'Google Firebase; Apple iCloud+ 2 TB' });
+  let rec = o.w.read();
+  assert.equal(rec.answers.tools.text, 'Google Firebase; Apple iCloud+ 2 TB', 'on the saved list now, not only in the box');
+  assert.equal(rec.answers.tools.source, 'owner');
+  assert.equal(rec.answers.tools.coverage, 'known', 'only Save says it is the whole list');
+  assert.deepEqual(rec.seen.tools.map((s) => s.id), [stripe.id], 'it leaves the seen items; the other still waits');
+  assert.deepEqual(rec.hits.tools, hitBefore, 'the card is still open: no new note to Michael for the next seen item');
+  assert.equal(o.told.length, 0);
+  assert.deepEqual(o.w.seenAction('tools', icloud.id, 'add'), { ok: false }, 'added once');
+  // Save afterwards needs only the rest settled.
+  assert.deepEqual(o.w.seenAction('tools', icloud.id, 'undoAdd'), { ok: true, text: 'Google Firebase' });
+  rec = o.w.read();
+  assert.equal(rec.answers.tools.text, 'Google Firebase');
+  assert.deepEqual(rec.seen.tools.map((s) => s.id).sort(), [stripe.id, icloud.id].sort(), 'Undo brings it back');
+  assert.deepEqual(o.w.seenAction('tools', icloud.id, 'undoAdd'), { ok: false }, 'nothing left to undo');
+  // An empty list: Add starts it, Undo empties it again.
+  o.w.handle('sadiq', { question: 'competitors', gap: 'x', item: 'Acme', source: { file } });
+  const acme = o.w.read().seen.competitors[0];
+  assert.deepEqual(o.w.seenAction('competitors', acme.id, 'add'), { ok: true, text: 'Acme' });
+  assert.deepEqual(o.w.seenAction('competitors', acme.id, 'undoAdd'), { ok: true, text: '' });
+  assert.equal(o.w.read().answers.competitors, undefined);
+  assert.deepEqual(o.w.read().seen.competitors.map((s) => s.id), [acme.id]);
+  // A full list refuses it, and a single question has no seen items to add.
+  assert.deepEqual(o.w.ownerAnswer('offer', 'x'.repeat(F.LIST_CAP - 3)), { ok: true, complete: true });
+  o.w.handle('sadiq', { question: 'offer', gap: 'x', item: 'Audits', source: { file } });
+  const audits = o.w.read().seen.offer[0];
+  assert.deepEqual(o.w.seenAction('offer', audits.id, 'add'), { ok: false, error: 'too-long' });
+  assert.deepEqual(o.w.read().seen.offer.map((s) => s.id), [audits.id], 'still waiting');
+  assert.deepEqual(o.w.seenAction('customers', 'x', 'add'), { ok: false });
+});
+
 test('Michael makes a list whole only with "complete": true from the owner\'s own words', (t) => {
   // Value: protects=a passing mention relayed by Michael never closes a list (eng R2); fails_when=Michael's owner relay always or never closes it; why_new=R2; seam=ownerSaid is the writer's injected owner list, as today; no_claim=Michael choosing the flag
   const o = writer(t);
@@ -1178,7 +1219,10 @@ test('the list card: one box from the saved list, seen rows with Add, Not ours a
   assert.match(card, /seenDo\(n\.seen!, 'undoNotOurs'\)/);
   assert.match(card, /!\(list && known\)/, 'Draft only while a list is empty (D6)');
   assert.match(card, /readOnly=\{busy \|\| \(list && !loaded\)\}/, 'a list box waits for its record');
-  assert.match(card, /seen\.slice\(0, SEEN_SHOWN\)/);
+  assert.match(card, /listed\.slice\(0, SEEN_SHOWN\)/);
+  assert.match(card, /foundationsSeen\(id, s\.id, 'add'\)/, 'Add is saved at once, like Not ours and Decide later');
+  assert.match(card, /foundationsSeen\(id, s\.id, 'undoAdd'\)/);
+  assert.equal((card.match(/<CloseLine /g) ?? []).length, 3, 'each settled line (added, put off, not ours) can be closed');
   assert.match(card, /aria-label=\{t\('foundations\.card\.seenAddLabel', \{ item: s\.item \}\)\}/);
   const save = read('src/renderer/src/shell/foundationSave.ts');
   assert.match(save, /with "complete": true/, 'Michael\'s fallback carries the whole list flag');

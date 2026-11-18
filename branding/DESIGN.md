@@ -1700,12 +1700,15 @@ review 2026-11-03). Same card as §7.27a, with these changes:
   clamped to two lines, `dir="auto"`; under it the app's own line in `amber-text` 11 px: the
   member, the file it was seen in, the day. Add is a 26 px secondary button; Not ours and Decide
   later are quiet links with 24 px targets, each named for its item.
-  - Add puts the name on a new line in the box; the row becomes a `green-soft` line "Added to the
-    list. Save to keep it." with Undo.
+  - Add is saved at once (owner, 2026-11-18): the name goes on the saved list, known so far, and
+    on a new line in the box; the row becomes a `green-soft` line "Card ending 1005 is on the
+    list." with Undo, under the undecided rows. A full list refuses it with a `coral-text` line.
   - Not ours is saved at once; the row becomes an `indigo-soft` line "Card ending 1005 is marked
     not ours." with Undo until the card leaves the board; a failure is a `coral-text` line.
   - Decide later is saved at once; the row becomes a `neutral-soft` line "Back next week." with
     Undo. Focus moves to the next undecided Add, else to Save; each change is spoken politely.
+  - Each settled line ends in a quiet × ("Close the line about Card ending 1005") that hides the
+    line on this card and keeps the choice.
 - **Primary button**: "Save as the whole list"; "Save the list so far" while an item is put off;
   "Still all of them" on a card past its shelf life whose box matches the saved list. Held until
   every seen item is added, not ours or put off. It never truncates.

@@ -24,7 +24,7 @@ import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } 
 import { privateRoot } from '../shared/agentPrivatePaths';
 import { writeFileAtomic } from './atomicFile';
 import {
-  FIT_PICTURES, FIT_TEXT_MAX, FOLDER_REF, FOUNDATION_FILE_TAG, FOUNDATION_QUESTIONS, FOUNDATIONS_TAG, FOUNDATIONS_TITLE, RETIRED_IDS, SEEN_ITEM_MAX, SEEN_LATER_MS, capFor, systemAnswerable, cleanRecord, emptyRecord, fileAnswerLine, folderAnswerLine, isExpired, isFoundationId, isFoundationsDoc, isLater, isListQuestion, isSettled, itemKey, joinListLines, listState, oneLine, questionOf, questionVersion, questionsFor, renderFoundations,
+  FIT_PICTURES, FIT_TEXT_MAX, FOLDER_REF, FOUNDATION_FILE_TAG, FOUNDATION_QUESTIONS, FOUNDATIONS_TAG, FOUNDATIONS_TITLE, RETIRED_IDS, SEEN_ITEM_MAX, SEEN_LATER_MS, capFor, systemAnswerable, cleanRecord, emptyRecord, fileAnswerLine, folderAnswerLine, isExpired, isFoundationId, isFoundationsDoc, isLater, isListQuestion, isSettled, itemKey, joinListLines, listLines, listState, oneLine, questionOf, questionVersion, questionsFor, renderFoundations,
   type Coverage, type FoundationAnswer, type FoundationId, type FoundationJob, type FoundationPast, type FoundationSourceKind, type FoundationsRecord, type FoundationsView, type SeenItem
 } from '../shared/foundations';
 import { IMAGES, type DocExtraction } from './docText';
@@ -194,6 +194,9 @@ export class Foundations {
   private cache: { home: string; rec: FoundationsRecord } | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private expiryCheckedAt = 0;
+  /** Seen items the owner added on a card this run, kept so Undo can bring
+   *  each back; an add from before a restart stays (Undo is gone with its row). */
+  private addedSeen = new Map<string, SeenItem>();
 
   constructor(private readonly d: FoundationsDeps) {}
 
@@ -533,13 +536,17 @@ export class Foundations {
     return { ok: true, complete: cov.coverage === 'complete' };
   }
 
-  /** What the owner did with a seen item on a list card: Not ours and Decide
-   *  later are saved at once, each with its own undo (design review D4, D7). */
-  seenAction(id: unknown, seenId: unknown, action: unknown): { ok: boolean } {
+  /** What the owner did with a seen item on a list card: Add, Not ours and
+   *  Decide later are each saved at once, with their own undo (design review
+   *  D4, D7), so an owner who settles a few today keeps them. Add puts the item
+   *  on the saved list, known so far: only Save says it is the whole list.
+   *  `text` is the saved list after an Add or its undo. */
+  seenAction(id: unknown, seenId: unknown, action: unknown): { ok: boolean; text?: string; error?: 'too-long' } {
     if (!isFoundationId(id) || typeof seenId !== 'string' || !seenId || !this.file()) return { ok: false };
     const rec = this.read();
     const seen = rec.seen[id] ?? [];
     const notOurs = rec.notOurs[id] ?? [];
+    if (action === 'add' || action === 'undoAdd') return isListQuestion(id) ? this.seenAdd(rec, id, seenId, action === 'undoAdd') : { ok: false };
     const put = (nextSeen: SeenItem[], nextNot = notOurs): void => {
       const s2 = { ...rec.seen }, n2 = { ...rec.notOurs };
       if (nextSeen.length) s2[id] = nextSeen; else delete s2[id];
@@ -568,6 +575,46 @@ export class Foundations {
       return { ok: true };
     }
     return { ok: false };
+  }
+
+  /** Add a seen item to the saved list, or undo that while the app runs: the
+   *  item goes on as its own line (once, matched on its key), the seen item
+   *  goes, and the answer stays the owner's, known so far. Undo takes the line
+   *  off again and brings the seen item back. */
+  private seenAdd(rec: FoundationsRecord, id: FoundationId, seenId: string, undo: boolean): { ok: boolean; text?: string; error?: 'too-long' } {
+    const had = rec.answers[id];
+    const lines = had ? listLines(had.text) : [];
+    const seen = rec.seen[id] ?? [];
+    const key = `${id}\u0000${seenId}`;
+    const s = undo ? this.addedSeen.get(key) : seen.find((x) => x.id === seenId);
+    if (!s) return { ok: false };
+    const k = itemKey(s.item);
+    let next = lines;
+    if (undo) {
+      const i = lines.map(itemKey).lastIndexOf(k);
+      if (i >= 0) next = [...lines.slice(0, i), ...lines.slice(i + 1)];
+    } else if (!lines.some((l) => itemKey(l) === k)) next = [...lines, s.item];
+    const text = joinListLines(next.join('\n'));
+    if (text.length > capFor(id)) return { ok: false, error: 'too-long' };
+    const nextSeen = undo ? (seen.some((x) => x.id === seenId) ? seen : [...seen, s]) : seen.filter((x) => x !== s);
+    let out: FoundationsRecord;
+    if (text) {
+      const a: FoundationAnswer = { text, by: 'owner', source: 'owner', at: this.iso(), ...(had?.ref ? { ref: had.ref } : {}), ...this.coverageFields(id, 'known') };
+      out = this.withAnswer(rec, id, a, null, { seen: nextSeen });
+      // The card is still open: the next seen item needs no new note to Michael.
+      if (rec.hits[id]) out = { ...out, hits: { ...out.hits, [id]: rec.hits[id]! } };
+    } else {
+      // The undo took off the only line: the list is empty again.
+      const answers = { ...rec.answers };
+      delete answers[id];
+      const s2 = { ...rec.seen };
+      if (nextSeen.length) s2[id] = nextSeen; else delete s2[id];
+      out = { ...rec, answers, seen: s2, history: had ? this.withPast(rec, id, had) : rec.history };
+    }
+    this.save(out);
+    this.publishSoon();
+    if (undo) this.addedSeen.delete(key); else this.addedSeen.set(key, s);
+    return { ok: true, text };
   }
 
   /** A file the owner adds on the card (D2, D3, D4, D5, D10): read it once;

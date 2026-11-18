@@ -1158,7 +1158,7 @@ const api = {
   /** The owner's answer from a foundation card; it always wins. */
   foundationsAnswer: (id: string, text: string, added?: string[]): Promise<{ ok: boolean; error?: string; complete?: boolean }> => ipcRenderer.invoke('foundations:answer', id, text, added),
   /** A seen item on a list card: Not ours, Decide later, or an undo of either. */
-  foundationsSeen: (id: string, seenId: string, action: 'notOurs' | 'undoNotOurs' | 'later' | 'undoLater'): Promise<{ ok: boolean }> => ipcRenderer.invoke('foundations:seen', id, seenId, action),
+  foundationsSeen: (id: string, seenId: string, action: 'add' | 'undoAdd' | 'notOurs' | 'undoNotOurs' | 'later' | 'undoLater'): Promise<{ ok: boolean; text?: string; error?: 'too-long' }> => ipcRenderer.invoke('foundations:seen', id, seenId, action),
   /** One file for a foundation card, from the OS picker. */
   foundationsPickFile: (): Promise<{ ok: true; path: string; name: string } | { ok: false; error: string }> => ipcRenderer.invoke('foundations:pickFile'),
   /** Read, check and add a card's file to company knowledge (nothing is added
