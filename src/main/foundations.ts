@@ -427,13 +427,24 @@ export class Foundations {
     if (this.d.canTell && !this.d.canTell()) return;
     let rec = this.read();
     const due = RETIRED_IDS.filter((id) => rec.answers[id] && !rec.answers[id]!.retiredNoticeAt);
-    if (!due.length) return;
+    // A retired question the work hit while it was empty: the hit goes, so it
+    // is never brought back, and Michael withdraws any card it raised.
+    const hitOnly = RETIRED_IDS.filter((id) => rec.hits[id] && !rec.answers[id]);
+    if (!due.length && !hitOnly.length) return;
     const at = this.iso();
     for (const id of due) {
       const a = rec.answers[id]!;
       rec = { ...rec, answers: { ...rec.answers, [id]: { ...a, retiredNoticeAt: at } } };
     }
+    if (hitOnly.length) {
+      const hits = { ...rec.hits };
+      for (const id of hitOnly) delete hits[id];
+      rec = { ...rec, hits };
+    }
     this.save(rec);
+    for (const id of hitOnly) {
+      this.toMichael('Foundation question retired', `"${FOUNDATION_QUESTIONS[id].text}" (${id}) is no longer a company foundations question: the list now lives with the member whose role keeps it, so the owner is not asked it. Withdraw any open foundation card for it and raise none again.`);
+    }
     for (const id of due) {
       const a = rec.answers[id]!;
       const seen = (rec.seen?.[id] ?? []).map((s) => s.item);
@@ -691,6 +702,8 @@ export class Foundations {
     if (!isFoundationId(id)) return `No company foundations question "${String(id ?? '')}". Use an id from your COMPANY FOUNDATIONS context, in square brackets after each question.`;
     const q = FOUNDATION_QUESTIONS[id].text;
     if (p.retired === 'kept') return this.retiredKept(from, id);
+    // A retired question takes no new answer, gap or draft, from Michael either.
+    if (questionOf(id).retired) return `"${q}" is retired: that list lives with the member whose role keeps it. Send nothing more for it.`;
     if (typeof p.gap === 'string' || typeof p.item === 'string') return this.gap(from, id, typeof p.gap === 'string' ? p.gap : '', p.item, p.source);
     // A draft comes only from the member the owner asked, or Michael (draft()).
     if (typeof p.draft === 'string') return this.draft(from, id, p.draft);

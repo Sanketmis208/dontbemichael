@@ -427,7 +427,8 @@ export function FoundationCard({ id, rowKey, taskId, q, askedAt, raiserId, raise
       </div>
       {failed && <div role="alert" style={{ marginTop: 6, fontSize: 11, lineHeight: '15px', color: 'var(--cth-coral-text)' }}>{t(failed === 'save' ? 'foundations.card.failed' : failed === 'draft' ? 'foundations.card.failedDraft' : 'foundations.card.failedLater', { name: drafter })}</div>}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--cth-line)', fontSize: 11, color: 'var(--cth-ink-3)', flexWrap: 'wrap' }}>
-        <span>{t('foundations.card.usedBy', { count: jobs.length, jobs: jobList })}</span>
+        {/* A retired question is no job's: no "use this" with nobody before it. */}
+        {jobs.length > 0 && <span>{t('foundations.card.usedBy', { count: jobs.length, jobs: jobList })}</span>}
         <span style={{ marginInlineStart: 'auto' }}>{t('foundations.card.weekly')}</span>
       </div>
     </section>

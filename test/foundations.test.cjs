@@ -293,7 +293,9 @@ test('a member citing an owner message can neither override the owner nor set th
   assert.equal(o.w.handle('ryan', { question: 'reference_customers', gap: 'posts' }), null);
   assert.ok(o.w.read().hits.reference_customers);
   // A retired question is no job's any more (decision 6).
-  assert.match(o.w.handle('ryan', { question: 'current_customers', gap: 'posts' }), /not one of your job's/);
+  assert.match(o.w.handle('ryan', { question: 'current_customers', gap: 'posts' }), /is retired/);
+  assert.match(o.w.handle('god', { question: 'current_customers', gap: 'posts' }), /is retired/, 'from Michael too');
+  assert.equal(o.w.read().hits.current_customers, undefined);
   // Michael raises a gap for any job's question.
   assert.equal(o.w.handle('god', { question: 'access', gap: 'the owner asked about passwords' }), null);
   assert.ok(o.w.read().hits.access);
@@ -1201,6 +1203,24 @@ test('a retired list is told to Michael once, kept until its keeper takes it ove
   assert.equal(o.w.read().answers.current_customers.retiredKeptBy, 'ryan');
   assert.match(F.michaelFoundations(o.w.read(), ["marketing"], (id) => (id === "ryan" ? "Ryan" : id)), /taken over by Ryan/);
   assert.match(o.w.handle('ryan', { question: 'voice', retired: 'kept' }), /not a retired question/);
+});
+
+test('a retired question the work hit before it retired is never brought back: the hit goes and Michael withdraws its card', (t) => {
+  // Value: protects=no card for a retired question (owner, 2026-11-18: a customers today card came back after it retired); fails_when=Michael's open list names a retired question, the hit stays, or the note repeats; why_new=bug 2026-11-18; seam=a hit written before the question retired; no_claim=Michael withdrawing the card (model)
+  const o = writer(t, { deps: { jobs: () => ['marketing'], jobsOf: () => ['marketing'] } });
+  const rec = o.w.read();
+  o.w.save({ ...rec, hits: { ...rec.hits, current_customers: { first: '2026-11-06T15:01:47.538Z', last: '2026-11-06T15:01:47.538Z', count: 1, by: ['ryan'], evidence: 'Blog post written without it.', told: true } } });
+  assert.doesNotMatch(F.michaelFoundations(o.w.read(), ['marketing']), /current_customers/, 'not an empty question the work hit');
+  o.w.checkExpiry(true);
+  const notes = o.told.filter((m) => m.subject === 'Foundation question retired');
+  assert.equal(notes.length, 1);
+  assert.match(notes[0].body, /Withdraw any open foundation card for it and raise none again/);
+  assert.equal(o.w.read().hits.current_customers, undefined, 'the hit goes');
+  o.w.checkExpiry(true);
+  assert.equal(o.told.filter((m) => m.subject === 'Foundation question retired').length, 1, 'told once');
+  // The card names what the work went by, and a card with no job shows no "use this".
+  assert.match(read('src/main/hive.ts'), /naming anything it used instead/);
+  assert.match(read('src/renderer/src/components/FoundationCard.tsx'), /\{jobs\.length > 0 && <span>\{t\('foundations\.card\.usedBy'/);
 });
 
 test('a connected system answers only where a record lives, only from a member who reaches it, and never over the owner', (t) => {
