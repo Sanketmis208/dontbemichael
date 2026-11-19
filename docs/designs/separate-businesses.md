@@ -492,6 +492,15 @@ Proves two logins side by side on this Mac. Any account works, even the same one
 - **Moved to E3:** `readConfig()` returning a type without business fields. Switched alone it breaks every reader, and the app would not run until E3 moved them; switched in E3, its compile errors are the list of readers still to move.
 - Test: test/office-settings.test.cjs (8 cases: one home per field, the id kept through saves, backfill of an id only record, unsafe ids, two offices kept apart, a lost office.json, settings with nowhere to go, the pure helpers). Full suite 4033 pass, 0 fail.
 
+## E2: moving the settings at launch (2026-11-19)
+
+- `migrateToOfficeSettings()` in src/main/officeSettings.ts. Order: give each known office (the open one and the recent ones) its id; keep config.json as `config.before-offices.json` (the first copy is never overwritten); write `offices[<id>]` for every office not already there; read it back; then one write removes the business fields from the top level and sets `officesMigrated: 1`. A stop before that last write leaves the top level as it was, and the next launch runs again, keeping entries already written.
+- Who gets what (D11): an office is this business when the T2 guard would open it with these settings (team match, or the same business folder in office.json, or a business with no team and nothing to tell it apart), and it gets every business setting. Another business with an office.json gets its identity and team, `setupNoticePending`, and no mailboxes, grants, connectors or schedules of this one. An office with nothing to go on gets nothing and runs setup. While setup is unfinished, the open office gets what was typed so far.
+- It waits, changing nothing, while no office is open yet or the open office's folder is missing (the "We can't find your office" screen), and runs once it is there.
+- New fields: `officesMigrated` (install) and `setupNoticePending` (business; the notice itself is UI work in E3 and the design tasks).
+- **Not called at launch yet.** Its last step empties the top level, and every reader still reads there until E3, so running it now would leave the app with blank settings. E3 adds the launch call (before any service starts) in the same change that moves the readers, and splits `DEFAULTS` so `readConfig()` stops filling business defaults at the top level.
+- Test: test/office-settings-migration.test.cjs (7 cases: the one office regression, field by field; several offices by team match with a moved copy, another business, an unknown office and a deleted folder; no team; unfinished setup; waiting; resume after a stop; the pure rule). It fails when every office is given the settings. Full suite: 4039 pass; proc-kill.test.cjs failed once under load and passed alone twice (unrelated timing).
+
 ## Completion summary
 
 ```
@@ -800,7 +809,7 @@ Lane A: T2 guard (independent, ships first). Lane B: office id → accessor → 
   - Surfaced by: Architecture 1 and 2, Code quality 1
   - Files: src/main/officeSettings.ts (new), src/main/config.ts, src/shared/officeRecord.ts, src/main/officeFile.ts
   - Verify: node --test test/office-settings.test.cjs test/office-record.test.cjs; typecheck fails on a planted business key read
-- [ ] **E2 (P1, human: ~1 day / CC: ~40min)** — src/main — Migrate by team match with a frozen copy and resume marker
+- [x] **E2 (P1, human: ~1 day / CC: ~40min)** — src/main — Migrate by team match with a frozen copy and resume marker (built 2026-11-19; called at launch in E3, see E2 below)
   - Surfaced by: R2 (D11), CEO Section 9
   - Files: src/main/officeSettings.ts, src/main/index.ts (launch)
   - Verify: node --test test/office-settings-migration.test.cjs

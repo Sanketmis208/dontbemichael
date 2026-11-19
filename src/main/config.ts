@@ -417,6 +417,14 @@ export interface HarnessConfig {
    *  docs/designs/separate-businesses.md). Read and written only through
    *  officeSettings / updateOfficeSettings. */
   offices?: Record<string, OfficeEntry>;
+  /** Set when the business settings that used to sit at the top level were
+   *  moved into `offices` (migrateToOfficeSettings). Its version, 1. */
+  officesMigrated?: number;
+  /** This business's identity came from its office.json when settings moved
+   *  per office, but its mailboxes, schedules, grants and connectors were
+   *  another business's and were not carried over: tell the owner once, on
+   *  first open (docs/designs/separate-businesses.md, D11). */
+  setupNoticePending?: boolean;
 
 }
 
@@ -605,6 +613,28 @@ function persistConfig(patched: HarnessConfig): HarnessConfig {
     try { listener(view); } catch { /* a broken listener is not a failed save */ }
   }
   return next;
+}
+
+/** Save this whole config in place of the stored one: unlike writeConfig, a
+ *  field left out is removed. Only the move to per office settings uses it. */
+export function replaceConfig(next: HarnessConfig): HarnessConfig {
+  return persistConfig(next);
+}
+
+/** Copy config.json, as it is on disk, to `name` beside it, unless that copy
+ *  already exists (the first copy is the one to keep). True when the copy is
+ *  there afterwards, or there was no config.json to copy. */
+export function keepConfigCopy(name: string): boolean {
+  const p = configPath();
+  const copy = join(dirname(p), name);
+  try {
+    if (existsSync(copy) || !existsSync(p)) return true;
+    copyFileSync(p, copy);
+    return existsSync(copy);
+  } catch (e) {
+    console.error(`[config] could not keep a copy as ${name}:`, e);
+    return false;
+  }
 }
 
 export function writeConfig(patch: Partial<HarnessConfig>): HarnessConfig {
