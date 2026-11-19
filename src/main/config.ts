@@ -17,6 +17,7 @@ import { MAX_AGENT_TOKEN_CAP } from '../shared/tokenCaps';
 import { expandTilde, normalizeHiveHome } from './fs';
 import { isHeldRename, RENAME_RETRY_MS, sleepSync, writeFileAtomic } from './atomicFile';
 import type { IntegrationRecord } from '../shared/integrations';
+import type { OfficeEntry } from './officeSettings';
 
 /** A recurring schedule. The type and every rule about it (ownership, next run,
  *  what a run sends) live in shared/missions.ts so main, preload and the
@@ -412,6 +413,10 @@ export interface HarnessConfig {
   tvShowOffices?: boolean;
   /** Per-CLI-provider default model slug, used to pre-fill the model picker. */
   providerDefaultModels?: Partial<Record<AgentProvider, string>>;
+  /** Each business's own settings, by office id (src/main/officeSettings.ts,
+   *  docs/designs/separate-businesses.md). Read and written only through
+   *  officeSettings / updateOfficeSettings. */
+  offices?: Record<string, OfficeEntry>;
 
 }
 
@@ -441,6 +446,12 @@ const DEFAULTS: HarnessConfig = {
   // switched on once at launch (knowledgeOnSeeded).
   knowledgeGraph: { enabled: true }
 };
+
+/** A fresh copy of the defaults: nested values (missions, knowledgeGraph) are
+ *  not shared with DEFAULTS, so a caller may change what it gets. */
+export function configDefaults(): HarnessConfig {
+  return structuredClone(DEFAULTS);
+}
 
 function configPath(): string {
   return join(app.getPath('userData'), 'config.json');

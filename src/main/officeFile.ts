@@ -3,15 +3,19 @@
  *
  * Plain node:fs, no electron import, so it tests as a node module.
  */
+import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import {
   configMatchesRegistry,
+  describesBusiness,
+  isOfficeId,
   officeRecordFromConfig,
   officeRecordFromRegistry,
   parseOfficeRecord,
   sameOfficeRecord,
+  withOfficeId,
   type OfficeConfigFields,
   type OfficeRecord,
   type RegistryAgentFields
@@ -64,8 +68,11 @@ export function syncOfficeRecord(cfg: OfficeConfigFields): boolean {
   // before it saves, and a missing office must not be recreated as a stray file.
   if (!existsSync(home)) return false;
   try {
-    if (sameOfficeRecord(readOfficeRecord(home), rec)) return false;
-    writeOfficeRecord(home, rec);
+    // The office's id outlives every description of it: keep it.
+    const existing = readOfficeRecord(home);
+    const next = withOfficeId(rec, existing?.id);
+    if (sameOfficeRecord(existing, next)) return false;
+    writeOfficeRecord(home, next);
     return true;
   } catch (e) {
     console.error('[office] could not save office.json:', e);
@@ -81,7 +88,8 @@ export function syncOfficeRecord(cfg: OfficeConfigFields): boolean {
  */
 export function backfillOfficeRecord(cfg: OfficeConfigFields): boolean {
   const home = cfg.harnessHome;
-  if (!home || !existsSync(home) || readOfficeRecord(home)) return false;
+  // A record holding only the office's id still needs its description.
+  if (!home || !existsSync(home) || describesBusiness(readOfficeRecord(home))) return false;
   const caseInsensitive = process.platform === 'darwin' || process.platform === 'win32';
   if (!configMatchesRegistry(cfg, readRegistryAgents(home), caseInsensitive)) return false;
   return syncOfficeRecord(cfg);
@@ -120,7 +128,8 @@ export function officeSwitchGuard(cfg: OfficeConfigFields, newHome: string): Off
     const t = resolve(p).replace(/[\\/]+$/, '');
     return caseInsensitive ? t.toLowerCase() : t;
   };
-  const theirs = readOfficeRecord(newHome);
+  const read = readOfficeRecord(newHome);
+  const theirs = describesBusiness(read) ? read : null;
   if (theirs?.businessFolder && mine.businessFolder && norm(theirs.businessFolder) === norm(mine.businessFolder)) return 'ok';
   if (mine.team.length === 0 && !theirs) {
     const inside = norm(newHome) + sep;
@@ -128,6 +137,34 @@ export function officeSwitchGuard(cfg: OfficeConfigFields, newHome: string): Off
     if (members.length === 0) return 'ok';
   }
   return 'otherBusiness';
+}
+
+/** The office's lasting id from its office.json, or null when it has none yet. */
+export function readOfficeId(home: string | null | undefined): string | null {
+  if (!home) return null;
+  const id = readOfficeRecord(home)?.id;
+  return isOfficeId(id) ? id : null;
+}
+
+/**
+ * The office's lasting id, made and saved in its office.json the first time.
+ * An office with no record gets one holding only the id, which setup and the
+ * launch backfill still treat as no description (describesBusiness). Null when
+ * the folder holds no office, or the id could not be saved: an id that is not
+ * on disk would be a different one next launch.
+ */
+export function ensureOfficeId(home: string | null | undefined): string | null {
+  if (!home || !homeFolderStatus(home).hasOffice) return null;
+  const existing = readOfficeRecord(home);
+  if (isOfficeId(existing?.id)) return existing!.id!;
+  const id = randomUUID();
+  try {
+    writeOfficeRecord(home, withOfficeId(existing ?? { version: 1, team: [] }, id));
+  } catch (e) {
+    console.error('[office] could not save the office id:', e);
+    return null;
+  }
+  return readOfficeId(home) === id ? id : null;
 }
 
 function readRegistryAgents(home: string): Record<string, RegistryAgentFields> | undefined {
@@ -283,7 +320,9 @@ function findOfficeUnchecked(home: string): FoundOffice {
     const rec = fromFile ? { ...fromRegistry, ...stripEmpty(fromFile), team: fromRegistry.team } : fromRegistry;
     return { path: home, hasOffice: true, record: rec, source: 'registry' };
   }
-  return { path: home, hasOffice: true, record: fromFile, source: fromFile ? 'file' : null };
+  // A record holding only the office's id describes nothing to continue.
+  const described = describesBusiness(fromFile) ? fromFile : null;
+  return { path: home, hasOffice: true, record: described, source: described ? 'file' : null };
 }
 
 function stripEmpty(rec: OfficeRecord): Partial<OfficeRecord> {

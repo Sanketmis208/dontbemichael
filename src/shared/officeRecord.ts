@@ -22,6 +22,10 @@ import { cleanCompanyProfile, type CompanyProfile } from './companyProfile';
 
 export interface OfficeRecord {
   version: 1;
+  /** The office's lasting id (docs/designs/separate-businesses.md): its
+   *  settings are filed under it, so a moved or renamed folder keeps them.
+   *  Made once (ensureOfficeId) and kept by every later save. */
+  id?: string;
   businessName?: string;
   businessCity?: string;
   businessType?: string;
@@ -99,6 +103,26 @@ function cleanTeam(v: unknown): Array<{ agentId: string; folder: string }> {
   return out;
 }
 
+/** What an office id looks like: letters, digits, '-' and '_', 8 to 64 long.
+ *  A record from a copied or synced folder is checked, so an id can never be a
+ *  path or anything else that would be unsafe as a key. */
+export function isOfficeId(v: unknown): v is string {
+  return typeof v === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(v);
+}
+
+/** The record with this id first after the version (or none), so a record
+ *  compares and saves the same way whatever order it was built in. */
+export function withOfficeId(rec: OfficeRecord, id: string | undefined): OfficeRecord {
+  const { version, id: _old, ...rest } = rec;
+  return isOfficeId(id) ? { version, id, ...rest } : { version, ...rest };
+}
+
+/** Whether a record says anything about a business: a team, a business folder
+ *  or a name. A record holding only the office's id does not. */
+export function describesBusiness(rec: OfficeRecord | null | undefined): rec is OfficeRecord {
+  return !!rec && (rec.team.length > 0 || !!rec.businessFolder || !!rec.businessName);
+}
+
 /** A record read from disk, or null when it is not one. Never throws. */
 export function parseOfficeRecord(v: unknown): OfficeRecord | null {
   if (!v || typeof v !== 'object') return null;
@@ -106,6 +130,7 @@ export function parseOfficeRecord(v: unknown): OfficeRecord | null {
   if (o.version !== 1) return null;
   return {
     version: 1,
+    ...(isOfficeId(o.id) ? { id: o.id } : {}),
     businessName: str(o.businessName),
     businessCity: str(o.businessCity),
     businessType: str(o.businessType),

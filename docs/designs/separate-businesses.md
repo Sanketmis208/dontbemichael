@@ -483,6 +483,15 @@ Proves two logins side by side on this Mac. Any account works, even the same one
 2. `CLAUDE_CONFIG_DIR=~/dbm-t4 claude auth status --text` shows that account; `claude auth status --text` still shows yours.
 3. Clean up: `CLAUDE_CONFIG_DIR=~/dbm-t4 claude auth logout`, then delete ~/dbm-t4.
 
+## E1: the office id and the settings accessor (2026-11-19)
+
+- office.json gains `id` (a random UUID, made once by `ensureOfficeId`). Every later save keeps it (`syncOfficeRecord`). A record holding only the id describes no business: setup still sees no office to continue, and the launch backfill still writes the description (`describesBusiness`). An id read from a copied or synced record is checked (`isOfficeId`), so it is never a path.
+- src/main/officeSettings.ts holds T3's two lists, `BUSINESS_KEYS` (44) and `INSTALL_KEYS` (16 plus `offices`). The build fails when a config field is in neither list or in both.
+- `currentOfficeId()` reads office.json's id, else the `offices` entry last opened from this folder, so a lost office.json keeps its settings. `officeSettings()` gives that business's saved settings over the defaults (a business with none starts setup, with no mailboxes). `updateOfficeSettings(patch)` saves only business keys, and refuses (saving nothing) when no office is open or it has no id. `installConfig()` gives the install keys only.
+- Nothing reads through it yet, so the app behaves as before.
+- **Moved to E3:** `readConfig()` returning a type without business fields. Switched alone it breaks every reader, and the app would not run until E3 moved them; switched in E3, its compile errors are the list of readers still to move.
+- Test: test/office-settings.test.cjs (8 cases: one home per field, the id kept through saves, backfill of an id only record, unsafe ids, two offices kept apart, a lost office.json, settings with nowhere to go, the pure helpers). Full suite 4033 pass, 0 fail.
+
 ## Completion summary
 
 ```
@@ -787,7 +796,7 @@ Lane A: T2 guard (independent, ships first). Lane B: office id → accessor → 
 
 ### Eng implementation tasks
 
-- [ ] **E1 (P1, human: ~1 day / CC: ~30min)** — src/main, src/shared — Add a stable office id and the officeSettings accessor; make readConfig return a type without business keys
+- [x] **E1 (P1, human: ~1 day / CC: ~30min)** — src/main, src/shared — Add a stable office id and the officeSettings accessor (done 2026-11-19; readConfig's type switch moved to E3, see E1 below)
   - Surfaced by: Architecture 1 and 2, Code quality 1
   - Files: src/main/officeSettings.ts (new), src/main/config.ts, src/shared/officeRecord.ts, src/main/officeFile.ts
   - Verify: node --test test/office-settings.test.cjs test/office-record.test.cjs; typecheck fails on a planted business key read
