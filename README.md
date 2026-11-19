@@ -391,5 +391,5 @@ The **source code** is licensed under the **MIT License**. See [`LICENSE`](./LIC
 
 ## Acknowledgements
 
-- Munder Difflin by Chaitanya Giri, for the inspiration. Don't Be Michael is a complete rewrite, built from the ground up so AI agents can run the everyday work of a small business.
+- Munder Difflin by Chaitanya G, for the inspiration. Don't Be Michael is a complete rewrite, built from the ground up so AI agents can run the everyday work of a small business.
 - [xterm.js](https://xtermjs.org/) · [node-pty](https://github.com/microsoft/node-pty) · [electron-vite](https://electron-vite.org/) · [CodeMirror](https://codemirror.net/) for the libraries this is built on.
