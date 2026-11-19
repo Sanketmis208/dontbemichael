@@ -46,7 +46,7 @@ const mailbox = (id, address) => ({ id, address, label: address });
 test('every config field has one home: the business or the install', () => {
   const business = new Set(settings.BUSINESS_KEYS);
   const install = new Set(settings.INSTALL_KEYS);
-  assert.equal(settings.BUSINESS_KEYS.length, 45, 'the 44 business fields of the plan (T3), plus setupNoticePending (E2)');
+  assert.equal(settings.BUSINESS_KEYS.length, 46, 'the 44 business fields of the plan (T3), plus setupNoticePending (E2) and claudeLogin (E6)');
   for (const k of business) assert.ok(!install.has(k), `${k} has two homes`);
   for (const k of Object.keys(config.configDefaults())) {
     assert.ok(business.has(k) || install.has(k), `${k} has no home`);

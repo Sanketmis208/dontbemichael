@@ -4,9 +4,8 @@
  * the file holds no secret the app looks at, and nothing is written.
  */
 import { readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
 import { planFromAccount, type ClaudePlanId } from '../shared/claudePlan';
+import { claudeJsonFile } from './claudeHome';
 
 const KEEP_MS = 10 * 60_000;
 let cached: { at: number; plan: ClaudePlanId | null } | null = null;
@@ -14,7 +13,7 @@ let cached: { at: number; plan: ClaudePlanId | null } | null = null;
 /** The account record's path: Claude Code keeps it beside its config folder's
  *  contents when CLAUDE_CONFIG_DIR is set, else in the home folder. */
 export function claudeAccountFile(): string {
-  return process.env.CLAUDE_CONFIG_DIR ? join(process.env.CLAUDE_CONFIG_DIR, '.claude.json') : join(homedir(), '.claude.json');
+  return claudeJsonFile();
 }
 
 /** The detected plan, read at most every ten minutes. */

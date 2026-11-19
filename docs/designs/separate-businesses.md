@@ -547,6 +547,14 @@ Proves two logins side by side on this Mac. Any account works, even the same one
 - Found while testing: `pulse:state:<office>` (the Pulse processor's position) was keyed by office and not in the list; without it Pulse would have read an office's history again after the move.
 - Test: test/pulse-office-id.test.cjs, run under Electron's Node for the real store (5 cases: rows and marks move once; history found by id after a move; existing id data wins; a one business reset; no op cases), plus a scan that fails when a new office keyed kv mark is not listed, and the main wiring order.
 
+## E6: a Claude login per business (2026-11-19)
+
+- New business setting `claudeLogin` ('own' or 'shared', unset is shared). For a business with its own login, the app sets `CLAUDE_CONFIG_DIR` to `userData/offices/<id>/claude` once, as the main process starts (after the move, before any agent, check or reader). Everything already follows that variable: agents keep it (ptyEnv.ts), the checks' sign in points at it (hiddenClaude.ts, empty for the default as T4 showed), transcripts and the projects folder walls read it, and the connector list is read with it. A switch relaunches, so it never changes mid run.
+- `claudeHome.ts` (plain node): where Claude's settings folder and `.claude.json` are, honoring `CLAUDE_CONFIG_DIR`. The three readers that hardcoded `~/.claude` now go through it: the trust and API key approvals (`.claude.json` moves inside the folder, where Claude reads it), the global permission prompts setting, and the owner plugins turned off per session. Plan detection uses it too. This also fixes those approvals for an owner who exports `CLAUDE_CONFIG_DIR` themselves.
+- **Where the owner chooses:** not built here. The design puts it in Add a business, at its Ready step ("Same as <business>" or "A different Claude account", mockup frame 4), which is DT3. Until then nothing sets `claudeLogin`.
+- A factory reset of a business erases its Claude folder with the rest of its place in the app's data folder; its Keychain entry (named after the folder) stays, unused.
+- Test: test/office-claude-login.test.cjs (6 cases: the usual places with no folder; the folder's settings and record; approvals written where Claude reads them; the business's folder only after the move and only for 'own'; agents' environment and plan detection; main sets it once at start, and no reader is left on a fixed ~/.claude). Live sign in of two accounts is the optional T4 owner check.
+
 ## Completion summary
 
 ```
@@ -871,7 +879,7 @@ Lane A: T2 guard (independent, ships first). Lane B: office id → accessor → 
   - Surfaced by: BIZ-4 (D5)
   - Files: src/main/db.ts, src/main/pulseBackfill.ts, Pulse telemetry
   - Verify: the Pulse backfill test with a moved folder
-- [ ] **E6 (P2, human: ~1 day / CC: ~40min)** — src/main — Own Claude login per office through one claudeHome(), after probe T4
+- [x] **E6 (P2, human: ~1 day / CC: ~40min)** — src/main — Own Claude login per office through one claudeHome(), after probe T4 (done 2026-11-19, see E6 below; the choice itself is set in Add a business, DT3)
   - Surfaced by: Architecture 4, BIZ-3 (D4)
   - Files: src/main/claudeAccount.ts, src/main/hive.ts, src/main/config.ts, src/main/ptyEnv.ts, src/main/index.ts
   - Verify: a unit test that the office's folder drives terminal env and plan detection; live sign in of two accounts

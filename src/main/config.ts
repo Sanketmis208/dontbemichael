@@ -21,6 +21,7 @@ import { randomUUID } from 'node:crypto';
 import { businessKeySet, installKeySet, officeIdIn, officesWith, pick, settingsIn, type OfficeEntry, type OfficeSettings } from './officeKeys';
 import { ensureOfficeId, readOfficeId } from './officeFile';
 import { homeFolderStatus } from './homeFolder';
+import { claudeJsonFile, claudeSettingsDir } from './claudeHome';
 
 /** A recurring schedule. The type and every rule about it (ownership, next run,
  *  what a run sends) live in shared/missions.ts so main, preload and the
@@ -292,6 +293,11 @@ export interface HarnessConfig {
    *  secret store under `apikey:anthropic` and handed to each Claude agent as
    *  ANTHROPIC_API_KEY at start. */
   claudeAuth?: 'account' | 'apiKey';
+  /** This business's own Claude login (docs/designs/separate-businesses.md,
+   *  BIZ-3, D4): 'own' keeps its sign in, connectors and conversations in its
+   *  own Claude folder in the app's data folder; unset or 'shared' uses the
+   *  Claude sign in the app already uses. A second account is a second plan. */
+  claudeLogin?: 'shared' | 'own';
   /** What the owner pays for their Claude plan a month, in USD (Settings > Agents).
    *  Unset: the detected plan's list price. Pulse splits it by share of the work. */
   planPriceMonthly?: number;
@@ -897,7 +903,9 @@ export function ensureHarnessHome(path: string): { ok: boolean; error?: string }
 }
 
 function ensureClaudeGlobalPermissions(home: string): void {
-  const dir = join(home, '.claude');
+  // The folder Claude really uses (CLAUDE_CONFIG_DIR, for a business with its
+  // own login or an owner's export), else ~/.claude (claudeHome.ts).
+  const dir = claudeSettingsDir(home);
   const p = join(dir, 'settings.json');
   try {
     let s: Record<string, unknown> = {};
@@ -927,7 +935,10 @@ type ClaudeConfig = Record<string, unknown> & { projects?: Record<string, Claude
  *  it changed something. A file that is not a JSON object is left alone.
  *  True when the file now holds the change (written, or already there). */
 function updateClaudeJson(home: string, change: (c: ClaudeConfig) => boolean): boolean {
-  const p = join(home, '.claude.json');
+  // `<CLAUDE_CONFIG_DIR>/.claude.json` when one is set, else ~/.claude.json:
+  // an approval written where Claude does not read stops every agent at the
+  // trust question (claudeHome.ts).
+  const p = claudeJsonFile(home);
   // Claude Code writes this file too. Write a copy beside it and swap it in, so
   // a crash never leaves it half written, and start again (up to three times)
   // when Claude changed it between our read and our write, so its edit is kept.

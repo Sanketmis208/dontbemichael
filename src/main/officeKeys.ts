@@ -20,7 +20,7 @@ export const BUSINESS_KEYS = [
   // mail and connectors
   'mailboxes', 'quickbooksClaude', 'connectorsOn', 'connectorsSeen', 'connectorsMigrated', 'claudeConnectors', 'mcpDefaults',
   // its Claude account
-  'claudeAuth', 'planPriceMonthly',
+  'claudeAuth', 'claudeLogin', 'planPriceMonthly',
   // schedules
   'missions', 'scheduleRequests', 'missionsOwnersMigrated', 'opsStandupSeeded', 'foundationsCheckSeeded',
   'standupFocusSeeded', 'heartbeatSeeded',

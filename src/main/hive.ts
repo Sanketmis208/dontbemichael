@@ -19,6 +19,7 @@
  * Everything here runs in the Electron main process.
  */
 import { placeLinkRule } from '../shared/settingsPlaces';
+import { claudeSettingsDir } from './claudeHome';
 import { WEB_SETTINGS_UNREADABLE, WEB_TOOLS, type SandboxNetwork } from '../shared/webAccess';
 import {
   addressedToResearch, ANSWER_UNCHECKED, ANSWER_UNCHECKED_SUBJECT, hasAttachments, looksLikeInjection, NOT_SENT_SUBJECT,
@@ -2065,12 +2066,14 @@ export class HiveManager {
     };
   }
 
-  /** Owner plugins to turn off for one agent session (#63). Reads ~/.claude only. */
+  /** Owner plugins to turn off for one agent session (#63). Reads the settings
+   *  folder Claude uses: CLAUDE_CONFIG_DIR when set, else ~/.claude. */
   private ownerPluginsOffForSession(): Record<string, false> {
     const out: Record<string, false> = {};
+    const dir = claudeSettingsDir();
     for (const p of [
-      join(homedir(), '.claude', 'settings.json'),
-      join(homedir(), '.claude', 'settings.local.json')
+      join(dir, 'settings.json'),
+      join(dir, 'settings.local.json')
     ]) {
       try {
         if (!existsSync(p)) continue;

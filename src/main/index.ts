@@ -171,7 +171,7 @@ import { AUTO_FAILURE_REPORTS } from '../shared/buildFeatures';
 import { APP_NAME, APP_DATA_DIR, APP_URL_SCHEME } from '../shared/appName';
 import { copyOfficeData, homeFolderStatus, homeReadyAtLaunch } from './homeFolder';
 import { backfillOfficeRecord, findOffice, folderLayoutFor, isUsableTeamFolder, officeSwitchGuard, syncOfficeRecord } from './officeFile';
-import { adoptOpenOffice, businessNameAt, migrateToOfficeSettings, officesAfterMove } from './officeSettings';
+import { adoptOpenOffice, businessNameAt, migrateToOfficeSettings, officeClaudeDir, officesAfterMove } from './officeSettings';
 import { folderPolicy, AGENT_TMP_DIR, agentTmpName, researchFolderPolicy, withAgentTmpWall, withMemberWall, RESEARCH_TMP_DIR, shellTempWalls, withResearchWall, type AgentFolderPolicy, type FolderLayout } from '../shared/folderAccess';
 import { sandboxNetwork } from '../shared/webAccess';
 import { legacyBusinessFolder, touchesOffice } from '../shared/officeRecord';
@@ -218,6 +218,20 @@ if (process.env.DBM_OFFICE_SETTINGS === '1' || readStoredConfig().officesMigrate
     adoptOpenOffice();
   } catch (e) { console.error('[offices] launch move:', e); }
 }
+// A business with its own Claude login (BIZ-3): Claude Code, for this whole
+// run, uses the business's own folder: its sign in, connectors, plugins and
+// conversations. Set here, before any agent, check or reader starts, so every
+// one of them follows it (they read CLAUDE_CONFIG_DIR: ptyEnv.ts keeps it for
+// agents, hiddenClaude.ts points checks' sign in at it, claudeHome.ts for the
+// app's own files). A switch relaunches, so it never changes mid run.
+try {
+  const ownClaude = officeClaudeDir();
+  if (ownClaude) {
+    mkdirSync(ownClaude, { recursive: true });
+    process.env.CLAUDE_CONFIG_DIR = ownClaude;
+    console.log('[offices] this business uses its own Claude login');
+  }
+} catch (e) { console.error('[offices] own Claude login:', e); }
 
 // Automatic failure reports: notices what used to fail silently and keeps it
 // in userData/failures.jsonl, the queue failureSender files from. Created

@@ -20,7 +20,7 @@
  * launch move (migrateToOfficeSettings) sets it. The key lists and pure
  * helpers live in officeKeys.ts.
  */
-import { BUSINESS_DATA_FILES, configDefaults, keepConfigCopy, moveIntoOffice, readStoredConfig, replaceConfig, writeConfig, type HarnessConfig } from './config';
+import { BUSINESS_DATA_FILES, configDefaults, keepConfigCopy, moveIntoOffice, officeDataPath, readStoredConfig, replaceConfig, writeConfig, type HarnessConfig } from './config';
 import { copySecretsToOffices } from './integrations';
 import { describesBusiness, type OfficeRecord } from '../shared/officeRecord';
 import {
@@ -137,6 +137,21 @@ export function businessNameAt(home: string | null | undefined): string | null {
   const fromSettings = id ? cfg.offices?.[id]?.settings?.businessName : undefined;
   const name = (typeof fromSettings === 'string' && fromSettings.trim()) || readOfficeRecord(home)?.businessName;
   return name ? name : null;
+}
+
+/**
+ * The open business's own Claude folder when it chose its own Claude login
+ * (claudeLogin 'own'), else null: Claude's usual folder. Once settings are per
+ * office only; the folder is `userData/offices/<id>/claude`, kept by office id
+ * so a moved office keeps its login (Claude names the login after the folder's
+ * path; T4).
+ */
+export function officeClaudeDir(): string | null {
+  const cfg = readStoredConfig();
+  if (!cfg.officesMigrated) return null;
+  const id = officeIdIn(cfg, readOfficeId(cfg.harnessHome));
+  if (!id || cfg.offices?.[id]?.settings?.claudeLogin !== 'own') return null;
+  return officeDataPath('claude');
 }
 
 /** How the app behaves, without any business's settings. */

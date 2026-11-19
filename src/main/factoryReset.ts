@@ -101,6 +101,9 @@ export const APP_DATA_ENTRIES = [
   'slack-reply.json',  'slack-done-notified.json',
   'slack-files',
   'pastes',
+  // A business's own Claude login (separate-businesses.md, E6). Only ever in
+  // its office's place (offices/<id>/claude), which a reset erases whole.
+  'claude',
   ...CHECK_FOLDERS
 ] as const;
 
