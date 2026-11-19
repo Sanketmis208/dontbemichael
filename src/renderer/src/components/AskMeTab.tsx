@@ -90,7 +90,7 @@ export function AskMeTab() {
   const agents = useStore((s) => s.agents);
   const restorable = useStore((s) => s.restorableAgents);
   // One shared read with the pill, the strip and the chips (D3, eng R4).
-  const { tasks, requests: scheduleRequests, offers, proposals, engineSetup, stop, researchNotice, knowledgeNotice, degraded, silent, foundations, update, updateLater, cliUpdate, cliUpdateLater, caseStudyWaiting, count: needsCount } = useNeedsYou();
+  const { tasks, requests: scheduleRequests, offers, proposals, engineSetup, stop, researchNotice, knowledgeNotice, setupNotice, degraded, silent, foundations, update, updateLater, cliUpdate, cliUpdateLater, caseStudyWaiting, count: needsCount } = useNeedsYou();
   // Michael's team upgrade card (docs/designs/team-upgrade-card.md) keeps All clear away too.
   const cliShown = cliUpdateToastVisible(cliUpdate, cliUpdateLater);
   // Michael's card for a new version (UpdateCard) keeps All clear away too.
@@ -284,7 +284,7 @@ export function AskMeTab() {
   // The whole board, whatever is picked: All clear and the answered list read it.
   const boardEmpty = !engineCard && !updateShown && !caseShown && !silentShown && !cliShown && waiting.length === 0 && scheduleRequests.length === 0 && offers.length === 0 && proposals.length === 0;
   // All clear shows, and with it Michael's one tip (owner, 2026-11-10).
-  const showAllClear = boardEmpty && !onBreak && !researchNotice && !knowledgeNotice && degraded.length === 0;
+  const showAllClear = boardEmpty && !onBreak && !researchNotice && !knowledgeNotice && !setupNotice && degraded.length === 0;
 
   /** The answer a row would send: the owner's words, labeled with the option
    *  or the questions it answers (ask-me-options.md, 5A). */
@@ -410,7 +410,7 @@ export function AskMeTab() {
       </div>
       {/* Nothing left (D4, D8): All clear, one light line, and what was just
           answered. The column closes on the next click outside it. */}
-      {boardEmpty && !onBreak && !researchNotice && !knowledgeNotice && degraded.length === 0 && (
+      {boardEmpty && !onBreak && !researchNotice && !knowledgeNotice && !setupNotice && degraded.length === 0 && (
         <div style={{ padding: '4px 2px 2px' }}>
           <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--cth-ink)' }}>{translate('shell.allClear')}</div>
           <div style={{ marginTop: 4, fontSize: 13, lineHeight: '19px', color: 'var(--cth-ink-3)' }}>{translate(`shell.allClearLine${line}`, { godName })}</div>
@@ -714,6 +714,7 @@ export function AskMeTab() {
       {/* A report, after the questions like every Report card (DESIGN.md 7.8). */}
       {researchNotice && <ResearchNoticeCard />}
       {knowledgeNotice && <KnowledgeNoticeCard />}
+      {setupNotice && <SetupNoticeCard />}
       {degraded.map((n) => (
         <DegradedNoticeCard key={n.agentId} notice={n} name={agents.find((a) => a.id === n.agentId)?.name ?? n.name} />
       ))}
@@ -786,6 +787,30 @@ function KnowledgeNoticeCard() {
           seen();
           window.dispatchEvent(new CustomEvent('cth:open-settings', { detail: { section: 'Memory & Knowledge' } }));
         }}>{t('knowledgeNotice.open')}</PixelButton>
+      </div>
+    </section>
+  );
+}
+
+/** The one time card for a business that kept only its name and team when
+ *  settings moved per office (docs/designs/separate-businesses.md, D11): its
+ *  mailboxes, schedules and connectors are set up again in Settings. */
+function SetupNoticeCard() {
+  const { t } = useTranslation();
+  const seen = (): void => { void window.cth.officeSetupNoticeSeen?.().then(() => refreshNeedsYou()).catch(() => undefined); };
+  return (
+    <section aria-label={t('setupNotice.title')} style={card}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--cth-ink)' }}>{t('setupNotice.title')}</span>
+        <span style={reportTag}>{t('askMe.report')}</span>
+      </div>
+      <p style={{ margin: '8px 0 12px', fontSize: 12.5, lineHeight: '18px', color: 'var(--cth-ink)' }}>{t('setupNotice.body')}</p>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+        <PixelButton variant="secondary" size="sm" onClick={seen}>{t('askMe.gotIt')}</PixelButton>
+        <PixelButton variant="primary" size="sm" onClick={() => {
+          seen();
+          window.dispatchEvent(new CustomEvent('cth:open-settings', { detail: { section: 'Connections' } }));
+        }}>{t('setupNotice.open')}</PixelButton>
       </div>
     </section>
   );

@@ -80,7 +80,7 @@ test('main keeps the notice at every start and answers the window, whatever the 
 test('Ask me shows each one as Michael\'s report, never in the coral count', () => {
   // Value: protects=the card is a report (no coral pill) on Ask me with Got it, and its title exists in every language; fails_when=it is counted as a question, not rendered, or a locale lacks the title; why_new=new card; seam=source pins; no_claim=visual layout
   const feed = read('src/renderer/src/shell/useNeedsYou.ts');
-  assert.match(feed, /\(merged\.knowledgeNotice \? 1 : 0\) \+ merged\.degraded\.length/, 'counted as reports');
+  assert.match(feed, /\(merged\.knowledgeNotice \? 1 : 0\) \+ \(merged\.setupNotice \? 1 : 0\) \+ merged\.degraded\.length/, 'counted as reports');
   const count = feed.slice(feed.indexOf('count: merged.tasks'), feed.indexOf('reports: merged.tasks'));
   assert.ok(!/degraded/.test(count), 'never in the coral count');
   assert.match(feed, /onDegradedChanged\?\.\(\(list\) => publish\(\{ degraded: list \}\)\)/);

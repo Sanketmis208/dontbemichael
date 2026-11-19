@@ -71,6 +71,9 @@ export interface NeedsYouFeed {
   researchNotice: boolean;
   /** The one time card for an owner who had company knowledge off (a report). */
   knowledgeNotice: boolean;
+  /** The one time card for a business whose mail, schedules and connectors
+   *  were not carried over when settings moved per office (a report). */
+  setupNotice: boolean;
   /** Members that started with something missing (shared/degradedNotices.ts):
    *  one report card each, never coral, never in `count`. */
   degraded: DegradedNotice[];
@@ -86,7 +89,7 @@ const CLI_LATER_KEY = 'cth.cliUpdateLaterFor';
 function readCliLater(): string | null {
   try { return window.localStorage.getItem(CLI_LATER_KEY); } catch { return null; }
 }
-let feed: NeedsYouFeed = { status: 'unknown', tasks: [], requests: [], ownerRequests: [], offers: [], proposals: [], engineSetup: null, stop: null, silent: [], update: null, updateLater: null, cliUpdate: null, cliUpdateLater: readCliLater(), caseStudyWaiting: false, count: 0, reports: 0, researchNotice: false, knowledgeNotice: false, degraded: [], foundations: null };
+let feed: NeedsYouFeed = { status: 'unknown', tasks: [], requests: [], ownerRequests: [], offers: [], proposals: [], engineSetup: null, stop: null, silent: [], update: null, updateLater: null, cliUpdate: null, cliUpdateLater: readCliLater(), caseStudyWaiting: false, count: 0, reports: 0, researchNotice: false, knowledgeNotice: false, setupNotice: false, degraded: [], foundations: null };
 // The offers need the team and the packs, which this module does not import;
 // the app hands it the reader at start (App.tsx).
 let offersSource: (() => Promise<WorkStyleOffer[]>) | null = null;
@@ -133,7 +136,7 @@ let taskReads = 0;
 let requestReads = 0;
 let ownerReads = 0;
 
-function publish(next: Partial<Pick<NeedsYouFeed, 'status' | 'tasks' | 'requests' | 'ownerRequests' | 'offers' | 'proposals' | 'engineSetup' | 'stop' | 'silent' | 'researchNotice' | 'knowledgeNotice' | 'degraded' | 'foundations' | 'update' | 'updateLater' | 'cliUpdate' | 'cliUpdateLater' | 'caseStudyWaiting'>>): void {
+function publish(next: Partial<Pick<NeedsYouFeed, 'status' | 'tasks' | 'requests' | 'ownerRequests' | 'offers' | 'proposals' | 'engineSetup' | 'stop' | 'silent' | 'researchNotice' | 'knowledgeNotice' | 'setupNotice' | 'degraded' | 'foundations' | 'update' | 'updateLater' | 'cliUpdate' | 'cliUpdateLater' | 'caseStudyWaiting'>>): void {
   // A poll that brings nothing new changes nothing, so nobody re-renders.
   const changed = (Object.keys(next) as Array<keyof typeof next>).some((k) => JSON.stringify(next[k]) !== JSON.stringify(feed[k]));
   if (!changed) return;
@@ -142,7 +145,7 @@ function publish(next: Partial<Pick<NeedsYouFeed, 'status' | 'tasks' | 'requests
   feed = {
     ...merged,
     count: merged.tasks.reduce((n, t) => n + shownQuestions(t, merged.foundations).length, 0) + merged.requests.length + merged.offers.length + merged.proposals.length,
-    reports: merged.tasks.reduce((n, t) => n + openReportIndexes(t.humanQA).length, 0) + (merged.researchNotice ? 1 : 0) + (merged.knowledgeNotice ? 1 : 0) + merged.degraded.length
+    reports: merged.tasks.reduce((n, t) => n + openReportIndexes(t.humanQA).length, 0) + (merged.researchNotice ? 1 : 0) + (merged.knowledgeNotice ? 1 : 0) + (merged.setupNotice ? 1 : 0) + merged.degraded.length
   };
   // One more while Michael cannot start for want of his engine (get-michael-ready.md),
   // unless a sign in stop already says so: one problem, one card (eng R3).
@@ -213,6 +216,9 @@ function readNotices(force = true): void {
     .catch(() => { /* keep the last value */ });
   void window.cth.kgNotice?.()
     .then((s) => publish({ knowledgeNotice: !!s?.notice }))
+    .catch(() => { /* keep the last value */ });
+  void window.cth.officeSetupNotice?.()
+    .then((s) => publish({ setupNotice: !!s?.notice }))
     .catch(() => { /* keep the last value */ });
 }
 

@@ -2613,6 +2613,11 @@
   "degradedNotice": {
     "title": "{{name}} started with something missing"
   },
+  "setupNotice": {
+    "title": "Finish setting up this business",
+    "body": "Settings are now kept for each business on their own. This one kept its name and team, but its mailboxes, schedules and connections were another business's and did not come with it. Add them in Settings.",
+    "open": "Open Settings"
+  },
   "knowledgeNotice": {
     "title": "Company knowledge is always on",
     "body": "You had turned company knowledge off. It has no switch now, so your team can search the documents in it. Open the list to remove any you would rather they not read.",

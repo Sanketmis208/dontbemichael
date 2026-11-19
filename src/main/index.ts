@@ -4875,6 +4875,14 @@ ipcMain.handle('kg:notice', () => {
   try { return { notice: knowledgeNoticeDue(cfg.knowledgeGraph?.enabled, cfg.knowledgeOnNoticeSeen, () => knowledge.list()) }; } catch { return { notice: false }; }
 });
 ipcMain.handle('kg:noticeSeen', () => { writeConfig({ knowledgeOnNoticeSeen: true }); return { ok: true }; });
+// When settings moved per office, a business whose identity came from its
+// office.json got none of another business's mailboxes, schedules, grants or
+// connectors (separate-businesses.md, D11): a one time card says so.
+ipcMain.handle('office:setupNotice', () => ({ notice: readConfig().setupNoticePending === true }));
+ipcMain.handle('office:setupNoticeSeen', () => { writeConfig({ setupNoticePending: undefined }); return { ok: true }; });
+// The open office's id, read once by the preload before the page loads, so
+// the renderer's saved state never carries from one business to another.
+ipcMain.on('office:currentIdSync', (evt) => { try { evt.returnValue = openOfficeId(); } catch { evt.returnValue = null; } });
 /** Members that started with something missing: Michael's report cards. */
 ipcMain.handle('degraded:list', () => degradedShown());
 /** Got it on one: hidden until it changes or the member starts clean. */

@@ -522,6 +522,13 @@ Proves two logins side by side on this Mac. Any account works, even the same one
 - Not yet: the setupNoticePending notice (UI), Pulse's office column by id (E5), switching through closing time (E4), a login per office (E6).
 - Test: test/office-data.test.cjs (8 cases: unchanged before the move; the move keeps secrets and files and the old keys; another business never reads this one's password; a knowledge store placed elsewhere; a stopped move; a one business reset; the office tables; the reset wiring). factory-reset.test.cjs now also checks every business file named through officeDataPath is erased by a reset.
 
+## E3, part 3: the setup notice and screen state (2026-11-19)
+
+- **Finish setting up this business:** a one time card on Ask me, from the app, for a business whose identity came from its office.json in the move (`setupNoticePending`). It says its mailboxes, schedules and connections were another business's and did not come with it. Got it clears it; Open Settings clears it and opens Connections. It counts with the reports and keeps Ask me from showing all clear.
+- **Screen state per business:** the renderer's saved state (`cth.*`: cards, selection, queues, floor view) is stamped with the office id. The preload checks it before the page's code reads it: state from another business is cleared, whatever way the app switched (Settings, the missing office screen, the business menu still to come). State from before the move has no stamp and is the open office's, so it is stamped, not cleared. Before the move nothing is checked. A business's view does not come back when you return to it: its roster comes from its own folder, and a stale saved copy could override it.
+- Test: test/office-renderer-state.test.cjs (6 cases: same business kept, another cleared, unstamped kept, nothing before the move, the card cleared once read, the card wiring and its copy). It runs the real preload, and fails when the clear is removed.
+- **E3 is complete.** Still behind `DBM_OFFICE_SETTINGS=1`. Left for step one: E4 (switch through closing time, and the T2 guard removed), E5 (Pulse office column by id), E6 (a Claude login per office), E7 (the live switch test), the design tasks DT1 to DT5, and removing the switch.
+
 ## Completion summary
 
 ```
@@ -834,7 +841,7 @@ Lane A: T2 guard (independent, ships first). Lane B: office id → accessor → 
   - Surfaced by: R2 (D11), CEO Section 9
   - Files: src/main/officeSettings.ts, src/main/index.ts (launch)
   - Verify: node --test test/office-settings-migration.test.cjs
-- [ ] **E3 (P1, human: ~2 days / CC: ~1h)** — src/main, src/renderer — Move every business reader and writer to officeSettings; key secrets, knowledge, journals and dock keys by office id; scope factory reset
+- [x] **E3 (P1, human: ~2 days / CC: ~1h)** — src/main, src/renderer — Move every business reader and writer to officeSettings; key secrets, knowledge, journals and dock keys by office id; scope factory reset (done 2026-11-19 in three parts, see E3 below)
   - Surfaced by: Architecture 1 and 3, Code quality 3, D9
   - Files: src/main/index.ts, src/main/mail.ts, src/main/integrations.ts, src/main/knowledge.ts, src/main/factoryReset.ts, src/main/foundations.ts, renderer settings screens
   - Verify: node --test test/office-secrets.test.cjs test/factory-reset.test.cjs; full suite green

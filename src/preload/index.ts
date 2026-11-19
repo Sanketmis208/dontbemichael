@@ -12,6 +12,9 @@ import type { FoundationsView } from '../shared/foundations';
 import type { ResearchConfig } from '../shared/research';
 import type { DataClassId, DataClassSetting } from '../shared/dataClasses';
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
+
+/** Which office the renderer's saved state belongs to. */
+const OFFICE_STAMP_KEY = 'cth.officeId';
 import type { OfficeRecord } from '../shared/officeRecord';
 import type { MailboxRecord, AgentCapabilities, MailProvider, MailServer } from '../shared/mailboxes';
 import type { OpenAttachmentResult, OriginalResult } from '../shared/emailLink';
@@ -846,6 +849,8 @@ const api = {
   /** Company knowledge has no switch now: whether this owner, who had turned it off, is still to be told. */
   kgNotice: (): Promise<{ notice: boolean }> => ipcRenderer.invoke('kg:notice'),
   kgNoticeSeen: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('kg:noticeSeen'),
+  officeSetupNotice: (): Promise<{ notice: boolean }> => ipcRenderer.invoke('office:setupNotice'),
+  officeSetupNoticeSeen: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('office:setupNoticeSeen'),
   /** Members that started with something missing: Michael's report cards on Ask me. */
   degradedNotices: (): Promise<DegradedNotice[]> => ipcRenderer.invoke('degraded:list'),
   degradedDismiss: (agentId: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('degraded:dismiss', agentId),
@@ -1492,6 +1497,30 @@ const api = {
     notes?: string;
   }): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('update:simulate', opts)
 };
+
+// The renderer's saved state (localStorage `cth.*`: cards, selection, queues,
+// floor view) belongs to the business it was saved in. Before the page's own
+// code reads it, check it is the open business's, whatever way the app got
+// here (separate-businesses.md). State from before settings were per office
+// has no stamp and is the open office's own, so it is stamped, not cleared.
+keepRendererStateWithItsOffice();
+
+function keepRendererStateWithItsOffice(): void {
+  try {
+    const id: unknown = ipcRenderer.sendSync('office:currentIdSync');
+    if (typeof id !== 'string' || !id) return;
+    const was = window.localStorage.getItem(OFFICE_STAMP_KEY);
+    if (was && was !== id) {
+      const keys: string[] = [];
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const k = window.localStorage.key(i);
+        if (k && k.startsWith('cth.')) keys.push(k);
+      }
+      for (const k of keys) window.localStorage.removeItem(k);
+    }
+    if (was !== id) window.localStorage.setItem(OFFICE_STAMP_KEY, id);
+  } catch { /* no storage, or an older main: nothing to check */ }
+}
 
 contextBridge.exposeInMainWorld('cth', api);
 
