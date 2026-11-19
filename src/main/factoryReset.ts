@@ -153,7 +153,7 @@ function setAsideJournals(userData: string): string[] {
  *  hive and palace where they resolve, Research's and the checks' Claude Code
  *  conversations). Returns the paths it could not remove; a reset carries on
  *  past them rather than stopping half way. */
-export function eraseOfficeData(p: { home: string | null; userData: string; extra?: string[]; knowledgeRoot?: string | null }): string[] {
+export function eraseOfficeData(p: { home: string | null; userData: string; extra?: string[]; knowledgeRoot?: string | null; officeId?: string | null }): string[] {
   const home = p.home && isOfficeFolder(p.home) ? p.home : null;
   // Company knowledge the owner moved out of the app's data folder: its store's
   // own entries, and only when it really is one.
@@ -166,9 +166,13 @@ export function eraseOfficeData(p: { home: string | null; userData: string; extr
     ...(home ? PRIVATE_ENTRIES.map((n) => join(privateRoot(home), n)) : []),
     // Only the app's own office record, never an owner's file of that name.
     ...(home && readOfficeRecord(home) ? [officeRecordPath(home)] : []),
-    ...APP_DATA_ENTRIES.map((n) => join(p.userData, n)),
-    // A damaged connected app write journal the broker set aside (brokerWriteOnce.ts).
-    ...setAsideJournals(p.userData),
+    // Once each business keeps its own files (separate-businesses.md), only this
+    // office's place in the app's data folder goes, and the attachments the owner
+    // opened; the shared database, secrets file and other offices stay (their
+    // rows and keys are erased by office in the reset itself).
+    ...(p.officeId
+      ? [join(p.userData, 'offices', p.officeId), join(p.userData, 'opened-attachments')]
+      : [...APP_DATA_ENTRIES.map((n) => join(p.userData, n)), ...setAsideJournals(p.userData)]),
     ...(p.extra ?? []).filter(Boolean)
   ];
   const failed: string[] = [];

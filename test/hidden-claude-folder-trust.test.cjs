@@ -69,7 +69,7 @@ test('job and memory checks run isolated in the app\'s own folder, never the off
   assert.doesNotMatch(main, /cwd: cfg\.harnessHome \?\? app\.getPath\('home'\)/, 'no check runs in the office folder');
   assert.equal((main.match(/cwd: jobCheckDir\(\),/g) ?? []).length, 4, 'hire overlap, job change, work style, focus');
   assert.match(main, /\(\) => ownerNotes,\s*\/\/[^\n]*\n\s*\(\) => jobCheckDir\(\)\s*\);/, 'memory tidy');
-  assert.match(main, /function jobCheckDir\(\): string \{\s*const dir = join\(app\.getPath\('userData'\), JOB_CHECK_DIR\);\s*try \{ mkdirSync\(dir, \{ recursive: true \}\); \}/);
+  assert.match(main, /function jobCheckDir\(\): string \{\s*const dir = officeDataPath\(JOB_CHECK_DIR\);\s*try \{ mkdirSync\(dir, \{ recursive: true \}\); \}/);
   assert.match(read('src/main/memoryTidy.ts'), /cwd: this\.checkDir\(\) \?\? home,/);
   const calls = [
     ['hire overlap', read('src/main/hireCheck.ts'), 'export async function checkDistinct'],

@@ -511,6 +511,17 @@ Proves two logins side by side on this Mac. Any account works, even the same one
 - Not yet: secrets, knowledge, journals, dock keys, pasted images, attachments and check folders by office id; a factory reset that erases only the open business (today's `resetConfig()` still erases every entry, as it erases everything today); the setupNoticePending notice. These are E3's next parts.
 - Test: test/office-config-routing.test.cjs (9 cases: unchanged before the move; reads and saves after it, clearing a field, the token cap; another office; a save that also opens a folder, and setup adopting its id; a Settings move and the backup left behind; a Finder move; what a save announces; a retired schedule in an office; the launch switch). It fails when reads ignore the office. Full suite 4048 pass, 0 fail.
 
+## E3, part 2: secrets, files and the factory reset by office (2026-11-19)
+
+- **Secrets:** the secret store (integrations.ts) keeps each business's passwords and keys under `@<office id>/<ref>` once settings are per office, inside the same get, set, has and delete functions every caller uses. Two businesses with a mailbox or integration of the same id keep two passwords, and one never reads the other's. The move copies every saved secret (still encrypted) to each office of this business; the keys from before the move stay in the file for a downgrade and are never read after it.
+- **Files:** `officeDataPath(name)` (config.ts) gives `userData/offices/<id>/<name>` for the open office after the move (`userData/<name>` before; `offices/none` with no office open). Used for the mail send and broker write journals, mail approvals, dock keys, pasted images, the check folders and the default knowledge store. The move renames the existing journals, approvals, dock keys, pasted images and knowledge into the open office's place (a knowledge store the owner placed elsewhere stays). Opened attachments stay shared: they are cleared at every quit, and a switch quits.
+- **The launch move now runs as the main process starts**, right after the data folder is set, so the journals and approvals open in the office's place. Still behind `DBM_OFFICE_SETTINGS=1`.
+- **The open office is always this business** in the move: the settings at the top are the ones it runs on. (Fixed from E2, where an office whose team had drifted could have received only its identity.)
+- **Factory reset, after the move, erases only the open business:** its place in the app's data folder, its secrets (`deleteOfficeSecrets`), its rows in every table with an office column (`persist.eraseOffice`, OFFICE_TABLES), its office folder entries as before, and its settings entry (`forgetOffice`). The shared database, secrets file, install settings and every other business stay. Before the move it erases everything, as today.
+- **Downgrade:** the frozen config copy, plus the knowledge store and journals, which now sit under `offices/<id>/`; a downgrade needs them moved back to the data folder.
+- Not yet: the setupNoticePending notice (UI), Pulse's office column by id (E5), switching through closing time (E4), a login per office (E6).
+- Test: test/office-data.test.cjs (8 cases: unchanged before the move; the move keeps secrets and files and the old keys; another business never reads this one's password; a knowledge store placed elsewhere; a stopped move; a one business reset; the office tables; the reset wiring). factory-reset.test.cjs now also checks every business file named through officeDataPath is erased by a reset.
+
 ## Completion summary
 
 ```

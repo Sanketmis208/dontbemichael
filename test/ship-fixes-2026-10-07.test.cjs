@@ -214,7 +214,7 @@ test('the owner\'s messages stay out of git; dock keys live in their own cached 
   const { home } = await office(t);
   assert.ok(fs.readFileSync(path.join(home, 'hive', '.gitignore'), 'utf8').split('\n').includes('agents/human/'));
   const main = read('src/main/index.ts');
-  assert.match(main, /const ownerDockKeysPath = \(\): string => join\(app\.getPath\('userData'\), 'owner-dock-keys\.json'\);/);
+  assert.match(main, /const ownerDockKeysPath = \(\): string => officeDataPath\('owner-dock-keys\.json'\);/);
   assert.match(main, /writeConfig\(\{ ownerDockKeys: undefined \}\);/, 'carried over once from settings');
   assert.match(main, /hive\.setOwnerMessageCheck\(isOwnerDockMessage\);/);
   assert.doesNotMatch(main, /readConfig\(\)\.ownerDockKeys \?\? \[\]/);
@@ -306,7 +306,7 @@ test('pass 2 fixes: owner text out of the log, the owner folder is never routed,
   assert.equal(ctx.out.sends.length, 1);
 
   const main = read('src/main/index.ts');
-  assert.match(main, /cwd: \(\) => \{\n    const dir = join\(app\.getPath\('userData'\), STANDING_CHECK_DIR\);/);
+  assert.match(main, /cwd: \(\) => \{\n    const dir = officeDataPath\(STANDING_CHECK_DIR\);/);
   assert.match(main, /if \(saveOwnerDockKeys\(list\)\) writeConfig\(\{ ownerDockKeys: undefined \}\);/);
   assert.match(main, /mailApprovals\.waiting\(\)\.filter\(\(p\) => memberPresent\(p\.agentId\)\)/);
   assert.match(read('src/main/standingCheck.ts'), /settingSources: 'user'/);

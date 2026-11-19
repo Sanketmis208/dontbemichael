@@ -12,7 +12,7 @@
 import { app } from 'electron';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { readConfig } from './config';
+import { officeDataPath, readConfig } from './config';
 import { extractDocumentText, type DocExtraction } from './docText';
 import { extractDocumentTextApart } from './docTextProcess';
 
@@ -69,7 +69,8 @@ export class KnowledgeManager {
   root(): string {
     const override = readConfig().knowledgeGraph?.rootPath;
     if (override && override.trim()) return override;
-    return join(app.getPath('userData'), 'knowledge');
+    // The open business's own store (config.ts officeDataPath).
+    return officeDataPath('knowledge');
   }
 
   /** Absolute path to the agent CLI (dev: repo resources/; packaged: resourcesPath). */

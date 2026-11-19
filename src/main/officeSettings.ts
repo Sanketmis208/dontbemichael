@@ -15,11 +15,13 @@
  *         ├─ home                         the entry whose home is the open folder
  *         └─ settings (BUSINESS_KEYS)   officeSettings() / updateOfficeSettings()
  *
- * Nothing reads through here yet: the launch migration (E2) fills `offices`,
- * and the readers move over in E3, when readConfig() stops returning business
- * fields.
+ * Every reader goes through readConfig()/writeConfig() in config.ts, which
+ * route business fields to the open office once `officesMigrated` is set; the
+ * launch move (migrateToOfficeSettings) sets it. The key lists and pure
+ * helpers live in officeKeys.ts.
  */
-import { configDefaults, keepConfigCopy, readStoredConfig, replaceConfig, writeConfig, type HarnessConfig } from './config';
+import { BUSINESS_DATA_FILES, configDefaults, keepConfigCopy, moveIntoOffice, readStoredConfig, replaceConfig, writeConfig, type HarnessConfig } from './config';
+import { copySecretsToOffices } from './integrations';
 import { describesBusiness, type OfficeRecord } from '../shared/officeRecord';
 import {
   BUSINESS_KEYS, businessKeySet, installKeySet, officeIdIn, officesWith, pick, samePath, settingsIn,
@@ -141,6 +143,8 @@ export function installConfig(): InstallConfig {
 //     │                                                          setupNoticePending
 //     │       nothing to tell ──────────────────────────────── nothing: setup runs
 //     ├─ 3. read back; anything missing ───────────────────► 'failed' (top level kept)
+//     ├─ 3b. saved secrets copied for each office of this business; the journals,
+//     │      approvals, dock keys, pasted images and knowledge moved to the open one
 //     └─ 4. one write: business fields removed from the top level, officesMigrated 1
 //
 // A crash anywhere before 4 leaves the top level as it was, and the next
@@ -221,7 +225,9 @@ export function migrateToOfficeSettings(log: (line: string) => void = (l) => con
       if (isOpen) { log(`[offices] migration: no id for the open office, kept as it was`); return 'failed'; }
       continue;
     }
-    const isThisBusiness = cfg.onboardingComplete ? officeSwitchGuard(cfg, home) === 'ok' : isOpen;
+    // The settings at the top are the ones the open office runs on, so it is
+    // always this business; another office is when the T2 guard would open it.
+    const isThisBusiness = isOpen || (!!cfg.onboardingComplete && officeSwitchGuard(cfg, home) === 'ok');
     const rec = readOfficeRecord(home);
     known.push({ home, id, isThisBusiness, record: describesBusiness(rec) ? rec : null });
   }
@@ -239,6 +245,15 @@ export function migrateToOfficeSettings(log: (line: string) => void = (l) => con
 
   const saved = readStoredConfig();
   if (known.some((o) => !saved.offices?.[o.id])) { log('[offices] migration: settings did not read back, kept as it was'); return 'failed'; }
+
+  // Saved passwords and keys: a copy for each office of this business. Files:
+  // the journals, approvals, dock keys, pasted images and knowledge go to the
+  // open office (a store the owner placed elsewhere stays where it is).
+  const businessIds = known.filter((o) => settingsForMigration(cfg, o).outcome === 'business').map((o) => o.id);
+  if (!copySecretsToOffices(businessIds)) { log('[offices] migration: could not copy the saved secrets, kept as it was'); return 'failed'; }
+  const openId = known.find((o) => samePath(o.home, open))?.id;
+  const files = BUSINESS_DATA_FILES.filter((f) => f !== 'knowledge' || !cfg.knowledgeGraph?.rootPath?.trim());
+  if (openId && !moveIntoOffice(openId, files)) { log('[offices] migration: could not move the business files, kept as it was'); return 'failed'; }
 
   const next: Record<string, unknown> = { ...saved };
   for (const k of BUSINESS_KEYS) delete next[k];

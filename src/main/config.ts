@@ -541,10 +541,61 @@ function businessPart(cfg: HarnessConfig): Partial<OfficeSettings> {
   return pick(cfg, businessKeySet) as Partial<OfficeSettings>;
 }
 
+/** The open office's id once settings are per office; null before the move,
+ *  or when no office is open. */
+export function openOfficeId(stored: HarnessConfig = readStoredConfig()): string | null {
+  if (!stored.officesMigrated) return null;
+  return officeIdIn(stored, readOfficeId(stored.harnessHome));
+}
+
+/**
+ * Where the app keeps one of its own files or folders that belong to a
+ * business (journals, dock keys, pasted images, check folders, knowledge):
+ * `userData/offices/<id>/<name>` for the open office once settings are per
+ * office, else `userData/<name>` as before. After the move with no office open
+ * (the missing office screen), `userData/offices/none/<name>`: never another
+ * business's, and nothing runs there.
+ */
+export function officeDataPath(name: string): string {
+  const stored = readStoredConfig();
+  const userData = app.getPath('userData');
+  if (!stored.officesMigrated) return join(userData, name);
+  return join(userData, 'offices', openOfficeId(stored) ?? 'none', name);
+}
+
+/** A business's own files in the app's data folder from before the move. */
+export const BUSINESS_DATA_FILES = [
+  'mail-send-journal.json', 'broker-write-journal.json', 'mail-proposals.json', 'owner-dock-keys.json', 'pastes', 'knowledge'
+] as const;
+
+/**
+ * At the move: put these files and folders of the app's data folder into the
+ * office's own place (officeDataPath), so the business keeps its journals,
+ * approvals, pasted images and knowledge. One already there is kept (a move
+ * that stopped midway and runs again). False when one could not be moved.
+ */
+export function moveIntoOffice(id: string, names: readonly string[]): boolean {
+  const userData = app.getPath('userData');
+  let ok = true;
+  for (const name of names) {
+    const from = join(userData, name);
+    const to = join(userData, 'offices', id, name);
+    try {
+      if (!existsSync(from) || existsSync(to)) continue;
+      mkdirSync(dirname(to), { recursive: true });
+      renameSync(from, to);
+    } catch (e) {
+      console.error(`[config] could not move ${name} into the office:`, e);
+      ok = false;
+    }
+  }
+  return ok;
+}
+
 function configView(stored: HarnessConfig): HarnessConfig {
   const { offices: _offices, ...rest } = stored;
   if (!stored.officesMigrated) return rest as HarnessConfig;
-  const id = officeIdIn(stored, readOfficeId(stored.harnessHome));
+  const id = openOfficeId(stored);
   const install = pick(rest, installKeySet);
   return dropRetiredMissions({ ...install, ...settingsIn(stored, id, businessPart(DEFAULTS)) } as HarnessConfig);
 }
@@ -773,6 +824,17 @@ export function setAgentTokenCap(agentId: unknown, tokenCap: unknown): HarnessCo
 
 /** Wipe the persisted config back to first-run defaults so the app boots into
  *  onboarding again. Used by the "reset & start over" flow. */
+/** A factory reset of the open business once settings are per office: its
+ *  entry goes, the install settings and every other business stay. Before the
+ *  move (no id) it is resetConfig(). */
+export function forgetOffice(id: string | null): HarnessConfig {
+  const stored = readStoredConfig();
+  if (!id || !stored.officesMigrated) return resetConfig();
+  const offices = { ...(stored.offices ?? {}) };
+  delete offices[id];
+  return configView(persistConfig({ ...stored, offices }));
+}
+
 export function resetConfig(): HarnessConfig {
   // Saved like any other change, so a reset announces itself too.
   persistConfig({ ...DEFAULTS });

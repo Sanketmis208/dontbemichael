@@ -371,7 +371,7 @@ test('a pending row and a finished answer age out on their own clocks, and a dam
 
 test('the app keeps the journal beside the mail journal and does not open a card', () => {
   const index = read('src/main/index.ts');
-  assert.match(index, /journalPath: join\(app\.getPath\('userData'\), 'broker-write-journal\.json'\)/);
+  assert.match(index, /journalPath: officeDataPath\('broker-write-journal\.json'\)/);
   const src = read('src/main/integrationBroker.ts') + read('src/main/brokerWriteOnce.ts');
   assert.doesNotMatch(src, /addTask|patchTask|humanQA/);
   for (const message of [WRITE_UNCERTAIN]) {

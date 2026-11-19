@@ -200,6 +200,12 @@ const MIGRATIONS: Array<(db: Database.Database) => void> = [
   }
 ];
 
+/** The tables whose rows belong to one office (the `office` column). */
+export const OFFICE_TABLES = [
+  'telemetry_events', 'telemetry_runs', 'telemetry_daily', 'telemetry_failures', 'telemetry_dismissed',
+  'telemetry_applied', 'telemetry_safety', 'cost_ledger', 'owner_notes'
+] as const;
+
 export class PersistStore {
   private db: Database.Database | null = null;
 
@@ -245,6 +251,24 @@ export class PersistStore {
   /** The open handle for main-process stores built on this database (Pulse
    *  telemetry), or null when it is closed or failed to open. */
   database(): Database.Database | null { return this.db; }
+
+  /** Every row one office wrote (Pulse, the cost ledger, owner notes), in one
+   *  transaction: a factory reset of one business leaves the others' history.
+   *  True when they are gone (or the store is closed and there is nothing to
+   *  do here). */
+  eraseOffice(office: string): boolean {
+    const db = this.db;
+    if (!db) return false;
+    try {
+      db.transaction(() => {
+        for (const t of OFFICE_TABLES) db.prepare(`DELETE FROM ${t} WHERE office = ?`).run(office);
+      })();
+      return true;
+    } catch (e) {
+      console.error('[db] could not erase the office rows:', e);
+      return false;
+    }
+  }
 
   // ─── kv (scalar app state) ─────────────────────────────────────────────────
 

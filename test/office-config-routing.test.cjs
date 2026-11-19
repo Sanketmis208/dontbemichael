@@ -189,9 +189,13 @@ test('until step one is complete, launch moves settings only when asked (DBM_OFF
   // A dev run shares config.json with the installed app, which cannot read
   // moved settings: the move must never happen on its own yet.
   const main = fs.readFileSync(path.join(__dirname, '..', 'src', 'main', 'index.ts'), 'utf8');
-  const ready = main.slice(main.indexOf('app.whenReady().then('));
-  const gate = ready.indexOf("process.env.DBM_OFFICE_SETTINGS === '1' || readStoredConfig().officesMigrated");
-  const move = ready.indexOf('migrateToOfficeSettings()');
+  const gate = main.indexOf("process.env.DBM_OFFICE_SETTINGS === '1' || readStoredConfig().officesMigrated");
+  const move = main.indexOf('migrateToOfficeSettings()');
   assert.ok(gate > 0 && move > gate, 'the move sits behind the switch');
-  assert.ok(move < ready.indexOf('bootstrapHiveServices()'), 'and runs before the services start');
+  assert.ok(gate > main.indexOf("app.setPath('userData'"), 'after the data folder is set');
+  // Before anything opens a business's journal or file, so they open in the
+  // office's own place, and before any service starts.
+  for (const first of ['new MailService(', 'new MailApprovals(', 'app.whenReady().then(']) {
+    assert.ok(move < main.indexOf(first), `before ${first}`);
+  }
 });

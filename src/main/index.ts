@@ -41,7 +41,7 @@ import { decodeCaseLogo, drawCaseSvg } from './caseLogoImage';
 import { RESEARCH_DESK_DIR, RESEARCH_ID, RESEARCH_NAME, RESEARCH_WORK_STYLE } from '../shared/research';
 import { initAutoUpdater, abortPendingRestart } from './updater';
 import {
-  readConfig, readStoredConfig, damagedConfigCopy, writeConfig, setAgentTokenCap, resetConfig, onConfigWritten, ensureHarnessHome, ensureClaudePermissionsAccepted, approveClaudeApiKey,
+  readConfig, readStoredConfig, officeDataPath, openOfficeId, forgetOffice, damagedConfigCopy, writeConfig, setAgentTokenCap, resetConfig, onConfigWritten, ensureHarnessHome, ensureClaudePermissionsAccepted, approveClaudeApiKey,
   modelForRole, OPS_STANDUP_MISSION, OPS_STANDUP_BUILT_IN_BODIES, OPS_STANDUP_FOCUS, OPS_STANDUP_BUILT_IN_FOCUSES, HEARTBEAT_MISSION, heartbeatMessage, FOUNDATIONS_CHECK_MISSION, FOUNDATIONS_CHECK_BUILT_IN_FOCUSES, FOUNDATIONS_CHECK_FOCUS, type HarnessConfig, type ScheduledMission
 } from './config';
 import { terminalLaunches } from './terminalAtFolder';
@@ -135,7 +135,7 @@ import { INTEGRATIONS_MCP_SERVER, connectorCarryOver, emailCalendarAllowed, isEm
 import { quickbooksAccessToSave } from '../shared/quickbooks';
 import { agentIntegrations, fillSavedCall, hasIntegrationTools, integrationLevel, validateBaseUrl, buildAuthHeaders, resolveUpstreamUrl, secretRefFor, withIntegrationLevel, withoutIntegration, INTEGRATION_TEMPLATES } from '../shared/integrations';
 import { RosterStore } from './roster';
-import { PASTE_KEEP_MS, pastesDir, savePaste, sweepOldPastes } from './pastes';
+import { PASTE_KEEP_MS, savePaste, sweepOldPastes } from './pastes';
 import { CASE_STUDY_DIR, CHECK_FOLDERS, JOB_CHECK_DIR, RUN_COMPARE_DIR, STANDING_CHECK_DIR, TRUST_CHECK_DIR, eraseOfficeData } from './factoryReset';
 import { autoMemoryFolders, eraseMemoryTargets, foldersFromRoster, gitTopOf, idsFromCostRows, idsFromRecord, memberIdsIn, memoryResetTargets } from './memoryReset';
 import { groupMembers, hardKillTree, isAlive, KILL_GRACE_MS, snapshotRemains } from './procKill';
@@ -203,6 +203,21 @@ const isDev = !!process.env.ELECTRON_RENDERER_URL;
 // without the pin would open on an empty folder, as if freshly installed.
 app.setPath('userData', join(app.getPath('appData'), APP_DATA_DIR));
 app.setName(APP_NAME);
+
+// Each business keeps its own settings and files (docs/designs/separate-businesses.md):
+// what sat at the top of config.json, and the business's files in the app's
+// data folder, move into the open office's own place once. Here, before
+// anything below opens a journal or reads a setting, and before any service
+// starts. Only with DBM_OFFICE_SETTINGS=1 until step one is complete: the move
+// is one way, and a dev run shares config.json with the installed app, which
+// cannot read moved settings. A config already moved keeps working without it.
+if (process.env.DBM_OFFICE_SETTINGS === '1' || readStoredConfig().officesMigrated) {
+  try {
+    const moved = migrateToOfficeSettings();
+    if (moved === 'failed') console.error('[offices] settings were not moved this launch; the app runs on them as they are');
+    adoptOpenOffice();
+  } catch (e) { console.error('[offices] launch move:', e); }
+}
 
 // Automatic failure reports: notices what used to fail silently and keeps it
 // in userData/failures.jsonl, the queue failureSender files from. Created
@@ -1085,7 +1100,7 @@ const mailService = new MailService({
   getConfig: () => readConfig(),
   getPassword: (id) => integrations.getSecret(secretRefForMailbox(id)),
   markStatus: (id, status, reason) => markMailboxStatus(id, status, reason),
-  journalPath: join(app.getPath('userData'), 'mail-send-journal.json')
+  journalPath: officeDataPath('mail-send-journal.json')
 });
 
 /** MB-7: a mailbox that stops accepting its password is marked "needs you" in
@@ -1196,7 +1211,7 @@ const outgoingFiles = new OutgoingFiles({
 });
 
 const mailApprovals = new MailApprovals({
-  path: join(app.getPath('userData'), 'mail-proposals.json'),
+  path: officeDataPath('mail-proposals.json'),
   send: (msg) => { if (!hive.enabled()) return false; hive.send(msg, 'mail'); return true; },
   remember: (agentId, line, why) => { hive.rememberOwnerNote(agentId, line, why); },
   // Only Michael notifies the owner (docs/designs/michael-only-notifications.md).
@@ -1219,7 +1234,7 @@ const mailApprovals = new MailApprovals({
  *  "trust this folder?" defaults to "No, exit"). A folder that cannot be made
  *  fails the check itself, which falls back as before. */
 function jobCheckDir(): string {
-  const dir = join(app.getPath('userData'), JOB_CHECK_DIR);
+  const dir = officeDataPath(JOB_CHECK_DIR);
   try { mkdirSync(dir, { recursive: true }); } catch { /* the check fails and falls back */ }
   return dir;
 }
@@ -1229,7 +1244,7 @@ const standingFit = standingFitCheck({
   // An empty folder only the app writes, never the office folder agents work
   // in, so no CLAUDE.md or project settings an agent left can sway the check.
   cwd: () => {
-    const dir = join(app.getPath('userData'), STANDING_CHECK_DIR);
+    const dir = officeDataPath(STANDING_CHECK_DIR);
     mkdirSync(dir, { recursive: true });
     // Trusted up front, as agent folders are at spawn, so the check never
     // stops on Claude Code's "trust this folder" question.
@@ -1249,7 +1264,7 @@ const standingFit = standingFitCheck({
  *  folder, command and engine (D3, D10). */
 const fileFit = fileFitCheck({
   cwd: () => {
-    const dir = join(app.getPath('userData'), STANDING_CHECK_DIR);
+    const dir = officeDataPath(STANDING_CHECK_DIR);
     mkdirSync(dir, { recursive: true });
     try { ensureClaudePermissionsAccepted(dir); } catch { /* the check fails closed */ }
     return dir;
@@ -1277,7 +1292,7 @@ function sweepOldCheckTranscripts(): void {
   oldCheckTranscriptsSwept = true;
   const cutoff = Date.now() - 60 * 60_000;
   for (const folder of CHECK_FOLDERS) {
-    const dir = projectDir(join(app.getPath('userData'), folder));
+    const dir = projectDir(officeDataPath(folder));
     let names: string[] = [];
     try { names = readdirSync(dir); } catch { continue; }
     for (const n of names) {
@@ -1289,7 +1304,7 @@ function sweepOldCheckTranscripts(): void {
 const trustLayer = makeTrustLayer({
   run: async (prompt) => {
     sweepOldCheckTranscripts();
-    const dir = join(app.getPath('userData'), TRUST_CHECK_DIR);
+    const dir = officeDataPath(TRUST_CHECK_DIR);
     mkdirSync(dir, { recursive: true });
     try { ensureClaudePermissionsAccepted(dir); } catch { /* the check fails closed */ }
     // Always Claude, whatever engine the office runs on: the check uses
@@ -1369,7 +1384,7 @@ const integrationBroker = new IntegrationBroker({
   getRecord: integrations.getRecord,
   getSecret: integrations.getSecret,
   // Same folder as the mail send journal, never the hive agents can read.
-  journalPath: join(app.getPath('userData'), 'broker-write-journal.json'),
+  journalPath: officeDataPath('broker-write-journal.json'),
   integrationLevel: (agentId, id) => integrationLevel(readConfig(), agentId, id),
   agentIntegrations: (agentId) => agentIntegrations(readConfig(), agentId, integrations.listRecordsRedacted()),
   // Quoted and capped: the lines come from outside. Michael decides, the member carries on.
@@ -5030,7 +5045,7 @@ const dockKey = (m: { id: string; created_at: string; body?: string }): string =
  * minute, so a list that grows with every question doesn't belong in it
  * (ship D5). The first build kept them in config.json; they are carried over once.
  */
-const ownerDockKeysPath = (): string => join(app.getPath('userData'), 'owner-dock-keys.json');
+const ownerDockKeysPath = (): string => officeDataPath('owner-dock-keys.json');
 let ownerDockKeysCache: Set<string> | null = null;
 function saveOwnerDockKeys(list: string[]): boolean {
   const path = ownerDockKeysPath();
@@ -5647,7 +5662,7 @@ ipcMain.handle('clipboard:saveImage', async () => {
   try {
     const img = clipboard.readImage();
     if (img.isEmpty()) return { ok: false as const, error: 'no image in clipboard' };
-    return { ok: true as const, file: savePaste(pastesDir(app.getPath('userData')), img.toPNG()) };
+    return { ok: true as const, file: savePaste(officeDataPath('pastes'), img.toPNG()) };
   } catch (e) {
     return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
   }
@@ -5755,8 +5770,11 @@ function stopForReset(tag: string, opts: { keepPersist?: boolean } = {}): void {
 // ─── IPC: full reset (wipe data + config, relaunch into onboarding) ──────────
 ipcMain.handle('app:resetAll', () => {
   allowQuit = true;
+  // Once each business keeps its own settings, the reset is this business's
+  // only: the store stays open long enough to erase its rows.
+  const resetOfficeId = openOfficeId();
   // Tear everything down first so nothing writes back into the dirs we wipe.
-  stopForReset('reset');
+  stopForReset('reset', { keepPersist: !!resetOfficeId });
   try { hive.removeExposedCodexData(); } catch (e) { console.error('[reset] removeExposedCodexData:', e); }
   // The roster is the renderer's half of the same state, so it retires with the
   // hive — archived into roster-backups/ rather than deleted, and cleared as the
@@ -5781,15 +5799,23 @@ ipcMain.handle('app:resetAll', () => {
     // desk are in its own entries, removed only when it really is an office.
     extra: [
       ...(researchDesk() ? projectDirs(researchDesk()!) : []),
-      ...CHECK_FOLDERS.flatMap((f) => projectDirs(join(userData, f)))
+      ...CHECK_FOLDERS.flatMap((f) => projectDirs(officeDataPath(f)))
     ],
     // Company knowledge the owner moved out of the app's data folder.
-    knowledgeRoot: resolve(kgRoot) !== resolve(join(userData, 'knowledge')) ? kgRoot : null
+    knowledgeRoot: resolve(kgRoot) !== resolve(officeDataPath('knowledge')) ? kgRoot : null,
+    officeId: resetOfficeId
   });
+  if (resetOfficeId) {
+    if (!integrations.deleteOfficeSecrets(resetOfficeId)) failed.push('saved passwords and keys');
+    const office = pulseOffice();
+    if (office && !persist.eraseOffice(office)) failed.push('Pulse history');
+    persist.close();
+  }
   if (failed.length) console.error('[reset] could not remove:', failed);
-  // Back to first-run defaults, then relaunch clean so all in-memory services
-  // re-bootstrap from scratch and the renderer lands on onboarding.
-  resetConfig();
+  // Back to first-run defaults (this business's, once each keeps its own), then
+  // relaunch clean so all in-memory services re-bootstrap from scratch and the
+  // renderer lands on onboarding.
+  forgetOffice(resetOfficeId);
   restartApp(app);
 });
 
@@ -6058,7 +6084,7 @@ const runCompare = new RunCompare({
     const cfg = readConfig();
     // An empty folder only the app writes, never the office folder: no
     // CLAUDE.md a member left there can steer the suggestion (as standingFit).
-    const cwd = join(app.getPath('userData'), RUN_COMPARE_DIR);
+    const cwd = officeDataPath(RUN_COMPARE_DIR);
     try { mkdirSync(cwd, { recursive: true }); ensureClaudePermissionsAccepted(cwd); } catch { /* the call fails and the owner can try again */ }
     return runHiddenModel(prompt, {
       engine: cfg.godProvider ?? 'claude',
@@ -6142,7 +6168,7 @@ const caseStudy = new CaseStudyService({
   runModel: (prompt) => {
     const cfg = readConfig();
     // An empty folder only the app writes, as the run comparison's.
-    const cwd = join(app.getPath('userData'), CASE_STUDY_DIR);
+    const cwd = officeDataPath(CASE_STUDY_DIR);
     try { mkdirSync(cwd, { recursive: true }); ensureClaudePermissionsAccepted(cwd); } catch { /* the call fails and the owner can retry */ }
     return runHiddenModel(prompt, {
       engine: cfg.godProvider ?? 'claude', engineModel: cfg.godModel, model: RUN_COMPARE_MODEL, cwd,
@@ -6575,7 +6601,7 @@ function bootstrapHiveServices(): void {
   hive.ensureHive();
   try { sweepOrphanAgentMcp(); } catch (e) { console.error('[mail] orphan agent-mcp sweep failed', e); }
   // A screenshot a queued message still points at stays, however long it waits.
-  sweepOldPastes(pastesDir(app.getPath('userData')), PASTE_KEEP_MS, Date.now(), JSON.stringify(roster.read()?.queues ?? {}));
+  sweepOldPastes(officeDataPath('pastes'), PASTE_KEEP_MS, Date.now(), JSON.stringify(roster.read()?.queues ?? {}));
   // Read the Claude account's connectors in the background (D11).
   void refreshClaudeConnectors('start');
   // Waiting schedule requests reach Michael, and ones he leaves undecided
@@ -6975,19 +7001,6 @@ app.whenReady().then(() => {
   // but only when the office is really there. If the owner moved or deleted the
   // folder, bootstrapping would quietly rebuild an EMPTY office at the old path;
   // instead nothing touches it and the renderer asks where it went (homeFolder.ts).
-  // Each business keeps its own settings (docs/designs/separate-businesses.md):
-  // the settings that sat at the top of config.json move into the open office's
-  // entry once, before any service reads them, and the open office gets its id.
-  // Only with DBM_OFFICE_SETTINGS=1 until step one is complete: the move is one
-  // way, and a dev run shares config.json with the installed app, which cannot
-  // read moved settings. A config already moved keeps working without it.
-  if (process.env.DBM_OFFICE_SETTINGS === '1' || readStoredConfig().officesMigrated) {
-    try {
-      const moved = migrateToOfficeSettings();
-      if (moved === 'failed') console.error('[offices] settings were not moved this launch; the app runs on them as they are');
-      adoptOpenOffice();
-    } catch (e) { console.error('[offices] launch move:', e); }
-  }
   const homeReady = homeReadyAtLaunch(readConfig());
   if (homeReady) {
     bootstrapHiveServices();
