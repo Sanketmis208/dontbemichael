@@ -63,6 +63,10 @@ export interface ClosingTimeEvent {
   godLive: boolean;
   /** The app reopens itself after closing (a Claude Code update, cliUpdate.ts). */
   relaunch: boolean;
+  /** Closing to open another business (docs/designs/separate-businesses.md,
+   *  D10, D20): the names the bar shows, "Closing <from> to open <to>". `to`
+   *  is null for a business with no name yet. Absent on a plain closing. */
+  switching?: { from: string; to: string | null };
 }
 
 export type ClosingTimeActionResult = { ok: true } | { ok: false; error: string };
@@ -91,6 +95,7 @@ export class ClosingTimeController {
   private active = false;
   private godId = 'god';
   private relaunch = false;
+  private switching: { from: string; to: string | null } | null = null;
   private workers = new Set<string>();
   private acked = new Set<string>();
   private excused = new Set<string>();
@@ -138,10 +143,13 @@ export class ClosingTimeController {
 
   /** Kick off the protocol. Returns an error string when the floor cannot run
    *  it (no live god agent) so the UI can fall back to the hard quit. */
-  start(opts: { relaunch?: boolean } = {}): { ok: boolean; error?: string } {
+  start(opts: { relaunch?: boolean; switching?: { from: string; to: string | null } } = {}): { ok: boolean; error?: string } {
     if (this.active) {
       // Already closing down after COMPLETE: nothing to restart.
       if (this.concluded) return { ok: false, error: 'Closing time has finished; the app is closing.' };
+      // A switch asked for while the office is already closing: the closing
+      // carries on, now to open that business.
+      if (opts.switching) this.switching = opts.switching;
       // Re-pressed while running (e.g. from the timeout view): keep waiting,
       // unless Michael is gone, when waiting can never end.
       if (!this.getLiveAgentIds().includes(this.godId)) {
@@ -181,6 +189,7 @@ export class ClosingTimeController {
     this.owedWaitNote = new Set();
     this.active = true;
     this.relaunch = opts.relaunch === true;
+    this.switching = opts.switching ?? null;
 
     const names = [...this.workers]
       .map((id) => `${reg.agents[id]?.name ?? id} (${id})`)
@@ -223,9 +232,24 @@ export class ClosingTimeController {
     return { ok: true };
   }
 
+  /**
+   * The owner chose Switch now: stop waiting, quietly. The office is about to
+   * stop and open another business, so nobody is told to go back to work
+   * (a cancel would), and no event goes to the bar, which stays up until the
+   * app relaunches. Steers no hook boundary has read yet are dropped.
+   */
+  stopForSwitch(): void {
+    if (!this.active) return;
+    this.cleanup();
+    this.concluded = true;
+    this.control?.clearSteers(this.godId);
+    for (const id of this.workers) this.control?.clearSteers(id);
+  }
+
   /** Human changed their mind — stand the floor back up. */
   cancel(): void {
     if (!this.active) return;
+    this.switching = null;
     this.cleanup();
     this.excused = new Set();
     this.lastRemind = new Map();
@@ -554,7 +578,8 @@ export class ClosingTimeController {
       notReporting,
       godId: this.godId,
       godLive: this.getLiveAgentIds().includes(this.godId),
-      relaunch: this.relaunch
+      relaunch: this.relaunch,
+      ...(this.switching ? { switching: this.switching } : {})
     };
     try { this.getWebContents()?.send('app:closingTime', ev); } catch { /* window tore down */ }
   }

@@ -124,6 +124,21 @@ export function officesAfterMove(oldHome: string, newHome: string): Record<strin
   return { ...cfg.offices, [id]: { ...cfg.offices[id], home: newHome } };
 }
 
+/**
+ * The name of the business whose office is in `home`, for the closing bar of a
+ * switch: its own settings once they are per office, else its office.json.
+ * Null for a folder with no office yet (a new business) or a business with no
+ * name.
+ */
+export function businessNameAt(home: string | null | undefined): string | null {
+  if (!home || !homeFolderStatus(home).hasOffice) return null;
+  const cfg = readStoredConfig();
+  const id = officeIdIn({ harnessHome: home, offices: cfg.offices }, readOfficeId(home));
+  const fromSettings = id ? cfg.offices?.[id]?.settings?.businessName : undefined;
+  const name = (typeof fromSettings === 'string' && fromSettings.trim()) || readOfficeRecord(home)?.businessName;
+  return name ? name : null;
+}
+
 /** How the app behaves, without any business's settings. */
 export function installConfig(): InstallConfig {
   return pick(readStoredConfig(), installKeySet) as InstallConfig;

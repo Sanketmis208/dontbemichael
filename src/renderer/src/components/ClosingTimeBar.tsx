@@ -26,6 +26,10 @@ export interface ClosingTimeState {
   godLive?: boolean;
   /** The app reopens itself once closed (a Claude Code update). */
   relaunch?: boolean;
+  /** Closing to open another business (separate-businesses.md, D20): the bar
+   *  says so, Cancel keeps this office open, and Switch now goes without
+   *  waiting. `to` is null for a business with no name yet. */
+  switching?: { from: string; to: string | null };
 }
 
 export interface ClosingTimeBarProps {
@@ -33,7 +37,8 @@ export interface ClosingTimeBarProps {
   closing: ClosingTimeState | null;
   /** Back to work: closing time is called off and nothing quits. */
   onCancel: () => void;
-  /** Quit now without waiting (a hard quit; unsaved work is lost). */
+  /** Quit now without waiting (a hard quit; unsaved work is lost). During a
+   *  switch: switch now, without waiting. */
   onForceQuit: () => void;
   /** Start closing time again after a refused start. */
   onRetry: () => void;
@@ -68,14 +73,19 @@ export function ClosingTimeBar({ closing, onCancel, onForceQuit, onRetry }: Clos
   const silent = c?.notReporting?.length ?? 0;
   const pct = c && c.total > 0 ? Math.min(100, Math.round((c.acked / c.total) * 100)) : done ? 100 : 0;
   const force = async () => { setBusy(true); onForceQuit(); };
+  // A switch of business (D20): the bar names both, and its buttons say switch.
+  const sw = c?.switching;
+  const toName = sw ? (sw.to ?? t('closingBar.newBusiness')) : '';
 
   const status = error
     ? (c?.error ?? t('quit.startFailed'))
     : done
-      ? (c?.relaunch ? t('quit.savedReopen') : t('quit.saved'))
-      : !c || c.total === 0 && c.phase === 'started'
-        ? t('closingBar.starting')
-        : headerLine(c, t);
+      ? (sw ? t('closingBar.opening', { to: toName }) : c?.relaunch ? t('quit.savedReopen') : t('quit.saved'))
+      : sw
+        ? t('closingBar.switching', { from: sw.from, to: toName })
+        : !c || c.total === 0 && c.phase === 'started'
+          ? t('closingBar.starting')
+          : headerLine(c, t);
 
   return (
     <div ref={regionRef} data-closing-bar="" tabIndex={-1} role="region" aria-label={t('closingBar.title')} style={{
@@ -135,17 +145,19 @@ export function ClosingTimeBar({ closing, onCancel, onForceQuit, onRetry }: Clos
         {!done && (
           confirmForce ? (
             <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-              <span style={{ fontSize: 12, color: 'var(--cth-ink-2)', maxWidth: 170 }}>{t('closingBar.confirmForce')}</span>
-              <button type="button" className="cth-toast-btn" autoFocus onClick={() => setConfirmForce(false)}>{t('closingBar.keepClosing')}</button>
+              <span style={{ fontSize: 12, color: 'var(--cth-ink-2)', maxWidth: 170 }}>
+                {sw ? (waiting === 1 ? t('closingBar.confirmSwitch', { count: waiting }) : waiting > 1 ? t('closingBar.confirmSwitchPlural', { count: waiting }) : t('closingBar.confirmSwitchNone')) : t('closingBar.confirmForce')}
+              </span>
+              <button type="button" className="cth-toast-btn" autoFocus onClick={() => setConfirmForce(false)}>{sw ? t('closingTime.keepWaiting') : t('closingBar.keepClosing')}</button>
               <button type="button" className="cth-toast-btn" style={{ background: 'var(--cth-coral-strong)', color: 'var(--cth-on-coral)', boxShadow: 'none' }} disabled={busy} onClick={() => { void force(); }}>
-                {busy ? t('quit.killing') : t('quit.forceQuit')}
+                {busy ? (sw ? t('closingBar.switchingNow') : t('quit.killing')) : sw ? t('closingBar.switchAnyway') : t('quit.forceQuit')}
               </button>
             </div>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
               {error && <button type="button" className="cth-toast-btn primary" onClick={onRetry}>{t('closingBar.tryAgain')}</button>}
-              <button type="button" className="cth-toast-btn" onClick={onCancel}>{t('quit.cancelBack')}</button>
-              <button type="button" className="cth-toast-btn" style={{ color: 'var(--cth-coral-text)' }} onClick={() => setConfirmForce(true)}>{t('quit.forceQuit')}</button>
+              <button type="button" className="cth-toast-btn" onClick={onCancel}>{sw ? t('closingBar.cancelSwitch') : t('quit.cancelBack')}</button>
+              <button type="button" className="cth-toast-btn" style={{ color: 'var(--cth-coral-text)' }} onClick={() => setConfirmForce(true)}>{sw ? t('closingBar.switchNow') : t('quit.forceQuit')}</button>
             </div>
           )
         )}

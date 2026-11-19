@@ -529,6 +529,16 @@ Proves two logins side by side on this Mac. Any account works, even the same one
 - Test: test/office-renderer-state.test.cjs (6 cases: same business kept, another cleared, unstamped kept, nothing before the move, the card cleared once read, the card wiring and its copy). It runs the real preload, and fails when the clear is removed.
 - **E3 is complete.** Still behind `DBM_OFFICE_SETTINGS=1`. Left for step one: E4 (switch through closing time, and the T2 guard removed), E5 (Pulse office column by id), E6 (a Claude login per office), E7 (the live switch test), the design tasks DT1 to DT5, and removing the switch.
 
+## E4: switching business through closing time (2026-11-19)
+
+- **D10:** once settings are per office, a switch from Settings (Open another office, or Change office folder) starts closing time with the target held in memory (`pendingSwitch`). Nothing is written, stopped or killed until Michael concludes; then `switchOffice()` saves the folder and reopens the app on the other business. With no Michael running (nothing to close), the switch is immediate, as before.
+- **D20, the closing bar:** it reads "Closing <A> to open <B>" (B is "a new business" for a folder with no office yet), and "Opening <B>…" once closed. Cancel becomes Cancel switch and keeps A open (main forgets the pending switch). Force quit becomes Switch now, which asks once: "3 people are still working. Switch anyway?" with Keep waiting and Switch anyway. Switch now stops closing time quietly (`stopForSwitch`: no "back to work" mail, no event, unread steers dropped) and switches. A hard quit forgets the switch. A switch asked while the office is already closing carries on to that business.
+- Settings steps aside for the bar while closing runs, and its saved screen state stays (the other business's window clears it as it opens, E3 part 3).
+- **The T2 guard now holds only before the move.** After it, another business's office opens with its own settings, and an empty folder starts a new business, which runs setup. Before the move nothing changes.
+- Names on the bar: `businessNameAt(home)`, the business's own settings, else its office.json, else none.
+- Test: test/switch-business.test.cjs (8 cases: the bar's names on every update; a plain closing and a cancel; a switch during a closing; a quiet Switch now; main writes nothing before conclusion, and conclusion, cancel, hard quit and Switch now; the guard only before the move; the bar, App and Settings wiring and the copy; the names). closing-time-dialog.test.cjs now checks the switch forms of Force quit too.
+- Still behind `DBM_OFFICE_SETTINGS=1`. Not covered by a test: a real relaunch into the other business (E7, the live switch test).
+
 ## Completion summary
 
 ```
@@ -845,7 +855,7 @@ Lane A: T2 guard (independent, ships first). Lane B: office id → accessor → 
   - Surfaced by: Architecture 1 and 3, Code quality 3, D9
   - Files: src/main/index.ts, src/main/mail.ts, src/main/integrations.ts, src/main/knowledge.ts, src/main/factoryReset.ts, src/main/foundations.ts, renderer settings screens
   - Verify: node --test test/office-secrets.test.cjs test/factory-reset.test.cjs; full suite green
-- [ ] **E4 (P1, human: ~4h / CC: ~20min)** — src/main, src/renderer — Switch business through closing time with relaunch
+- [x] **E4 (P1, human: ~4h / CC: ~20min)** — src/main, src/renderer — Switch business through closing time with relaunch (done 2026-11-19, see E4 below)
   - Surfaced by: R1 (D10)
   - Files: src/main/index.ts (config:changeHome), src/main/closingTime.ts, src/renderer/src/App.tsx, SettingsModal.tsx
   - Verify: node --test test/switch-business.test.cjs

@@ -539,7 +539,8 @@ export function App() {
                 setClosing(null);
                 setClosingOpen(false);
               }}
-              onForceQuit={() => { void window.cth.confirmClose(); }}
+              // During a switch of business, the same button switches now (D20).
+              onForceQuit={() => { void (closing?.switching ? window.cth.switchNow() : window.cth.confirmClose()); }}
               onRetry={() => { void startClosingTime(reopenAsked.current ? { relaunch: true } : undefined); }}
             />
           )}

@@ -437,12 +437,24 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
     setChangeErr(''); setChangeGuard(null);
     const snap = snapshotLocalState();
     clearLocalState();
-    const res: { ok: boolean; error?: string; guard?: OfficeGuard } = await window.cth.changeHome(path, 'fresh').catch((e) => ({ ok: false, error: String(e) }));
+    const res: { ok: boolean; error?: string; guard?: OfficeGuard; closing?: boolean } = await window.cth.changeHome(path, 'fresh').catch((e) => ({ ok: false, error: String(e) }));
+    if (res.ok && res.closing) { switchingAfterClosing(snap); return; }
     if (!res.ok) {
       restoreLocalState(snap);
       if (res.guard) setChangeGuard(res.guard);
       else setChangeErr(res.error ?? t('settings.changeHome.couldNotOpen'));
     }
+  };
+
+  /** The switch waits for closing time (separate-businesses.md, D10): this
+   *  office keeps working until it ends, so its saved state comes back (the
+   *  other business's window clears it as it opens), and Settings steps aside
+   *  for the closing bar, where Cancel switch and Switch now are. */
+  const switchingAfterClosing = (snap: Record<string, string> | null): void => {
+    if (snap) restoreLocalState(snap);
+    setChangeHome(null);
+    setChangeBusy(false);
+    onClose();
   };
 
   /** Apply the home-folder change. On success the app relaunches (never resolves);
@@ -459,6 +471,7 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
     if (snap) clearLocalState();
     try {
       const res = await window.cth.changeHome(changeHome, changeMode);
+      if (res.ok && res.closing) { switchingAfterClosing(snap); return; }
       if (!res.ok) {
         if (snap) restoreLocalState(snap);
         if (res.guard) setChangeGuard(res.guard);

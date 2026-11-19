@@ -1747,7 +1747,17 @@
     "hideWho": "Hide who",
     "confirmForce": "Quit without waiting? Unsaved work is lost.",
     "keepClosing": "Keep closing",
-    "tryAgain": "Try again"
+    "tryAgain": "Try again",
+    "switching": "Closing {{from}} to open {{to}}",
+    "opening": "Opening {{to}}…",
+    "newBusiness": "a new business",
+    "cancelSwitch": "Cancel switch",
+    "switchNow": "Switch now",
+    "confirmSwitch": "{{count}} person is still working. Switch anyway?",
+    "confirmSwitchPlural": "{{count}} people are still working. Switch anyway?",
+    "confirmSwitchNone": "Switch without waiting for {{godName}}?",
+    "switchAnyway": "Switch anyway",
+    "switchingNow": "Switching…"
   },
   "connectors": {
     "title": "Claude connectors",

@@ -171,7 +171,7 @@ import { AUTO_FAILURE_REPORTS } from '../shared/buildFeatures';
 import { APP_NAME, APP_DATA_DIR, APP_URL_SCHEME } from '../shared/appName';
 import { copyOfficeData, homeFolderStatus, homeReadyAtLaunch } from './homeFolder';
 import { backfillOfficeRecord, findOffice, folderLayoutFor, isUsableTeamFolder, officeSwitchGuard, syncOfficeRecord } from './officeFile';
-import { adoptOpenOffice, migrateToOfficeSettings, officesAfterMove } from './officeSettings';
+import { adoptOpenOffice, businessNameAt, migrateToOfficeSettings, officesAfterMove } from './officeSettings';
 import { folderPolicy, AGENT_TMP_DIR, agentTmpName, researchFolderPolicy, withAgentTmpWall, withMemberWall, RESEARCH_TMP_DIR, shellTempWalls, withResearchWall, type AgentFolderPolicy, type FolderLayout } from '../shared/folderAccess';
 import { sandboxNetwork } from '../shared/webAccess';
 import { legacyBusinessFolder, touchesOffice } from '../shared/officeRecord';
@@ -4186,11 +4186,12 @@ ipcMain.handle('config:changeHome', async (_evt, payload: unknown) => {
     return { ok: false, error: 'That folder already holds an office. Choose an empty folder to move to, or open that office instead.' };
   }
 
-  // Settings belong to the business that is open, and a switch keeps them all:
-  // another business's office, or a new empty one, would get this business's
-  // name, mailboxes, schedules and grants. Refused until each office keeps its
-  // own settings (docs/designs/separate-businesses.md). A move is the same office.
-  if (mode === 'fresh') {
+  // Settings belong to the business that is open, and before they are kept per
+  // office a switch keeps them all: another business's office, or a new empty
+  // one, would get this business's name, mailboxes, schedules and grants. So
+  // until the move (officesMigrated) such a switch is refused
+  // (docs/designs/separate-businesses.md, T2). A move is the same office.
+  if (mode === 'fresh' && !readStoredConfig().officesMigrated) {
     const guard = officeSwitchGuard(readConfig(), newHome);
     if (guard === 'otherBusiness') {
       return { ok: false, guard, error: 'That office belongs to another business. It can\'t be opened from here yet.' };
@@ -4203,6 +4204,32 @@ ipcMain.handle('config:changeHome', async (_evt, payload: unknown) => {
   const ensured = ensureHarnessHome(newHome);
   if (!ensured.ok) return ensured;
 
+  // Once each business keeps its own settings, a switch closes the open office
+  // properly first (closing time, D10): every member finishes or hands off its
+  // step, and only when Michael concludes is the new folder saved and the app
+  // reopened on it. Nothing is written before then; Cancel switch keeps this
+  // office open, and Switch now goes at once (office:switchNow). With no
+  // Michael running there is nothing to close, so the switch is immediate.
+  if (readStoredConfig().officesMigrated && hive.enabled()) {
+    const started = closingTime.start({
+      relaunch: true,
+      switching: { from: businessNameAt(oldHome) ?? (oldHome ? basename(oldHome) : ''), to: businessNameAt(newHome) }
+    });
+    if (started.ok) {
+      pendingSwitch = { newHome, mode, oldHome };
+      return { ok: true as const, closing: true as const };
+    }
+  }
+  return switchOffice(newHome, mode, oldHome);
+});
+
+/** A switch waiting for closing time to finish (D10). */
+let pendingSwitch: { newHome: string; mode: 'move' | 'fresh'; oldHome: string | null } | null = null;
+
+/** Stop the open office and reopen the app on `newHome` (moving this office's
+ *  data there first when `mode` is move). On success the app relaunches and
+ *  this never returns; a failed copy keeps the open office running. */
+function switchOffice(newHome: string, mode: 'move' | 'fresh', oldHome: string | null): { ok: true } | { ok: false; error: string } {
   // Tear down everything bound to the OLD root before copying, so nothing writes
   // mid-copy — a live git commit into hive/.git would otherwise be copied as a
   // half-written object and corrupt the moved repo.
@@ -4237,6 +4264,15 @@ ipcMain.handle('config:changeHome', async (_evt, payload: unknown) => {
   try { ptyManager.killAll(); } catch (e) { console.error('[changeHome] killAll:', e); }
   restartApp(app);
   return { ok: true as const }; // unreachable (process exits) — typed for the renderer
+}
+
+/** Switch now, from the closing bar (D20): the owner chose not to wait. */
+ipcMain.handle('office:switchNow', () => {
+  const s = pendingSwitch;
+  if (!s) return { ok: false, error: 'No switch is waiting.' };
+  pendingSwitch = null;
+  closingTime.stopForSwitch();
+  return switchOffice(s.newHome, s.mode, s.oldHome);
 });
 
 /** Setup asks what is in a folder before it creates anything: an office, and if
@@ -5703,6 +5739,7 @@ ipcMain.handle('app:requestQuit', () => {
   app.quit();
 });
 ipcMain.handle('app:confirmClose', () => {
+  pendingSwitch = null; // a quit is a quit, not a switch
   closingTime.cancel(); // a hard quit overrides a closing time in progress
   teardownAndQuit();
 });
@@ -5726,6 +5763,15 @@ const closingTime = new ClosingTimeController(
   () => [...new Set(ptyToAgent.values())],
   () => liveWebContents(),
   (relaunch) => {
+    // Closing time for a switch of business (D10): Michael concluded, so the
+    // other business opens now.
+    const s = pendingSwitch;
+    if (s) {
+      pendingSwitch = null;
+      const r = switchOffice(s.newHome, s.mode, s.oldHome);
+      if (r.ok) return;
+      console.error('[switch] could not switch after closing time:', r.error);
+    }
     // Same dev-mode caveat as restart.ts: a relaunched dev build opens blank.
     if (relaunch && canRelaunch()) app.relaunch();
     teardownAndQuit();
@@ -5742,7 +5788,8 @@ hive.setRoutedObserver((msg, targets) => closingTime.onRouted(msg, targets));
 // A dev build quits instead of reopening, so the dialog must not say "Reopening".
 ipcMain.handle('app:startClosingTime', (_evt, opts?: { relaunch?: boolean }) =>
   closingTime.start({ relaunch: opts?.relaunch === true && canRelaunch() }));
-ipcMain.handle('app:cancelClosingTime', () => closingTime.cancel());
+// Cancel switch is this Cancel too: the open office stays open (D20).
+ipcMain.handle('app:cancelClosingTime', () => { pendingSwitch = null; closingTime.cancel(); });
 /** The closing-time dialog's Remind and Close without them (owner, 2026-09-29). */
 ipcMain.handle('app:closingTimeRemind', (_evt, id: unknown) => closingTime.remind(id));
 ipcMain.handle('app:closingTimeExcuse', (_evt, id: unknown) => closingTime.excuse(id));

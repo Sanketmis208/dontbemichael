@@ -431,6 +431,9 @@ export interface ClosingTimeEvent {
   godLive: boolean;
   /** The app reopens itself after closing. */
   relaunch: boolean;
+  /** Closing to open another business: "Closing <from> to open <to>" (to is
+   *  null for a business with no name yet). */
+  switching?: { from: string; to: string | null };
 }
 
 /** Per-agent operator-control state (#7C.1–7C.3). */
@@ -689,8 +692,12 @@ const api = {
    *  into the new folder (old kept as a safety net); 'fresh' just re-points and
    *  bootstraps an empty home. On success the app relaunches (never resolves);
    *  on failure (e.g. copy error) returns { ok: false, error }. */
-  changeHome: (newHome: string, mode: 'move' | 'fresh'): Promise<{ ok: boolean; error?: string; guard?: 'otherBusiness' | 'newBusiness' }> =>
+  /** Resolves ok with `closing` when the switch waits for closing time (the
+   *  closing bar takes over; the app reopens on the other office when it ends). */
+  changeHome: (newHome: string, mode: 'move' | 'fresh'): Promise<{ ok: boolean; error?: string; guard?: 'otherBusiness' | 'newBusiness'; closing?: boolean }> =>
     ipcRenderer.invoke('config:changeHome', { newHome, mode }),
+  /** Switch now from the closing bar, without waiting for the team (D20). */
+  switchNow: (): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('office:switchNow'),
   /** Whether a folder (default: the current home) exists and holds an office. */
   homeStatus: (path?: string): Promise<{ path: string | null; exists: boolean; hasOffice: boolean }> =>
     ipcRenderer.invoke('config:homeStatus', path),
