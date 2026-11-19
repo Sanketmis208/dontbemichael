@@ -63,6 +63,9 @@ export type InstallConfig = Pick<HarnessConfig, InstallKey>;
 export interface OfficeEntry {
   home: string;
   settings: Partial<OfficeSettings>;
+  /** When this office last stopped (a switch away, or the app quitting), in ms:
+   *  the business menu's "Closed since". */
+  closedAt?: number;
 }
 
 export const businessKeySet: ReadonlySet<string> = new Set(BUSINESS_KEYS);
@@ -127,6 +130,6 @@ export function officesWith(
     if (v === undefined) delete settings[k];
     else settings[k] = v;
   }
-  offices[id] = { home, settings: settings as Partial<OfficeSettings> };
+  offices[id] = { ...offices[id], home, settings: settings as Partial<OfficeSettings> };
   return offices;
 }

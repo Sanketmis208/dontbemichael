@@ -698,6 +698,10 @@ const api = {
     ipcRenderer.invoke('config:changeHome', { newHome, mode }),
   /** Switch now from the closing bar, without waiting for the team (D20). */
   switchNow: (): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('office:switchNow'),
+  /** Every business on this install for the business menu (DT1); perOffice is
+   *  false before settings are per office, when there is one business and no menu. */
+  listBusinesses: (): Promise<{ perOffice: boolean; businesses: Array<{ id: string; home: string; name: string | null; state: 'open' | 'closed' | 'missing' | 'setup'; closedAt?: number }> }> =>
+    ipcRenderer.invoke('office:list'),
   /** Whether a folder (default: the current home) exists and holds an office. */
   homeStatus: (path?: string): Promise<{ path: string | null; exists: boolean; hasOffice: boolean }> =>
     ipcRenderer.invoke('config:homeStatus', path),

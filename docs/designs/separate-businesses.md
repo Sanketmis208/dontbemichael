@@ -555,6 +555,17 @@ Proves two logins side by side on this Mac. Any account works, even the same one
 - A factory reset of a business erases its Claude folder with the rest of its place in the app's data folder; its Keychain entry (named after the folder) stays, unused.
 - Test: test/office-claude-login.test.cjs (6 cases: the usual places with no folder; the folder's settings and record; approvals written where Claude reads them; the business's folder only after the move and only for 'own'; agents' environment and plan detection; main sets it once at start, and no reader is left on a fixed ~/.claude). Live sign in of two accounts is the optional T4 owner check.
 
+## DT1: the business menu in the top bar (2026-11-19)
+
+- `BusinessMenu` (src/renderer/src/shell/BusinessMenu.tsx) sits right of the lockup: the open business's name as a quiet button, "Business: <name>. Switch business", capped at 220 px with an ellipsis and the full name in a tooltip. Its menu lists every business (open first, then by name) with its state, then Add a business; with one business, only Add a business (D14).
+- Row states from main (`listBusinesses`, `office:list`): Open (green); Closed since <time> (today's time in mono, else the date; noted when the office stops: a switch away or a quit, not a move); Folder not found · Find it, which opens Settings, General, and never starts closing time (D17); Setup not finished, for a business whose setup is not done (D18).
+- Choosing a closed business, or one whose setup is not finished, switches to it through closing time (E4). Add a business, for now, asks for the folder the new office goes in and switches there, where setup runs; the wizard over the open business (D19) is DT3.
+- D21: menuitemradio rows with aria-checked, 40 px tall; opening puts focus on the open business; arrow keys wrap, Home and End; Esc closes and returns focus; Tab closes. The switch is announced by the closing bar's status line.
+- D22: the window title is "<business>, Don't Be Michael" with two or more businesses.
+- Shown only once each business keeps its own settings (`perOffice`), so nothing changes before the move or without `DBM_OFFICE_SETTINGS=1`.
+- Not built here: reopening an unfinished setup at the step it stopped (DT3), Remove for it (DT2), the narrow width live check.
+- Test: test/business-menu.test.cjs (8 cases: states and order from main, closed time kept through saves; row actions; the closed time text; one business; arrow keys; the menu's accessibility and place; when main notes a close; the copy).
+
 ## Completion summary
 
 ```
@@ -936,7 +947,7 @@ Journey (storyboard):
 
 ### Design tasks
 
-- [ ] **DT1 (P1, human: ~1 day / CC: ~30min)**: TopBar and a new business menu. Build the name button and menu with the Open, Closed since, Folder not found and Setup not finished rows.
+- [x] **DT1 (P1, human: ~1 day / CC: ~30min)**: TopBar and a new business menu. Build the name button and menu with the Open, Closed since, Folder not found and Setup not finished rows. (done 2026-11-19, see DT1 below; the narrow width check is live)
   - Surfaced by: 1A, 2A, 2B, 2C, 6A
   - Files: src/renderer/src/shell/TopBar.tsx, a new BusinessMenu component, src/renderer/src/i18n/locales/en.json
   - Verify: a renderer test for the row states and keyboard; live check at narrow width with a long name

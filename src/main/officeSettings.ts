@@ -154,6 +154,53 @@ export function officeClaudeDir(): string | null {
   return officeDataPath('claude');
 }
 
+/** One row of the business menu (docs/designs/separate-businesses.md, DT1). */
+export interface BusinessRow {
+  id: string;
+  home: string;
+  /** Its name, or null for one with none yet ("New business"). */
+  name: string | null;
+  /** open: the business on screen. closed: another, ready to open (closedAt
+   *  when known). missing: its folder is gone (D17, never starts closing time).
+   *  setup: its setup is not finished (D18). */
+  state: 'open' | 'closed' | 'missing' | 'setup';
+  closedAt?: number;
+}
+
+/**
+ * Every business on this install, for the business menu and Settings: the
+ * open one first, then the rest by name. Only once settings are per office
+ * (`perOffice`); before that the app has one business, and no menu.
+ */
+export function listBusinesses(): { perOffice: boolean; businesses: BusinessRow[] } {
+  const cfg = readStoredConfig();
+  if (!cfg.officesMigrated) return { perOffice: false, businesses: [] };
+  const openId = officeIdIn(cfg, readOfficeId(cfg.harnessHome));
+  const rows: BusinessRow[] = [];
+  for (const [id, entry] of Object.entries(cfg.offices ?? {})) {
+    if (!entry || typeof entry.home !== 'string') continue;
+    const s = entry.settings ?? {};
+    const name = typeof s.businessName === 'string' && s.businessName.trim() ? s.businessName.trim() : null;
+    const state: BusinessRow['state'] = id === openId ? 'open'
+      : s.onboardingComplete !== true ? 'setup'
+        : !homeFolderStatus(entry.home).hasOffice ? 'missing'
+          : 'closed';
+    rows.push({ id, home: entry.home, name, state, ...(typeof entry.closedAt === 'number' ? { closedAt: entry.closedAt } : {}) });
+  }
+  rows.sort((a, b) => (a.state === 'open' ? -1 : b.state === 'open' ? 1 : (a.name ?? '').localeCompare(b.name ?? '')));
+  return { perOffice: true, businesses: rows };
+}
+
+/** The open office stopped (a switch away, or the app quitting): note when,
+ *  for "Closed since" in the business menu. Once settings are per office. */
+export function noteOfficeClosed(now: number = Date.now()): void {
+  const cfg = readStoredConfig();
+  if (!cfg.officesMigrated) return;
+  const id = officeIdIn(cfg, readOfficeId(cfg.harnessHome));
+  if (!id || !cfg.offices?.[id]) return;
+  writeConfig({ offices: { ...cfg.offices, [id]: { ...cfg.offices[id], closedAt: now } } });
+}
+
 /** How the app behaves, without any business's settings. */
 export function installConfig(): InstallConfig {
   return pick(readStoredConfig(), installKeySet) as InstallConfig;

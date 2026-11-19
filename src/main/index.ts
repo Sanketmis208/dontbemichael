@@ -171,7 +171,7 @@ import { AUTO_FAILURE_REPORTS } from '../shared/buildFeatures';
 import { APP_NAME, APP_DATA_DIR, APP_URL_SCHEME } from '../shared/appName';
 import { copyOfficeData, homeFolderStatus, homeReadyAtLaunch } from './homeFolder';
 import { backfillOfficeRecord, findOffice, folderLayoutFor, isUsableTeamFolder, officeSwitchGuard, syncOfficeRecord } from './officeFile';
-import { adoptOpenOffice, businessNameAt, migrateToOfficeSettings, officeClaudeDir, officesAfterMove } from './officeSettings';
+import { adoptOpenOffice, businessNameAt, listBusinesses, migrateToOfficeSettings, noteOfficeClosed, officeClaudeDir, officesAfterMove } from './officeSettings';
 import { folderPolicy, AGENT_TMP_DIR, agentTmpName, researchFolderPolicy, withAgentTmpWall, withMemberWall, RESEARCH_TMP_DIR, shellTempWalls, withResearchWall, type AgentFolderPolicy, type FolderLayout } from '../shared/folderAccess';
 import { sandboxNetwork } from '../shared/webAccess';
 import { legacyBusinessFolder, touchesOffice } from '../shared/officeRecord';
@@ -4258,6 +4258,8 @@ let pendingSwitch: { newHome: string; mode: 'move' | 'fresh'; oldHome: string | 
  *  data there first when `mode` is move). On success the app relaunches and
  *  this never returns; a failed copy keeps the open office running. */
 function switchOffice(newHome: string, mode: 'move' | 'fresh', oldHome: string | null): { ok: true } | { ok: false; error: string } {
+  // "Closed since" in the business menu (DT1); a move is the same office going on.
+  if (mode === 'fresh') { try { noteOfficeClosed(); } catch (e) { console.error('[changeHome] note closed:', e); } }
   // Tear down everything bound to the OLD root before copying, so nothing writes
   // mid-copy — a live git commit into hive/.git would otherwise be copied as a
   // half-written object and corrupt the moved repo.
@@ -4293,6 +4295,9 @@ function switchOffice(newHome: string, mode: 'move' | 'fresh', oldHome: string |
   restartApp(app);
   return { ok: true as const }; // unreachable (process exits) — typed for the renderer
 }
+
+/** The business menu and Settings' Your businesses (DT1, DT2). */
+ipcMain.handle('office:list', () => listBusinesses());
 
 /** Switch now, from the closing bar (D20): the owner chose not to wait. */
 ipcMain.handle('office:switchNow', () => {
@@ -5745,6 +5750,7 @@ ipcMain.handle('clipboard:saveImage', async () => {
  *  and the closing-time conclusion (after the god confirmed the floor saved). */
 function teardownAndQuit(): void {
   allowQuit = true;
+  try { noteOfficeClosed(); } catch (e) { console.error('[quit] note closed:', e); }
   // Each teardown step is best-effort: a throw here (e.g. a dying child or a
   // half-torn-down socket) must never abort the quit or pop a crash dialog.
   try { clearMissionTimers(); } catch (e) { console.error('[quit] clearMissionTimers:', e); }

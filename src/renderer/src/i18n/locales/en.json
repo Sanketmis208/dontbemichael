@@ -2623,6 +2623,20 @@
   "degradedNotice": {
     "title": "{{name}} started with something missing"
   },
+  "businessMenu": {
+    "button": "Business: {{name}}. Switch business",
+    "label": "Businesses",
+    "windowTitle": "{{name}}, {{app}}",
+    "newBusiness": "New business",
+    "open": "Open",
+    "closed": "Closed",
+    "closedSince": "Closed since",
+    "folderNotFound": "Folder not found",
+    "findIt": "Find it",
+    "setupNotFinished": "Setup not finished",
+    "add": "Add a business",
+    "couldNotSwitch": "Couldn't switch to that business. Try again."
+  },
   "setupNotice": {
     "title": "Finish setting up this business",
     "body": "Settings are now kept for each business on their own. This one kept its name and team, but its mailboxes, schedules and connections were another business's and did not come with it. Add them in Settings.",
