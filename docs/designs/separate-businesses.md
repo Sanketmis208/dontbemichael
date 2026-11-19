@@ -342,7 +342,7 @@ Synthesized from this review's findings (strategy-only: next research, verificat
   - Surfaced by: Section 1 boundary rule; outside voice 7
   - Files: src/main/config.ts, src/main/index.ts, files under userData
   - Verify: the list is in this doc and each item has a home (office or install)
-- [ ] **T4 (P1, human: ~2h / CC: ~15min)** — verification — Probe a separate Claude sign in per office folder
+- [x] **T4 (P1, human: ~2h / CC: ~15min)** (probed 2026-11-19 on Claude Code 2.1.328, see T4 below; a live second account sign in is an optional owner check) — verification — Probe a separate Claude sign in per office folder
   - Surfaced by: BIZ-3 (D4); outside voice 2
   - Files: none (probe with Claude Code and two config folders)
   - Verify: two folders keep two signed in accounts and two connector lists; note the Claude Code version
@@ -431,6 +431,57 @@ The hive (registry, tasks, log), the palace, roster.json, office.json and Resear
 ### Outside both (T4)
 
 ~/.claude: the Claude sign in, its connectors (Gmail, QuickBooks) and the Claude conversations of every member and check. A separate login per office is T4.
+
+## T4: a separate Claude login per office (probed 2026-11-19, Claude Code 2.1.328)
+
+**Result: it works, and through the documented setting.** Each Claude config folder gets its own login. BIZ-3 does not rest on the undocumented variable for members; only the app's hidden checks need it, as they do today.
+
+### What the probe showed
+
+`claude auth status` (read only; no sign in was started, the account email was not printed):
+
+| Run | Signed in? |
+|---|---|
+| No CLAUDE_CONFIG_DIR (today's setup) | yes, the owner's account |
+| CLAUDE_CONFIG_DIR = a new folder A | no: A has its own login, empty |
+| A, with CLAUDE_SECURESTORAGE_CONFIG_DIR = "" | yes, the owner's account |
+| A, with CLAUDE_SECURESTORAGE_CONFIG_DIR = ~/.claude written out | no |
+| A new folder B, with CLAUDE_SECURESTORAGE_CONFIG_DIR = A | no (A has no login yet), so B reads A's entry |
+
+Why, from the Claude Code 2.1.328 binary: the login lives in the Keychain under `Claude Code-credentials`, plus `-` and the first 8 hex characters of sha256 of the config folder path whenever CLAUDE_CONFIG_DIR is set. CLAUDE_SECURESTORAGE_CONFIG_DIR, when set, picks the folder that name is made from, and an empty value means the default entry. So:
+
+- Office members run with `CLAUDE_CONFIG_DIR = <that office's Claude folder>`: a documented setting, its own login, its own `.claude.json`, plugins, local connectors and conversations.
+- Hidden checks (isolated folders, hiddenClaude.ts:203-204) keep borrowing a login with `CLAUDE_SECURESTORAGE_CONFIG_DIR = <that office's Claude folder>`. That variable stays undocumented; if Claude drops it the checks fail closed (they stop at sign in), as today.
+- The first business keeps today's login: no CLAUDE_CONFIG_DIR, and an empty CLAUDE_SECURESTORAGE_CONFIG_DIR for its checks. Writing ~/.claude out in full does **not** reach that login.
+- Gmail, QuickBooks and the other claude.ai connectors belong to the account, so a second login brings its own list.
+
+### What this changes in step one (follows D9, no new choice)
+
+- **The office's Claude folder goes in the app's data folder, keyed by office id** (`userData/offices/<officeId>/claude`), not inside the office folder as Section 1's diagram drew it. The login name is a hash of the folder's path, so an office folder that is moved or opened from a synced copy would lose its login. The app data folder is also already outside every agent's reach (folderAccess.ts:323 refuses edits under ~/Library).
+- A business uses its own Claude folder only when the owner chose "A different Claude account" in Add a business (DT, frame 4). Otherwise it shares the first business's login, as D4 allows.
+- A second account is a second Claude plan (D4).
+
+### Readers E6 routes through one claudeHome()
+
+| Reader | Today |
+|---|---|
+| transcript.ts:47, 52 (projects, history) | follows CLAUDE_CONFIG_DIR |
+| claudeAccount.ts:17 (plan) | follows CLAUDE_CONFIG_DIR |
+| hooks.ts:1384, index.ts:3537 (projects folder walls) | follow CLAUDE_CONFIG_DIR |
+| hiddenClaude.ts:204 (checks' login) | follows CLAUDE_CONFIG_DIR, empty for the default |
+| config.ts:725 ensureClaudeGlobalPermissions | **hardcoded ~/.claude/settings.json** |
+| config.ts:755 updateClaudeJson (trust and API key approvals) | **hardcoded ~/.claude.json**; with a config folder set, Claude reads `<folder>/.claude.json` instead |
+| hive.ts:2072 ownerPluginsOffForSession | **hardcoded ~/.claude/settings*.json** |
+
+The three hardcoded readers are wrong today too for an owner who exports CLAUDE_CONFIG_DIR: the approvals land in a file Claude does not read, and the agent stops at the trust question. E6 fixes them for both cases.
+
+### Optional owner check (5 minutes, not needed for step one)
+
+Proves two logins side by side on this Mac. Any account works, even the same one.
+
+1. `CLAUDE_CONFIG_DIR=~/dbm-t4 claude auth login`, and sign in in the browser.
+2. `CLAUDE_CONFIG_DIR=~/dbm-t4 claude auth status --text` shows that account; `claude auth status --text` still shows yours.
+3. Clean up: `CLAUDE_CONFIG_DIR=~/dbm-t4 claude auth logout`, then delete ~/dbm-t4.
 
 ## Completion summary
 
