@@ -1,5 +1,19 @@
 # TODOS
 
+## Two unrelated businesses (deferred from the CEO review of docs/designs/separate-businesses.md, 2026-11-18)
+
+### Both businesses running at once in one app
+
+**What:** Step two of docs/designs/separate-businesses.md: each business runs as its own office process at the same time, with one window, a business switcher and a Needs you list marked by business.
+
+**Why:** In step one the business the owner is not looking at pauses: its mail, schedules and agents wait. An owner running a bakery and a real estate agency needs both working all day.
+
+**Context:** Owner chose this direction in the CEO review (D1, option C) and deferred it until step one ships (D3). Step one moves every business field out of the shared `config.json` into the office, so this work starts from per office settings. Today the app holds one office per process (`requestSingleInstanceLock`, src/main/index.ts:2832) and one window; the earlier New Floor window shared one hive and was removed on 2026-10-03 (docs/FEATURES.md:879). Two Michaels at once doubles Claude usage. If the Mac user per business interim (OV-1) works, it is the stopgap until this ships.
+
+**Effort:** XL (human) / L (CC)
+**Priority:** P2
+**Depends on:** step one of docs/designs/separate-businesses.md
+
 ## Source links on cards (from the CEO review of docs/designs/ask-me-source-links.md, 2026-11-08)
 
 ### Links to connector records that come with only an id
