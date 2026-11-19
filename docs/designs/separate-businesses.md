@@ -539,6 +539,14 @@ Proves two logins side by side on this Mac. Any account works, even the same one
 - Test: test/switch-business.test.cjs (8 cases: the bar's names on every update; a plain closing and a cancel; a switch during a closing; a quiet Switch now; main writes nothing before conclusion, and conclusion, cancel, hard quit and Switch now; the guard only before the move; the bar, App and Settings wiring and the copy; the names). closing-time-dialog.test.cjs now checks the switch forms of Force quit too.
 - Still behind `DBM_OFFICE_SETTINGS=1`. Not covered by a test: a real relaunch into the other business (E7, the live switch test).
 
+## E5: Pulse by office id (2026-11-19)
+
+- `pulseOffice()` (index.ts), the one key Pulse, the cost ledger, owner notes, run comparisons and the case study file rows under, is the office's lasting id once settings are per office, else its folder as before. A moved folder keeps its history.
+- `persist.relabelOffice(folder, id)` runs right after the store opens, before any service writes: every row in the office tables and the kv marks keyed by office (`OFFICE_KV_PREFIXES`: the cost ledger import, Pulse backfill and Pulse processor position, run comparisons) move from the folder to the id, in one transaction, once per id (`office:relabelled:<id>`). A row or mark the id already has wins.
+- A factory reset of one business now erases its kv marks and relabel mark too.
+- Found while testing: `pulse:state:<office>` (the Pulse processor's position) was keyed by office and not in the list; without it Pulse would have read an office's history again after the move.
+- Test: test/pulse-office-id.test.cjs, run under Electron's Node for the real store (5 cases: rows and marks move once; history found by id after a move; existing id data wins; a one business reset; no op cases), plus a scan that fails when a new office keyed kv mark is not listed, and the main wiring order.
+
 ## Completion summary
 
 ```
@@ -859,7 +867,7 @@ Lane A: T2 guard (independent, ships first). Lane B: office id → accessor → 
   - Surfaced by: R1 (D10)
   - Files: src/main/index.ts (config:changeHome), src/main/closingTime.ts, src/renderer/src/App.tsx, SettingsModal.tsx
   - Verify: node --test test/switch-business.test.cjs
-- [ ] **E5 (P2, human: ~4h / CC: ~20min)** — src/main — Key Pulse by office id and map folder rows once
+- [x] **E5 (P2, human: ~4h / CC: ~20min)** — src/main — Key Pulse by office id and map folder rows once (done 2026-11-19, see E5 below)
   - Surfaced by: BIZ-4 (D5)
   - Files: src/main/db.ts, src/main/pulseBackfill.ts, Pulse telemetry
   - Verify: the Pulse backfill test with a moved folder

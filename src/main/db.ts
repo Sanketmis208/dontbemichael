@@ -206,6 +206,14 @@ export const OFFICE_TABLES = [
   'telemetry_applied', 'telemetry_safety', 'cost_ledger', 'owner_notes'
 ] as const;
 
+/** kv keys that end in the office they belong to (the cost ledger's import
+ *  mark, Pulse's backfill mark and processor position, the run comparison's
+ *  suggestions). pulse-office-id.test.cjs fails when a new one is not listed. */
+export const OFFICE_KV_PREFIXES = ['cost-ledger:import:', 'pulse:backfill:', 'pulse:state:', 'run-compare:'] as const;
+
+/** The kv key that marks an office's rows as moved from its folder to its id. */
+const relabelledKey = (id: string): string => `office:relabelled:${id}`;
+
 export class PersistStore {
   private db: Database.Database | null = null;
 
@@ -262,10 +270,42 @@ export class PersistStore {
     try {
       db.transaction(() => {
         for (const t of OFFICE_TABLES) db.prepare(`DELETE FROM ${t} WHERE office = ?`).run(office);
+        for (const p of OFFICE_KV_PREFIXES) db.prepare('DELETE FROM kv WHERE key = ?').run(p + office);
+        db.prepare('DELETE FROM kv WHERE key = ?').run(relabelledKey(office));
       })();
       return true;
     } catch (e) {
       console.error('[db] could not erase the office rows:', e);
+      return false;
+    }
+  }
+
+  /**
+   * Once settings are per office, Pulse keys an office's rows by its lasting id
+   * instead of its folder (docs/designs/separate-businesses.md, E5), so moving
+   * the folder keeps its history. This moves the rows and kv marks written
+   * under the folder (`from`) to the id (`to`), once per id, in one
+   * transaction. A row the id already has for the same key stays as it is.
+   * True when the rows are under the id now (moved now or before); false when
+   * the store is closed or the move failed (nothing changed; next launch tries
+   * again).
+   */
+  relabelOffice(from: string, to: string): boolean {
+    const db = this.db;
+    if (!db || !from || !to || from === to) return false;
+    try {
+      if (db.prepare('SELECT 1 FROM kv WHERE key = ?').get(relabelledKey(to))) return true;
+      db.transaction(() => {
+        for (const t of OFFICE_TABLES) db.prepare(`UPDATE OR IGNORE ${t} SET office = ? WHERE office = ?`).run(to, from);
+        for (const p of OFFICE_KV_PREFIXES) {
+          const had = db.prepare('SELECT 1 FROM kv WHERE key = ?').get(p + to);
+          if (!had) db.prepare('UPDATE kv SET key = ? WHERE key = ?').run(p + to, p + from);
+        }
+        db.prepare('INSERT OR REPLACE INTO kv (key, value, updated_at) VALUES (?, ?, ?)').run(relabelledKey(to), JSON.stringify(from), Date.now());
+      })();
+      return true;
+    } catch (e) {
+      console.error('[db] could not move the office rows to its id:', e);
       return false;
     }
   }

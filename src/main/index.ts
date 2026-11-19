@@ -815,7 +815,21 @@ ipcMain.handle('silent:checkAgain', (_evt, id: unknown) => { if (typeof id === '
 
 // ─── Pulse telemetry (docs/designs/team-performance.md) ─────────────────────
 // The isolated store: written only here, in harness.db, keyed by office.
-const pulseOffice = (): string | null => { const h = readConfig().harnessHome; return h ? expandTilde(h) : null; };
+/** Which office Pulse, the cost ledger and owner notes file a row under: the
+ *  office's lasting id once settings are per office, so a moved folder keeps
+ *  its history (separate-businesses.md, E5); its folder before. */
+const pulseOffice = (): string | null => {
+  const id = openOfficeId();
+  if (id) return id;
+  const h = readConfig().harnessHome;
+  return h ? expandTilde(h) : null;
+};
+/** The open office's rows written under its folder go to its id, once. */
+function relabelPulseOffice(): void {
+  const id = openOfficeId();
+  const h = readConfig().harnessHome;
+  if (id && h) persist.relabelOffice(expandTilde(h), id);
+}
 const pulseTelemetry = new TelemetryStore(() => persist.database(), pulseOffice);
 const pulseProcessor = new TelemetryProcessor(() => persist.database(), pulseTelemetry);
 // The owner's notes for members' memory, kept beside Pulse in harness.db where
@@ -7043,6 +7057,9 @@ app.whenReady().then(() => {
   // Guarded: a DB failure (e.g. a bad native build) must degrade to defaults,
   // never block app startup.
   try { persist.open(); } catch (e) { console.error('[db] open failed:', e); }
+  // Before anything writes to it: rows filed under the office's folder move to
+  // its id (E5).
+  try { relabelPulseOffice(); } catch (e) { console.error('[db] office relabel:', e); }
   // A break saved before quitting is still on (issue 124).
   armOfficeBreak();
   // Members that were not reporting when the app quit: Checking (issue #326, SD8).
