@@ -338,7 +338,7 @@ Synthesized from this review's findings (strategy-only: next research, verificat
   - Surfaced by: BIZ-6 (D6) amended by OV-2 (D8)
   - Files: src/main/index.ts (config:changeHome), src/main/officeFile.ts (configMatchesRegistry), src/renderer/src/components/SettingsModal.tsx, src/renderer/src/i18n/locales/en.json, a test under test/
   - Verify: a test switching between two offices with different teams, with and without office.json, is refused; the same office reopens
-- [ ] **T3 (P1, human: ~3h / CC: ~20min)** — design — List every business shaped field and file for step one
+- [x] **T3 (P1, human: ~3h / CC: ~20min)** (done 2026-11-19, see T3 below) — design — List every business shaped field and file for step one
   - Surfaced by: Section 1 boundary rule; outside voice 7
   - Files: src/main/config.ts, src/main/index.ts, files under userData
   - Verify: the list is in this doc and each item has a home (office or install)
@@ -383,6 +383,54 @@ Use the Demo Mac user as the second business. Nothing here touches the main offi
 2. Two Mac users at once: in your own user keep the main office open. Switch to Demo (fast user switching, not log out), open its office, give it one schedule that fires hourly, and switch back.
 3. Leave both running a day. Then check each office: did the hourly schedule fire in Demo while it was in the background, did mail polling keep going, and did either app stop or show a sign in prompt.
 4. Result: if both kept working, the guard's first line becomes "Open it from its own Mac user for now." and the Mac user per business is the documented interim (OV-1). If not, the line stays as built.
+
+## T3: what belongs to a business, field by field (2026-11-19)
+
+Rule (Section 1): anything that names a customer, an account, a schedule, a team member or the business goes with the office; only how the app itself behaves stays with the install. "Office" below means `config.json` under `offices[<officeId>]` (D9) for settings, and a folder or key by office id for files.
+
+### Settings in config.json (HarnessConfig, config.ts:217-416)
+
+| Goes with | Fields |
+|---|---|
+| Office: who the business is | businessType, businessName, businessCity, companyProfile, businessFolder, officeFolder (legacy, read once then dropped), registeredRepos (its folders) |
+| Office: setup and team | onboardingComplete (each business's own setup, for the Setup not finished row, D18; "first run" becomes "no offices yet"), businessTeam, businessTeamStarted, businessTeamRetry, instructionsRewritten, firstTasksRemoved, workStyleUpdatesDecided, agentCapabilities, agentTokenCaps, autoDeliveryPausedAgents |
+| Office: mail and connectors | mailboxes, quickbooksClaude, connectorsOn, connectorsSeen, connectorsMigrated, claudeConnectors (the last read of the login this office uses), mcpDefaults (legacy, feeds the connectors carry over) |
+| Office: Claude account | claudeAuth (account or API key, a login like any other, BIZ-3), planPriceMonthly (that account's price) |
+| Office: schedules | missions, scheduleRequests, missionsOwnersMigrated, opsStandupSeeded, foundationsCheckSeeded, standupFocusSeeded, heartbeatSeeded (seed guards follow the schedules they guard, so a new business gets its own standup) |
+| Office: Research and data | research, dataClasses |
+| Office: knowledge and memory | knowledgeGraph (its rootPath override is a business folder), knowledgeOnSeeded, knowledgeOnNoticeSeen, embeddingModel (the palace in the office folder is built with it) |
+| Office: owner messages | ownerAnswerKeys, ownerDockKeys (legacy, already moved to a file) |
+| Office: integrations and budget | integrations (metadata; secrets below), costCapTokens, costCapUsd (deprecated, follows costCapTokens) |
+| Install: how the app behaves | harnessHome (becomes the open office's id), recentHives (becomes the known offices list), audience, autoMode, maxTurns, circuitBreaker, notifications, strongKeepalive, autoUpdate (deprecated), terminalTheme, tvShowOffices |
+| Install, by the rule, open to revisit after T4 | godProvider, godModel, defaultModel, defaultCommand, providerDefaultModels. Which models exist depends on the Claude account; if T4 makes a login per office real, these may follow the login. Not a step one blocker. |
+
+Count: all 60 fields placed: 44 with the office, 11 with the install, 5 with the install pending T4.
+
+### Files in the app's data folder (~/Library/Application Support/dontbemichael)
+
+| File | Goes with | Note |
+|---|---|---|
+| config.json | split | install part stays; business part under offices[<id>] |
+| integration-secrets.json | office, keyed | one encrypted file, entries keyed by office id: `mail:<id>`, `apikey:anthropic`, integration secretRefs |
+| knowledge/ | office | userData/knowledge/<officeId>, unless the office's own rootPath override is set |
+| mail-send-journal.json, broker-write-journal.json, mail-proposals.json | office | journals and approvals name customers and accounts; split by office id |
+| owner-dock-keys.json | office | |
+| pastes/ | office | **Step one must split it.** The launch sweep keeps only pastes the open office's queues still name (index.ts:6574), so with two offices it would delete pastes the closed one still needs. |
+| opened-attachments/ | office | that business's mail attachments |
+| job-check/, standing-check/, trust-check/, run-compare/, case-study/ | office | empty working folders, but their Claude conversations hold the business's job text; per office so a reset of one office sweeps only its own (E3) |
+| harness.db: telemetry_*, cost_ledger, owner_notes | office, keyed | already have an `office` column, keyed by folder; re-key to office id (E5) |
+| harness.db: kv (window.bounds) | install | |
+| failures.jsonl | install, tagged | app failure reports; tag each with the office id |
+| hero.json, model-catalog.json, updater.log, last-run-version | install | remote copy and app version |
+| Renderer saved state (localStorage `cth.*`) | office | cleared on a switch today; step one keys it by office id so a business's view comes back with it |
+
+### Already in the office folder (nothing to do)
+
+The hive (registry, tasks, log), the palace, roster.json, office.json and Research's desk all live under harnessHome today.
+
+### Outside both (T4)
+
+~/.claude: the Claude sign in, its connectors (Gmail, QuickBooks) and the Claude conversations of every member and check. A separate login per office is T4.
 
 ## Completion summary
 
