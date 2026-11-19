@@ -26,6 +26,7 @@ test.after(() => fs.rmSync(userData, { recursive: true, force: true }));
 const config = loadTs('src/main/config.ts');
 const file = loadTs('src/main/officeFile.ts');
 const settings = loadTs('src/main/officeSettings.ts');
+const keys = loadTs('src/main/officeKeys.ts');
 
 const configFile = path.join(userData, 'config.json');
 function resetConfig(cfg) {
@@ -123,7 +124,7 @@ test('two offices never see each other\'s business settings', () => {
   }), true);
   assert.equal(settings.officeSettings().businessName, 'Harbor Bakery');
   assert.equal(config.readConfig().notifications, false, 'the install key was not changed through the office');
-  assert.equal(config.readConfig().offices[bakeryId].settings.notifications, undefined);
+  assert.equal(config.readStoredConfig().offices[bakeryId].settings.notifications, undefined);
 
   // Open the other office: it starts from the defaults, not the bakery.
   config.writeConfig({ harnessHome: realty });
@@ -156,7 +157,7 @@ test('settings with nowhere to go are not saved', () => {
   resetConfig({ harnessHome: home, businessName: 'Top level' });
   assert.equal(settings.currentOfficeId(), null);
   assert.equal(settings.updateOfficeSettings({ businessName: 'Lost' }), false);
-  const cfg = config.readConfig();
+  const cfg = config.readStoredConfig();
   assert.equal(cfg.offices, undefined);
   assert.equal(cfg.businessName, 'Top level', 'nothing written at the top level either');
   resetConfig({ harnessHome: null });
@@ -172,10 +173,10 @@ test('the pure helpers: an id from the record wins, a folder match is the fallba
   assert.equal(settings.officeIdIn({ harnessHome: '/Users/o/Offices/Other', offices }, null), null);
   assert.equal(settings.officeIdIn({ harnessHome: null, offices }, null), null);
 
-  const s = settings.settingsIn({ offices }, 'office-aaaa1111');
+  const s = keys.settingsIn({ offices }, 'office-aaaa1111', settings.businessDefaults());
   assert.equal(s.businessName, 'Bakery');
   assert.equal('notifications' in s, false, 'an install key stored by mistake is never read as a business setting');
-  assert.equal(settings.settingsIn({ offices }, '../x').businessName, undefined);
+  assert.equal(keys.settingsIn({ offices }, '../x', settings.businessDefaults()).businessName, undefined);
 
   const split = settings.splitPatch({ businessName: 'B', mailboxes: [], notifications: true, harnessHome: '/x', nonsense: 1 });
   assert.deepEqual(Object.keys(split.business).sort(), ['businessName', 'mailboxes']);

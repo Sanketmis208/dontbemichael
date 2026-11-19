@@ -41,7 +41,7 @@ import { decodeCaseLogo, drawCaseSvg } from './caseLogoImage';
 import { RESEARCH_DESK_DIR, RESEARCH_ID, RESEARCH_NAME, RESEARCH_WORK_STYLE } from '../shared/research';
 import { initAutoUpdater, abortPendingRestart } from './updater';
 import {
-  readConfig, damagedConfigCopy, writeConfig, setAgentTokenCap, resetConfig, onConfigWritten, ensureHarnessHome, ensureClaudePermissionsAccepted, approveClaudeApiKey,
+  readConfig, readStoredConfig, damagedConfigCopy, writeConfig, setAgentTokenCap, resetConfig, onConfigWritten, ensureHarnessHome, ensureClaudePermissionsAccepted, approveClaudeApiKey,
   modelForRole, OPS_STANDUP_MISSION, OPS_STANDUP_BUILT_IN_BODIES, OPS_STANDUP_FOCUS, OPS_STANDUP_BUILT_IN_FOCUSES, HEARTBEAT_MISSION, heartbeatMessage, FOUNDATIONS_CHECK_MISSION, FOUNDATIONS_CHECK_BUILT_IN_FOCUSES, FOUNDATIONS_CHECK_FOCUS, type HarnessConfig, type ScheduledMission
 } from './config';
 import { terminalLaunches } from './terminalAtFolder';
@@ -171,6 +171,7 @@ import { AUTO_FAILURE_REPORTS } from '../shared/buildFeatures';
 import { APP_NAME, APP_DATA_DIR, APP_URL_SCHEME } from '../shared/appName';
 import { copyOfficeData, homeFolderStatus, homeReadyAtLaunch } from './homeFolder';
 import { backfillOfficeRecord, findOffice, folderLayoutFor, isUsableTeamFolder, officeSwitchGuard, syncOfficeRecord } from './officeFile';
+import { adoptOpenOffice, migrateToOfficeSettings, officesAfterMove } from './officeSettings';
 import { folderPolicy, AGENT_TMP_DIR, agentTmpName, researchFolderPolicy, withAgentTmpWall, withMemberWall, RESEARCH_TMP_DIR, shellTempWalls, withResearchWall, type AgentFolderPolicy, type FolderLayout } from '../shared/folderAccess';
 import { sandboxNetwork } from '../shared/webAccess';
 import { legacyBusinessFolder, touchesOffice } from '../shared/officeRecord';
@@ -4214,7 +4215,10 @@ ipcMain.handle('config:changeHome', async (_evt, payload: unknown) => {
   allowQuit = true;
   // The old office's running time and buffered points land before the switch.
   try { pulseTelemetry.runningPause(officeStopped()); pulseTelemetry.flush(); } catch (e) { console.error('[changeHome] pulse flush:', e); }
-  writeConfig({ harnessHome: newHome });
+  // A moved office keeps its settings: its entry goes with it. A fresh open
+  // finds its own entry by the id in that folder.
+  const movedOffices = mode === 'move' && oldHome ? officesAfterMove(oldHome, newHome) : null;
+  writeConfig(movedOffices ? { harnessHome: newHome, offices: movedOffices } : { harnessHome: newHome });
   try { ptyManager.killAll(); } catch (e) { console.error('[changeHome] killAll:', e); }
   restartApp(app);
   return { ok: true as const }; // unreachable (process exits) — typed for the renderer
@@ -6971,6 +6975,19 @@ app.whenReady().then(() => {
   // but only when the office is really there. If the owner moved or deleted the
   // folder, bootstrapping would quietly rebuild an EMPTY office at the old path;
   // instead nothing touches it and the renderer asks where it went (homeFolder.ts).
+  // Each business keeps its own settings (docs/designs/separate-businesses.md):
+  // the settings that sat at the top of config.json move into the open office's
+  // entry once, before any service reads them, and the open office gets its id.
+  // Only with DBM_OFFICE_SETTINGS=1 until step one is complete: the move is one
+  // way, and a dev run shares config.json with the installed app, which cannot
+  // read moved settings. A config already moved keeps working without it.
+  if (process.env.DBM_OFFICE_SETTINGS === '1' || readStoredConfig().officesMigrated) {
+    try {
+      const moved = migrateToOfficeSettings();
+      if (moved === 'failed') console.error('[offices] settings were not moved this launch; the app runs on them as they are');
+      adoptOpenOffice();
+    } catch (e) { console.error('[offices] launch move:', e); }
+  }
   const homeReady = homeReadyAtLaunch(readConfig());
   if (homeReady) {
     bootstrapHiveServices();

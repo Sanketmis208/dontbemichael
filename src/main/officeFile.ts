@@ -153,13 +153,19 @@ export function readOfficeId(home: string | null | undefined): string | null {
  * the folder holds no office, or the id could not be saved: an id that is not
  * on disk would be a different one next launch.
  */
-export function ensureOfficeId(home: string | null | undefined): string | null {
+export function ensureOfficeId(home: string | null | undefined, preferred?: string): string | null {
   if (!home || !homeFolderStatus(home).hasOffice) return null;
   const existing = readOfficeRecord(home);
   if (isOfficeId(existing?.id)) return existing!.id!;
-  const id = randomUUID();
+  return setOfficeId(home, isOfficeId(preferred) ? preferred : randomUUID());
+}
+
+/** Give the office in this folder this id, keeping the rest of its record.
+ *  The id back once it is on disk, else null. */
+export function setOfficeId(home: string, id: string): string | null {
+  if (!isOfficeId(id) || !homeFolderStatus(home).hasOffice) return null;
   try {
-    writeOfficeRecord(home, withOfficeId(existing ?? { version: 1, team: [] }, id));
+    writeOfficeRecord(home, withOfficeId(readOfficeRecord(home) ?? { version: 1, team: [] }, id));
   } catch (e) {
     console.error('[office] could not save the office id:', e);
     return null;

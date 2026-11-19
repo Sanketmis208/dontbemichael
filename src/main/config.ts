@@ -17,7 +17,10 @@ import { MAX_AGENT_TOKEN_CAP } from '../shared/tokenCaps';
 import { expandTilde, normalizeHiveHome } from './fs';
 import { isHeldRename, RENAME_RETRY_MS, sleepSync, writeFileAtomic } from './atomicFile';
 import type { IntegrationRecord } from '../shared/integrations';
-import type { OfficeEntry } from './officeSettings';
+import { randomUUID } from 'node:crypto';
+import { businessKeySet, installKeySet, officeIdIn, officesWith, pick, settingsIn, type OfficeEntry, type OfficeSettings } from './officeKeys';
+import { ensureOfficeId, readOfficeId } from './officeFile';
+import { homeFolderStatus } from './homeFolder';
 
 /** A recurring schedule. The type and every rule about it (ownership, next run,
  *  what a run sends) live in shared/missions.ts so main, preload and the
@@ -499,7 +502,14 @@ function dropRemovedWebhookData<T>(p: string, parsed: T): T {
   return next as T;
 }
 
-export function readConfig(): HarnessConfig {
+/**
+ * config.json as stored, with the defaults filled in. Before the move to per
+ * office settings (officesMigrated unset) this is what every reader sees; after
+ * it, only the install part is meant to be read from here, and the business
+ * settings live in `offices`. readConfig() is the view to use; this is for the
+ * code that files settings by office (officeSettings.ts).
+ */
+export function readStoredConfig(): HarnessConfig {
   const p = configPath();
   // No file yet = a first run with nothing to migrate; the defaults ARE the
   // post-migration shape. Deliberately does not persist — a bare read must not
@@ -512,6 +522,46 @@ export function readConfig(): HarnessConfig {
   } catch {
     return { ...DEFAULTS };
   }
+}
+
+/**
+ * The config every reader sees. Before the move it is config.json as today.
+ * After it, the install fields come from the top of config.json and the
+ * business fields from the open office's own entry (its saved ones over the
+ * defaults), so the same readConfig().businessName, .mailboxes or .missions
+ * read the business that is open, and no reader can read another one's
+ * (docs/designs/separate-businesses.md). Other businesses' entries are never
+ * part of it.
+ */
+export function readConfig(): HarnessConfig {
+  return configView(readStoredConfig());
+}
+
+function businessPart(cfg: HarnessConfig): Partial<OfficeSettings> {
+  return pick(cfg, businessKeySet) as Partial<OfficeSettings>;
+}
+
+function configView(stored: HarnessConfig): HarnessConfig {
+  const { offices: _offices, ...rest } = stored;
+  if (!stored.officesMigrated) return rest as HarnessConfig;
+  const id = officeIdIn(stored, readOfficeId(stored.harnessHome));
+  const install = pick(rest, installKeySet);
+  return dropRetiredMissions({ ...install, ...settingsIn(stored, id, businessPart(DEFAULTS)) } as HarnessConfig);
+}
+
+/**
+ * The office id business settings are saved under for this folder: its own
+ * (office.json), else the entry last opened from it, else a new one. A folder
+ * that holds an office gets the new id in its office.json at once; one that
+ * does not yet (setup has not made it) keeps it in the entry, and the office
+ * takes it when it is made (adoptOpenOffice). Null with no folder at all.
+ */
+function officeIdForSave(stored: HarnessConfig, home: string | null | undefined): string | null {
+  if (!home) return null;
+  const known = officeIdIn({ harnessHome: home, offices: stored.offices }, readOfficeId(home));
+  if (known) return known;
+  if (homeFolderStatus(home).hasOffice) return ensureOfficeId(home);
+  return randomUUID();
 }
 
 /** (#140, the upgrade path) A config.json persisted BEFORE `writeConfig`
@@ -606,7 +656,7 @@ function persistConfig(patched: HarnessConfig): HarnessConfig {
   // Saving one setting stores only that setting, so fill the rest back in first:
   // subscribers must see the same complete config a read gives them, never a
   // half-filled one.
-  const view = normalizeStoredHomes({ ...DEFAULTS, ...next });
+  const view = configView(normalizeStoredHomes({ ...DEFAULTS, ...next }));
   // The change is already saved, so one failed subscriber must not fail the save
   // for its caller, nor stop the subscribers after it.
   for (const listener of configWriteListeners) {
@@ -638,7 +688,7 @@ export function keepConfigCopy(name: string): boolean {
 }
 
 export function writeConfig(patch: Partial<HarnessConfig>): HarnessConfig {
-  const current = readConfig();
+  const current = readStoredConfig();
   const next: HarnessConfig = { ...current, ...patch };
   // Project INGESTION — a registered repo is typed by hand ("~/dev/foo") as often
   // as it is picked from the folder dialog. Expand `~` here so the persisted list
@@ -665,7 +715,32 @@ export function writeConfig(patch: Partial<HarnessConfig>): HarnessConfig {
     next.harnessHome = home;
     next.recentHives = recentHives;
   }
-  return persistConfig(next);
+  if (!current.officesMigrated) return configView(persistConfig(next));
+  return configView(persistConfig(routedToOffice(current, next, patch)));
+}
+
+/**
+ * After the move: the business fields of a save go to the open office's entry
+ * (the folder being opened, when the save also sets harnessHome), and the top
+ * of config.json keeps install fields only. A business field saved with no
+ * folder at all has nowhere to go and is left out.
+ */
+function routedToOffice(current: HarnessConfig, merged: HarnessConfig, patch: Partial<HarnessConfig>): HarnessConfig {
+  // `merged` has the save applied (registeredRepos and harnessHome cleaned up).
+  const business: Record<string, unknown> = {};
+  for (const k of Object.keys(patch)) if (businessKeySet.has(k)) business[k] = (merged as unknown as Record<string, unknown>)[k];
+  const top: Record<string, unknown> = { ...merged };
+  for (const k of businessKeySet) delete top[k];
+  const out = top as unknown as HarnessConfig;
+  if (Object.keys(business).length === 0) return out;
+  const home = out.harnessHome;
+  const id = officeIdForSave(current, home);
+  if (!home || !id) {
+    console.error('[config] business settings with no office to save them in were left out:', Object.keys(business).join(', '));
+    return out;
+  }
+  out.offices = officesWith(out, id, home, business) as Record<string, OfficeEntry>;
+  return out;
 }
 
 /** Set or clear one agent's token ceiling against the latest config on disk.
@@ -693,10 +768,7 @@ export function setAgentTokenCap(agentId: unknown, tokenCap: unknown): HarnessCo
   const agentTokenCaps = { ...(current.agentTokenCaps ?? {}) };
   if (tokenCap === undefined) delete agentTokenCaps[agentId];
   else agentTokenCaps[agentId] = tokenCap;
-  return persistConfig({
-    ...current,
-    agentTokenCaps
-  });
+  return writeConfig({ agentTokenCaps });
 }
 
 /** Wipe the persisted config back to first-run defaults so the app boots into

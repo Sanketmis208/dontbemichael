@@ -140,5 +140,5 @@ test('the Settings switch asks the guard before it touches anything', () => {
   const guard = body.indexOf('officeSwitchGuard(readConfig(), newHome)');
   assert.ok(guard > 0, 'a fresh switch asks the guard');
   assert.ok(guard < body.indexOf('ensureHarnessHome(newHome)'), 'before the folder is made');
-  assert.ok(guard < body.indexOf('writeConfig({ harnessHome: newHome })'), 'before the folder is saved');
+  assert.ok(guard < body.indexOf('writeConfig(movedOffices'), 'before the folder is saved');
 });

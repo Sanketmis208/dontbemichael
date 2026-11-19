@@ -932,8 +932,8 @@ test('the app drives the running clock: a beat each minute, paused and saved bef
   assert.ok(body('function teardownAndQuit', '\n}\n').includes(saveThenFlush), 'quit saves the running minutes before the flush');
   assert.ok(body("ipcMain.handle('app:resetMemory'", 'persist.close()').includes(saveThenFlush), 'a memory reset does too, before the database closes');
   // An office switch or a start over relaunches too (adversarial review, ship 2026-10-26).
-  const change = body("writeConfig({ harnessHome: newHome });", 'restartApp(app)');
-  assert.ok(main.slice(main.lastIndexOf('allowQuit = true;', main.indexOf('writeConfig({ harnessHome: newHome });')), main.indexOf('writeConfig({ harnessHome: newHome });')).includes(saveThenFlush), 'switching offices saves the old one\'s minutes first');
+  const change = body("writeConfig(movedOffices", 'restartApp(app)');
+  assert.ok(main.slice(main.lastIndexOf('allowQuit = true;', main.indexOf('writeConfig(movedOffices')), main.indexOf('writeConfig(movedOffices')).includes(saveThenFlush), 'switching offices saves the old one\'s minutes first');
   assert.ok(change.length > 0);
   assert.ok(body("console.error('[startOverHere] pulse flush:'", 'restartApp(app)').length > 0 && main.includes(`try { ${saveThenFlush} } catch (e) { console.error('[startOverHere] pulse flush:', e); }`), 'so does starting over');
   assert.match(main, /powerMonitor\.on\('suspend', \(\) => \{[^\n]*pulseTelemetry\.runningPause\(officeStopped\(\)\); pulseTelemetry\.presence\(0, true\);/);
