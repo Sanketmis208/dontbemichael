@@ -170,7 +170,7 @@ import { claudeCliFlags, claudeCliVersion, lastClaudeCliVersion } from './claude
 import { AUTO_FAILURE_REPORTS } from '../shared/buildFeatures';
 import { APP_NAME, APP_DATA_DIR, APP_URL_SCHEME } from '../shared/appName';
 import { copyOfficeData, homeFolderStatus, homeReadyAtLaunch } from './homeFolder';
-import { backfillOfficeRecord, findOffice, folderLayoutFor, isUsableTeamFolder, syncOfficeRecord } from './officeFile';
+import { backfillOfficeRecord, findOffice, folderLayoutFor, isUsableTeamFolder, officeSwitchGuard, syncOfficeRecord } from './officeFile';
 import { folderPolicy, AGENT_TMP_DIR, agentTmpName, researchFolderPolicy, withAgentTmpWall, withMemberWall, RESEARCH_TMP_DIR, shellTempWalls, withResearchWall, type AgentFolderPolicy, type FolderLayout } from '../shared/folderAccess';
 import { sandboxNetwork } from '../shared/webAccess';
 import { legacyBusinessFolder, touchesOffice } from '../shared/officeRecord';
@@ -4168,6 +4168,20 @@ ipcMain.handle('config:changeHome', async (_evt, payload: unknown) => {
   // copy this office over that one (cpSync with force).
   if (mode === 'move' && homeFolderStatus(newHome).hasOffice) {
     return { ok: false, error: 'That folder already holds an office. Choose an empty folder to move to, or open that office instead.' };
+  }
+
+  // Settings belong to the business that is open, and a switch keeps them all:
+  // another business's office, or a new empty one, would get this business's
+  // name, mailboxes, schedules and grants. Refused until each office keeps its
+  // own settings (docs/designs/separate-businesses.md). A move is the same office.
+  if (mode === 'fresh') {
+    const guard = officeSwitchGuard(readConfig(), newHome);
+    if (guard === 'otherBusiness') {
+      return { ok: false, guard, error: 'That office belongs to another business. It can\'t be opened from here yet.' };
+    }
+    if (guard === 'newBusiness') {
+      return { ok: false, guard, error: 'A new business can\'t start from here yet.' };
+    }
   }
 
   const ensured = ensureHarnessHome(newHome);

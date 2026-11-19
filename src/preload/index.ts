@@ -686,7 +686,7 @@ const api = {
    *  into the new folder (old kept as a safety net); 'fresh' just re-points and
    *  bootstraps an empty home. On success the app relaunches (never resolves);
    *  on failure (e.g. copy error) returns { ok: false, error }. */
-  changeHome: (newHome: string, mode: 'move' | 'fresh'): Promise<{ ok: boolean; error?: string }> =>
+  changeHome: (newHome: string, mode: 'move' | 'fresh'): Promise<{ ok: boolean; error?: string; guard?: 'otherBusiness' | 'newBusiness' }> =>
     ipcRenderer.invoke('config:changeHome', { newHome, mode }),
   /** Whether a folder (default: the current home) exists and holds an office. */
   homeStatus: (path?: string): Promise<{ path: string | null; exists: boolean; hasOffice: boolean }> =>

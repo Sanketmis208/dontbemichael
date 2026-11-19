@@ -14,6 +14,7 @@ import { clearLocalState, restoreLocalState, snapshotLocalState } from '@/store/
 import { plainReasonKey } from '@/store/plainReason';
 import { SHOW_MAILBOXES, SHOW_SIMPLE_MODE_SWITCH } from '@shared/buildFeatures';
 import { InfoTip } from './InfoTip';
+import { OfficeGuardNotice, type OfficeGuard } from './OfficeGuardNotice';
 import { KnowledgeDocList } from './KnowledgeDocList';
 import { PixelButton } from './PixelButton';
 import { SettingsHeroCard } from './SettingsHeroCard';
@@ -123,6 +124,8 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
   // Change-home flow: null until the user picks a new folder, then the sub-modal
   // confirms move-vs-fresh. Pre-selects 'move' (recommended - keeps the data).
   const [changeHome, setChangeHome] = useState<string | null>(null);
+  /** A switch refused because the settings belong to the open business. */
+  const [changeGuard, setChangeGuard] = useState<OfficeGuard | null>(null);
   const [changeMode, setChangeMode] = useState<'move' | 'fresh'>('move');
   const [changeBusy, setChangeBusy] = useState(false);
   const [changeErr, setChangeErr] = useState('');
@@ -418,7 +421,7 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
   // --- Change home folder ---
   /** Pick a new folder, then open the move-vs-fresh sub-modal. */
   const pickNewHome = async () => {
-    setChangeErr('');
+    setChangeErr(''); setChangeGuard(null);
     const res = await window.cth.chooseFolder();
     if (!res.ok) return; // cancelled - no-op
     const st = await window.cth.homeStatus(res.path).catch(() => null);
@@ -431,18 +434,22 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
   /** Switch to another office this install has used. A different office, so the
    *  renderer's saved state goes (its own roster comes back from its folder). */
   const openOtherOffice = async (path: string) => {
-    setChangeErr('');
+    setChangeErr(''); setChangeGuard(null);
     const snap = snapshotLocalState();
     clearLocalState();
-    const res = await window.cth.changeHome(path, 'fresh').catch((e) => ({ ok: false, error: String(e) }));
-    if (!res.ok) { restoreLocalState(snap); setChangeErr(res.error ?? t('settings.changeHome.couldNotOpen')); }
+    const res: { ok: boolean; error?: string; guard?: OfficeGuard } = await window.cth.changeHome(path, 'fresh').catch((e) => ({ ok: false, error: String(e) }));
+    if (!res.ok) {
+      restoreLocalState(snap);
+      if (res.guard) setChangeGuard(res.guard);
+      else setChangeErr(res.error ?? t('settings.changeHome.couldNotOpen'));
+    }
   };
 
   /** Apply the home-folder change. On success the app relaunches (never resolves);
    *  on failure we surface the error and the existing home keeps running. */
   const applyChangeHome = async () => {
     if (!changeHome) return;
-    setChangeBusy(true); setChangeErr('');
+    setChangeBusy(true); setChangeErr(''); setChangeGuard(null);
     // Moving copies the hive (incl. its .git) + palace, so the new home owns the
     // same renderer-side roster - keep localStorage. 'fresh' either starts an
     // empty office or opens one already in that folder; both bring their own
@@ -452,7 +459,12 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
     if (snap) clearLocalState();
     try {
       const res = await window.cth.changeHome(changeHome, changeMode);
-      if (!res.ok) { if (snap) restoreLocalState(snap); setChangeErr(res.error ?? t('settings.changeHome.couldNotChange')); setChangeBusy(false); }
+      if (!res.ok) {
+        if (snap) restoreLocalState(snap);
+        if (res.guard) setChangeGuard(res.guard);
+        else setChangeErr(res.error ?? t('settings.changeHome.couldNotChange'));
+        setChangeBusy(false);
+      }
       // ok === true never returns (the process relaunches).
     } catch (e) {
       if (snap) restoreLocalState(snap);
@@ -555,9 +567,10 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
               {changeErr && (
                 <div style={{ fontSize: 12, lineHeight: '18px', color: 'var(--cth-coral-text)' }}>{changeErr}</div>
               )}
+              {changeGuard && <OfficeGuardNotice guard={changeGuard} onClose={() => setChangeGuard(null)} />}
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                <PixelButton variant="secondary" size="md" onClick={() => { setChangeHome(null); setChangeErr(''); }} disabled={changeBusy}>
+                <PixelButton variant="secondary" size="md" onClick={() => { setChangeHome(null); setChangeErr(''); setChangeGuard(null); }} disabled={changeBusy}>
                   {t('common.cancel')}
                 </PixelButton>
                 <PixelButton variant="primary" size="md" onClick={applyChangeHome} disabled={changeBusy}>
@@ -731,6 +744,11 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
                         )}
                         {changeErr && !changeHome && (
                           <div style={{ fontSize: 12, lineHeight: '18px', color: 'var(--cth-coral-text)', marginTop: 6 }}>{changeErr}</div>
+                        )}
+                        {changeGuard && !changeHome && (
+                          <div style={{ marginTop: 6 }}>
+                            <OfficeGuardNotice guard={changeGuard} onClose={() => setChangeGuard(null)} />
+                          </div>
                         )}
                       </div>
 

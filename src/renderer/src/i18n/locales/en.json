@@ -18,7 +18,8 @@
     "tokens": "tokens",
     "restarting": "restarting…",
     "add": "add",
-    "clear": "Clear"
+    "clear": "Clear",
+    "ok": "OK"
   },
   "commandBar": {
     "send": "send"
@@ -1224,6 +1225,17 @@
     "sendNow": "send now",
     "sendingWhenFree": "sending when free…",
     "removeFromQueue": "Remove from queue"
+  },
+  "officeGuard": {
+    "why": "Settings like mailboxes, schedules and connectors belong to the business that is open. Each business will keep its own settings soon; until then, opening another one here would give it this business's settings.",
+    "otherBusiness": {
+      "title": "That office belongs to another business",
+      "line": "It can't be opened from here yet."
+    },
+    "newBusiness": {
+      "title": "A new business can't start from here yet",
+      "line": "To use a different folder for this business, choose Move my office here."
+    }
   },
   "officeMissing": {
     "title": "We can't find your office",

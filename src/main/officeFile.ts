@@ -87,6 +87,49 @@ export function backfillOfficeRecord(cfg: OfficeConfigFields): boolean {
   return syncOfficeRecord(cfg);
 }
 
+/**
+ * May the app switch to the office in `newHome` keeping the settings it has now?
+ *
+ * Several offices share one config, and a switch changes only the folder: the
+ * business name, mailboxes, schedules, grants and connectors stay. Opening
+ * another business's office would hand it this business's settings, and a new
+ * empty office would start with them. Until each office keeps its own settings
+ * (docs/designs/separate-businesses.md, step one), such a switch is refused.
+ *
+ * - 'ok': setup has not finished (nothing to carry over), or `newHome` is this
+ *   business's office: its registry has this team in the same folders (the
+ *   check backfillOfficeRecord uses), or its office.json names the same
+ *   business folder. A business with no team yet and an office with no record
+ *   and no members outside the hive cannot be told apart, so it is allowed.
+ * - 'otherBusiness': `newHome` holds an office that is not this business.
+ * - 'newBusiness': `newHome` holds no office, so a new one would start there.
+ *
+ * A move (the same office copied to an empty folder) never asks: it is the
+ * same business.
+ */
+export type OfficeSwitchGuard = 'ok' | 'otherBusiness' | 'newBusiness';
+
+export function officeSwitchGuard(cfg: OfficeConfigFields, newHome: string): OfficeSwitchGuard {
+  const mine = officeRecordFromConfig(cfg);
+  if (!mine) return 'ok';
+  if (!homeFolderStatus(newHome).hasOffice) return 'newBusiness';
+  const caseInsensitive = process.platform === 'darwin' || process.platform === 'win32';
+  const agents = readRegistryAgents(newHome);
+  if (mine.team.length > 0 && configMatchesRegistry(cfg, agents, caseInsensitive)) return 'ok';
+  const norm = (p: string) => {
+    const t = resolve(p).replace(/[\\/]+$/, '');
+    return caseInsensitive ? t.toLowerCase() : t;
+  };
+  const theirs = readOfficeRecord(newHome);
+  if (theirs?.businessFolder && mine.businessFolder && norm(theirs.businessFolder) === norm(mine.businessFolder)) return 'ok';
+  if (mine.team.length === 0 && !theirs) {
+    const inside = norm(newHome) + sep;
+    const members = Object.values(agents ?? {}).filter((a) => typeof a?.cwd === 'string' && a.cwd && !(norm(a.cwd) + sep).startsWith(inside));
+    if (members.length === 0) return 'ok';
+  }
+  return 'otherBusiness';
+}
+
 function readRegistryAgents(home: string): Record<string, RegistryAgentFields> | undefined {
   try {
     const p = join(home, 'hive', 'registry.json');
