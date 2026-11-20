@@ -1,4 +1,4 @@
-import { useRef, type CSSProperties, type KeyboardEvent } from 'react';
+import { useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AskOption, AskPart, PartAnswer } from '@shared/askMeRouting';
 import { isComposingKey } from '@shared/imeGuard';
@@ -70,8 +70,14 @@ export function ChoiceRows({ options, pick, onPick, onSend, who }: {
   );
 }
 
+/** Questions shown at once on a card (owner, 2026-11-19: seven at once was a
+ *  lot to face, and one card filled the column). */
+export const QUESTIONS_PER_PAGE = 3;
+
 /** Several questions: each with its number, its text, its chips if it has
- *  options (a mixed ask, 8A) and a line to type. Any can be left blank (D1). */
+ *  options (a mixed ask, 8A) and a line to type. Any can be left blank (D1).
+ *  Three at a time, with Previous and Next: answers stay as the page turns,
+ *  and Reply sends what is filled in on every page. */
 export function PartLines({ parts, answers, onChange, onSend, who }: {
   parts: AskPart[];
   answers: (PartAnswer | undefined)[];
@@ -85,9 +91,15 @@ export function PartLines({ parts, answers, onChange, onSend, who }: {
     all[i] = next;
     onChange(all);
   };
+  const pages = Math.max(1, Math.ceil(parts.length / QUESTIONS_PER_PAGE));
+  const [page, setPage] = useState(0);
+  const at = Math.min(page, pages - 1);
+  const from = at * QUESTIONS_PER_PAGE;
+  const shown = parts.slice(from, from + QUESTIONS_PER_PAGE);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 10 }}>
-      {parts.map((p, i) => {
+      {shown.map((p, k) => {
+        const i = from + k;
         const a = answers[i] ?? {};
         return (
           <div key={i} style={{ display: 'grid', gridTemplateColumns: '20px 1fr', gap: '4px 6px' }}>
@@ -128,10 +140,27 @@ export function PartLines({ parts, answers, onChange, onSend, who }: {
           </div>
         );
       })}
+      {pages > 1 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingInlineStart: 26 }}>
+          <span aria-live="polite" style={{ flex: 1, fontSize: 12, color: 'var(--cth-ink-3)' }}>
+            {t('askMe.questionsShown', { from: from + 1, to: from + shown.length, total: parts.length })}
+          </span>
+          {at > 0 && <button type="button" onClick={() => setPage(at - 1)} style={pageBtn}>{t('askMe.questionsBack')}</button>}
+          {at < pages - 1 && (
+            <button type="button" onClick={() => setPage(at + 1)} style={{ ...pageBtn, color: 'var(--cth-ink)', fontWeight: 600 }}>
+              {t('askMe.questionsNext', { count: Math.min(QUESTIONS_PER_PAGE, parts.length - from - shown.length) })}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
+const pageBtn: CSSProperties = {
+  height: 26, padding: '0 10px', border: 'none', borderRadius: 'var(--cth-r-pill)', background: 'var(--cth-neutral-soft)', cursor: 'pointer',
+  fontFamily: 'var(--cth-font-ui)', fontSize: 12, fontWeight: 500, color: 'var(--cth-ink-2)'
+};
 const numStyle: CSSProperties = { /* style-guard: micro */ fontSize: 11, fontWeight: 600, color: 'var(--cth-ink-3)', lineHeight: '18px', flexShrink: 0 };
 const recTag: CSSProperties = {
   display: 'inline-flex', alignItems: 'center', flexShrink: 0, height: 18, padding: '0 7px', borderRadius: 'var(--cth-r-pill)',

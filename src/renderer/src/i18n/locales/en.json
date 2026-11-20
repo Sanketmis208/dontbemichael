@@ -158,7 +158,11 @@
     "replyPartial": "Reply to {{n}} of {{total}}",
     "partAnswer": "Your answer",
     "partOwn": "Or your own answer",
-    "anythingElse": "Anything else (optional)"
+    "anythingElse": "Anything else (optional)",
+    "questionsShown": "Questions {{from}} to {{to}} of {{total}}",
+    "questionsBack": "Previous",
+    "questionsNext_one": "Next question",
+    "questionsNext_other": "Next {{count}}"
   },
   "sidebar": {
     "terminal": "Work",
