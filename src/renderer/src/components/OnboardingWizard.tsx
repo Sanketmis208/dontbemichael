@@ -30,6 +30,7 @@ import { missingBusinessFields, type BusinessField } from '@shared/businessProfi
 import { useResolvedGodName } from '@/hooks/useResolvedGodName';
 import { teamPlanFromRecord, type OfficeRecord } from '@shared/officeRecord';
 import { fieldLabel, groupName, requiredMark } from './fieldText';
+import { BackupRestore } from './BackupRestore';
 
 /** Add a business (docs/designs/separate-businesses.md, DT3, D19): the wizard
  *  runs over the open business, which keeps working, and its answers go to the
@@ -609,6 +610,14 @@ export function OnboardingWizard({ onComplete, preview, add }: OnboardingWizardP
           </div>
           <div style={{ padding: '14px 22px 22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
+            {/* A new computer: bring the office over from a backup instead of
+                setting it up (docs/designs/backup-restore.md). */}
+            {!add && !preview && step === 'business' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={{ fontSize: 13, color: 'var(--cth-ink-2)' }}>{t('backup.moving')}</span>
+                <BackupRestore restoreOnly hasOffice={false} />
+              </div>
+            )}
             {!add && damagedCopy && (step === 'business' || step === 'resume') && (
               <div role="status" data-damaged-config style={{
                 borderRadius: 'var(--cth-r-md)', padding: '8px 10px',

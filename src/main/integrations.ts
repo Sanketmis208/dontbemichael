@@ -158,6 +158,37 @@ export function copySecretsToOffices(ids: string[]): boolean {
   }
 }
 
+/**
+ * A backup (backup.ts): every saved secret, decrypted, by the key it is kept
+ * under. MAIN-INTERNAL ONLY: it goes straight into the backup sealed with the
+ * owner's backup password, never over IPC, never logged. One that cannot be
+ * decrypted on this computer is left out.
+ */
+export function exportSecrets(): Record<string, string> {
+  if (!canStoreSecrets()) return {};
+  const out: Record<string, string> = {};
+  for (const [key, cipher] of Object.entries(readSecretBlob())) {
+    try { out[key] = safeStorage.decryptString(Buffer.from(cipher, 'base64')); } catch { /* not readable here */ }
+  }
+  return out;
+}
+
+/**
+ * A restore: the secrets from a backup, locked to this computer (safeStorage),
+ * replacing the file. False, with nothing written, when this computer cannot
+ * keep secrets encrypted.
+ */
+export function importSecrets(secrets: Record<string, string>): boolean {
+  if (!canStoreSecrets()) return false;
+  const blob: Record<string, string> = {};
+  for (const [key, plain] of Object.entries(secrets)) {
+    if (typeof plain === 'string' && plain) blob[key] = safeStorage.encryptString(plain).toString('base64');
+  }
+  if (Object.keys(blob).length === 0) return true;
+  writeSecretBlob(blob);
+  return true;
+}
+
 /** A factory reset of one business: every secret kept under its office id.
  *  Another office's, and the keys from before the move, stay. True when none
  *  of them is left in the file. */

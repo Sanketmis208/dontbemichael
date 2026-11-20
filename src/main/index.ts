@@ -109,6 +109,8 @@ import { CASE_DRAFT_TIMEOUT_MS, CaseStudyService, caseInput, savePaths } from '.
 import { readSiteLogo } from './siteLogo';
 import type { CaseFont } from '../shared/caseStudy';
 import { CostLedgerStore } from './costLedger';
+import { checkBackupPassword, inspectBackup, restoreBackup, writeBackup } from './backup';
+import { MIN_BACKUP_PASSWORD } from './backupSecrets';
 import { dntSet } from './doNotTrack';
 import { createFailureReporter, FLUSH_MS } from './failureReport';
 import { breakerArm, crashContextFor, loopAgentContext, loopAgentDetail } from '../shared/failureReport';
@@ -4295,6 +4297,72 @@ function switchOffice(newHome: string, mode: 'move' | 'fresh', oldHome: string |
   restartApp(app);
   return { ok: true as const }; // unreachable (process exits) — typed for the renderer
 }
+
+// ─── Back up and restore (docs/designs/backup-restore.md) ───────────────────
+// Everything on this computer in one file, documents included, passwords and
+// keys sealed with a backup password; restored on a new computer.
+ipcMain.handle('backup:create', async (evt, password: unknown) => {
+  if (typeof password !== 'string' || password.length < MIN_BACKUP_PASSWORD) return { ok: false, error: 'password' };
+  const win = BrowserWindow.fromWebContents(evt.sender);
+  const day = new Date().toISOString().slice(0, 10);
+  const saveOpts = {
+    title: 'Save the backup',
+    defaultPath: join(app.getPath('documents'), `Don't Be Michael backup ${day}.dbmbackup`),
+    filters: [{ name: 'Backup', extensions: ['dbmbackup'] }]
+  };
+  const pick = win ? await dialog.showSaveDialog(win, saveOpts) : await dialog.showSaveDialog(saveOpts);
+  if (pick.canceled || !pick.filePath) return { ok: false, error: 'cancelled' };
+  try { pulseTelemetry.flush(); } catch { /* the snapshot reads what is saved */ }
+  try {
+    const done = await writeBackup(pick.filePath, password, {
+      userData: app.getPath('userData'), home: homedir(), appVersion: app.getVersion(), platform: process.platform,
+      config: readStoredConfig() as unknown as Record<string, unknown>,
+      claudeDirFor: (folder) => projectDirs(folder).find((d) => existsSync(d)) ?? null,
+      dbSnapshot: async (dest) => { const db = persist.database(); if (!db) return false; await db.backup(dest); return true; },
+      secrets: () => integrations.exportSecrets(),
+      onProgress: (files, bytes) => { try { evt.sender.send('backup:progress', { files, bytes }); } catch { /* window gone */ } }
+    });
+    return { ok: true, path: pick.filePath, ...done };
+  } catch (e) {
+    console.error('[backup] could not write the backup:', e);
+    try { rmSync(pick.filePath, { force: true }); } catch { /* nothing to remove */ }
+    return { ok: false, error: 'failed' };
+  }
+});
+ipcMain.handle('backup:pick', async (evt) => {
+  const win = BrowserWindow.fromWebContents(evt.sender);
+  const openOpts = { title: 'Restore from a backup', properties: ['openFile' as const], filters: [{ name: 'Backup', extensions: ['dbmbackup'] }] };
+  const pick = win ? await dialog.showOpenDialog(win, openOpts) : await dialog.showOpenDialog(openOpts);
+  if (pick.canceled || !pick.filePaths[0]) return { ok: false, error: 'cancelled' };
+  try {
+    return { ok: true, path: pick.filePaths[0], summary: await inspectBackup(pick.filePaths[0], homedir()) };
+  } catch {
+    return { ok: false, error: 'notBackup' };
+  }
+});
+ipcMain.handle('backup:restore', async (_evt, path: unknown, password: unknown) => {
+  if (typeof path !== 'string' || typeof password !== 'string') return { ok: false, error: 'invalid' };
+  // The password is checked before anything stops, so a wrong one changes nothing.
+  try { await checkBackupPassword(path, password); } catch (e) {
+    return { ok: false, error: e instanceof Error && e.message === 'wrong password' ? 'wrongPassword' : 'notBackup' };
+  }
+  allowQuit = true;
+  stopForReset('restore');
+  try {
+    const res = await restoreBackup(path, password, {
+      userData: app.getPath('userData'), home: homedir(),
+      claudeDirFor: (folder) => projectDirs(folder)[0],
+      importSecrets: (s) => integrations.importSecrets(s),
+      moveDbPaths: (dbPath, from, to) => { const s = new PersistStore(dbPath); s.open(); try { s.movePathPrefix(from, to); } finally { s.close(); } }
+    });
+    console.log(`[backup] restored ${res.written} files (${res.skipped} kept as they were)`);
+  } catch (e) {
+    console.error('[backup] restore stopped:', e);
+  }
+  // The restored office opens on the next start, whatever happened above.
+  restartApp(app);
+  return { ok: true as const };
+});
 
 /** The business menu and Settings' Your businesses (DT1, DT2). */
 ipcMain.handle('office:list', () => listBusinesses());

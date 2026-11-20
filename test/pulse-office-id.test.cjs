@@ -138,3 +138,20 @@ test('every kv key built from an office is listed, so it moves and is erased wit
   assert.ok(found.size >= 3, [...found].join(', '));
   for (const k of found) assert.ok(OFFICE_KV_PREFIXES.includes(k), `${k} is keyed by office but not listed`);
 });
+
+test('a restore under another home folder moves folder keyed rows and marks, and nothing else', (t) => {
+  if (!process.env.PULSE_UNDER_ELECTRON) return;
+  const p = store(t);
+  const db = p.database();
+  const oldOffice = '/Users/sam/HarnessAgents';
+  seed(db, oldOffice);
+  seed(db, '/Users/samuel/HarnessAgents');
+  seed(db, ID);
+  p.setKv(`pulse:state:${oldOffice}`, { at: 1 });
+  p.movePathPrefix('/Users/sam', '/Users/alex');
+  assert.equal(count(db, '/Users/alex/HarnessAgents'), 2, 'moved to the new home folder');
+  assert.equal(count(db, oldOffice), 0);
+  assert.equal(count(db, '/Users/samuel/HarnessAgents'), 2, 'another name is not a prefix match');
+  assert.equal(count(db, ID), 2, 'an office id is not a path');
+  assert.deepEqual(p.getKv('pulse:state:/Users/alex/HarnessAgents'), { at: 1 });
+});

@@ -16,6 +16,7 @@ import { SHOW_MAILBOXES, SHOW_SIMPLE_MODE_SWITCH } from '@shared/buildFeatures';
 import { InfoTip } from './InfoTip';
 import { OfficeGuardNotice, type OfficeGuard } from './OfficeGuardNotice';
 import { YourBusinesses } from './YourBusinesses';
+import { BackupRestore } from './BackupRestore';
 import type { BusinessRow } from '@/shell/businessMenuRows';
 import { KnowledgeDocList } from './KnowledgeDocList';
 import { PixelButton } from './PixelButton';
@@ -786,6 +787,14 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
                             <OfficeGuardNotice guard={changeGuard} onClose={() => setChangeGuard(null)} />
                           </div>
                         )}
+                      </div>
+
+
+                      {/* Back up everything, or restore it on a new computer
+                          (docs/designs/backup-restore.md). */}
+                      <div style={group}>
+                        <h3 style={groupName}>{t('backup.title')}</h3>
+                        <BackupRestore hasOffice={!!config.onboardingComplete} />
                       </div>
 
 

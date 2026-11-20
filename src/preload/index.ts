@@ -715,6 +715,21 @@ const api = {
   /** A business left before the end of its setup, to reopen the wizard where it stopped. */
   businessDraft: (id: string): Promise<{ id: string; home: string; step: string; settings: Record<string, unknown> } | null> =>
     ipcRenderer.invoke('office:draft', id),
+  /** Back up everything on this computer to a file the owner picks, secrets
+   *  sealed with `password` (docs/designs/backup-restore.md). */
+  backupCreate: (password: string): Promise<{ ok: boolean; error?: string; path?: string; files?: number; bytes?: number }> =>
+    ipcRenderer.invoke('backup:create', password),
+  /** Pick a backup file and read what is in it, before anything is restored. */
+  backupPick: (): Promise<{ ok: boolean; error?: string; path?: string; summary?: { createdAt: number; appVersion: string; businesses: string[]; hasSecrets: boolean; fromOtherHome: boolean } }> =>
+    ipcRenderer.invoke('backup:pick'),
+  /** Restore it: replaces what is on this computer, then the app reopens. */
+  backupRestore: (path: string, password: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('backup:restore', path, password),
+  onBackupProgress: (cb: (p: { files: number; bytes: number }) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, p: { files: number; bytes: number }) => cb(p);
+    ipcRenderer.on('backup:progress', listener);
+    return () => ipcRenderer.removeListener('backup:progress', listener);
+  },
   /** Remove a business whose setup was never finished (not the open one). */
   removeUnfinishedBusiness: (id: string): Promise<boolean> => ipcRenderer.invoke('office:removeUnfinished', id),
   /** Whether a folder (default: the current home) exists and holds an office. */

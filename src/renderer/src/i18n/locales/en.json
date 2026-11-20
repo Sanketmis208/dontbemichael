@@ -2634,6 +2634,33 @@
   "degradedNotice": {
     "title": "{{name}} started with something missing"
   },
+  "backup": {
+    "title": "Backup",
+    "backUp": "Back up everything",
+    "restore": "Restore from a backup",
+    "tip": "One file with every business on this computer: the team, memory, tasks, history, knowledge, settings and the team's folders. Saved passwords and keys are locked with a backup password. Keep the file somewhere safe, like a drive or cloud storage.",
+    "restoreTip": "Brings every business from a backup made on another computer, as it was. You sign in to Claude again afterwards.",
+    "moving": "Moving from another computer?",
+    "passwordLine": "Choose a backup password. It locks the saved passwords and keys in the backup, and you need it to restore.",
+    "password": "Backup password",
+    "passwordAgain": "The same password again",
+    "passwordShort": "Use at least {{count}} characters.",
+    "passwordMismatch": "The two passwords are not the same.",
+    "chooseWhere": "Choose where to save",
+    "backingUp": "Backing up: {{count}} files, {{size}}",
+    "done": "Backed up, {{size}}:",
+    "keepPassword": "Keep the backup password with it: without it, the saved passwords and keys can't be restored.",
+    "ok": "OK",
+    "couldNotBackUp": "Couldn't save the backup. Check there is room where you saved it, and try again.",
+    "notBackup": "That file is not a backup from this app.",
+    "from": "Backup from {{date}}",
+    "replaces": "Restoring replaces what is on this computer now.",
+    "signInAgain": "After it opens, sign in to Claude again. Your connectors come back with your account.",
+    "restoreNow": "Restore",
+    "restoring": "Restoring. The app reopens when it is done.",
+    "wrongPassword": "That is not the backup password.",
+    "couldNotRestore": "Couldn't restore that backup. Nothing was changed."
+  },
   "addBusiness": {
     "backToOffice": "Back to the office",
     "thisBusiness": "this business",

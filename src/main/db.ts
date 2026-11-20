@@ -310,6 +310,27 @@ export class PersistStore {
     }
   }
 
+  /**
+   * A restore on a computer whose home folder differs (backup.ts): office rows
+   * and marks filed under a folder in the old home move to the same folder in
+   * this one. Office ids (once settings are per office) are not paths and stay.
+   */
+  movePathPrefix(from: string, to: string): void {
+    const db = this.db;
+    if (!db || !from || !to || from === to) return;
+    const n = from.length;
+    db.transaction(() => {
+      for (const t of OFFICE_TABLES) {
+        db.prepare(`UPDATE OR IGNORE ${t} SET office = ? || substr(office, ?) WHERE office = ? OR substr(office, 1, ?) = ?`)
+          .run(to, n + 1, from, n + 1, `${from}/`);
+      }
+      for (const p of OFFICE_KV_PREFIXES) {
+        db.prepare('UPDATE OR IGNORE kv SET key = ? || ? || substr(key, ?) WHERE key = ? OR substr(key, 1, ?) = ?')
+          .run(p, to, p.length + n + 1, p + from, p.length + n + 1, `${p}${from}/`);
+      }
+    })();
+  }
+
   // ─── kv (scalar app state) ─────────────────────────────────────────────────
 
   /** Read a JSON-decoded scalar, or undefined if absent/unparseable. */
