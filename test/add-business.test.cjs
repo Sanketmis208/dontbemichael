@@ -165,3 +165,22 @@ test('a business just added opens on its first launch; a lost office still does 
   assert.equal(s.settings.neverOpenedBusiness(back), false);
   assert.equal(s.settings.neverOpenedBusiness({ ...back, harnessHome: realty, offices: { x: { home: realty, settings: {}, draft: { step: 'team' } } } }), false);
 });
+
+// Value: protects=a draft id names only an unfinished business: the id of one that finished setup never lets Add a business or Back to office write over it, and nothing is added before the move; fails_when=the onboardingComplete check on p.id goes, or the officesMigrated guard goes; why_new=the tests above pass only draft ids or none; seam=none; no_claim=what the renderer sends (main side only)
+test('a finished business\'s id is never taken as a draft, and nothing is added before the move', (t) => {
+  const s = scene(t);
+  const other = path.join(s.userData, 'HarnessAgents 4');
+  const added = s.settings.addBusiness({ id: s.bakeryId, home: other, settings: { businessName: 'Corner Florist' } });
+  assert.equal(added.ok, true);
+  assert.notEqual(added.id, s.bakeryId, 'a new entry of its own');
+  const draft = s.settings.saveBusinessDraft({ id: s.bakeryId, home: path.join(s.userData, 'HarnessAgents 5'), step: 'team', settings: { businessName: 'Northgate Realty' } });
+  assert.ok(draft && draft !== s.bakeryId);
+  assert.equal(s.settings.businessDraft(s.bakeryId), null, 'a finished business has no draft');
+  assert.deepEqual(s.stored().offices[s.bakeryId], { home: s.bakery, settings: s.bakerySettings }, 'the finished business untouched');
+
+  const cfg = s.stored();
+  delete cfg.officesMigrated;
+  fs.writeFileSync(path.join(s.userData, 'config.json'), JSON.stringify(cfg));
+  assert.deepEqual(s.settings.addBusiness({ home: other, settings: { businessName: 'X' } }), { ok: false, error: 'notPerOffice' });
+  assert.equal(s.settings.saveBusinessDraft({ home: other, step: 'business', settings: {} }), null);
+});

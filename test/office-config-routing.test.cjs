@@ -200,3 +200,22 @@ test('launch moves settings on every launch, with no switch, before any service 
     assert.ok(move < main.indexOf(first), `before ${first}`);
   }
 });
+
+// Value: protects=after the move, with no office open, a business field has nowhere to go and is left out, and the business's files point at offices/none, never another business's place or the top; fails_when=routedToOffice keeps the field at the top or files it under the last office, or officeDataPath falls back to userData; why_new=every routing test above has an office open; seam=none; no_claim=what the missing office screen shows (main only)
+test('no office open after the move: a business field is left out, and business files go nowhere shared', () => {
+  const home = migratedBakery();
+  const id = file.readOfficeId(home);
+  const before = JSON.stringify(raw().offices);
+  const errors = [];
+  const err = console.error;
+  console.error = (...a) => errors.push(a.join(' '));
+  try { config.writeConfig({ harnessHome: null, businessName: 'Typed with no office', notifications: true }); } finally { console.error = err; }
+  assert.equal(raw().notifications, true, 'an install field is still saved');
+  assert.deepEqual(businessKeysAtTop(), [], 'never at the top');
+  assert.equal(JSON.stringify(raw().offices), before, 'never in another business\'s entry');
+  assert.ok(errors.some((l) => /left out: businessName/.test(l)), 'and says so in the log');
+  assert.equal(config.officeDataPath('pastes'), path.join(userData, 'offices', 'none', 'pastes'));
+  config.writeConfig({ harnessHome: home });
+  assert.equal(config.officeDataPath('pastes'), path.join(userData, 'offices', id, 'pastes'));
+  assert.equal(config.readConfig().businessName, 'Harbor Bakery');
+});
