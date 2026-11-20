@@ -1314,3 +1314,16 @@ test('a connected system answers only where a record lives, only from a member w
   assert.equal(F.holdsSystem(['QuickBooks'], 'Books'), false);
   assert.equal(F.holdsSystem(['Email'], 'Mail'), false);
 });
+
+// Owner, 2026-11-19: "Save as the whole list" read as final, as if the list
+// could not change and the team would stop finding things. Saving means all
+// the owner knows of for now: seen items still come, and it can be changed.
+test('the save button says all for now, never a final list', () => {
+  const en = JSON.parse(require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'src/renderer/src/i18n/locales/en.json'), 'utf8')).foundations.card;
+  assert.equal(en.saveWhole, "Save, that's all for now");
+  assert.match(en.listHint, /anything new/);
+  for (const k of ['saveWhole', 'listHint', 'savedWhole', 'sentToMichaelWhole']) {
+    assert.doesNotMatch(en[k], /whole list/i, k);
+    assert.doesNotMatch(en[k], /[–—]| - /, k);
+  }
+});

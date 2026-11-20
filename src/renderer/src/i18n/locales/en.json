@@ -2616,7 +2616,7 @@
       "folderTooLong": "{{name}} sits too deep to name here. Move it higher and add it again.",
       "listSoFar": "The list so far",
       "listSoFarFrom": "The list so far, from {{name}}",
-      "listHint": "Saving says this is the whole list.",
+      "listHint": "The team still tells you about anything new, and you can change it any time.",
       "listHintUndecided": "Add, mark Not ours or Decide later for each seen item first.",
       "counter": "{{n}} of {{max}}",
       "listChanged": "The list changed since you started. Review it before saving.",
@@ -2638,7 +2638,7 @@
       "closeLine": "Close the line about {{item}}",
       "showMore_one": "Show {{count}} more",
       "showMore": "Show {{count}} more",
-      "saveWhole": "Save as the whole list",
+      "saveWhole": "Save, that's all for now",
       "saveSoFar": "Save the list so far",
       "stillAll": "Still all of them",
       "confirmedOn": "Confirmed {{day}}",
@@ -2647,9 +2647,9 @@
       "addFull": "The list is full. Make room in it first.",
       "failedNotOurs": "Couldn't mark it not ours, try again.",
       "failedPutOff": "Couldn't put it off, try again.",
-      "savedWhole": "Saved as the whole list.",
+      "savedWhole": "Saved. The team tells you about anything new.",
       "savedSoFar": "Saved the list so far.",
-      "sentToMichaelWhole": "Sent to {{godName}} to save as the whole list."
+      "sentToMichaelWhole": "Sent to {{godName}} to save as all for now."
     }
   },
   "allClearTip": {
