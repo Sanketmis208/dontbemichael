@@ -59,11 +59,22 @@ test('hours typed the usual ways start the picker where the owner left them', ()
   for (const unclear of ['By appointment', 'Weekends only', 'Open late']) assert.equal(h.guessHours(unclear), null, unclear);
 });
 
+test('hours not set show no day open and say so, never an unsaved preset', () => {
+  // Live, 2026-11-20: empty hours showed Mon to Fri 9 to 5 without saving it,
+  // so setup and Settings looked set while Pam asked the owner for the hours.
+  assert.equal(h.formatHours(h.NOT_SET), undefined, 'what is shown is what is saved');
+  const picker = read('src/renderer/src/components/HoursPicker.tsx');
+  assert.match(picker, /useState<WeekHours>\(\(\) => parsed \?\? guessHours\(value\) \?\? NOT_SET\)/);
+  assert.doesNotMatch(picker, /\?\? WEEKDAYS_9_TO_5/, 'no preset stands in for hours not set');
+  assert.match(picker, /else if \(!value\?\.trim\(\) && formatHours\(week\)\) setWeek\(NOT_SET\);/, 'hours cleared elsewhere clear the days');
+  assert.match(picker, /\{!value\?\.trim\(\) && <span[^>]*>\{t\('companyProfile\.hoursNotSet'\)\}/);
+});
+
 test('the picker: in the profile, saves only on a change, keeps other text, and the copy', () => {
   const picker = read('src/renderer/src/components/HoursPicker.tsx');
   assert.match(picker, /const save = \(next: WeekHours\): void => \{ setWeek\(next\); onChange\(formatHours\(next\)\); \};/);
   assert.match(picker, /useState<'week' \| 'text'>\(\(\) => \(!value\?\.trim\(\) \|\| parsed \? 'week' : 'text'\)\)/, 'other text opens as text');
-  assert.match(picker, /onClick=\{\(\) => \{ setWeek\(parsed \?\? guessHours\(value\) \?\? WEEKDAYS_9_TO_5\); setMode\('week'\); \}\}/, 'Set by day saves nothing by itself');
+  assert.match(picker, /onClick=\{\(\) => \{ setWeek\(parsed \?\? guessHours\(value\) \?\? NOT_SET\); setMode\('week'\); \}\}/, 'Set by day saves nothing by itself');
   assert.match(picker, /type="time" step=\{900\}/);
   const fields = read('src/renderer/src/components/CompanyProfileFields.tsx');
   assert.match(fields, /<Field label=\{t\('companyProfile\.hours'\)\} group>\s*<HoursPicker value=\{value\.hours\} onChange=\{\(hours\) => set\(\{ hours \}\)\}/);
@@ -73,7 +84,7 @@ test('the picker: in the profile, saves only on a change, keeps other text, and 
   assert.match(fields, /<Field label=\{t\('companyProfile\.social'\)\} group>/);
   assert.match(fields, /read=\{group\}/);
   const en = JSON.parse(read('src/renderer/src/i18n/locales/en.json')).companyProfile;
-  for (const k of ['hoursWeekdays', 'hoursEveryDay', 'hoursOpen', 'hoursClosed', 'hoursTypeInstead', 'hoursByDay', 'hoursKept']) {
+  for (const k of ['hoursWeekdays', 'hoursEveryDay', 'hoursOpen', 'hoursClosed', 'hoursTypeInstead', 'hoursByDay', 'hoursKept', 'hoursNotSet']) {
     assert.ok(en[k], k);
     assert.doesNotMatch(en[k], /[–—]| - /, k);
   }

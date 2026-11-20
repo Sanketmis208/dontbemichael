@@ -1358,6 +1358,7 @@
     "hoursTypeInstead": "Type them instead",
     "hoursByDay": "Set by day",
     "hoursKept": "Saved now: {{hours}}. It stays until you change a day.",
+    "hoursNotSet": "Not set yet. Pick hours above or open the days you work.",
     "timeZone": "Time zone",
     "serviceArea": "Where you serve",
     "area": {

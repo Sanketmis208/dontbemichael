@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
-import { EVERY_DAY_9_TO_5, WEEKDAYS_9_TO_5, formatHours, guessHours, parseHours, type WeekHours } from '@shared/businessHours';
+import { EVERY_DAY_9_TO_5, NOT_SET, WEEKDAYS_9_TO_5, formatHours, guessHours, parseHours, type WeekHours } from '@shared/businessHours';
 
 /**
  * Business hours, set by day (owner, 2026-11-19: typing them freely was hard).
@@ -9,6 +9,10 @@ import { EVERY_DAY_9_TO_5, WEEKDAYS_9_TO_5, formatHours, guessHours, parseHours,
  * any other form, typed by hand or written by an agent, show as text and are
  * kept until the owner changes a day; "Type them instead" is there for hours a
  * week cannot say.
+ *
+ * Hours not set show every day closed and "Not set yet", never a preset: a
+ * week shown but not saved read as set, in setup and in Settings, while agents
+ * read nothing and asked for the hours (owner, 2026-11-20).
  */
 export function HoursPicker({ value, onChange, inputClassName, inputStyle }: {
   value: string | undefined;
@@ -19,12 +23,14 @@ export function HoursPicker({ value, onChange, inputClassName, inputStyle }: {
   const { t, i18n } = useTranslation();
   const parsed = useMemo(() => parseHours(value), [value]);
   const [mode, setMode] = useState<'week' | 'text'>(() => (!value?.trim() || parsed ? 'week' : 'text'));
-  // Starts from the saved hours, or a best guess at typed ones (never saved by itself).
-  const [week, setWeek] = useState<WeekHours>(() => parsed ?? guessHours(value) ?? WEEKDAYS_9_TO_5);
+  // Starts from the saved hours, or a best guess at typed ones (never saved by
+  // itself), else no day open: what is shown is what is saved.
+  const [week, setWeek] = useState<WeekHours>(() => parsed ?? guessHours(value) ?? NOT_SET);
 
   // Hours saved from elsewhere (a foundation answer) come in as they are.
   useEffect(() => {
     if (parsed && formatHours(week) !== value) setWeek(parsed);
+    else if (!value?.trim() && formatHours(week)) setWeek(NOT_SET);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
@@ -52,7 +58,7 @@ export function HoursPicker({ value, onChange, inputClassName, inputStyle }: {
           className={inputClassName}
           style={inputStyle}
         />
-        <button type="button" onClick={() => { setWeek(parsed ?? guessHours(value) ?? WEEKDAYS_9_TO_5); setMode('week'); }} style={linkButton}>{t('companyProfile.hoursByDay')}</button>
+        <button type="button" onClick={() => { setWeek(parsed ?? guessHours(value) ?? NOT_SET); setMode('week'); }} style={linkButton}>{t('companyProfile.hoursByDay')}</button>
       </div>
     );
   }
@@ -98,6 +104,7 @@ export function HoursPicker({ value, onChange, inputClassName, inputStyle }: {
           </div>
         ))}
       </div>
+      {!value?.trim() && <span style={{ fontSize: 12, color: 'var(--cth-ink-3)' }}>{t('companyProfile.hoursNotSet')}</span>}
       {value && !parsed && (
         // Typed or written elsewhere: kept until a day here is changed.
         <span style={{ fontSize: 12, color: 'var(--cth-ink-3)' }}>{t('companyProfile.hoursKept', { hours: value })}</span>

@@ -21,6 +21,9 @@ export const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as co
 
 export const WEEKDAYS_9_TO_5: WeekHours = [0, 1, 2, 3, 4, 5, 6].map((d) => (d < 5 ? { open: '09:00', close: '17:00' } : null));
 export const EVERY_DAY_9_TO_5: WeekHours = [0, 1, 2, 3, 4, 5, 6].map(() => ({ open: '09:00', close: '17:00' }));
+/** No day open: what the picker shows for hours not set yet, the same as what
+ *  is saved (nothing), never a preset nobody chose. */
+export const NOT_SET: WeekHours = [0, 1, 2, 3, 4, 5, 6].map(() => null);
 
 const HHMM = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
