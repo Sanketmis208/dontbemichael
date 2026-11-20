@@ -185,13 +185,14 @@ test('a retired schedule saved in an office is never read', () => {
   assert.deepEqual(config.readConfig().missions, []);
 });
 
-test('until step one is complete, launch moves settings only when asked (DBM_OFFICE_SETTINGS=1), before any service starts', () => {
-  // A dev run shares config.json with the installed app, which cannot read
-  // moved settings: the move must never happen on its own yet.
+test('launch moves settings on every launch, with no switch, before any service starts', () => {
+  // Step one is complete (owner, 2026-11-20): the move no longer waits for
+  // DBM_OFFICE_SETTINGS=1, and nothing else asks for it.
   const main = fs.readFileSync(path.join(__dirname, '..', 'src', 'main', 'index.ts'), 'utf8');
-  const gate = main.indexOf("process.env.DBM_OFFICE_SETTINGS === '1' || readStoredConfig().officesMigrated");
+  assert.ok(!/DBM_OFFICE_SETTINGS/.test(main), 'no switch left');
+  const gate = main.indexOf('const moved = migrateToOfficeSettings();');
   const move = main.indexOf('migrateToOfficeSettings()');
-  assert.ok(gate > 0 && move > gate, 'the move sits behind the switch');
+  assert.ok(gate > 0 && move >= gate, 'the move runs at launch');
   assert.ok(gate > main.indexOf("app.setPath('userData'"), 'after the data folder is set');
   // Before anything opens a business's journal or file, so they open in the
   // office's own place, and before any service starts.

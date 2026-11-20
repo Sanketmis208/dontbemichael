@@ -221,16 +221,14 @@ app.setName(APP_NAME);
 // what sat at the top of config.json, and the business's files in the app's
 // data folder, move into the open office's own place once. Here, before
 // anything below opens a journal or reads a setting, and before any service
-// starts. Only with DBM_OFFICE_SETTINGS=1 until step one is complete: the move
-// is one way, and a dev run shares config.json with the installed app, which
-// cannot read moved settings. A config already moved keeps working without it.
-if (process.env.DBM_OFFICE_SETTINGS === '1' || readStoredConfig().officesMigrated) {
-  try {
-    const moved = migrateToOfficeSettings();
-    if (moved === 'failed') console.error('[offices] settings were not moved this launch; the app runs on them as they are');
-    adoptOpenOffice();
-  } catch (e) { console.error('[offices] launch move:', e); }
-}
+// starts. On every launch: a config already moved returns at once, and one
+// whose office is not there yet waits for it. The move is one way; the copy
+// kept from before it (config.before-offices.json) is what a downgrade needs.
+try {
+  const moved = migrateToOfficeSettings();
+  if (moved === 'failed') console.error('[offices] settings were not moved this launch; the app runs on them as they are');
+  adoptOpenOffice();
+} catch (e) { console.error('[offices] launch move:', e); }
 // A business with its own Claude login (BIZ-3): Claude Code, for this whole
 // run, uses the business's own folder: its sign in, connectors, plugins and
 // conversations. Set here, before any agent, check or reader starts, so every

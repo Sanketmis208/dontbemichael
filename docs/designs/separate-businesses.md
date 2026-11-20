@@ -585,6 +585,13 @@ Proves two logins side by side on this Mac. Any account works, even the same one
 - The menu and Settings changed with it: a business whose setup is not finished now opens the wizard (`rowAction` 'resume'), never a switch.
 - Test: test/add-business.test.cjs (5 cases: the new entry and an untouched open business; refused folders; a draft kept, resumed and finished in place; the wizard's add finish, Back to office, default folder, Ready step, App and menu wiring; the copy).
 
+## Step one complete: the switch removed (2026-11-20)
+
+- The owner tested switching live (E7) and said step one is complete. `DBM_OFFICE_SETTINGS` is gone: every launch now makes the move (a config already moved returns at once; one whose office is not there yet waits), so every install gets the business menu, Your businesses, Add a business, switching through closing time and a Claude login per business.
+- One way: a build from before this one cannot read moved settings. `config.before-offices.json` is the copy a downgrade needs, with the journals and knowledge under `offices/<id>/` moved back.
+- The T2 guard stays for an install whose move has not run yet (no office open, or a failed move).
+- Test: test/office-config-routing.test.cjs, the launch case now fails if the switch comes back or the move leaves launch.
+
 ## Completion summary
 
 ```
