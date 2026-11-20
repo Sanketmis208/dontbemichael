@@ -260,6 +260,9 @@ export interface HarnessConfig {
   /** The owner's data classes that differ from the seeded defaults
    *  (shared/dataClasses.ts): what the team may send to Research. */
   dataClasses?: Partial<Record<DataClassId, DataClassSetting>>;
+  /** Always allowed (shared/publicTerms.ts): what the owner says is the
+   *  business's own and public, kept as written by the privacy check. */
+  researchPublic?: string[];
   /** Team members that failed their first start, tried again (and only they)
    *  on each later launch until they start. */
   businessTeamRetry?: string[];

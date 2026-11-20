@@ -1161,6 +1161,8 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
                       config={config}
                       classes={pending.dataClasses ?? config.dataClasses}
                       onClassesChange={(next) => stage({ dataClasses: cleanDataClassOverrides(next) ?? {} } as Partial<HarnessConfig>)}
+                      publicTerms={pending.researchPublic ?? config.researchPublic}
+                      onPublicTermsChange={(next) => stage({ researchPublic: next } as Partial<HarnessConfig>)}
                     />
                   )}
 

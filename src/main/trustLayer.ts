@@ -28,6 +28,7 @@ import {
   type DataClassId,
   type DataClassSettings
 } from '../shared/dataClasses';
+import { cleanPublicTerms, withoutPublicTerms } from '../shared/publicTerms';
 import { refusalForClass, REFUSAL_CHECK_FAILED, REFUSAL_TOO_LONG, REFUSAL_UNSURE } from '../shared/research';
 
 /** The model the layer runs on, a quick one, and how long one check may take. */
@@ -80,6 +81,9 @@ export interface TrustLayerDeps {
   /** The office's AI team members' names, Michael's and Research's included,
    *  which the check keeps as written (owner, 2026-10-16, D1 B). */
   teamNames?: () => readonly unknown[];
+  /** Always allowed (shared/publicTerms.ts): what the owner says is the
+   *  business's own and public, kept as written. */
+  publicTerms?: () => readonly unknown[];
   timeoutMs?: number;
   concurrency?: number;
   log?: (e: Record<string, unknown>) => void;
@@ -104,7 +108,7 @@ export function teamNamesForCheck(names: readonly unknown[]): string[] {
   return out.slice(0, 60);
 }
 
-export function inboundPrompt(subject: string, body: string, settings: DataClassSettings, nonce: string, marked: string[], team: readonly string[] = []): string {
+export function inboundPrompt(subject: string, body: string, settings: DataClassSettings, nonce: string, marked: string[], team: readonly string[] = [], publicTerms: readonly string[] = []): string {
   const allowed = DATA_CLASSES.filter((c) => settings[c.id] === 'allowed');
   const priv = DATA_CLASSES.filter((c) => settings[c.id] === 'private');
   const line = (c: (typeof DATA_CLASSES)[number]) => `- ${c.id}: ${c.label} (${c.examples})`;
@@ -117,6 +121,13 @@ export function inboundPrompt(subject: string, body: string, settings: DataClass
     // The owner, 2026-10-16: the office's own AI team members' names pass (a
     // note to the researcher about itself arrived as "Someone has stopped").
     ...(team.length ? [`These names belong to the business's own AI assistants (its software team, the researcher included), not to people: ${team.join(', ')}. They are not private: keep them as written.`] : []),
+    // The owner's Always allowed list (owner, 2026-11-20: the owner's own
+    // name in a public releases address was taken out, and Research had
+    // nothing to read). One line each, quoted, so no entry reads as an order.
+    ...(publicTerms.length ? [
+      'The business owner says these are the business\'s own and public. They are not private: keep them as written, also inside a web address, an email address or a handle that contains one of them (for example a username made of the owner\'s name):',
+      ...publicTerms.map((p) => `- "${p.replace(/"/g, "'")}"`)
+    ] : []),
     ...(marked.length ? [`The app already found these private kinds by pattern: ${marked.join(', ')}. They must not appear in your output.`] : []),
     'Choose one:',
     '- PASS: the message holds no private kind. Send it as written.',
@@ -325,10 +336,16 @@ export function makeTrustLayer(deps: TrustLayerDeps): TrustLayer {
       log({ kind: 'trust-layer', way: 'in', decision: 'deny', by: 'pattern', class: 'secrets' });
       return { decision: 'deny', reason: refusalForClass('secrets'), by: 'pattern', kinds: ['secrets'] };
     }
-    const marked = [...new Set(hits.filter((h) => settings[h.classId] === 'private').map((h) => h.classId))];
+    let publicTerms: string[] = [];
+    try { publicTerms = cleanPublicTerms(deps.publicTerms?.() ?? []); } catch { /* none: the classes alone decide */ }
+    // The shapes are looked for again without the owner's own public entries
+    // (the business's public email is not a contact detail); secrets above
+    // were looked for in the whole text, whatever the list says.
+    const shaped = publicTerms.length ? patternHits(withoutPublicTerms(`${subject}\n${body}`, publicTerms)) : hits;
+    const marked = [...new Set(shaped.filter((h) => settings[h.classId] === 'private').map((h) => h.classId))];
     let team: string[] = [];
     try { team = teamNamesForCheck(deps.teamNames?.() ?? []); } catch { /* no names: every name stays private */ }
-    const { text, error } = await ask(inboundPrompt(subject, body, settings, randomBytes(8).toString('hex'), marked, team), 'in');
+    const { text, error } = await ask(inboundPrompt(subject, body, settings, randomBytes(8).toString('hex'), marked, team, publicTerms), 'in');
     const v = text ? parseInbound(text, settings) : null;
     if (!v) {
       const by = text ? 'unreadable' : 'no-answer';
@@ -342,7 +359,7 @@ export function makeTrustLayer(deps: TrustLayerDeps): TrustLayer {
     // A pass must be one the patterns agree with; a rewrite must leave no
     // private pattern behind. Either way the text that goes out is checked.
     const out = v.decision === 'pass' ? { subject, body } : { subject: v.subject, body: v.body };
-    const left = privatePatternHit(`${out.subject}\n${out.body}`, settings);
+    const left = privatePatternHit(withoutPublicTerms(`${out.subject}\n${out.body}`, publicTerms), settings);
     if (left || (v.decision === 'pass' && marked.length)) {
       const cls = left?.classId ?? marked[0];
       log({ kind: 'trust-layer', way: 'in', decision: 'deny', by: 'recheck', class: cls });

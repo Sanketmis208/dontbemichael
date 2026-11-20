@@ -25,7 +25,7 @@ export const BUSINESS_KEYS = [
   'missions', 'scheduleRequests', 'missionsOwnersMigrated', 'opsStandupSeeded', 'foundationsCheckSeeded',
   'standupFocusSeeded', 'heartbeatSeeded',
   // Research and data
-  'research', 'dataClasses',
+  'research', 'dataClasses', 'researchPublic',
   // knowledge and memory
   'knowledgeGraph', 'knowledgeOnSeeded', 'knowledgeOnNoticeSeen', 'embeddingModel',
   // owner messages

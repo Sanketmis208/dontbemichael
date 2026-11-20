@@ -1370,6 +1370,8 @@ const trustLayer = makeTrustLayer({
     return r.ok && r.text ? r.text : r.ok ? null : { error: r.error ?? 'unknown' };
   },
   settings: () => dataClassSettings(readConfig().dataClasses),
+  // The owner's Always allowed list (Settings, Research & privacy).
+  publicTerms: () => readConfig().researchPublic ?? [],
   // Every AI team member's name, Michael's and Research's included, passes as
   // written; real people's names stay private (owner, 2026-10-16).
   teamNames: () => {
