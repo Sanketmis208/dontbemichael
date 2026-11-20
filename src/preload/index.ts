@@ -730,6 +730,10 @@ const api = {
     ipcRenderer.on('backup:progress', listener);
     return () => ipcRenderer.removeListener('backup:progress', listener);
   },
+  /** Address suggestions for what was typed in the street field (Photon,
+   *  OpenStreetMap). ok false: none this time; the fields are typed by hand. */
+  suggestAddress: (typed: string, lang?: string): Promise<{ ok: boolean; suggestions?: Array<{ label: string; address: { street?: string; city?: string; region?: string; postalCode?: string; country?: string } }> }> =>
+    ipcRenderer.invoke('address:suggest', typed, lang),
   /** Remove a business whose setup was never finished (not the open one). */
   removeUnfinishedBusiness: (id: string): Promise<boolean> => ipcRenderer.invoke('office:removeUnfinished', id),
   /** Whether a folder (default: the current home) exists and holds an office. */

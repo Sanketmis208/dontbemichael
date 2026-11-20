@@ -1295,6 +1295,8 @@
     "industryPlaceholder": "For example: Dental clinic",
     "addressHead": "Headquarters address",
     "street": "Street address",
+    "suggestions": "Address suggestions",
+    "fromOsm": "Suggestions from OpenStreetMap",
     "streetPlaceholder": "For example: 123 Main Street",
     "city": "City",
     "region": "State or region",

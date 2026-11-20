@@ -1,6 +1,7 @@
 import { useMemo, type CSSProperties, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Field as SharedField, Panel, requiredMark } from './fieldText';
+import { StreetField } from './StreetField';
 import {
   ENTITY_TYPES, SERVICE_AREAS,
   type CompanyAddress, type CompanyProfile, type RequiredProfileField
@@ -107,8 +108,11 @@ export function CompanyProfileFields({ value, onChange, parts, needsIndustry, mi
           </Panel>
           <Panel title={t('companyProfile.addressHead')}>
           <Field label={t('companyProfile.street')} required>
-            <input value={text(value.address?.street)} onChange={(e) => setAddress({ street: orUndefined(e.target.value) })}
-              placeholder={t('companyProfile.streetPlaceholder')} aria-required aria-invalid={miss('street')} className="cth-input" style={fieldStyle} />
+            {/* Address suggestions as the street is typed (OpenStreetMap, free, no
+                key); a pick fills the rest of the address, all still editable. */}
+            <StreetField value={text(value.address?.street)} onType={(v) => setAddress({ street: orUndefined(v) })}
+              onPick={(a) => set({ address: { ...(value.address ?? {}), ...a } })}
+              placeholder={t('companyProfile.streetPlaceholder')} invalid={miss('street')} className="cth-input" style={fieldStyle} />
           </Field>
           <div style={grid2}>
             <Field label={t('companyProfile.city')} required>

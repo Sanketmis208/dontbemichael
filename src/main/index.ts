@@ -111,6 +111,7 @@ import type { CaseFont } from '../shared/caseStudy';
 import { CostLedgerStore } from './costLedger';
 import { backupFileName, checkBackupPassword, inspectBackup, restoreBackup, writeBackup } from './backup';
 import { MIN_BACKUP_PASSWORD } from './backupSecrets';
+import { photonQueryUrl, readPhoton, type AddressSuggestion } from '../shared/photon';
 import { dntSet } from './doNotTrack';
 import { createFailureReporter, FLUSH_MS } from './failureReport';
 import { breakerArm, crashContextFor, loopAgentContext, loopAgentDetail } from '../shared/failureReport';
@@ -4361,6 +4362,34 @@ ipcMain.handle('backup:restore', async (_evt, path: unknown, password: unknown) 
   // The restored office opens on the next start, whatever happened above.
   restartApp(app);
   return { ok: true as const };
+});
+
+// ─── Address suggestions (shared/photon.ts) ──────────────────────────────────
+// What the owner typed in the street field goes to Photon (OpenStreetMap, free,
+// no key); the answers fill the address. Asked only from the street field, at
+// most every 300 ms, with a short wait; a recent answer is reused. Any failure
+// is no suggestions: the fields are typed by hand as before. The request names
+// only the app, never the owner.
+const addressCache = new Map<string, AddressSuggestion[]>();
+let addressLastAt = 0;
+ipcMain.handle('address:suggest', async (_evt, typed: unknown, lang: unknown) => {
+  const url = typeof typed === 'string' ? photonQueryUrl(typed, typeof lang === 'string' ? lang : undefined) : null;
+  if (!url) return { ok: true, suggestions: [] };
+  const hit = addressCache.get(url);
+  if (hit) return { ok: true, suggestions: hit };
+  const now = Date.now();
+  if (now - addressLastAt < 300) return { ok: false };
+  addressLastAt = now;
+  try {
+    const res = await net.fetch(url, { headers: { 'User-Agent': `DontBeMichael/${app.getVersion()} (open source desktop app)` }, signal: AbortSignal.timeout(4000) });
+    if (!res.ok) return { ok: false };
+    const suggestions = readPhoton(await res.json());
+    addressCache.set(url, suggestions);
+    if (addressCache.size > 100) addressCache.delete(addressCache.keys().next().value as string);
+    return { ok: true, suggestions };
+  } catch {
+    return { ok: false };
+  }
 });
 
 /** The business menu and Settings' Your businesses (DT1, DT2). */
