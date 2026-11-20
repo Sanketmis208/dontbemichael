@@ -23,7 +23,7 @@ import type { ToolStatus } from '@shared/toolCatalog';
 import type { OfficePack } from '@shared/officePack';
 import type { AgentDefinitionV2 } from '@shared/agentDefinition';
 import {
-  OFFICE_KEY, folderNames, initialPicks, folderFor, michaelFolderFor, connectionsNeeded, teamPlan,
+  OFFICE_KEY, folderNames, initialPicks, connectionsNeeded, teamPlan,
   type FolderSuggestions
 } from '@shared/teamPlan';
 import { missingBusinessFields, type BusinessField } from '@shared/businessProfile';
@@ -231,21 +231,13 @@ export function OnboardingWizard({ onComplete, preview, add }: OnboardingWizardP
     const h = folderSuggestions?.home;
     return h && (p === h || p.startsWith(h + '/')) ? '~' + p.slice(h.length) : p;
   };
-  const chooseTeamFolder = async (key: string) => {
+  // The office folder; each member's folder goes inside it.
+  const chooseOfficeFolder = async () => {
     setError(undefined);
     const res = await window.cth.chooseFolder();
     if (!res.ok) { if (res.error !== 'cancelled') setError(res.error); return; }
-    // Michael's folder is private to him, so it can't be a team member's own
-    // folder (src/shared/folderAccess.ts).
-    const same = (a?: string) => !!a && a.replace(/[\\/]+$/, '').toLowerCase() === res.path.replace(/[\\/]+$/, '').toLowerCase();
-    if (key !== OFFICE_KEY && same(michaelFolderFor(folderSuggestions, folderOverrides))) {
-      setError(t('addAgent.errFolderShared'));
-      return;
-    }
-    setFolderOverrides((o) => ({ ...o, [key]: res.path }));
+    setFolderOverrides({ [OFFICE_KEY]: res.path });
   };
-  const resetTeamFolder = (key: string) =>
-    setFolderOverrides((o) => { const n = { ...o }; delete n[key]; return n; });
   const connLabel: Record<string, string> = {
     email: t('onboarding.team.conn.email'),
     quickbooks: t('onboarding.team.conn.quickbooks'),
@@ -269,11 +261,6 @@ export function OnboardingWizard({ onComplete, preview, add }: OnboardingWizardP
     }
     if (a.connections.length === 0) chips.push({ tone: 'ok', label: t('onboarding.team.nothingToConnect') });
     return chips;
-  };
-  const folderLabels = {
-    worksIn: t('onboarding.team.worksIn'),
-    change: t('onboarding.team.change'),
-    useSuggested: t('onboarding.team.useSuggested')
   };
 
   const [home, setHome] = useState<string>(draft?.home ?? '');
@@ -558,11 +545,15 @@ export function OnboardingWizard({ onComplete, preview, add }: OnboardingWizardP
   // glow follow this one flag (docs/designs/onboarding-centered.md).
   // Not on Team itself: picking the team needs the room for who each member
   // is and does, not their seats (owner, 2026-11-19). The studio fills in after.
+  // Each step opens at its top: the window scrolls as one, and kept the place
+  // the last step was left at (owner, 2026-11-19: Team opened midway down).
+  const scroller = useRef<HTMLDivElement>(null);
+  useEffect(() => { scroller.current?.scrollTo({ top: 0 }); }, [step]);
   const hasStudio = (step === 'home' || step === 'orchestrator' || step === 'permissions' || step === 'ready') && teamAgents.length > 0;
   // Team is a wide card, the members side by side, so the list doesn't run long.
-  const cardTrack = step === 'team' ? 'minmax(0, 1120px)' : 'minmax(0, 560px)';
+  const cardTrack = step === 'team' ? 'minmax(0, 1400px)' : 'minmax(0, 560px)';
   return (
-    <div style={{
+    <div ref={scroller} style={{
       position: 'fixed', inset: 0, zIndex: 200, overflowY: 'auto',
       background: 'var(--cth-bg)',
       display: 'flex', flexDirection: 'column'
@@ -1055,29 +1046,29 @@ export function OnboardingWizard({ onComplete, preview, add }: OnboardingWizardP
                 {/* The folder idea, said once, in plain words: each person has a
                     folder; put their documents there; they save their work there. */}
                 {/* One line; the rest behind the (i) (owner, 2026-11-19: the list
-                    started below a long paragraph). */}
+                    started below a long paragraph). Only the office folder is
+                    chosen here: each member's folder goes inside it (owner,
+                    2026-11-19: a change link on every card was too much). A
+                    member's folder can still be moved after setup. */}
                 {folderSuggestions && (
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 14, lineHeight: '20px', color: 'var(--cth-ink-700)' }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 14, lineHeight: '20px', color: 'var(--cth-ink-700)' }}>
                     <span style={{ flexShrink: 0, display: 'flex' }}><Icon name="folder" /></span>
                     <span>{t('onboarding.team.folderLine', { root: tildePath(folderSuggestions.root) })}</span>
                     <InfoTip text={t('onboarding.team.folderNote', { root: tildePath(folderSuggestions.root) })} />
+                    <button type="button" onClick={() => { void chooseOfficeFolder(); }} style={linkBtn}>{t('onboarding.team.change')}</button>
+                    {folderOverrides[OFFICE_KEY] !== undefined && (
+                      <button type="button" onClick={() => setFolderOverrides({})} style={linkBtn}>{t('onboarding.team.useSuggested')}</button>
+                    )}
                   </div>
                 )}
 
-                {/* Side by side: three across in a usual window, fewer when narrow. */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
+                {/* Side by side: four across in a usual window, fewer when narrow. */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
                   <TeamCard
                     character="michael"
                     name={t('onboarding.team.managerName')}
                     summary={t('onboarding.team.managerSummary')}
                     chips={[{ tone: 'muted', label: t('onboarding.team.alwaysOn') }]}
-                    folder={michaelFolderFor(folderSuggestions, folderOverrides)}
-                    folderNote={t('onboarding.team.sharedFolder')}
-                    displayPath={tildePath}
-                    overridden={folderOverrides[OFFICE_KEY] !== undefined}
-                    onChangeFolder={() => { void chooseTeamFolder(OFFICE_KEY); }}
-                    onUseSuggested={() => resetTeamFolder(OFFICE_KEY)}
-                    labels={folderLabels}
                   />
                   {teamAgents.map((a) => (
                     <TeamCard
@@ -1088,12 +1079,6 @@ export function OnboardingWizard({ onComplete, preview, add }: OnboardingWizardP
                       chips={agentChips(a)}
                       picked={!!teamPicked[a.id]}
                       onTogglePicked={() => { setError(undefined); setTeamPicked((p) => ({ ...p, [a.id]: !p[a.id] })); }}
-                      folder={folderFor(a, folderSuggestions, folderOverrides)}
-                      displayPath={tildePath}
-                      overridden={folderOverrides[a.id] !== undefined}
-                      onChangeFolder={() => { void chooseTeamFolder(a.id); }}
-                      onUseSuggested={() => resetTeamFolder(a.id)}
-                      labels={folderLabels}
                     />
                   ))}
                   <TeamCard
@@ -1103,11 +1088,6 @@ export function OnboardingWizard({ onComplete, preview, add }: OnboardingWizardP
                     chips={[{ tone: 'muted', label: t('research.teamTag') }]}
                     picked={researchPicked}
                     onTogglePicked={() => setResearchPicked((v) => !v)}
-                    displayPath={tildePath}
-                    overridden={false}
-                    onChangeFolder={() => undefined}
-                    onUseSuggested={() => undefined}
-                    labels={folderLabels}
                   />
                 </div>
 
@@ -1486,14 +1466,12 @@ const CHIP_FG: Record<TeamChip['tone'], string> = {
 };
 
 /**
- * One member of the starter team (wireframe screen 2, plus the folder they work
- * in — Decision 47). `picked` undefined means not pickable: Michael, always on.
- * The folder row sits OUTSIDE the label so its buttons aren't nested inside
- * the checkbox's click target.
+ * One member of the starter team (wireframe screen 2). `picked` undefined means
+ * not pickable: Michael, always on. Their folder is not shown: only the office
+ * folder is chosen on this step (owner, 2026-11-19).
  */
 function TeamCard({
-  character, name, summary, chips, picked, onTogglePicked,
-  folder, folderNote, displayPath, overridden, onChangeFolder, onUseSuggested, labels
+  character, name, summary, chips, picked, onTogglePicked
 }: {
   character?: string;
   name: string;
@@ -1501,13 +1479,6 @@ function TeamCard({
   chips: TeamChip[];
   picked?: boolean;
   onTogglePicked?: () => void;
-  folder?: string;
-  folderNote?: string;
-  displayPath: (p: string) => string;
-  overridden: boolean;
-  onChangeFolder: () => void;
-  onUseSuggested: () => void;
-  labels: { worksIn: string; change: string; useSuggested: string };
 }) {
   const pickable = picked !== undefined;
   const active = !pickable || picked;
@@ -1516,7 +1487,7 @@ function TeamCard({
   // A card in the Team grid; picked ones carry the stronger ring.
   return (
     <div style={{
-      display: 'flex', flexDirection: 'column', padding: 14, borderRadius: 'var(--cth-r-lg)', minWidth: 0,
+      display: 'flex', flexDirection: 'column', padding: 12, borderRadius: 'var(--cth-r-lg)', minWidth: 0,
       background: active ? 'var(--cth-card)' : 'var(--cth-card-2)',
       boxShadow: `inset 0 0 0 ${active && pickable ? 2 : 1}px ${active && pickable ? 'var(--cth-ink)' : 'var(--cth-line)'}`
     }}>
@@ -1541,11 +1512,11 @@ function TeamCard({
             {rest.length > 0 && <span style={{ fontSize: 14, color: 'var(--cth-ink-3)' }}>{rest.join(' · ')}</span>}
           </span>
           <span style={{ display: 'block', fontSize: 14, lineHeight: '20px', color: 'var(--cth-ink-2)' }}>{summary}</span>
-          <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 7 }}>
+          <span style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
             {chips.map((c) => (
               <span key={c.label} style={{
                 display: 'inline-flex', alignItems: 'center', gap: 5,
-                fontSize: 14, fontWeight: 600, lineHeight: '20px', padding: '2px 9px', borderRadius: 999,
+                fontSize: 12, fontWeight: 600, lineHeight: '16px', padding: '1px 8px', borderRadius: 999,
                 background: CHIP_BG[c.tone], color: CHIP_FG[c.tone],
                 boxShadow: c.tone === 'optional' ? 'none' : c.tone === 'need' ? 'inset 0 0 0 1px var(--cth-line-2)' : 'none',
                 border: c.tone === 'optional' ? '1px dashed var(--cth-line-2)' : 'none'
@@ -1557,23 +1528,6 @@ function TeamCard({
           </span>
         </span>
       </label>
-
-      {active && folder && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 'auto', paddingTop: 10,
-          fontSize: 13, color: 'var(--cth-ink-3)', minWidth: 0
-        }}>
-          <Icon name="folder" />
-          <span>{labels.worksIn}</span>
-          <span title={folder} style={{
-            fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-2)', minWidth: 0, maxWidth: '100%',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
-          }}>{displayPath(folder)}</span>
-          {folderNote && <span>{folderNote}</span>}
-          <button type="button" onClick={onChangeFolder} style={linkBtn}>{labels.change}</button>
-          {overridden && <button type="button" onClick={onUseSuggested} style={linkBtn}>{labels.useSuggested}</button>}
-        </div>
-      )}
       </div>
     </div>
   );

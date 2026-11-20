@@ -38,7 +38,7 @@ test('without the studio the side tracks are equal, so the card is centered', ()
   const [aStart, aCard, aEnd] = tracks(alone);
   assert.equal(aStart, aEnd, 'equal start and end tracks center the card');
   assert.equal(aCard, '${cardTrack}');
-  assert.match(wizard, /const cardTrack = step === 'team' \? 'minmax\(0, 1120px\)' : 'minmax\(0, 560px\)';/, 'wide on Team, 560 elsewhere');
+  assert.match(wizard, /const cardTrack = step === 'team' \? 'minmax\(0, 1400px\)' : 'minmax\(0, 560px\)';/, 'wide on Team, 560 elsewhere');
   const [sStart, sCard] = tracks(withStudio);
   assert.match(sStart, /0fr/, 'the start track closes when the studio shows');
   assert.equal(sCard, aCard, 'the card track keeps its width, so only the side tracks animate');
@@ -67,8 +67,20 @@ test('the slide, the glow and the fade stop under reduced motion', () => {
 });
 
 test('Team: members side by side as cards, the folder idea in one line', () => {
-  assert.match(wizard, /gridTemplateColumns: 'repeat\(auto-fill, minmax\(300px, 1fr\)\)', gap: 12/);
+  assert.match(wizard, /gridTemplateColumns: 'repeat\(auto-fill, minmax\(280px, 1fr\)\)', gap: 10/);
+  // Team opened midway down, where Details was left (owner, 2026-11-19).
+  assert.match(wizard, /useEffect\(\(\) => \{ scroller\.current\?\.scrollTo\(\{ top: 0 \}\); \}, \[step\]\);/, 'each step opens at its top');
+  assert.match(wizard, /<div ref=\{scroller\} style=\{\{\s*position: 'fixed', inset: 0, zIndex: 200, overflowY: 'auto',/, 'on the box that scrolls');
   assert.match(wizard, /t\('onboarding\.team\.folderLine', \{ root: tildePath\(folderSuggestions\.root\) \}\)\}<\/span>\s*<InfoTip text=\{t\('onboarding\.team\.folderNote'/);
   const en = JSON.parse(fs.readFileSync(path.join(root, 'src/renderer/src/i18n/locales/en.json'), 'utf8'));
   assert.doesNotMatch(en.onboarding.team.folderLine, /[\u2013\u2014]| - /);
+});
+
+test('Team: only the office folder is chosen; each member\'s goes inside it', () => {
+  // Owner, 2026-11-19: a change link on every card was too much.
+  assert.match(wizard, /onClick=\{\(\) => \{ void chooseOfficeFolder\(\); \}\}/);
+  assert.match(wizard, /setFolderOverrides\(\{ \[OFFICE_KEY\]: res\.path \}\);/, 'one override, the office');
+  const card = wizard.slice(wizard.indexOf('function TeamCard('), wizard.indexOf('\n}\n', wizard.indexOf('function TeamCard(')));
+  assert.doesNotMatch(card, /folder/i, 'no folder on a member card');
+  assert.doesNotMatch(wizard, /chooseTeamFolder|folderOverrides\[a\.id\]/);
 });
