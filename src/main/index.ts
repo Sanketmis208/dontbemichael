@@ -197,6 +197,7 @@ import { createReporter } from './reportProblem';
 import { createMailboxNotes, newlyHeld, GRANT_NOTES_FILE, type PendingGrant } from './mailboxNotes';
 import { PromptSubmits, confirmSubmit } from '../shared/submitConfirm';
 import { createBootWatchdog, type BootWatchdog } from './bootWatchdog';
+import { dropInheritedClaudeVars } from './inheritedEnv';
 import { dismissNotice, emptyDegraded, noteStart, shownNotices, type DegradedNotice } from '../shared/degradedNotices';
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
@@ -206,6 +207,14 @@ const isDev = !!process.env.ELECTRON_RENDERER_URL;
 // without the pin would open on an empty folder, as if freshly installed.
 app.setPath('userData', join(app.getPath('appData'), APP_DATA_DIR));
 app.setName(APP_NAME);
+
+// Started from inside a Claude Code session (a dev run): that session's own
+// settings never reach the team or the checks (inheritedEnv.ts). Before
+// any setting is read or anything starts.
+{
+  const dropped = dropInheritedClaudeVars(process.env);
+  if (dropped) console.log(`[env] started inside a Claude Code session: ${dropped} of its settings dropped`);
+}
 
 // Each business keeps its own settings and files (docs/designs/separate-businesses.md):
 // what sat at the top of config.json, and the business's files in the app's
