@@ -705,6 +705,16 @@ const api = {
   /** Find it: point a business whose folder went missing at its folder (only the same office). */
   relocateBusiness: (id: string, path: string): Promise<{ ok: boolean; error?: 'notFound' | 'notThatOffice' }> =>
     ipcRenderer.invoke('office:relocate', id, path),
+  /** Add a business (DT3): file the wizard's answers under the new business's
+   *  own entry, never the open one's; the renderer then switches to it. */
+  addBusiness: (p: { id?: string; home: string; settings: Record<string, unknown>; install?: Record<string, unknown> }): Promise<{ ok: boolean; id?: string; error?: string }> =>
+    ipcRenderer.invoke('office:addBusiness', p),
+  /** Back to office from Add a business: keep what was typed as Setup not finished. */
+  saveBusinessDraft: (p: { id?: string; home: string; step: string; settings: Record<string, unknown> }): Promise<string | null> =>
+    ipcRenderer.invoke('office:saveDraft', p),
+  /** A business left before the end of its setup, to reopen the wizard where it stopped. */
+  businessDraft: (id: string): Promise<{ id: string; home: string; step: string; settings: Record<string, unknown> } | null> =>
+    ipcRenderer.invoke('office:draft', id),
   /** Remove a business whose setup was never finished (not the open one). */
   removeUnfinishedBusiness: (id: string): Promise<boolean> => ipcRenderer.invoke('office:removeUnfinished', id),
   /** Whether a folder (default: the current home) exists and holds an office. */

@@ -31,8 +31,22 @@ import { useResolvedGodName } from '@/hooks/useResolvedGodName';
 import { teamPlanFromRecord, type OfficeRecord } from '@shared/officeRecord';
 import { fieldLabel, groupName, requiredMark } from './fieldText';
 
+/** Add a business (docs/designs/separate-businesses.md, DT3, D19): the wizard
+ *  runs over the open business, which keeps working, and its answers go to the
+ *  new business's own entry. */
+export interface AddBusinessMode {
+  /** A business left before the end of its setup, to go on where it stopped. */
+  draft: { id: string; home: string; step: string; settings: Record<string, unknown> } | null;
+  /** The open business's name, for "Same as <name>" on the Ready step. */
+  openBusinessName: string;
+  /** Leave the wizard: back to the office, or the switch has started. */
+  onClose: () => void;
+}
+
 export interface OnboardingWizardProps {
   onComplete: (config: HarnessConfig) => void;
+  /** Set for Add a business; absent for the first setup. */
+  add?: AddBusinessMode;
   /** Open on a later step with the first answers filled in. Only for the
    *  reference screens (tools/studio-lab/reference.tsx); the app never sets it. */
   preview?: { step: 'business' | 'team' | 'ready'; businessType: string; businessName: string };
@@ -68,11 +82,17 @@ const PROVIDER_BLURB_KEYS: Partial<Record<AgentProvider, string>> = {
   codex: 'onboarding.providerBlurb.codex'
 };
 
-export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps) {
+export function OnboardingWizard({ onComplete, preview, add }: OnboardingWizardProps) {
   const { t } = useTranslation();
   // Onboarding runs before god exists in the store, so read the persisted name.
   const godName = useResolvedGodName();
-  const [step, setStep] = useState<Step>(preview?.step ?? 'business');
+  // A draft left by Back to office goes on where it stopped (D19).
+  const draft = add?.draft ?? null;
+  const draftSettings = (draft?.settings ?? {}) as { businessType?: string; businessName?: string; companyProfile?: CompanyProfile };
+  const [step, setStep] = useState<Step>(preview?.step ?? (draft && DRAFT_STEPS.includes(draft.step as Step) ? draft.step as Step : 'business'));
+  // Add a business: this business's own Claude login, or the open one's (D4, E6).
+  const [claudeLogin, setClaudeLogin] = useState<'shared' | 'own'>('shared');
+  const [draftId, setDraftId] = useState<string | undefined>(draft?.id);
 
   // WHAT BUSINESS THIS IS — the first and most consequential question, because it
   // decides the suggested cast, the office hours, and every agent's starting tool
@@ -80,12 +100,12 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
   // the owner to classify themselves before the app had earned anything, and it
   // forked every subsequent string into two registers. There is one register now,
   // and it is the plain one.
-  const [businessType, setBusinessType] = useState<string | undefined>(preview?.businessType);
-  const [businessName, setBusinessName] = useState(preview?.businessName ?? '');
+  const [businessType, setBusinessType] = useState<string | undefined>(preview?.businessType ?? draftSettings.businessType);
+  const [businessName, setBusinessName] = useState(preview?.businessName ?? draftSettings.businessName ?? '');
   // The company profile (src/shared/companyProfile.ts): the essentials on step
   // 1, everything else optional on step 2. Time zone and currency start from
   // the Mac's own settings.
-  const [profile, setProfile] = useState<CompanyProfile>(() => ({ timeZone: localTimeZone(), currency: localCurrency() }));
+  const [profile, setProfile] = useState<CompanyProfile>(() => ({ timeZone: localTimeZone(), currency: localCurrency(), ...(draftSettings.companyProfile ?? {}) }));
   // Step 2's legal name starts as the step 1 business name, and follows a
   // rename on step 1 until the owner types a legal name of their own.
   const legalNameFilled = useRef<string | undefined>(undefined);
@@ -255,7 +275,7 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
     useSuggested: t('onboarding.team.useSuggested')
   };
 
-  const [home, setHome] = useState<string>('');
+  const [home, setHome] = useState<string>(draft?.home ?? '');
   const [autoMode, setAutoMode] = useState<boolean>(true);
   const [godProvider, setGodProvider] = useState<AgentProvider>('claude');
   const [godModel, setGodModel] = useState<string | undefined>(
@@ -338,7 +358,11 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
   // at the config-write boundary AND at ensureHarnessHome's mkdir, so every
   // downstream reader still sees one absolute path. No new IPC surface.
   useEffect(() => {
-    if (!home) setHome(DEFAULT_HOME);
+    if (home) return;
+    // Add a business: the open office is most likely in the default folder, so
+    // the new one is suggested the first free "~/HarnessAgents N" (as Start new).
+    if (add) { void firstFreeHome().then((free) => setHome((h) => h || free)); return; }
+    setHome(DEFAULT_HOME);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -349,6 +373,8 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
   const [resuming, setResuming] = useState(false);
   const foundPlan = found ? teamPlanFromRecord(found.record) : null;
   useEffect(() => {
+    // Adding a business never takes over the open office's folder.
+    if (add) return;
     let alive = true;
     void window.cth.officeFind(DEFAULT_HOME)
       .then((f) => {
@@ -392,6 +418,21 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
     setError(undefined);
     setBusy(false);
     setStep('business');
+  };
+
+  const backToOffice = async (): Promise<void> => {
+    if (!add) return;
+    if (businessName.trim() || businessType) {
+      const where = home.trim() || await firstFreeHome();
+      if (where) {
+        const id = await window.cth.saveBusinessDraft({
+          id: draftId, home: where, step,
+          settings: { businessType: businessType === OTHER_BUSINESS ? undefined : businessType, businessName: businessName.trim() || undefined, businessCity: businessCity.trim() || undefined, companyProfile: cleanCompanyProfile(profile) }
+        }).catch(() => null);
+        if (id) setDraftId(id);
+      }
+    }
+    add.onClose();
   };
 
   const pickHome = async () => {
@@ -443,7 +484,7 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
       // Michael's engine and model become the team's default too: the starter
       // team and later hires start on what the owner picked here.
       const config = await window.cth.getConfig();
-      const next = await window.cth.updateConfig({
+      const patch: Partial<HarnessConfig> = {
         onboardingComplete: true,
         // The pack drives the starter cast. '__other__' is recorded as unset: no
         // pack applies, so Michael asks rather than silently picking one.
@@ -469,7 +510,27 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
         godProvider,
         godModel,
         ...teamDefaultsFromMichael(config, godProvider, godModel)
-      });
+      };
+      if (add) {
+        // The new business's own entry, never the open one's; then the switch,
+        // which closes the open office first (closing time, D10, D19).
+        const saved = await window.cth.addBusiness({ id: draftId, home: harnessHome, settings: { ...patch, claudeLogin }, install: patch });
+        if (!saved.ok) {
+          setError(saved.error === 'exists' ? t('addBusiness.exists') : saved.error === 'isOpen' ? t('addBusiness.isOpen') : t('onboarding.errSaveSetup'));
+          setBusy(false);
+          if (saved.error === 'exists' || saved.error === 'isOpen') setStep('home');
+          return;
+        }
+        setDraftId(saved.id);
+        const sw = await window.cth.changeHome(harnessHome, 'fresh').catch((e) => ({ ok: false, error: String(e) }));
+        setBusy(false);
+        // Saved either way: a switch that could not start leaves it in the
+        // business menu to open later.
+        if (!sw.ok) { setError(sw.error ?? t('businessMenu.couldNotSwitch')); return; }
+        add.onClose();
+        return;
+      }
+      const next = await window.cth.updateConfig(patch);
       setBusy(false);
       onComplete(next);
     } catch (e) {
@@ -514,6 +575,15 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
             {t('onboarding.stepOf', { n: stepIndex + 1, total: steps.length })}
           </span>
         )}
+        {add && (
+          // The open business never stopped; going back keeps what was typed
+          // as Setup not finished, to go on from the business menu (D19).
+          <span className="cth-titlebar-nodrag" style={{ marginInlineStart: stepIndex >= 0 ? 12 : 'auto' }}>
+            <PixelButton variant="secondary" size="sm" disabled={busy} onClick={() => { void backToOffice(); }}>
+              {t('addBusiness.backToOffice')}
+            </PixelButton>
+          </span>
+        )}
       </div>
       {/* `margin: auto` centers while the card fits and falls back to a normal
           scroll once it doesn't (a centered flex item that overflows is clipped
@@ -539,7 +609,7 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
           </div>
           <div style={{ padding: '14px 22px 22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-            {damagedCopy && (step === 'business' || step === 'resume') && (
+            {!add && damagedCopy && (step === 'business' || step === 'resume') && (
               <div role="status" data-damaged-config style={{
                 borderRadius: 'var(--cth-r-md)', padding: '8px 10px',
                 background: 'var(--cth-amber-soft)', color: 'var(--cth-amber-text)',
@@ -1035,7 +1105,16 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
               </>
             )}
 
-            {step === 'ready' && <GetMichaelReady provider={godProvider} onReadyChange={setEngineReady} />}
+            {step === 'ready' && add && (
+              <ClaudeAccountChoice
+                newName={businessName.trim() || t('addBusiness.thisBusiness')}
+                openName={add.openBusinessName || t('addBusiness.openBusiness')}
+                value={claudeLogin}
+                onChange={setClaudeLogin}
+              />
+            )}
+            {/* Its own account is signed in when it opens, in its own Claude folder. */}
+            {step === 'ready' && !(add && claudeLogin === 'own') && <GetMichaelReady provider={godProvider} onReadyChange={setEngineReady} />}
 
             {step === 'permissions' && (
               <>
@@ -1255,13 +1334,13 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
                     {busy ? t('common.saving') : t('common.finish')}
                   </PixelButton>
                 )}
-                {step === 'ready' && !engineReady && (
+                {step === 'ready' && !engineReady && !(add && claudeLogin === 'own') && (
                   <PixelButton variant="ghost" size="md" onClick={finish} disabled={busy}>
                     {t('engineSetup.setUpLater')}
                   </PixelButton>
                 )}
                 {step === 'ready' && (
-                  <PixelButton variant="primary" size="md" onClick={finish} disabled={busy || !engineReady}>
+                  <PixelButton variant="primary" size="md" onClick={finish} disabled={busy || (!engineReady && !(add && claudeLogin === 'own'))}>
                     {busy ? t('common.saving') : t('engineSetup.openOffice')}
                   </PixelButton>
                 )}
@@ -1546,6 +1625,54 @@ function Dots({ step, steps }: { step: Step; steps: readonly Step[] }) {
 
 /** Where setup suggests the office lives, and looks for an existing one. */
 const DEFAULT_HOME = '~/HarnessAgents';
+
+/** The steps a draft can go on from (D19): any but the resume screen. */
+const DRAFT_STEPS: readonly Step[] = ['business', 'details', 'team', 'home', 'orchestrator', 'permissions', 'ready'];
+
+/** The first free "~/HarnessAgents N", or '' when none is (the folder step asks). */
+async function firstFreeHome(): Promise<string> {
+  for (let n = 2; n <= NEW_OFFICE_SUGGESTIONS; n++) {
+    const candidate = `${DEFAULT_HOME} ${n}`;
+    const st = await window.cth.homeStatus(candidate).catch(() => null);
+    if (!st) return '';
+    if (!st.exists) return candidate;
+  }
+  return '';
+}
+
+/** Add a business, Ready step (mockup frame 4; D4, E6): the Claude account the
+ *  new business runs on. A different account is its own sign in, connectors and
+ *  plan, signed in when it opens. */
+function ClaudeAccountChoice({ newName, openName, value, onChange }: {
+  newName: string; openName: string; value: 'shared' | 'own'; onChange: (v: 'shared' | 'own') => void;
+}) {
+  const { t } = useTranslation();
+  const option = (v: 'shared' | 'own', title: string, desc: string) => (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={value === v}
+      onClick={() => onChange(v)}
+      style={{
+        textAlign: 'start', cursor: 'pointer', padding: '10px 12px', border: 'none', borderRadius: 'var(--cth-r-lg)',
+        background: 'var(--cth-card)', boxShadow: `inset 0 0 0 ${value === v ? 2 : 1}px ${value === v ? 'var(--cth-ink)' : 'var(--cth-line-2)'}`,
+        display: 'flex', flexDirection: 'column', gap: 3, fontFamily: 'var(--cth-font-ui)'
+      }}
+    >
+      <span style={{ fontSize: 13.5, fontWeight: value === v ? 700 : 500, color: 'var(--cth-ink)' }}>{title}</span>
+      <span style={{ fontSize: 12.5, color: 'var(--cth-ink-3)' }}>{desc}</span>
+    </button>
+  );
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <h3 style={groupName} id="add-business-claude">{t('addBusiness.claudeTitle', { name: newName })}</h3>
+      <div role="radiogroup" aria-labelledby="add-business-claude" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {option('shared', t('addBusiness.claudeSame', { name: openName }), t('addBusiness.claudeSameDesc'))}
+        {option('own', t('addBusiness.claudeOwn'), t('addBusiness.claudeOwnDesc'))}
+      </div>
+    </div>
+  );
+}
 /** How many "~/HarnessAgents N" names a new office tries before asking the owner to pick. */
 const NEW_OFFICE_SUGGESTIONS = 20;
 

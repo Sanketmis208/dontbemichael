@@ -171,7 +171,7 @@ import { AUTO_FAILURE_REPORTS } from '../shared/buildFeatures';
 import { APP_NAME, APP_DATA_DIR, APP_URL_SCHEME } from '../shared/appName';
 import { copyOfficeData, homeFolderStatus, homeReadyAtLaunch } from './homeFolder';
 import { backfillOfficeRecord, findOffice, folderLayoutFor, isUsableTeamFolder, officeSwitchGuard, syncOfficeRecord } from './officeFile';
-import { adoptOpenOffice, businessNameAt, listBusinesses, migrateToOfficeSettings, noteOfficeClosed, officeClaudeDir, officesAfterMove, relocateBusiness, removeUnfinishedBusiness } from './officeSettings';
+import { addBusiness, adoptOpenOffice, businessDraft, businessNameAt, listBusinesses, migrateToOfficeSettings, noteOfficeClosed, officeClaudeDir, officesAfterMove, relocateBusiness, removeUnfinishedBusiness, saveBusinessDraft } from './officeSettings';
 import { folderPolicy, AGENT_TMP_DIR, agentTmpName, researchFolderPolicy, withAgentTmpWall, withMemberWall, RESEARCH_TMP_DIR, shellTempWalls, withResearchWall, type AgentFolderPolicy, type FolderLayout } from '../shared/folderAccess';
 import { sandboxNetwork } from '../shared/webAccess';
 import { legacyBusinessFolder, touchesOffice } from '../shared/officeRecord';
@@ -4300,6 +4300,28 @@ function switchOffice(newHome: string, mode: 'move' | 'fresh', oldHome: string |
 ipcMain.handle('office:list', () => listBusinesses());
 ipcMain.handle('office:relocate', (_evt, id: unknown, path: unknown) =>
   typeof id === 'string' && typeof path === 'string' && path ? relocateBusiness(id, resolve(expandTilde(path))) : { ok: false, error: 'notFound' });
+// Add a business over the open one (DT3): its answers go to its own entry.
+ipcMain.handle('office:addBusiness', (_evt, p: unknown) => {
+  const v = (p ?? {}) as { id?: unknown; home?: unknown; settings?: unknown; install?: unknown };
+  if (typeof v.home !== 'string' || !v.home.trim() || !v.settings || typeof v.settings !== 'object') return { ok: false, error: 'invalid' };
+  return addBusiness({
+    id: typeof v.id === 'string' ? v.id : undefined,
+    home: resolve(expandTilde(v.home.trim())),
+    settings: v.settings as Record<string, unknown>,
+    install: v.install && typeof v.install === 'object' ? v.install as Record<string, unknown> : undefined
+  });
+});
+ipcMain.handle('office:saveDraft', (_evt, p: unknown) => {
+  const v = (p ?? {}) as { id?: unknown; home?: unknown; step?: unknown; settings?: unknown };
+  if (typeof v.home !== 'string' || !v.home.trim() || typeof v.step !== 'string') return null;
+  return saveBusinessDraft({
+    id: typeof v.id === 'string' ? v.id : undefined,
+    home: resolve(expandTilde(v.home.trim())),
+    step: v.step,
+    settings: v.settings && typeof v.settings === 'object' ? v.settings as Record<string, unknown> : {}
+  });
+});
+ipcMain.handle('office:draft', (_evt, id: unknown) => (typeof id === 'string' ? businessDraft(id) : null));
 ipcMain.handle('office:removeUnfinished', (_evt, id: unknown) => (typeof id === 'string' ? removeUnfinishedBusiness(id) : false));
 
 /** Switch now, from the closing bar (D20): the owner chose not to wait. */

@@ -233,6 +233,7 @@
       "tip": "A closed business waits: its mail and schedules run again when you open it. Opening one closes the open business first, so its team finishes what it is doing.",
       "open": "Open",
       "remove": "Remove",
+      "goOn": "Go on with setup",
       "notThatOffice": "That folder holds a different office. Pick the folder where {{name}} is.",
       "couldNotRemove": "Couldn't remove it. Try again.",
       "addHereTitle": "Add a business here",
@@ -2632,6 +2633,18 @@
   },
   "degradedNotice": {
     "title": "{{name}} started with something missing"
+  },
+  "addBusiness": {
+    "backToOffice": "Back to the office",
+    "thisBusiness": "this business",
+    "openBusiness": "the open business",
+    "claudeTitle": "Claude account for {{name}}",
+    "claudeSame": "Same as {{name}}",
+    "claudeSameDesc": "Uses the Claude account you already signed in with. One plan for both.",
+    "claudeOwn": "A different Claude account",
+    "claudeOwnDesc": "Its own sign in, connectors and plan. You sign in when it opens.",
+    "exists": "That folder holds a business you already have. Open it from the business menu, or pick another folder.",
+    "isOpen": "That is the open business's folder. Pick another folder."
   },
   "businessMenu": {
     "button": "Business: {{name}}. Switch business",

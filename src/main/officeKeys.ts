@@ -66,6 +66,9 @@ export interface OfficeEntry {
   /** When this office last stopped (a switch away, or the app quitting), in ms:
    *  the business menu's "Closed since". */
   closedAt?: number;
+  /** Add a business left before the end (D19): the step it stopped at, so
+   *  choosing it reopens the wizard there. Gone once its setup is finished. */
+  draft?: { step: string };
 }
 
 export const businessKeySet: ReadonlySet<string> = new Set(BUSINESS_KEYS);

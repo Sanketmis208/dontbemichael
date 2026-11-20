@@ -221,6 +221,66 @@ export function removeUnfinishedBusiness(id: string): boolean {
   return true;
 }
 
+/**
+ * Add a business (DT3, D19): the setup wizard ran over the open business, and
+ * its answers are filed under the new business's own entry, never the open
+ * one's. The install settings it chose (engine, model, auto mode) are saved as
+ * install settings. Then the renderer switches to it, through closing time.
+ *
+ * Refused for the open office's own folder, and for a folder whose office is
+ * already a business that finished setup (open that one from the menu). A
+ * draft id from Back to office is finished in place.
+ */
+export function addBusiness(p: {
+  id?: string; home: string; settings: Partial<OfficeSettings>; install?: Partial<InstallConfig>;
+}): { ok: true; id: string } | { ok: false; error: 'notPerOffice' | 'isOpen' | 'exists' } {
+  const cfg = readStoredConfig();
+  if (!cfg.officesMigrated) return { ok: false, error: 'notPerOffice' };
+  if (cfg.harnessHome && samePath(cfg.harnessHome, p.home)) return { ok: false, error: 'isOpen' };
+  const offices: Record<string, OfficeEntry> = { ...(cfg.offices ?? {}) };
+  const draft = p.id && offices[p.id] && offices[p.id].settings?.onboardingComplete !== true ? p.id : null;
+  let id = draft;
+  if (!id) {
+    const there = homeFolderStatus(p.home).hasOffice ? officeIdIn({ harnessHome: p.home, offices }, readOfficeId(p.home)) : null;
+    if (there && offices[there]?.settings?.onboardingComplete === true) return { ok: false, error: 'exists' };
+    id = there ?? (homeFolderStatus(p.home).hasOffice ? ensureOfficeId(p.home) : null) ?? randomUUID();
+  }
+  const settings = { ...(pick(p.settings ?? {}, businessKeySet) as Partial<OfficeSettings>), onboardingComplete: true };
+  const { draft: _left, ...rest } = offices[id] ?? { home: p.home, settings: {} };
+  offices[id] = { ...rest, home: p.home, settings };
+  // Only how the app behaves; never which office is open (the switch does that).
+  const install = pick(p.install ?? {}, installKeySet) as Record<string, unknown>;
+  for (const k of ['harnessHome', 'recentHives', 'offices', 'officesMigrated']) delete install[k];
+  writeConfig({ ...(install as Partial<HarnessConfig>), offices });
+  return { ok: true, id };
+}
+
+/**
+ * Back to office from Add a business (D19): what was typed so far is kept as a
+ * business whose setup is not finished, with the step it stopped at. Its folder
+ * may not exist yet. Never the open office's folder.
+ */
+export function saveBusinessDraft(p: { id?: string; home: string; step: string; settings: Partial<OfficeSettings> }): string | null {
+  const cfg = readStoredConfig();
+  if (!cfg.officesMigrated || !p.home) return null;
+  if (cfg.harnessHome && samePath(cfg.harnessHome, p.home)) return null;
+  const offices: Record<string, OfficeEntry> = { ...(cfg.offices ?? {}) };
+  const reuse = p.id && offices[p.id] && offices[p.id].settings?.onboardingComplete !== true ? p.id : null;
+  const id = reuse ?? randomUUID();
+  const settings = { ...(pick(p.settings ?? {}, businessKeySet) as Partial<OfficeSettings>), onboardingComplete: false };
+  offices[id] = { ...(offices[id] ?? {}), home: p.home, settings, draft: { step: p.step } };
+  writeConfig({ offices });
+  return id;
+}
+
+/** A business left before the end of its setup: where it stopped, to reopen there. */
+export function businessDraft(id: string): { id: string; home: string; step: string; settings: Partial<OfficeSettings> } | null {
+  const cfg = readStoredConfig();
+  const entry = cfg.officesMigrated ? cfg.offices?.[id] : undefined;
+  if (!entry || entry.settings?.onboardingComplete === true) return null;
+  return { id, home: entry.home, step: entry.draft?.step ?? 'business', settings: entry.settings ?? {} };
+}
+
 /** The open office stopped (a switch away, or the app quitting): note when,
  *  for "Closed since" in the business menu. Once settings are per office. */
 export function noteOfficeClosed(now: number = Date.now()): void {

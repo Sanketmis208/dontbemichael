@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { closedTime, nextIndex, rowAction, showsBusinesses, type BusinessRow } from './businessMenuRows';
+import { closedTime, nextIndex, openAddBusiness, rowAction, showsBusinesses, type BusinessRow } from './businessMenuRows';
 import { ChevronGlyph } from './TopBar';
 
 /**
@@ -95,16 +95,14 @@ export function BusinessMenu() {
       window.dispatchEvent(new CustomEvent('cth:open-settings', { detail: { section: 'General' } }));
       return;
     }
+    // Setup not finished: the wizard goes on where it stopped (D18, D19).
+    if (action === 'resume') { close(false); openAddBusiness(row.id); return; }
     void switchTo(row.home);
   };
 
-  // Add a business: pick the folder its office goes in, then it opens there
-  // and runs setup (the wizard over the app comes with DT3).
-  const addBusiness = async (): Promise<void> => {
-    const res = await window.cth.chooseFolder();
-    if (!res.ok) return;
-    await switchTo(res.path);
-  };
+  // Add a business: the setup wizard over the open business, which keeps
+  // working until the wizard's Open the office (D19, DT3).
+  const addBusiness = (): void => { close(false); openAddBusiness(); };
 
   const onMenuKey = (e: ReactKeyboardEvent<HTMLDivElement>): void => {
     if (e.key === 'Escape') { e.preventDefault(); close(true); return; }
@@ -171,7 +169,7 @@ export function BusinessMenu() {
             type="button"
             role="menuitem"
             disabled={busy}
-            onClick={() => { void addBusiness(); }}
+            onClick={addBusiness}
             style={{ ...rowStyle, minHeight: 32, color: 'var(--cth-ink-2)', fontWeight: 500 }}
             className="cth-business-row"
           >

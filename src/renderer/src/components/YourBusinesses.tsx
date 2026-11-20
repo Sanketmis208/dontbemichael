@@ -1,7 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelButton } from './PixelButton';
-import { closedTime, rowAction, type BusinessRow } from '@/shell/businessMenuRows';
+import { closedTime, openAddBusiness, rowAction, type BusinessRow } from '@/shell/businessMenuRows';
 
 /**
  * Settings, General, Your businesses (docs/designs/separate-businesses.md, DT2,
@@ -64,6 +64,9 @@ export function YourBusinesses({ businesses, onOpen, onChanged }: {
             <div style={{ display: 'flex', gap: 6, flex: 'none' }}>
               {action === 'switch' && (
                 <PixelButton variant="secondary" size="sm" disabled={busy === row.id} onClick={() => onOpen(row.home)}>{t('settings.business.open')}</PixelButton>
+              )}
+              {action === 'resume' && (
+                <PixelButton variant="secondary" size="sm" disabled={busy === row.id} onClick={() => openAddBusiness(row.id)}>{t('settings.business.goOn')}</PixelButton>
               )}
               {action === 'findIt' && (
                 <PixelButton variant="secondary" size="sm" disabled={busy === row.id} onClick={() => { void findIt(row); }}>{t('businessMenu.findIt')}</PixelButton>

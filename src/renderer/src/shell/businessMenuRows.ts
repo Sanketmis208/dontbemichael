@@ -12,15 +12,22 @@ export interface BusinessRow {
   closedAt?: number;
 }
 
-/** What choosing a row does. Open: nothing, it is on screen. Closed or setup
- *  not finished: switch to it (closing time first). Folder not found: Settings,
- *  to find it; it never starts closing time (D17). */
-export type RowAction = 'none' | 'switch' | 'findIt';
+/** What choosing a row does. Open: nothing, it is on screen. Closed: switch to
+ *  it (closing time first). Setup not finished: the setup wizard, over the open
+ *  business, where it stopped (D18, D19). Folder not found: Settings, to find
+ *  it. Only Closed ever starts closing time (D17). */
+export type RowAction = 'none' | 'switch' | 'resume' | 'findIt';
 
 export function rowAction(row: BusinessRow): RowAction {
   if (row.state === 'open') return 'none';
   if (row.state === 'missing') return 'findIt';
+  if (row.state === 'setup') return 'resume';
   return 'switch';
+}
+
+/** Open Add a business: a new one, or a draft to go on with (App.tsx). */
+export function openAddBusiness(id?: string): void {
+  window.dispatchEvent(new CustomEvent('cth:add-business', { detail: id ? { id } : {} }));
 }
 
 /** "9:12" for an office closed today, "Nov 18" for one closed before. */

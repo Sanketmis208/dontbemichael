@@ -75,11 +75,11 @@ test('every business with its state: open first, then by name', (t) => {
   assert.equal(stored().offices[bakeryId].settings.businessCity, 'Austin');
 });
 
-test('what each row does: a missing folder goes to Settings, never a switch', () => {
+test('what each row does: a missing folder goes to Settings, an unfinished setup to the wizard, never a switch', () => {
   const row = (state) => ({ id: 'x', home: '/o', name: 'X', state });
   assert.equal(rows.rowAction(row('open')), 'none');
   assert.equal(rows.rowAction(row('closed')), 'switch');
-  assert.equal(rows.rowAction(row('setup')), 'switch');
+  assert.equal(rows.rowAction(row('setup')), 'resume', 'goes on with setup over the open business (D19)');
   assert.equal(rows.rowAction(row('missing')), 'findIt');
 });
 

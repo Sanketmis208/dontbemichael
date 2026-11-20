@@ -576,6 +576,15 @@ Proves two logins side by side on this Mac. Any account works, even the same one
 - Before the move nothing changes: the group is Office folder with Other offices on this computer, as today.
 - Test: test/your-businesses.test.cjs (5 cases: Find it accepts the business's own folder; never another's; Remove only an unfinished setup; Settings and the menu share one source and one rule set, and the old list stays before the move; main's handlers and the copy).
 
+## DT3: Add a business over the open business (2026-11-19)
+
+- Add a business (the business menu, Settings) opens the setup wizard over the floor (`cth:add-business`, App.tsx); the open business stays mounted and its team keeps working. The new office's folder starts as the first free "~/HarnessAgents N", and the wizard never offers to continue the open office's folder.
+- The wizard saves only at its end, so in add mode its one save goes through `addBusiness` (`office:addBusiness`): the business settings into the new business's own entry (setup done), the install settings it chose (engine, model, auto mode) as install settings, and never the open business's entry or the open folder. Refused for the open office's folder, and for a folder whose office is a business that already finished setup. Then the switch, through closing time (D10, D19).
+- Back to the office (in the wizard's header) keeps what was typed as Setup not finished (`saveBusinessDraft`), with the step it stopped at; choosing that business in the menu, or Go on with setup in Settings, reopens the wizard there (`businessDraft`). Finishing completes the same entry. The team picks start again from the pack's defaults when it reopens.
+- Ready step (mockup frame 4; D4, E6): "Claude account for <name>", Same as <open business> or A different Claude account (`claudeLogin` 'own'). With a different account, the Ready step does not wait for a sign in: it happens in that business's own Claude folder when it opens.
+- The menu and Settings changed with it: a business whose setup is not finished now opens the wizard (`rowAction` 'resume'), never a switch.
+- Test: test/add-business.test.cjs (5 cases: the new entry and an untouched open business; refused folders; a draft kept, resumed and finished in place; the wizard's add finish, Back to office, default folder, Ready step, App and menu wiring; the copy).
+
 ## Completion summary
 
 ```
@@ -965,7 +974,7 @@ Journey (storyboard):
   - Surfaced by: 1B
   - Files: src/renderer/src/components/SettingsModal.tsx, en.json
   - Verify: the Settings test lists the same entries as the menu
-- [ ] **DT3 (P1, human: ~1 day / CC: ~40min)**: Setup wizard. Run Add a business over the app while the open business keeps working, add the Claude account choice on the Ready step, and switch at the end.
+- [x] **DT3 (P1, human: ~1 day / CC: ~40min)**: Setup wizard. Run Add a business over the app while the open business keeps working, add the Claude account choice on the Ready step, and switch at the end. (done 2026-11-19, see DT3 below)
   - Surfaced by: 3A, BIZ-3 (D4)
   - Files: src/renderer/src/components/OnboardingWizard.tsx, src/main/index.ts
   - Verify: an integration test that the open office keeps running until Open the office

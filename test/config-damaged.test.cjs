@@ -68,7 +68,7 @@ test('setup shows the notice with the copy path on its first step, in every lang
   // Value: protects=the notice reaches the owner; fails_when=setup stops asking or showing it, or a language lacks the text; why_new=issue 98 notice; seam=none
   const wizard = read('src/renderer/src/components/OnboardingWizard.tsx');
   assert.match(wizard, /window\.cth\.damagedConfigCopy\?\.\(\)/);
-  assert.match(wizard, /\{damagedCopy && \(step === 'business' \|\| step === 'resume'\) && \(\s*<div role="status" data-damaged-config/);
+  assert.match(wizard, /\{!add && damagedCopy && \(step === 'business' \|\| step === 'resume'\) && \(\s*<div role="status" data-damaged-config/);
   assert.match(read('src/main/index.ts'), /ipcMain\.handle\('config:damagedCopy', \(\): string \| null => damagedConfigCopy\(\)\)/);
   for (const loc of ['en']) {
     assert.equal(typeof JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).onboarding.damagedConfig, 'string', loc);

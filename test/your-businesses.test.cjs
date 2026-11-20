@@ -82,7 +82,7 @@ test('Settings lists the same businesses as the menu, and changes nothing before
   const menu = read('src/renderer/src/shell/BusinessMenu.tsx');
   assert.match(settings, /window\.cth\.listBusinesses\?\.\(\)/, 'one source for both');
   assert.match(menu, /window\.cth\.listBusinesses\?\.\(\)/);
-  assert.match(list, /import \{ closedTime, rowAction, type BusinessRow \} from '@\/shell\/businessMenuRows';/, 'the same row rules');
+  assert.match(list, /import \{[^}]*\browAction\b[^}]*\} from '@\/shell\/businessMenuRows';/, 'the same row rules');
   assert.match(settings, /\{perOffice \? t\('settings\.business\.title'\) : t\('settings\.general\.homeFolder'\)\}/);
   assert.match(settings, /\{!perOffice && otherOffices\.length > 0 && \(/, 'the old list only before the move');
   assert.match(settings, /perOffice\n\s*\? \['fresh', t\('settings\.business\.addHereTitle'\), t\('settings\.business\.addHereDesc'\)\] as const/, 'Start a new empty office becomes Add a business');
