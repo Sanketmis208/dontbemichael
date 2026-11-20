@@ -1353,7 +1353,11 @@
       "international": "Worldwide"
     },
     "languages": "Languages you serve customers in",
-    "languagesPlaceholder": "For example: English, Spanish",
+    "languagesMore": "Add another language",
+    "languagesAdd": "Add a language",
+    "languagesChosen": "Languages chosen",
+    "languagesRemove": "Remove {{language}}",
+    "languagesMax": "{{count}} languages is the most.",
     "moneyHead": "Money",
     "currency": "Currency",
     "fiscalMonth": "Financial year starts in",

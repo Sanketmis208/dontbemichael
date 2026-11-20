@@ -4,6 +4,7 @@ import { Field as SharedField, Panel, requiredMark } from './fieldText';
 import { StreetField } from './StreetField';
 import { SocialLinks } from './SocialLinks';
 import { HoursPicker } from './HoursPicker';
+import { LanguagesPicker } from './LanguagesPicker';
 import {
   ENTITY_TYPES, SERVICE_AREAS,
   type CompanyAddress, type CompanyProfile, type RequiredProfileField
@@ -184,11 +185,11 @@ export function CompanyProfileFields({ value, onChange, parts, needsIndustry, mi
                 {SERVICE_AREAS.map((k) => <option key={k} value={k}>{t(`companyProfile.area.${k}`)}</option>)}
               </select>
             </Field>
-            <Field label={t('companyProfile.languages')}>
-              <input value={text(value.languages)} onChange={(e) => set({ languages: orUndefined(e.target.value) })}
-                placeholder={t('companyProfile.languagesPlaceholder')} className="cth-input" style={fieldStyle} />
-            </Field>
           </div>
+          {/* One chip per language, suggested as typed (owner, 2026-11-19). */}
+          <Field label={t('companyProfile.languages')} group>
+            <LanguagesPicker value={value.languages} onChange={(languages) => set({ languages })} inputClassName="cth-input" inputStyle={fieldStyle} />
+          </Field>
           </Panel>
 
           <Panel title={t('companyProfile.moneyHead')}>
