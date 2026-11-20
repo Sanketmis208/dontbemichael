@@ -556,7 +556,11 @@ export function OnboardingWizard({ onComplete, preview, add }: OnboardingWizardP
   // The card is centered whenever the studio isn't showing (Business, Details,
   // Resume, or no team yet) and sits in its column when it is; the move and the
   // glow follow this one flag (docs/designs/onboarding-centered.md).
-  const hasStudio = (step === 'team' || step === 'home' || step === 'orchestrator' || step === 'permissions' || step === 'ready') && teamAgents.length > 0;
+  // Not on Team itself: picking the team needs the room for who each member
+  // is and does, not their seats (owner, 2026-11-19). The studio fills in after.
+  const hasStudio = (step === 'home' || step === 'orchestrator' || step === 'permissions' || step === 'ready') && teamAgents.length > 0;
+  // Team is a wide card, the members side by side, so the list doesn't run long.
+  const cardTrack = step === 'team' ? 'minmax(0, 1120px)' : 'minmax(0, 560px)';
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 200, overflowY: 'auto',
@@ -593,7 +597,7 @@ export function OnboardingWizard({ onComplete, preview, add }: OnboardingWizardP
           start track closes and the end track holds it. The fr values animate. */}
       <div className="cth-onb-body" style={{
         flex: 1, display: 'grid', columnGap: 0, padding: '8px 28px 28px', width: '100%', maxWidth: 1440, margin: '0 auto', boxSizing: 'border-box',
-        gridTemplateColumns: hasStudio ? 'minmax(0, 0fr) minmax(0, 560px) minmax(0, 1fr)' : 'minmax(0, 1fr) minmax(0, 560px) minmax(0, 1fr)'
+        gridTemplateColumns: hasStudio ? `minmax(0, 0fr) ${cardTrack} minmax(0, 1fr)` : `minmax(0, 1fr) ${cardTrack} minmax(0, 1fr)`
       }}>
         <div style={{ gridColumn: 2, gridRow: 1, minWidth: 0, margin: step === 'team' ? '0' : 'auto 0' }}>
           <div role="region" aria-label={stepTitle} style={{
@@ -1050,19 +1054,18 @@ export function OnboardingWizard({ onComplete, preview, add }: OnboardingWizardP
 
                 {/* The folder idea, said once, in plain words: each person has a
                     folder; put their documents there; they save their work there. */}
+                {/* One line; the rest behind the (i) (owner, 2026-11-19: the list
+                    started below a long paragraph). */}
                 {folderSuggestions && (
-                  <div style={{
-                    borderRadius: 'var(--cth-r-md)',
-                    display: 'flex', gap: 10, alignItems: 'flex-start', padding: 10,
-                    background: 'var(--cth-sky-light)', boxShadow: 'inset 0 0 0 1px var(--cth-line-2)',
-                    fontSize: 14, lineHeight: '20px', color: 'var(--cth-ink-700)'
-                  }}>
-                    <span style={{ flexShrink: 0, marginTop: 1 }}><Icon name="folder" /></span>
-                    <span>{t('onboarding.team.folderNote', { root: tildePath(folderSuggestions.root) })}</span>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 14, lineHeight: '20px', color: 'var(--cth-ink-700)' }}>
+                    <span style={{ flexShrink: 0, display: 'flex' }}><Icon name="folder" /></span>
+                    <span>{t('onboarding.team.folderLine', { root: tildePath(folderSuggestions.root) })}</span>
+                    <InfoTip text={t('onboarding.team.folderNote', { root: tildePath(folderSuggestions.root) })} />
                   </div>
                 )}
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {/* Side by side: three across in a usual window, fewer when narrow. */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
                   <TeamCard
                     character="michael"
                     name={t('onboarding.team.managerName')}
@@ -1509,11 +1512,15 @@ function TeamCard({
   const pickable = picked !== undefined;
   const active = !pickable || picked;
   const isMichael = character === 'michael';
-  // The folder row lines up under the text: checkbox + gap + avatar + gap.
-  const textIndent = (pickable ? 18 + 12 : 18 + 12) + 36 + 12;
   const [first, ...rest] = name.split(' · ');
+  // A card in the Team grid; picked ones carry the stronger ring.
   return (
-    <div style={{ padding: '12px 4px', borderTop: '1px solid var(--cth-line)', opacity: active ? 1 : 0.55 }}>
+    <div style={{
+      display: 'flex', flexDirection: 'column', padding: 14, borderRadius: 'var(--cth-r-lg)', minWidth: 0,
+      background: active ? 'var(--cth-card)' : 'var(--cth-card-2)',
+      boxShadow: `inset 0 0 0 ${active && pickable ? 2 : 1}px ${active && pickable ? 'var(--cth-ink)' : 'var(--cth-line)'}`
+    }}>
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, opacity: active ? 1 : 0.6 }}>
       <label style={{ display: 'flex', gap: 12, alignItems: 'flex-start', cursor: pickable ? 'pointer' : 'default' }}>
         {pickable ? (
           <input
@@ -1553,8 +1560,8 @@ function TeamCard({
 
       {active && folder && (
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
-          marginTop: 8, marginInlineStart: textIndent, fontSize: 14, color: 'var(--cth-ink-3)', minWidth: 0
+          display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 'auto', paddingTop: 10,
+          fontSize: 13, color: 'var(--cth-ink-3)', minWidth: 0
         }}>
           <Icon name="folder" />
           <span>{labels.worksIn}</span>
@@ -1567,6 +1574,7 @@ function TeamCard({
           {overridden && <button type="button" onClick={onUseSuggested} style={linkBtn}>{labels.useSuggested}</button>}
         </div>
       )}
+      </div>
     </div>
   );
 }

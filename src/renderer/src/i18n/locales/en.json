@@ -670,6 +670,7 @@
       "intro": "Suggested for {{pack}}. Pick whoever you want, and you can hire more later.",
       "introTip": "{{godName}} hands each job to the right person on your team. Your team remembers what you tell them, asks before posting online or spending money, and you see all their work on one screen.",
       "introOther": "Start with {{godName}} and Oscar. Once your office is running, {{godName}} will ask you a few questions and suggest who else to hire.",
+      "folderLine": "Each person works in their own folder inside {{root}}.",
       "folderNote": "Everyone works in their own folder, inside {{root}}, which is {{godName}}'s. Put the documents each person needs in their folder. They'll read them and save their work there, and only they and {{godName}} can open it. Company wide information, policies and rules go in Settings, Memory & Knowledge, where every team member can search them.",
       "managerName": "{{godName}} · Office Manager",
       "managerSummary": "Runs the office. Hands out work, and checks in with you when something needs a yes.",
