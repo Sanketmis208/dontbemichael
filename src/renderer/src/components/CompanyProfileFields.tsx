@@ -5,6 +5,7 @@ import { StreetField } from './StreetField';
 import { SocialLinks } from './SocialLinks';
 import { HoursPicker } from './HoursPicker';
 import { LanguagesPicker } from './LanguagesPicker';
+import { currencyOptions } from '@shared/currencies';
 import {
   ENTITY_TYPES, SERVICE_AREAS,
   type CompanyAddress, type CompanyProfile, type RequiredProfileField
@@ -66,6 +67,7 @@ export function CompanyProfileFields({ value, onChange, parts, needsIndustry, mi
   const { t, i18n } = useTranslation();
   const timeZones = useMemo(() => supported('timeZone'), []);
   const currencies = useMemo(() => supported('currency'), []);
+  const currencyList = useMemo(() => currencyOptions(currencies, i18n.language), [currencies, i18n.language]);
   const months = useMemo(() => {
     try {
       const f = new Intl.DateTimeFormat(i18n.language, { month: 'long' });
@@ -198,7 +200,13 @@ export function CompanyProfileFields({ value, onChange, parts, needsIndustry, mi
               <select value={value.currency ?? ''} onChange={(e) => set({ currency: e.target.value || undefined })} className="cth-input" style={fieldStyle}>
                 <option value="">{t('companyProfile.notSet')}</option>
                 {value.currency && !currencies.includes(value.currency) && <option value={value.currency}>{value.currency}</option>}
-                {currencies.map((c) => <option key={c} value={c}>{c}</option>)}
+                {/* Named, common ones first (owner, 2026-11-19); the code is what is saved. */}
+                <optgroup label={t('companyProfile.currencyCommon')}>
+                  {currencyList.common.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
+                </optgroup>
+                <optgroup label={t('companyProfile.currencyAll')}>
+                  {currencyList.rest.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
+                </optgroup>
               </select>
             </Field>
             <Field label={t('companyProfile.fiscalMonth')}>

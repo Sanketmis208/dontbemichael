@@ -1355,6 +1355,8 @@
     "languages": "Languages you serve customers in",
     "languagesMore": "Add another language",
     "languagesAdd": "Add a language",
+    "currencyCommon": "Common",
+    "currencyAll": "All currencies",
     "languagesChosen": "Languages chosen",
     "languagesRemove": "Remove {{language}}",
     "languagesMax": "{{count}} languages is the most.",
