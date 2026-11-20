@@ -754,3 +754,23 @@ test('revive leaves alone anyone closing time is not waiting on', (t) => {
   f.ct.revive('ghost');
   assert.equal(f.sent.filter((m) => m.subject === 'Closing time').length, 0, 'confirmed, closed without, or never on the list');
 });
+
+// Live, 2026-11-20: Michael moved his whole inbox to .done after reading one
+// ACK, and the three that had just arrived went with it unread. The app had
+// all of them; Michael thought he was still waiting, and closing time hung.
+test('once every team member has confirmed, the app tells Michael so, once, naming them', (t) => {
+  const f = floor({ t, workers: ['pam', 'dwight', 'toby'] });
+  f.ct.start();
+  const told = () => f.sent.filter((m) => m.subject === 'Closing time: everyone has confirmed');
+  f.route('pam', 'CLOSING-TIME-ACK');
+  f.route('dwight', 'CLOSING-TIME-ACK');
+  assert.equal(told().length, 0, 'not while anyone is still out');
+  f.route('toby', 'CLOSING-TIME-ACK');
+  assert.equal(told().length, 1);
+  assert.equal(told()[0].to, 'god');
+  assert.equal(told()[0].from, 'human');
+  assert.match(told()[0].body, /Pam \(pam\), Dwight \(dwight\), Toby \(toby\)/);
+  assert.match(told()[0].body, /then send CLOSING-TIME-COMPLETE/);
+  f.route('toby', 'CLOSING-TIME-ACK');
+  assert.equal(told().length, 1, 'once');
+});

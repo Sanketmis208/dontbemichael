@@ -98,6 +98,8 @@ export class ClosingTimeController {
   private switching: { from: string; to: string | null } | null = null;
   private workers = new Set<string>();
   private acked = new Set<string>();
+  /** Michael was told every team member confirmed (tellMichaelAllIn). */
+  private toldAllIn = false;
   private excused = new Set<string>();
   private lastRemind = new Map<string, number>();
   /** Set once COMPLETE is accepted. `active` stays true through the teardown
@@ -180,6 +182,7 @@ export class ClosingTimeController {
       })
     );
     this.acked = new Set();
+    this.toldAllIn = false;
     this.excused = new Set();
     this.lastRemind = new Map();
     this.concluded = false;
@@ -512,6 +515,7 @@ export class ClosingTimeController {
         // Closed without, but confirmed anyway: it moves to confirmed.
         this.excused.delete(msg.from);
         this.emitProgress();
+        this.tellMichaelAllIn();
       }
       return;
     }
@@ -550,6 +554,31 @@ export class ClosingTimeController {
         this.onConcluded(this.relaunch);
       }, TEARDOWN_GRACE_MS);
     }
+  }
+
+  /**
+   * Every team member has confirmed: Michael hears it from the app, naming
+   * them, once per closing. Seen live (2026-11-20): Michael moved his whole
+   * inbox to .done after reading one ACK, and the three that had just arrived
+   * went with it unread; the app had all four, Michael thought he was still
+   * waiting, and closing time hung. The app's own count is what lets the
+   * office close, so it says so.
+   */
+  private tellMichaelAllIn(): void {
+    if (this.toldAllIn || this.concluded) return;
+    const reg = this.hive.registry();
+    if (this.pendingIds(reg).length > 0) return;
+    this.toldAllIn = true;
+    const names = [...this.acked].map((id) => `${reg.agents[id]?.name ?? id} (${id})`).join(', ') || 'nobody';
+    this.hive.send({
+      to: 'god',
+      act: 'inform',
+      subject: 'Closing time: everyone has confirmed',
+      body: [
+        `Every team member has sent CLOSING-TIME-ACK: ${names}. Their notes are in your inbox, or in inbox/.done if you moved them there.`,
+        'Do not wait for anything more: update tasks.json and board.md now, then send CLOSING-TIME-COMPLETE ("to": "human").'
+      ].join('\n')
+    }, 'human');
   }
 
   private armTimeout(): void {
