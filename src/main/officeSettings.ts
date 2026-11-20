@@ -191,6 +191,36 @@ export function listBusinesses(): { perOffice: boolean; businesses: BusinessRow[
   return { perOffice: true, businesses: rows };
 }
 
+/**
+ * Find it (DT2, D17): the owner points a business whose folder went missing at
+ * where it is now. Only the same office (its office.json id) is accepted, so
+ * another business's folder can never take its settings.
+ */
+export function relocateBusiness(id: string, home: string): { ok: true } | { ok: false; error: 'notFound' | 'notThatOffice' } {
+  const cfg = readStoredConfig();
+  const entry = cfg.officesMigrated ? cfg.offices?.[id] : undefined;
+  if (!entry) return { ok: false, error: 'notFound' };
+  if (!homeFolderStatus(home).hasOffice || readOfficeId(home) !== id) return { ok: false, error: 'notThatOffice' };
+  writeConfig({ offices: { ...cfg.offices, [id]: { ...entry, home } } });
+  return { ok: true };
+}
+
+/**
+ * Remove a business whose setup was never finished (DT2, D18): its entry goes,
+ * and with it the settings typed so far. Never the open business, and never
+ * one that finished setup: those are erased by a factory reset only.
+ */
+export function removeUnfinishedBusiness(id: string): boolean {
+  const cfg = readStoredConfig();
+  const entry = cfg.officesMigrated ? cfg.offices?.[id] : undefined;
+  if (!entry || entry.settings?.onboardingComplete === true) return false;
+  if (officeIdIn(cfg, readOfficeId(cfg.harnessHome)) === id) return false;
+  const offices = { ...cfg.offices };
+  delete offices[id];
+  writeConfig({ offices });
+  return true;
+}
+
 /** The open office stopped (a switch away, or the app quitting): note when,
  *  for "Closed since" in the business menu. Once settings are per office. */
 export function noteOfficeClosed(now: number = Date.now()): void {

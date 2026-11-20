@@ -171,7 +171,7 @@ import { AUTO_FAILURE_REPORTS } from '../shared/buildFeatures';
 import { APP_NAME, APP_DATA_DIR, APP_URL_SCHEME } from '../shared/appName';
 import { copyOfficeData, homeFolderStatus, homeReadyAtLaunch } from './homeFolder';
 import { backfillOfficeRecord, findOffice, folderLayoutFor, isUsableTeamFolder, officeSwitchGuard, syncOfficeRecord } from './officeFile';
-import { adoptOpenOffice, businessNameAt, listBusinesses, migrateToOfficeSettings, noteOfficeClosed, officeClaudeDir, officesAfterMove } from './officeSettings';
+import { adoptOpenOffice, businessNameAt, listBusinesses, migrateToOfficeSettings, noteOfficeClosed, officeClaudeDir, officesAfterMove, relocateBusiness, removeUnfinishedBusiness } from './officeSettings';
 import { folderPolicy, AGENT_TMP_DIR, agentTmpName, researchFolderPolicy, withAgentTmpWall, withMemberWall, RESEARCH_TMP_DIR, shellTempWalls, withResearchWall, type AgentFolderPolicy, type FolderLayout } from '../shared/folderAccess';
 import { sandboxNetwork } from '../shared/webAccess';
 import { legacyBusinessFolder, touchesOffice } from '../shared/officeRecord';
@@ -4298,6 +4298,9 @@ function switchOffice(newHome: string, mode: 'move' | 'fresh', oldHome: string |
 
 /** The business menu and Settings' Your businesses (DT1, DT2). */
 ipcMain.handle('office:list', () => listBusinesses());
+ipcMain.handle('office:relocate', (_evt, id: unknown, path: unknown) =>
+  typeof id === 'string' && typeof path === 'string' && path ? relocateBusiness(id, resolve(expandTilde(path))) : { ok: false, error: 'notFound' });
+ipcMain.handle('office:removeUnfinished', (_evt, id: unknown) => (typeof id === 'string' ? removeUnfinishedBusiness(id) : false));
 
 /** Switch now, from the closing bar (D20): the owner chose not to wait. */
 ipcMain.handle('office:switchNow', () => {

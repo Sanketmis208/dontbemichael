@@ -702,6 +702,11 @@ const api = {
    *  false before settings are per office, when there is one business and no menu. */
   listBusinesses: (): Promise<{ perOffice: boolean; businesses: Array<{ id: string; home: string; name: string | null; state: 'open' | 'closed' | 'missing' | 'setup'; closedAt?: number }> }> =>
     ipcRenderer.invoke('office:list'),
+  /** Find it: point a business whose folder went missing at its folder (only the same office). */
+  relocateBusiness: (id: string, path: string): Promise<{ ok: boolean; error?: 'notFound' | 'notThatOffice' }> =>
+    ipcRenderer.invoke('office:relocate', id, path),
+  /** Remove a business whose setup was never finished (not the open one). */
+  removeUnfinishedBusiness: (id: string): Promise<boolean> => ipcRenderer.invoke('office:removeUnfinished', id),
   /** Whether a folder (default: the current home) exists and holds an office. */
   homeStatus: (path?: string): Promise<{ path: string | null; exists: boolean; hasOffice: boolean }> =>
     ipcRenderer.invoke('config:homeStatus', path),

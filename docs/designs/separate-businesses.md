@@ -566,6 +566,16 @@ Proves two logins side by side on this Mac. Any account works, even the same one
 - Not built here: reopening an unfinished setup at the step it stopped (DT3), Remove for it (DT2), the narrow width live check.
 - Test: test/business-menu.test.cjs (8 cases: states and order from main, closed time kept through saves; row actions; the closed time text; one business; arrow keys; the menu's accessibility and place; when main notes a close; the copy).
 
+## DT2: Your businesses in Settings (2026-11-19)
+
+- Settings, General: once each business keeps its own settings, the Office folder group is Your businesses, with an info tip (D16: a closed business waits, its mail and schedules run again when it opens; opening one closes the open business first). The open office's folder and Change stay above it (D15).
+- `YourBusinesses` lists the same businesses as the top bar's menu, from the same source (`listBusinesses`) and the same row rules (`rowAction`), each with its state and its folder in mono. Open for a closed business (Settings' own switch, through closing time), Find it for a missing folder, and Open and Remove for an unfinished setup (D18).
+- Find it (`relocateBusiness`, `office:relocate`) asks for the folder and accepts only the same office (its office.json id), so another business's folder can never take its settings.
+- Remove (`removeUnfinishedBusiness`, `office:removeUnfinished`) drops only a business whose setup was never finished, never the open business and never a finished one.
+- Change office folder, on an empty folder: "Start a new, empty office here" becomes "Add a business here" (a new business with its own settings that runs setup).
+- Before the move nothing changes: the group is Office folder with Other offices on this computer, as today.
+- Test: test/your-businesses.test.cjs (5 cases: Find it accepts the business's own folder; never another's; Remove only an unfinished setup; Settings and the menu share one source and one rule set, and the old list stays before the move; main's handlers and the copy).
+
 ## Completion summary
 
 ```
@@ -951,7 +961,7 @@ Journey (storyboard):
   - Surfaced by: 1A, 2A, 2B, 2C, 6A
   - Files: src/renderer/src/shell/TopBar.tsx, a new BusinessMenu component, src/renderer/src/i18n/locales/en.json
   - Verify: a renderer test for the row states and keyboard; live check at narrow width with a long name
-- [ ] **DT2 (P1, human: ~3h / CC: ~15min)**: Settings. Rename to Your businesses, align its entries with the menu, and replace Start a new empty office with Add a business.
+- [x] **DT2 (P1, human: ~3h / CC: ~15min)**: Settings. Rename to Your businesses, align its entries with the menu, and replace Start a new empty office with Add a business. (done 2026-11-19, see DT2 below)
   - Surfaced by: 1B
   - Files: src/renderer/src/components/SettingsModal.tsx, en.json
   - Verify: the Settings test lists the same entries as the menu

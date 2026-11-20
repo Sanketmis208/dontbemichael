@@ -15,6 +15,8 @@ import { plainReasonKey } from '@/store/plainReason';
 import { SHOW_MAILBOXES, SHOW_SIMPLE_MODE_SWITCH } from '@shared/buildFeatures';
 import { InfoTip } from './InfoTip';
 import { OfficeGuardNotice, type OfficeGuard } from './OfficeGuardNotice';
+import { YourBusinesses } from './YourBusinesses';
+import type { BusinessRow } from '@/shell/businessMenuRows';
 import { KnowledgeDocList } from './KnowledgeDocList';
 import { PixelButton } from './PixelButton';
 import { SettingsHeroCard } from './SettingsHeroCard';
@@ -136,6 +138,14 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
   // switching. Took over from the launch picker, which no longer shows on a
   // normal launch (owner, 2026-09-24).
   const [otherOffices, setOtherOffices] = useState<string[]>([]);
+  // Once each business keeps its own settings, the same businesses as the top
+  // bar's menu (separate-businesses.md, DT2); before that, the folders above.
+  const [businesses, setBusinesses] = useState<{ perOffice: boolean; businesses: BusinessRow[] } | null>(null);
+  const loadBusinesses = (): void => {
+    void window.cth.listBusinesses?.().then(setBusinesses).catch(() => { /* keep the last list */ });
+  };
+  useEffect(() => { loadBusinesses(); }, [config]);
+  const perOffice = !!businesses?.perOffice;
   useEffect(() => {
     let alive = true;
     const candidates = (config.recentHives ?? []).filter((h) => h && h !== config.harnessHome);
@@ -548,7 +558,11 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
                   ? [['fresh', t('settings.changeHome.openTitle'), t('settings.changeHome.openDesc')] as const]
                   : [
                     ['move', t('settings.changeHome.moveTitle'), t('settings.changeHome.moveDesc')] as const,
-                    ['fresh', t('settings.changeHome.freshTitle'), t('settings.changeHome.freshDesc')] as const
+                    // Once each business keeps its own settings, a new office here is a new
+                    // business, with its own settings and its own setup (D15).
+                    (perOffice
+                      ? ['fresh', t('settings.business.addHereTitle'), t('settings.business.addHereDesc')] as const
+                      : ['fresh', t('settings.changeHome.freshTitle'), t('settings.changeHome.freshDesc')] as const)
                   ]
                 ).map(([value, title, desc]) => {
                   const selected = changeMode === value;
@@ -727,7 +741,9 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
                       {/* Home folder */}
                       <div style={group}>
                         <h3 style={groupName}>
-                          {t('settings.general.homeFolder')}
+                          {perOffice ? t('settings.business.title') : t('settings.general.homeFolder')}
+                          {/* A closed business waits, and runs again when it opens (D16). */}
+                          {perOffice && <InfoTip text={t('settings.business.tip')} />}
                         </h3>
                         <div style={{ display: 'flex', gap: 12, fontSize: 13, lineHeight: '20px', alignItems: 'center' }}>
                           <span style={{
@@ -739,7 +755,14 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
                         <span style={hint}>
                           {t('settings.general.homeFolderDesc')}
                         </span>
-                        {otherOffices.length > 0 && (
+                        {perOffice && businesses && (
+                          <YourBusinesses
+                            businesses={businesses.businesses}
+                            onOpen={(home) => { void openOtherOffice(home); }}
+                            onChanged={loadBusinesses}
+                          />
+                        )}
+                        {!perOffice && otherOffices.length > 0 && (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
                             <span style={{ fontSize: 14, color: 'var(--cth-ink-700)' }}>{t('settings.general.otherOffices')}</span>
                             {otherOffices.map((h) => (
