@@ -5,7 +5,7 @@ import { Disclosure, Toggle } from './triggers/ui';
 import { Field, Panel, hint } from './fieldText';
 import {
   GOOGLE_APP_PASSWORDS_URL, GOOGLE_TWO_STEP_URL, IMAPS_PORT, PROVIDER_ORDER, PROVIDER_PRESETS, SMTPS_PORT, SUBMISSION_PORT,
-  googleStepUrl, guessServers, isGoogleProvider, type MailProvider, type MailServer, type MailboxRecord
+  googleStepUrl, guessServers, isGoogleProvider, providerForAddress, type MailProvider, type MailServer, type MailboxRecord
 } from '@shared/mailboxes';
 
 /**
@@ -19,17 +19,21 @@ import {
  * dialog, Escape closes, the password has a Show/Hide button, and the testing
  * and failure lines are announced politely.
  */
-export function AddMailboxDialog({ fix, onClose, onSaved }: {
+export function AddMailboxDialog({ fix, suggestedAddress, onClose, onSaved }: {
   /** The mailbox being fixed; absent when adding. */
   fix?: MailboxRecord;
+  /** Adding: the address to start with, the company's email from setup
+   *  (suggestedMailboxAddress); its service is picked when its domain names one. */
+  suggestedAddress?: string;
   onClose: () => void;
   onSaved: (rec: MailboxRecord) => void;
 }) {
   const { t } = useTranslation();
   // A mailbox saved as Google Workspace opens on the one Google tile, and
   // saves as gmail: the same servers (owner, 2026-10-26).
-  const [provider, setProvider] = useState<MailProvider>(fix?.provider === 'google-workspace' ? 'gmail' : (fix?.provider ?? 'gmail'));
-  const [address, setAddress] = useState(fix?.address ?? '');
+  const start = fix ? '' : (suggestedAddress ?? '');
+  const [provider, setProvider] = useState<MailProvider>(fix?.provider === 'google-workspace' ? 'gmail' : (fix?.provider ?? providerForAddress(start) ?? 'gmail'));
+  const [address, setAddress] = useState(fix?.address ?? start);
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const guessed = guessServers(address);
