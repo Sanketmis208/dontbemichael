@@ -784,8 +784,12 @@ test('the note comes again while Michael has not closed, at most twice, and neve
   const f = floor({ t, workers: ['pam'] });
   f.ct.start();
   f.route('pam', 'CLOSING-TIME-ACK');
-  await new Promise((r) => setTimeout(r, 60));
-  assert.deepEqual(f.sent.filter((m) => /everyone has confirmed/.test(m.subject)).map((m) => m.subject),
+  // Timers run late under load: wait for the notes, then a little longer to
+  // be sure no third reminder follows.
+  const notes = () => f.sent.filter((m) => /everyone has confirmed/.test(m.subject));
+  for (let i = 0; i < 200 && notes().length < 3; i++) await new Promise((r) => setTimeout(r, 10));
+  await new Promise((r) => setTimeout(r, 50));
+  assert.deepEqual(notes().map((m) => m.subject),
     ['Closing time: everyone has confirmed', 'Closing time: everyone has confirmed (again)', 'Closing time: everyone has confirmed (again)']);
 
   const g = floor({ t, workers: ['pam'] });

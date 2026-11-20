@@ -469,8 +469,18 @@ ipcMain.handle('cliUpdate:current', () => lastCliUpdate);
  *  install disabled) so the freshly-installed CLI launches in the SAME pty/window —
  *  no user click. Cleared the moment it's consumed, so it can never loop installs. */
 const pendingInstallRelaunch = new Map<string, { opts: AgentSpawnOptions; owner: Electron.WebContents | null; bin: string }>();
+/**
+ * Set as a switch saves the new business's folder: from then on the hive and
+ * the roster write to no business at all until the app relaunches. Writes from
+ * the closing office (a member's last hook, the 30 s cost sample, the window's
+ * last roster save) resolved the folder at the moment they wrote, which was
+ * already the new business's: members with the same id (Michael, Pam, ...) had
+ * their resume key overwritten with the other business's (2026-11-20).
+ */
+let switchingHome = false;
+const currentHome = (): string | null => (switchingHome ? null : readConfig().harnessHome ?? null);
 const hive = new HiveManager(
-  () => readConfig().harnessHome,
+  currentHome,
   (channel, payload) => {
     const wc = liveWebContents();
     if (!wc) return false;
@@ -533,7 +543,7 @@ telemetry.onApiError((agentId, querySource, statusCode) => {
 telemetry.onApiSuccess((agentId, querySource) => breaker.recordApiSuccess(agentId, querySource));
 // Shared roster on disk — created early so HookServer can re-read standing goals
 // on every UserPromptSubmit (Edit Agent saves land here via persistAgents).
-const roster = new RosterStore(() => readConfig().harnessHome);
+const roster = new RosterStore(currentHome);
 /**
  * Whether a member is on the team now, for Send only grants
  * (docs/designs/shared-mailboxes.md, EV1): in the roster's `agents`, or in
@@ -4305,6 +4315,8 @@ function switchOffice(newHome: string, mode: 'move' | 'fresh', oldHome: string |
   // A moved office keeps its settings: its entry goes with it. A fresh open
   // finds its own entry by the id in that folder.
   const movedOffices = mode === 'move' && oldHome ? officesAfterMove(oldHome, newHome) : null;
+  // Nothing the closing office still sends reaches the new one (switchingHome).
+  switchingHome = true;
   writeConfig(movedOffices ? { harnessHome: newHome, offices: movedOffices } : { harnessHome: newHome });
   try { ptyManager.killAll(); } catch (e) { console.error('[changeHome] killAll:', e); }
   restartApp(app);
