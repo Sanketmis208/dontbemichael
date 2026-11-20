@@ -103,6 +103,11 @@ export function AskMeTab() {
   // A sign in stop already asks the owner to sign in: one card (eng R3).
   const engineCard = setupCardShown({ engineSetup, stop });
   const onBreak = !!useOfficeBreak();
+  // The office opening (the team clocking in) or closing (closing time): the
+  // asks are read only until it is open (askLock below).
+  const officeClosing = useStore((s) => s.officeClosing);
+  const officeOpening = useStore((s) => s.opening.kind === 'opening');
+  const askLock: 'closing' | 'opening' | null = officeClosing ? 'closing' : officeOpening ? 'opening' : null;
   const refreshScheduleRequests = refreshNeedsYou;
   // Drafts live in the STORE (keyed by row) — switching tabs unmounts this
   // view, and a half-typed answer must survive the round trip.
@@ -398,6 +403,20 @@ export function AskMeTab() {
       <UpdateCard update={update} later={updateLater} />
       <CaseStudyCard waiting={caseStudyWaiting} />
       <CliUpdateCard status={cliUpdate} later={cliUpdateLater} />
+      {/* While the office opens or closes, the asks below can be read but not
+          answered (owner, 2026-11-19): a reply then reaches a team that is not
+          there to act on it. The cards above stay usable, since signing Claude
+          in or fixing a stop is how an opening that is stuck gets going. */}
+      {askLock && (
+        <div role="status" style={{ flexShrink: 0, fontSize: 12.5, lineHeight: '18px', color: 'var(--cth-ink-3)', padding: '0 2px' }}>
+          {askLock === 'closing' ? translate('askMe.lockedClosing') : translate('askMe.lockedOpening')}
+        </div>
+      )}
+      <div
+        data-askme-locked={askLock || undefined}
+        {...(askLock ? ({ inert: '' } as Record<string, string>) : {})}
+        style={{ display: 'flex', flexDirection: 'column', gap: 12, flexShrink: 0, opacity: askLock ? 0.55 : 1, transition: 'opacity 200ms var(--cth-ease)' }}
+      >
       <ScheduleRequestCards requests={scheduleRequests} refresh={refreshScheduleRequests} look={memberLook} hiddenIds={hiddenOf('schedule:')} fold={foldFor('schedule:')} />
       <WorkStyleUpdateCards offers={offers} look={memberLook} hiddenIds={hiddenOf('offer:')} fold={foldFor('offer:')} />
       <MailProposalCards proposals={proposals} refresh={refreshNeedsYou} look={memberLook} hiddenIds={hiddenOf('mail:')} fold={foldFor('mail:')} />
@@ -718,6 +737,7 @@ export function AskMeTab() {
       {degraded.map((n) => (
         <DegradedNoticeCard key={n.agentId} notice={n} name={agents.find((a) => a.id === n.agentId)?.name ?? n.name} />
       ))}
+      </div>
     </div>
   );
 }

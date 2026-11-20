@@ -63,6 +63,8 @@
     "steerAria": "Send this agent a note"
   },
   "askMe": {
+    "lockedClosing": "Closing time: answers open again when the office does.",
+    "lockedOpening": "The office is opening: answers open once the team is in.",
     "sources": "Sources",
     "lookedIn": "Looked in: {{places}}",
     "sourceOpens": "{{label}}, opens {{site}}",
