@@ -84,6 +84,7 @@ test('main asks with a short wait, at most every 300 ms, names only the app, and
 test('the street field: a combobox in setup and Settings that credits OpenStreetMap', () => {
   const field = read('src/renderer/src/components/StreetField.tsx');
   assert.match(field, /role="combobox"/);
+  assert.match(field, /<div style=\{\{ position: 'relative', display: 'flex', flexDirection: 'column' \}\}>/, 'the field fills the width, as the plain input did');
   assert.match(field, /aria-autocomplete="list"/);
   assert.match(field, /role="listbox"/);
   assert.match(field, /role="option"\n\s*aria-selected=\{i === active\}/);

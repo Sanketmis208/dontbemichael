@@ -65,7 +65,8 @@ export function StreetField({ value, onType, onPick, placeholder, invalid, class
 
   const shown = open && options.length > 0;
   return (
-    <div style={{ position: 'relative' }}>
+    // A column, so the field fills the width as the plain input did.
+    <div style={{ position: 'relative', display: 'flex', flexDirection: 'column' }}>
       <input
         value={value}
         onChange={(e) => onType(e.target.value)}
