@@ -23,7 +23,7 @@ import { claudeSettingsDir } from './claudeHome';
 import { WEB_SETTINGS_UNREADABLE, WEB_TOOLS, type SandboxNetwork } from '../shared/webAccess';
 import {
   addressedToResearch, ANSWER_UNCHECKED, ANSWER_UNCHECKED_SUBJECT, hasAttachments, looksLikeInjection, NOT_SENT_SUBJECT,
-  PRIVACY_CHECK_SENDER, REFUSAL_CHECK_FAILED, REFUSAL_FILES, REFUSAL_NOT_DELIVERED, REFUSAL_OFF, REFUSAL_TOO_LONG, RESEARCH_HOUSE_RULE, RESEARCH_ID, RESEARCH_REPLY_LABEL,
+  PRIVACY_CHECK_SENDER, REFUSAL_CHECK_FAILED, REFUSAL_FILES, REFUSAL_NOT_DELIVERED, REFUSAL_NOT_RUNNING, REFUSAL_OFF, REFUSAL_TOO_LONG, RESEARCH_HOUSE_RULE, RESEARCH_ID, RESEARCH_REPLY_LABEL,
   RESEARCH_UNCHECKED_TOOL, NOT_SENT_SUBJECT_OUT, RESEARCH_ONLY_ASKERS, RESEARCH_NAME, RESEARCH_ROLE, isReservedName,
   SENT_AS_SUBJECT, sentAsBody, nameKey, researchText, cleanResearchName, RESEARCH_ONLY_SKILLS
 } from '../shared/research';
@@ -2382,6 +2382,13 @@ export class HiveManager {
    *  "why messages are not queued and waited", D1 30 minutes). Nothing goes
    *  out unchecked meanwhile. */
   static TRUST_WAIT_MS = 30 * 60_000;
+  /** How long a question waits for Research to start when it is switched on
+   *  but not running: every member is marked stopped as the office opens and
+   *  started again within seconds (2026-11-19: a question waiting from before
+   *  a restart was refused as "Pete is off" six seconds before Pete started). */
+  static RESEARCH_START_WAIT_MS = 3 * 60_000;
+  /** When each message to Research first found it not running, by message. */
+  private researchStartWaits = new Map<string, number>();
   /** The gap before try `tries + 1`: 30 s, 1, 2 and 4 minutes, then every 5. */
   static trustRetryDelayMs(tries: number): number { return Math.min(5 * 60_000, 30_000 * 2 ** Math.max(0, tries)); }
   /** A deny that only says the check could not run this time. */
@@ -2656,7 +2663,7 @@ export class HiveManager {
     const what = from === 'human' ? 'A note from the owner'
       : from === 'system' ? 'A message from the app'
         : `${reg.agents[from]?.name?.trim() || from}'s message`;
-    const next = reason === REFUSAL_CHECK_FAILED || reason === REFUSAL_NOT_DELIVERED
+    const next = reason === REFUSAL_CHECK_FAILED || reason === REFUSAL_NOT_DELIVERED || reason === REFUSAL_NOT_RUNNING
       ? 'This is an app problem. If it keeps happening, tell the owner.'
       : reason === REFUSAL_OFF
         ? `The owner turns ${n} on in Settings, Research & privacy.`
@@ -2850,7 +2857,19 @@ export class HiveManager {
       if (held) this.recordHeld('in', senderId, RESEARCH_ID, partial.subject, partial.body, held.why, held.error, senderId === (this.registry().godId ?? 'god') ? 'sender' : 'sender+michael');
       return 'denied';
     };
-    if (!on) return deny(REFUSAL_OFF);
+    if (!on) {
+      // Off only when the owner switched it off. Switched on but not running
+      // (starting with the office): the question waits in its outbox, then
+      // says it is not running, never that it is off.
+      if (!this.researchEnabled()) return deny(REFUSAL_OFF);
+      const key = `${senderId}:${String(msg.id ?? raw)}`;
+      const since = this.researchStartWaits.get(key) ?? Date.now();
+      this.researchStartWaits.set(key, since);
+      if (Date.now() - since < HiveManager.RESEARCH_START_WAIT_MS) return 'hold';
+      this.researchStartWaits.delete(key);
+      return deny(REFUSAL_NOT_RUNNING);
+    }
+    this.researchStartWaits.delete(`${senderId}:${String(msg.id ?? raw)}`);
     // Research not reporting (SD16): the question waits with Michael as it is,
     // before any check is paid for, and nobody is told it reached Research.
     if (this.memberMail?.(RESEARCH_ID) === 'hold') {
