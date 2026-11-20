@@ -107,7 +107,8 @@ test('the wizard over the floor: the open office runs until Open the office, the
   // Back to office keeps a draft; adding never takes over the open office's folder.
   assert.match(wiz, /const id = await window\.cth\.saveBusinessDraft\(\{/);
   assert.match(wiz, /\/\/ Adding a business never takes over the open office's folder\.\n\s*if \(add\) return;/);
-  assert.match(wiz, /if \(add\) \{ void firstFreeHome\(\)/);
+  // A free folder from the start; named after the business once it has a name.
+  assert.match(wiz, /if \(add\) \{\s*void firstFreeHome\(\)\.then/);
   // The Ready step: the account choice, and no sign in wait for a different account.
   assert.match(wiz, /\{step === 'ready' && add && \(\n\s*<ClaudeAccountChoice/);
   assert.match(wiz, /\{step === 'ready' && !\(add && claudeLogin === 'own'\) && <GetMichaelReady/);

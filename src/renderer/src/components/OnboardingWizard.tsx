@@ -1,4 +1,5 @@
 import { useResearchName } from '@/shell/research';
+import { DEFAULT_HOME, businessHomeCandidates } from '@shared/officeHome';
 import { CompanyProfileFields, localCurrency, localTimeZone } from './CompanyProfileFields';
 import { cityLine, cleanCompanyProfile, missingProfileFields, prefillLegalName, type CompanyProfile, type RequiredProfileField } from '@shared/companyProfile';
 import { useEffect, useRef, useState } from 'react';
@@ -264,6 +265,9 @@ export function OnboardingWizard({ onComplete, preview, add }: OnboardingWizardP
   };
 
   const [home, setHome] = useState<string>(draft?.home ?? '');
+  /** The folder the app suggested (Add a business), so it can be renamed for
+   *  the business; anything else in `home` was picked by the owner. */
+  const autoHome = useRef('');
   const [autoMode, setAutoMode] = useState<boolean>(true);
   const [godProvider, setGodProvider] = useState<AgentProvider>('claude');
   const [godModel, setGodModel] = useState<string | undefined>(
@@ -349,10 +353,34 @@ export function OnboardingWizard({ onComplete, preview, add }: OnboardingWizardP
     if (home) return;
     // Add a business: the open office is most likely in the default folder, so
     // the new one is suggested the first free "~/HarnessAgents N" (as Start new).
-    if (add) { void firstFreeHome().then((free) => setHome((h) => h || free)); return; }
+    if (add) {
+      void firstFreeHome().then((free) => setHome((h) => { if (h) return h; autoHome.current = free; return free; }));
+      return;
+    }
     setHome(DEFAULT_HOME);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Add a business: once it has a name, its folder is named after it
+  // ("~/HarnessAgents Northgate Realty"; owner, 2026-11-19: "HarnessAgents 2"
+  // said nothing with several businesses). Only while the folder is still the
+  // app's suggestion: one the owner picked is never renamed.
+  useEffect(() => {
+    const name = businessName.trim();
+    if (!add || !name || step === 'business') return;
+    if (home && home !== autoHome.current) return;
+    let alive = true;
+    void freeHomeFor(name).then((named) => {
+      if (!alive || !named) return;
+      setHome((h) => {
+        if (h && h !== autoHome.current) return h;
+        autoHome.current = named;
+        return named;
+      });
+    });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   // An office already in the suggested home folder (a reinstall, or a new data
   // folder): offer to continue it exactly as it is, by folder. Continuing never
@@ -411,7 +439,7 @@ export function OnboardingWizard({ onComplete, preview, add }: OnboardingWizardP
   const backToOffice = async (): Promise<void> => {
     if (!add) return;
     if (businessName.trim() || businessType) {
-      const where = home.trim() || await firstFreeHome();
+      const where = home.trim() || await freeHomeFor(businessName.trim());
       if (where) {
         const id = await window.cth.saveBusinessDraft({
           id: draftId, home: where, step,
@@ -1594,21 +1622,30 @@ function Dots({ step, steps }: { step: Step; steps: readonly Step[] }) {
   );
 }
 
-/** Where setup suggests the office lives, and looks for an existing one. */
-const DEFAULT_HOME = '~/HarnessAgents';
 
 /** The steps a draft can go on from (D19): any but the resume screen. */
 const DRAFT_STEPS: readonly Step[] = ['business', 'details', 'team', 'home', 'orchestrator', 'permissions', 'ready'];
 
 /** The first free "~/HarnessAgents N", or '' when none is (the folder step asks). */
 async function firstFreeHome(): Promise<string> {
-  for (let n = 2; n <= NEW_OFFICE_SUGGESTIONS; n++) {
-    const candidate = `${DEFAULT_HOME} ${n}`;
+  const numbered = Array.from({ length: NEW_OFFICE_SUGGESTIONS - 1 }, (_, i) => `${DEFAULT_HOME} ${i + 2}`);
+  return firstFreeOf(numbered);
+}
+
+/** The first of these folders not there yet, or '' (none, or the check failed). */
+async function firstFreeOf(candidates: string[]): Promise<string> {
+  for (const candidate of candidates) {
     const st = await window.cth.homeStatus(candidate).catch(() => null);
     if (!st) return '';
     if (!st.exists) return candidate;
   }
   return '';
+}
+
+/** A new business's folder, named after it ("~/HarnessAgents Northgate
+ *  Realty", shared/officeHome.ts); the numbered one when its name makes none. */
+async function freeHomeFor(businessName: string): Promise<string> {
+  return (await firstFreeOf(businessHomeCandidates(businessName, NEW_OFFICE_SUGGESTIONS))) || firstFreeHome();
 }
 
 /** Add a business, Ready step (mockup frame 4; D4, E6): the Claude account the
