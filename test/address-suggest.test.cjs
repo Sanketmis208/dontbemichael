@@ -51,6 +51,16 @@ test('a street with no number, a town for a city, and no gaps for what is not kn
   assert.equal(s[0].label, 'High Street, Bath, United Kingdom');
 });
 
+test('an address outside city limits leaves the city empty, never the county or a district', () => {
+  const s = photon.readPhoton({ features: [
+    feature({ housenumber: '12', street: 'Ranch Road', district: 'Steiner Ranch', county: 'Travis County', state: 'Texas', postcode: '78732', country: 'United States', countrycode: 'US' }),
+    feature({ housenumber: '3', street: 'Mill Lane', hamlet: 'Little Snoring', county: 'Norfolk', country: 'United Kingdom', countrycode: 'GB' })
+  ] });
+  assert.deepEqual(s[0].address, { street: '12 Ranch Road', region: 'Texas', postalCode: '78732', country: 'United States' }, 'the owner types the city the mail uses');
+  assert.equal(s[0].label, '12 Ranch Road, Texas 78732, United States');
+  assert.equal(s[1].address.city, 'Little Snoring', 'a hamlet is a place name');
+});
+
 test('places with no street are left out, repeats once, five at most, and a strange answer is no suggestions', () => {
   const city = feature({ osm_key: 'place', name: 'Austin', state: 'Texas', countrycode: 'US' });
   const same = feature({ housenumber: '1', street: 'Main Street', city: 'Austin', countrycode: 'US' });

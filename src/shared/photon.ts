@@ -59,7 +59,12 @@ export function readPhoton(body: unknown): AddressSuggestion[] {
     const street = number ? (cc && NUMBER_FIRST.has(cc) ? `${number} ${streetName}` : `${streetName} ${number}`) : streetName;
     const address: CompanyAddress = {
       street,
-      city: str(p.city) ?? str(p.town) ?? str(p.village) ?? str(p.district) ?? str(p.county),
+      // A city, town, village or hamlet only. Never the county or a district:
+      // an address outside a city's limits (an unincorporated part of the
+      // county) has no city in OpenStreetMap though its mail goes to one, and a
+      // county name there was wrong (owner, 2026-11-19). Left empty, the owner
+      // types the city the mail uses.
+      city: str(p.city) ?? str(p.town) ?? str(p.village) ?? str(p.hamlet),
       region: str(p.state),
       postalCode: str(p.postcode),
       country: str(p.country)
