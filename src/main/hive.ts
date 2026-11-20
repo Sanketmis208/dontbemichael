@@ -1,3 +1,4 @@
+import { MAX_KEPT_OPEN, type ResearchKept } from '../shared/researchKept';
 /**
  * The Hive — the on-disk multi-agent coordination layer.
  *
@@ -567,6 +568,9 @@ const HOPS_REMEMBERED = 5000;
 /** The owner's sent message ids and who got each, in the private folder: a
  *  member's shell can write the hive log, never this (Company foundations). */
 const OWNER_SAID_FILE = 'owner-said.jsonl';
+/** What the privacy check kept back from team members' questions, for Ask me
+ *  (shared/researchKept.ts), with each question's own words to ask again. */
+const RESEARCH_KEPT_FILE = 'research-kept.json';
 /** How much of its end ownerSaid reads: a cited owner message is recent, and
  *  a line is under 200 bytes. */
 const OWNER_SAID_SPAN = 1024 * 1024;
@@ -2654,6 +2658,80 @@ export class HiveManager {
     }, PRIVACY_CHECK_SENDER));
   }
 
+  /** The kept back questions, newest first (Ask me). */
+  researchKept(): ResearchKept[] {
+    return this.readKept().map(({ again: _again, ...k }) => k).sort((a, b) => b.at - a.at);
+  }
+
+  /**
+   * The owner's answer on a kept back card: 'again' sends the question once
+   * more from the one who asked, through the check with the owner's list as it
+   * is now (an entry they just allowed stays in); 'keep' closes it. Either way
+   * the card goes.
+   */
+  decideKept(id: string, action: 'again' | 'keep'): boolean {
+    const all = this.readKept();
+    const k = all.find((x) => x.id === id);
+    if (!k) return false;
+    if (action === 'again') {
+      const root = this.root();
+      if (!root || !this.registry().agents[k.from]) return false;
+      const outbox = join(root, 'agents', k.from, 'outbox');
+      try {
+        mkdirSync(outbox, { recursive: true });
+        this.atomicWriteJson(join(outbox, `${Date.now()}-asked-again.json`), { to: RESEARCH_ID, act: k.again.act, subject: k.again.subject, body: k.again.body, ...(k.again.conversation ? { conversation: k.again.conversation } : {}) });
+      } catch (e) {
+        console.error('[research] asking again', e);
+        return false;
+      }
+    }
+    this.writeKept(all.filter((x) => x.id !== id));
+    return true;
+  }
+
+  private readKept(): Array<ResearchKept & { again: { act: string; subject: string; body: string; conversation?: string } }> {
+    const home = this.getHome();
+    if (!home) return [];
+    try {
+      const v = JSON.parse(readFileSync(join(privateRoot(home), RESEARCH_KEPT_FILE), 'utf8')) as unknown;
+      return Array.isArray(v) ? v.filter((x) => x && typeof x.id === 'string' && Array.isArray(x.parts) && x.again && typeof x.again.body === 'string') : [];
+    } catch { return []; }
+  }
+
+  private writeKept(all: ReturnType<HiveManager['readKept']>): void {
+    const home = this.getHome();
+    if (!home) return;
+    try {
+      mkdirSync(privateRoot(home), { recursive: true });
+      this.atomicWriteJson(join(privateRoot(home), RESEARCH_KEPT_FILE), all.slice(-MAX_KEPT_OPEN));
+    } catch (e) { console.error('[research] saving what was kept back', e); }
+  }
+
+  /** A team member's question went to Research without some of its words, or
+   *  not at all: the owner is offered each one on Ask me (owner, 2026-11-20).
+   *  One card per question; the same question again adds to its card. */
+  private recordKept(senderId: string, msg: HiveMessage, partial: Partial<HiveMessage>, parts: string[], denied: boolean): void {
+    const subject = typeof partial.subject === 'string' ? partial.subject : '';
+    const body = typeof partial.body === 'string' ? partial.body : '';
+    if (!body.trim() && !subject.trim()) return;
+    const all = this.readKept();
+    const same = all.find((x) => x.from === senderId && x.again.subject === subject && x.again.body === body);
+    if (same) {
+      same.parts = [...same.parts, ...parts.filter((p) => !same.parts.some((q) => q.toLowerCase() === p.toLowerCase()))].slice(0, 5);
+      same.denied = same.denied && denied;
+      same.at = Date.now();
+    } else {
+      const reg = this.registry();
+      all.push({
+        id: typeof msg.id === 'string' ? msg.id : `kept-${Date.now()}`,
+        at: Date.now(), from: senderId, fromName: reg.agents[senderId]?.name?.trim() || null,
+        subject, parts, denied,
+        again: { act: typeof msg.act === 'string' ? msg.act : 'query', subject, body, ...(safeConversation(msg.conversation) ? { conversation: msg.conversation as string } : {}) }
+      });
+    }
+    this.writeKept(all);
+  }
+
   /** Michael hears of every message the privacy check kept from Research:
    *  who sent it, its subject and why, and what to do about it, so he can tell
    *  the owner what was stopped and where it is set (owner, 2026-10-14). His
@@ -2887,8 +2965,11 @@ export class HiveManager {
     if (v.decision === 'deny') {
       const why = heldWhy(v, REFUSAL_CHECK_FAILED, REFUSAL_TOO_LONG);
       if (!why) this.recordChecked('in', senderId, RESEARCH_ID, 'stop', partial, undefined, { kinds: 'kinds' in v ? v.kinds : undefined });
+      if (!why && v.parts?.length) this.recordKept(senderId, msg, partial, v.parts, true);
       return deny(v.reason, why ? { why, error: v.error } : undefined);
     }
+    const kept = 'parts' in v && Array.isArray(v.parts) ? v.parts : [];
+    if (v.decision === 'clean' && kept.length) this.recordKept(senderId, msg, partial, kept, false);
     this.deliverToResearch(senderId, msg, v.subject, v.body);
     this.recordChecked('in', senderId, RESEARCH_ID, v.decision, partial, v, { kinds: 'removed' in v ? v.removed : undefined });
     if (v.decision === 'clean') this.tellSender(senderId, msg.id, msg.conversation, SENT_AS_SUBJECT, sentAsBody(v.subject, v.body, this.researchName()), true);

@@ -15,6 +15,7 @@ import { answerMessages, askAsText, isAnswered, isReport, isWithdrawn, labeledAn
 import { noticeKindOf } from '@shared/noticeCards';
 import { isComposingKey } from '@shared/imeGuard';
 import { ScheduleRequestCards } from './ScheduleRequestCards';
+import { ResearchKeptCards } from './ResearchKeptCards';
 import { WorkStyleUpdateCards } from './WorkStyleUpdateCards';
 import { MailProposalCards } from './MailProposalCards';
 import { EngineSetupCard } from './EngineSetupCard';
@@ -90,7 +91,7 @@ export function AskMeTab() {
   const agents = useStore((s) => s.agents);
   const restorable = useStore((s) => s.restorableAgents);
   // One shared read with the pill, the strip and the chips (D3, eng R4).
-  const { tasks, requests: scheduleRequests, offers, proposals, engineSetup, stop, researchNotice, knowledgeNotice, setupNotice, degraded, silent, foundations, update, updateLater, cliUpdate, cliUpdateLater, caseStudyWaiting, count: needsCount } = useNeedsYou();
+  const { tasks, requests: scheduleRequests, researchKept, offers, proposals, engineSetup, stop, researchNotice, knowledgeNotice, setupNotice, degraded, silent, foundations, update, updateLater, cliUpdate, cliUpdateLater, caseStudyWaiting, count: needsCount } = useNeedsYou();
   // Michael's team upgrade card (docs/designs/team-upgrade-card.md) keeps All clear away too.
   const cliShown = cliUpdateToastVisible(cliUpdate, cliUpdateLater);
   // Michael's card for a new version (UpdateCard) keeps All clear away too.
@@ -229,6 +230,7 @@ export function AskMeTab() {
   // The board top to bottom: schedule changes, Work style updates, mail, then the rows.
   const cards: BoardCard[] = [
     ...scheduleRequests.map((r) => ({ key: `schedule:${r.id}`, dept: deptOf(r.agentId) })),
+    ...researchKept.map((k) => ({ key: `kept:${k.id}`, dept: deptOf(k.from) })),
     ...offers.map((o) => ({ key: `offer:${decisionId(o.key, o.agentId)}`, dept: deptOf(o.agentId) })),
     ...proposals.map((p) => ({ key: `mail:${p.id}`, dept: deptOf(p.agentId) })),
     ...waiting.map((r) => ({ key: r.key, dept: rowDept(r), keep: isReport(r.ask) }))
@@ -287,7 +289,7 @@ export function AskMeTab() {
     return { open: openKey === key, toggle: () => setOpenId(openKey === key ? null : key), pin: () => setOpenId(key) };
   };
   // The whole board, whatever is picked: All clear and the answered list read it.
-  const boardEmpty = !engineCard && !updateShown && !caseShown && !silentShown && !cliShown && waiting.length === 0 && scheduleRequests.length === 0 && offers.length === 0 && proposals.length === 0;
+  const boardEmpty = !engineCard && !updateShown && !caseShown && !silentShown && !cliShown && waiting.length === 0 && scheduleRequests.length === 0 && researchKept.length === 0 && offers.length === 0 && proposals.length === 0;
   // All clear shows, and with it Michael's one tip (owner, 2026-11-10).
   const showAllClear = boardEmpty && !onBreak && !researchNotice && !knowledgeNotice && !setupNotice && degraded.length === 0;
 
@@ -418,6 +420,8 @@ export function AskMeTab() {
         style={{ display: 'flex', flexDirection: 'column', gap: 12, flexShrink: 0, opacity: askLock ? 0.55 : 1, transition: 'opacity 200ms var(--cth-ease)' }}
       >
       <ScheduleRequestCards requests={scheduleRequests} refresh={refreshScheduleRequests} look={memberLook} hiddenIds={hiddenOf('schedule:')} fold={foldFor('schedule:')} />
+      {/* What the privacy check kept back from a question to Research (owner, 2026-11-20). */}
+      <ResearchKeptCards kept={researchKept} refresh={refreshNeedsYou} look={memberLook} hiddenIds={hiddenOf('kept:')} fold={foldFor('kept:')} />
       <WorkStyleUpdateCards offers={offers} look={memberLook} hiddenIds={hiddenOf('offer:')} fold={foldFor('offer:')} />
       <MailProposalCards proposals={proposals} refresh={refreshNeedsYou} look={memberLook} hiddenIds={hiddenOf('mail:')} fold={foldFor('mail:')} />
       {/* Always mounted, so screen readers announce the line when it fills. */}

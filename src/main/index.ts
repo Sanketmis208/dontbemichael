@@ -198,6 +198,7 @@ import { createMailboxNotes, newlyHeld, GRANT_NOTES_FILE, type PendingGrant } fr
 import { PromptSubmits, confirmSubmit } from '../shared/submitConfirm';
 import { createBootWatchdog, type BootWatchdog } from './bootWatchdog';
 import { dropInheritedClaudeVars } from './inheritedEnv';
+import { MAX_PUBLIC_TERMS, cleanPublicTerm, cleanPublicTerms } from '../shared/publicTerms';
 import { dismissNotice, emptyDegraded, noteStart, shownNotices, type DegradedNotice } from '../shared/degradedNotices';
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
@@ -5014,6 +5015,20 @@ ipcMain.handle('connectors:setGrant', (_evt, agentId: unknown, key: unknown, gra
 });
 /** Research (shared/research.ts, issue #230): is it on, and how many asks
  *  wait for it (turning it off sends them back, design review D7). */
+// What the privacy check kept back from team members' questions (Ask me),
+// and the owner's answers to it (owner, 2026-11-20). Always allow adds the
+// words to the business's Always allowed list: only this, and Settings, write it.
+ipcMain.handle('research:kept', () => hive.researchKept());
+ipcMain.handle('research:allow', (_evt, term: unknown) => {
+  const t = cleanPublicTerm(term);
+  if (!t) return { ok: false };
+  const now = cleanPublicTerms(readConfig().researchPublic);
+  if (now.length >= MAX_PUBLIC_TERMS && !now.some((x) => x.toLowerCase() === t.toLowerCase())) return { ok: false, full: true };
+  writeConfig({ researchPublic: cleanPublicTerms([...now, t]) });
+  return { ok: true };
+});
+ipcMain.handle('research:keptDecide', (_evt, id: unknown, action: unknown) =>
+  typeof id === 'string' && (action === 'again' || action === 'keep') ? { ok: hive.decideKept(id, action) } : { ok: false });
 ipcMain.handle('research:status', () => {
   const cfg = readConfig();
   return { on: !!cfg.research?.on, live: hive.researchOn(), waiting: hive.researchOn() ? hive.researchWaiting() : 0, notice: !!cfg.research?.notice };

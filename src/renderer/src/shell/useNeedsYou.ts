@@ -1,3 +1,4 @@
+import type { ResearchKept } from '@shared/researchKept';
 import { useSyncExternalStore } from 'react';
 import type { ScheduleRequest } from '@shared/missions';
 import type { MailProposal } from '@shared/mailProposals';
@@ -29,6 +30,9 @@ export interface NeedsYouFeed {
   tasks: HiveTask[];
   /** Schedule requests Michael passed on to the owner. */
   requests: ScheduleRequest[];
+  /** Questions to Research the privacy check kept words back from: one card
+   *  each, offering each piece to always allow (shared/researchKept.ts). */
+  researchKept: ResearchKept[];
   /** Owner answers Michael has not closed yet (card-lifecycle.md): the Tasks
    *  view shows those cards as with Michael. They wait on him, not the owner,
    *  so they are not in `count`. */
@@ -89,7 +93,7 @@ const CLI_LATER_KEY = 'cth.cliUpdateLaterFor';
 function readCliLater(): string | null {
   try { return window.localStorage.getItem(CLI_LATER_KEY); } catch { return null; }
 }
-let feed: NeedsYouFeed = { status: 'unknown', tasks: [], requests: [], ownerRequests: [], offers: [], proposals: [], engineSetup: null, stop: null, silent: [], update: null, updateLater: null, cliUpdate: null, cliUpdateLater: readCliLater(), caseStudyWaiting: false, count: 0, reports: 0, researchNotice: false, knowledgeNotice: false, setupNotice: false, degraded: [], foundations: null };
+let feed: NeedsYouFeed = { status: 'unknown', tasks: [], requests: [], researchKept: [], ownerRequests: [], offers: [], proposals: [], engineSetup: null, stop: null, silent: [], update: null, updateLater: null, cliUpdate: null, cliUpdateLater: readCliLater(), caseStudyWaiting: false, count: 0, reports: 0, researchNotice: false, knowledgeNotice: false, setupNotice: false, degraded: [], foundations: null };
 // The offers need the team and the packs, which this module does not import;
 // the app hands it the reader at start (App.tsx).
 let offersSource: (() => Promise<WorkStyleOffer[]>) | null = null;
@@ -136,7 +140,7 @@ let taskReads = 0;
 let requestReads = 0;
 let ownerReads = 0;
 
-function publish(next: Partial<Pick<NeedsYouFeed, 'status' | 'tasks' | 'requests' | 'ownerRequests' | 'offers' | 'proposals' | 'engineSetup' | 'stop' | 'silent' | 'researchNotice' | 'knowledgeNotice' | 'setupNotice' | 'degraded' | 'foundations' | 'update' | 'updateLater' | 'cliUpdate' | 'cliUpdateLater' | 'caseStudyWaiting'>>): void {
+function publish(next: Partial<Pick<NeedsYouFeed, 'status' | 'tasks' | 'requests' | 'researchKept' | 'ownerRequests' | 'offers' | 'proposals' | 'engineSetup' | 'stop' | 'silent' | 'researchNotice' | 'knowledgeNotice' | 'setupNotice' | 'degraded' | 'foundations' | 'update' | 'updateLater' | 'cliUpdate' | 'cliUpdateLater' | 'caseStudyWaiting'>>): void {
   // A poll that brings nothing new changes nothing, so nobody re-renders.
   const changed = (Object.keys(next) as Array<keyof typeof next>).some((k) => JSON.stringify(next[k]) !== JSON.stringify(feed[k]));
   if (!changed) return;
@@ -144,7 +148,7 @@ function publish(next: Partial<Pick<NeedsYouFeed, 'status' | 'tasks' | 'requests
   const merged = { ...feed, ...next };
   feed = {
     ...merged,
-    count: merged.tasks.reduce((n, t) => n + shownQuestions(t, merged.foundations).length, 0) + merged.requests.length + merged.offers.length + merged.proposals.length,
+    count: merged.tasks.reduce((n, t) => n + shownQuestions(t, merged.foundations).length, 0) + merged.requests.length + merged.researchKept.length + merged.offers.length + merged.proposals.length,
     reports: merged.tasks.reduce((n, t) => n + openReportIndexes(t.humanQA).length, 0) + (merged.researchNotice ? 1 : 0) + (merged.knowledgeNotice ? 1 : 0) + (merged.setupNotice ? 1 : 0) + merged.degraded.length
   };
   // One more while Michael cannot start for want of his engine (get-michael-ready.md),
@@ -202,6 +206,16 @@ function readTasks(): void {
   readEngine(false);
   readNotices(false);
   readFoundations(false);
+  readKept();
+}
+
+// A small file in the app's private folder, read with every poll.
+let keptReads = 0;
+function readKept(): void {
+  const mine = ++keptReads;
+  void window.cth.researchKept?.()
+    .then((all) => { if (mine === keptReads) publish({ researchKept: Array.isArray(all) ? all : [] }); })
+    .catch(() => { /* keep the last value */ });
 }
 
 // The one time cards (Research's, and company knowledge's for an owner who
@@ -383,6 +397,7 @@ export function refreshNeedsYou(): void {
   readEngine();
   readTasks();
   readRequests();
+  readKept();
   readProposals();
   readOffers();
   readNotices();

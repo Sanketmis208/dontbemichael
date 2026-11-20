@@ -11,6 +11,7 @@ import type { CaseDraftResult, CaseInput, CaseOpen, CasePrep, CaseSaveResult, Ca
 import type { FoundationsView } from '../shared/foundations';
 import type { ResearchConfig } from '../shared/research';
 import type { DataClassId, DataClassSetting } from '../shared/dataClasses';
+import type { ResearchKept } from '../shared/researchKept';
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
 
 /** Which office the renderer's saved state belongs to. */
@@ -891,6 +892,12 @@ const api = {
   connectorsSeen: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('connectors:seen'),
   /** Research, the one team member on the internet (shared/research.ts). */
   researchStatus: (): Promise<{ on: boolean; live: boolean; waiting: number; notice: boolean }> => ipcRenderer.invoke('research:status'),
+  /** What the privacy check kept back from team members' questions (shared/researchKept.ts). */
+  researchKept: (): Promise<ResearchKept[]> => ipcRenderer.invoke('research:kept'),
+  /** Add words to the business's Always allowed list (the owner's click on Ask me). */
+  researchAllow: (term: string): Promise<{ ok: boolean; full?: boolean }> => ipcRenderer.invoke('research:allow', term),
+  /** Ask again through the check, or keep private: the card goes either way. */
+  researchKeptDecide: (id: string, action: 'again' | 'keep'): Promise<{ ok: boolean }> => ipcRenderer.invoke('research:keptDecide', id, action),
   researchPrepare: (): Promise<{ ok: true; cwd: string } | { ok: false }> => ipcRenderer.invoke('research:prepare'),
   researchOff: (): Promise<{ ok: boolean; returned: number }> => ipcRenderer.invoke('research:off'),
   researchNoticeSeen: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('research:noticeSeen'),
