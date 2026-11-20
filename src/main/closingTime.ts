@@ -100,6 +100,13 @@ export class ClosingTimeController {
   private acked = new Set<string>();
   /** Michael was told every team member confirmed (tellMichaelAllIn). */
   private toldAllIn = false;
+  /** The note again while he has not closed (tellMichaelAllIn). */
+  private allInTimer: NodeJS.Timeout | null = null;
+  /** How long Michael has to close after the note before it comes again, and
+   *  how many times it comes again (2026-11-20: a note filed unread with the
+   *  confirmations it followed held closing time). */
+  static ALL_IN_REMIND_MS = 45_000;
+  static ALL_IN_REMINDERS = 2;
   private excused = new Set<string>();
   private lastRemind = new Map<string, number>();
   /** Set once COMPLETE is accepted. `active` stays true through the teardown
@@ -570,15 +577,33 @@ export class ClosingTimeController {
     if (this.pendingIds(reg).length > 0) return;
     this.toldAllIn = true;
     const names = [...this.acked].map((id) => `${reg.agents[id]?.name ?? id} (${id})`).join(', ') || 'nobody';
-    this.hive.send({
-      to: 'god',
-      act: 'inform',
-      subject: 'Closing time: everyone has confirmed',
-      body: [
-        `Every team member has sent CLOSING-TIME-ACK: ${names}. Their notes are in your inbox, or in inbox/.done if you moved them there.`,
-        'Do not wait for anything more: update tasks.json and board.md now, then send CLOSING-TIME-COMPLETE ("to": "human").'
-      ].join('\n')
-    }, 'human');
+    const note = (again: boolean): void => {
+      try {
+        this.hive.send({
+          to: 'god',
+          act: 'inform',
+          subject: again ? 'Closing time: everyone has confirmed (again)' : 'Closing time: everyone has confirmed',
+          body: [
+            `Every team member has sent CLOSING-TIME-ACK: ${names}. Their notes are in your inbox, or in inbox/.done if you moved them there.`,
+            'Do not wait for anything more: update tasks.json and board.md now, then send CLOSING-TIME-COMPLETE ("to": "human").'
+          ].join('\n')
+        }, 'human');
+      } catch (e) { console.error('[closing-time] telling Michael everyone confirmed', e); }
+    };
+    note(false);
+    // Again while he has not closed: a note filed unread with the
+    // confirmations it followed held closing time (2026-11-20).
+    let left = ClosingTimeController.ALL_IN_REMINDERS;
+    const again = (): void => {
+      this.allInTimer = setTimeout(() => {
+        this.allInTimer = null;
+        if (!this.active || this.concluded || left <= 0) return;
+        left--;
+        note(true);
+        if (left > 0) again();
+      }, ClosingTimeController.ALL_IN_REMIND_MS);
+    };
+    again();
   }
 
   private armTimeout(): void {
@@ -591,6 +616,7 @@ export class ClosingTimeController {
   private cleanup(): void {
     if (this.timeoutTimer) { clearTimeout(this.timeoutTimer); this.timeoutTimer = null; }
     if (this.teardownTimer) { clearTimeout(this.teardownTimer); this.teardownTimer = null; }
+    if (this.allInTimer) { clearTimeout(this.allInTimer); this.allInTimer = null; }
     this.active = false;
   }
 

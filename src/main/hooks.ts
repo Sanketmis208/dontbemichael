@@ -1,3 +1,4 @@
+import { INBOX_SWEEP_REASON, sweepsInbox } from '../shared/inboxSweep';
 /**
  * HookServer — the bridge between `claude` lifecycle hooks and the harness.
  *
@@ -770,6 +771,17 @@ export class HookServer {
           permissionDecisionReason: RESEARCH_SANDBOX_ONLY
         }
       };
+    }
+    // Michael moves each inbox message by name, never with a wildcard: one
+    // filed messages that had arrived meanwhile unread, and held closing time
+    // twice (owner, 2026-11-20; shared/inboxSweep.ts).
+    if (event === 'PreToolUse' && agentId && p.tool_name === 'Bash') {
+      const cmd = (p.tool_input as { command?: unknown } | undefined)?.command;
+      let isGod = false;
+      try { const reg = this.hive.registry(); isGod = agentId === (reg.godId ?? 'god') || !!reg.agents[agentId]?.isGod; } catch { /* not Michael */ }
+      if (isGod && typeof cmd === 'string' && sweepsInbox(cmd)) {
+        return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: INBOX_SWEEP_REASON } };
+      }
     }
     if (event === 'PreToolUse' && agentId && WEB_TOOLS.has(p.tool_name ?? '')) {
       // Unreadable settings fail closed, like the connector gate (D8).
