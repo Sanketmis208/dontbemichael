@@ -978,11 +978,11 @@ Journey (storyboard):
   - Surfaced by: 3A, BIZ-3 (D4)
   - Files: src/renderer/src/components/OnboardingWizard.tsx, src/main/index.ts
   - Verify: an integration test that the open office keeps running until Open the office
-- [ ] **DT4 (P2, human: ~2h / CC: ~10min)**: Closing bar. Add the switch subject, Cancel switch, and Switch now with its one time question.
+- [x] **DT4 (P2, human: ~2h / CC: ~10min)**: Closing bar. Add the switch subject, Cancel switch, and Switch now with its one time question. (done with E4: ClosingTimeBar's switch form, tested in switch-business.test.cjs and closing-time-dialog.test.cjs)
   - Surfaced by: 5A
   - Files: the closing bar component, en.json
   - Verify: the closing bar test covers the switch variant
-- [ ] **DT5 (P2, human: ~30min / CC: ~5min)**: Window title. Name the business when there are two or more.
+- [x] **DT5 (P2, human: ~30min / CC: ~5min)**: Window title. Name the business when there are two or more. (done with DT1: the renderer sets the page title, which the window follows; tested in business-menu.test.cjs)
   - Surfaced by: 7A
   - Files: src/main/index.ts
   - Verify: a unit test of the title rule
