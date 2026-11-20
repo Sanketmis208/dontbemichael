@@ -20,6 +20,7 @@ import { createReadStream, createWriteStream, lstatSync, mkdirSync, unlinkSync, 
 import { dirname, isAbsolute, resolve, sep } from 'node:path';
 import { createGunzip, createGzip, constants as zc } from 'node:zlib';
 import { once } from 'node:events';
+import { finished } from 'node:stream/promises';
 import type { Readable, Writable } from 'node:stream';
 
 export const BACKUP_MAGIC = 'DBMBACKUP 1\n';
@@ -199,9 +200,16 @@ export async function readEntries(
     // read only (opening it to write fails), and a link would lead elsewhere.
     try { const st = lstatSync(target); if (!st.isDirectory()) unlinkSync(target); } catch { /* not there */ }
     const out = createWriteStream(target, { mode: (h.m & 0o777) || 0o600, flags: 'wx' });
-    await b.take(h.s, async (chunk) => { if (!out.write(chunk)) await once(out, 'drain'); });
+    // A file that cannot be opened or written (a full disk, a folder in the
+    // way) stops the restore with its error, never a wait with no end.
+    let failed: Error | null = null;
+    out.on('error', (e) => { failed = e; });
+    await b.take(h.s, async (chunk) => {
+      if (failed) throw failed;
+      if (!out.write(chunk)) await once(out, 'drain');
+    });
     out.end();
-    await once(out, 'close');
+    await finished(out);
     // Keep the file's own time, so a restored office looks as it did.
     if (h.t > 0) { try { utimesSync(target, new Date(), new Date(h.t)); } catch { /* the time only */ } }
     written += 1;

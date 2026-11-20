@@ -119,7 +119,9 @@ export function backupRoots(src: Pick<BackupSource, 'config' | 'home'>): { offic
   add(offices, cfg.harnessHome);
   for (const h of (cfg.recentHives as unknown[] | undefined) ?? []) add(offices, h);
   for (const e of Object.values((cfg.offices as Record<string, { home?: string }> | undefined) ?? {})) add(offices, e?.home);
-  const officeRoots = offices.filter((o) => holdsOffice(o) && isUsableTeamFolder(o, src.home));
+  // Only folders a restore puts back (restorableFolder), so a backup never
+  // carries one that would be left out on the other computer.
+  const officeRoots = offices.filter((o) => holdsOffice(o) && restorableFolder(o, src.home));
 
   const wanted: string[] = [];
   const names: string[] = [];
@@ -132,7 +134,7 @@ export function backupRoots(src: Pick<BackupSource, 'config' | 'home'>): { offic
   // Outermost first, so a team folder inside the business folder is not taken twice.
   const folders: string[] = [];
   for (const f of wanted.sort((a, b) => a.length - b.length)) {
-    if (!isDir(f) || !isUsableTeamFolder(f, src.home)) continue;
+    if (!isDir(f) || !restorableFolder(f, src.home)) continue;
     if (folders.some((x) => inside(f, x)) || officeRoots.some((o) => inside(f, o))) continue;
     folders.push(f);
   }
@@ -177,7 +179,7 @@ export async function writeBackup(outPath: string, password: string, src: Backup
   offices.forEach((o, i) => { roots[`o${i}`] = { kind: 'office', path: o }; });
   folders.forEach((f, i) => { roots[`f${i}`] = { kind: 'folder', path: f }; });
   const claude: Array<[string, string]> = [];
-  agentFolders(offices, folders, src.config).forEach((folder) => {
+  agentFolders(offices, folders, src.config).filter((f) => restorableFolder(f, src.home)).forEach((folder) => {
     const dir = src.claudeDirFor(folder);
     if (dir && isDir(dir)) { const id = `c${claude.length}`; roots[id] = { kind: 'claude', path: folder }; claude.push([id, dir]); }
   });
@@ -293,7 +295,10 @@ export function restorableFolder(folder: string, home: string): boolean {
   if (!isAbsolute(folder) || !isUsableTeamFolder(folder, home)) return false;
   const rel = relative(resolve(home), resolve(folder));
   if (!rel || rel.startsWith('..') || isAbsolute(rel)) return true;
-  return !rel.split(sep).some((part) => part.startsWith('.'));
+  const parts = rel.split(sep);
+  // Windows keeps settings and login items in AppData, as a Mac does in Library.
+  if (parts[0].toLowerCase() === 'appdata') return false;
+  return !parts.some((part) => part.startsWith('.'));
 }
 
 export interface RestoreTarget {

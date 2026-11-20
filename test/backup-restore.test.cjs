@@ -349,3 +349,29 @@ test('a link already in a restored folder never takes a file outside it', { skip
   assert.equal(fs.readFileSync(path.join(shop, 'menu.txt'), 'utf8'), 'menu');
   assert.equal(fs.readFileSync(path.join(home, 'Documents', 'New', 'deep', 'a.txt'), 'utf8'), 'a', 'a folder not there yet is made');
 });
+
+// Value: protects=a restore file that cannot be written stops the restore with its error instead of waiting forever with the office stopped; fails_when=readEntries awaits close with no error listener; why_new=every restore test wrote where it could (pre-landing review pass 2, reproduced a hang); seam=none; no_claim=a full disk (a folder in the way stands in for it)
+test('a file that cannot be written stops the restore with its error, never a wait', async (t) => {
+  const d = tmp(t, 'bk-stuck');
+  const file = path.join(d, 's.dbmbackup');
+  const w = new archive.BackupWriter(file, { v: 1 });
+  await w.addBuffer('r', 'busy', Buffer.alloc(2 * 1024 * 1024, 1));
+  await w.finish();
+  const out = path.join(d, 'out');
+  fs.mkdirSync(path.join(out, 'busy', 'inside'), { recursive: true });
+  const timeout = new Promise((_, no) => { const h = setTimeout(() => no(new Error('the restore hung')), 5000); h.unref(); });
+  await assert.rejects(Promise.race([archive.readEntries(file, (h) => archive.safeTarget(out, h.p)), timeout]), (e) => e.message !== 'the restore hung');
+});
+
+// Value: protects=a backup takes only folders a restore puts back, so nothing promised is left out, and Windows AppData is never a restore folder; fails_when=backupRoots and restorableFolder disagree, or AppData passes; why_new=the pass 1 fix refused dot folders on restore only (pre-landing review pass 2); seam=none; no_claim=Windows paths on a Mac (path checks only)
+test('a backup takes only folders a restore puts back', (t) => {
+  const d = tmp(t, 'bk-agree');
+  const home = path.join(d, 'Users', 'sam');
+  const hidden = path.join(home, '.work', 'listings-site');
+  const shop = path.join(home, 'Documents', 'Shop');
+  for (const f of [hidden, shop]) fs.mkdirSync(f, { recursive: true });
+  const roots = backup.backupRoots({ config: { businessFolder: shop, registeredRepos: [hidden] }, home });
+  assert.deepEqual(roots.folders, [shop], 'a folder under a dot folder is not promised');
+  assert.equal(backup.restorableFolder(path.join(home, 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup'), home), false);
+  assert.equal(backup.restorableFolder(shop, home), true);
+});
