@@ -193,3 +193,159 @@ test('main checks the password before it stops anything, and the app offers both
   const en = JSON.parse(read('src/renderer/src/i18n/locales/en.json')).backup;
   for (const [k, v] of Object.entries(en)) assert.doesNotMatch(v, /[\u2013\u2014]| - |Michael/, k);
 });
+
+// Value: protects=after the move to per office settings a backup carries every business's office, folders and name; fails_when=backupRoots reads only the top of config.json or skips offices[].home; why_new=the whole computer test uses a config from before the move; seam=none; no_claim=the Claude conversations and secrets of the second business (real files, no electron)
+test('two separate businesses: the backup carries each one\'s office, folders and name', (t) => {
+  const d = tmp(t, 'bk-two');
+  const home = path.join(d, 'Users', 'sam');
+  const office = (name) => { const o = path.join(home, name); put(path.join(o, 'hive', 'registry.json'), '{"agents":{}}'); return o; };
+  const bakeryOffice = office('BakeryOffice');
+  const realtyOffice = office('RealtyOffice');
+  const bakery = path.join(home, 'Documents', 'Harbor Bakery');
+  const bakeryTeam = path.join(bakery, 'Front desk');
+  const realty = path.join(home, 'Documents', 'Northgate Realty');
+  const repo = path.join(home, 'Code', 'listings-site');
+  for (const f of [bakeryTeam, realty, repo]) fs.mkdirSync(f, { recursive: true });
+  const config = {
+    harnessHome: bakeryOffice,
+    officesMigrated: 1,
+    offices: {
+      'office-bakery': { home: bakeryOffice, settings: { businessName: 'Harbor Bakery', businessFolder: bakery, businessTeam: [{ agentId: 'pam', folder: bakeryTeam }] } },
+      // Never opened from the recent list: still carried, as its own office.
+      'office-realty': { home: realtyOffice, settings: { businessName: 'Northgate Realty', businessFolder: realty, registeredRepos: [repo] } }
+    }
+  };
+  const roots = backup.backupRoots({ config, home });
+  assert.deepEqual(roots.offices.sort(), [bakeryOffice, realtyOffice].sort(), 'both offices');
+  assert.deepEqual(roots.folders.sort(), [bakery, realty, repo].sort(), 'each business folder once; a team folder inside one is not taken twice');
+  assert.deepEqual(roots.names.sort(), ['Harbor Bakery', 'Northgate Realty']);
+});
+
+// Value: protects=a backup with no saved secrets restores with any password, and a restore that cannot lock secrets says so; fails_when=checkBackupPassword demands a password with nothing sealed, or importSecrets false is ignored; why_new=only the sealed case is tested; seam=none; no_claim=Keychain behavior (importSecrets is a stub)
+test('no secrets in the backup: no password needed; secrets that cannot be locked here are reported', async (t) => {
+  const d = tmp(t, 'bk-nosecret');
+  const userData = path.join(d, 'Users', 'sam', 'data');
+  put(path.join(userData, 'config.json'), JSON.stringify({ onboardingComplete: true }));
+  const src = { userData, home: path.join(d, 'Users', 'sam'), appVersion: '0.4.3', platform: 'darwin', config: {}, claudeDirFor: () => null, dbSnapshot: async () => false };
+  const plain = path.join(d, 'plain.dbmbackup');
+  await backup.writeBackup(plain, 'correct horse', { ...src, secrets: () => ({}) });
+  await backup.checkBackupPassword(plain, '');
+  assert.equal((await backup.inspectBackup(plain, src.home)).hasSecrets, false);
+
+  const sealed = path.join(d, 'sealed.dbmbackup');
+  await backup.writeBackup(sealed, 'correct horse', { ...src, secrets: () => ({ 'mail:mb1': 'bakery-pass' }) });
+  await assert.rejects(backup.checkBackupPassword(sealed, 'wrong horse'), /wrong password/);
+  const target = { userData: path.join(d, 'new'), home: src.home, claudeDirFor: () => path.join(d, 'c'), importSecrets: () => false, moveDbPaths: () => {} };
+  await assert.rejects(backup.restoreBackup(sealed, 'correct horse', target), /secrets not saved/);
+});
+
+const entriesOf = async (file) => { const out = []; await archive.readEntries(file, (h) => { out.push(`${h.r}:${h.p}`); return null; }); return out; };
+const restoreTarget = (d, home) => ({ userData: path.join(d, 'newdata'), home, claudeDirFor: (f) => path.join(home, '.claude', 'projects', f.replace(/[^A-Za-z0-9]/g, '-')), importSecrets: () => true, moveDbPaths: () => {} });
+
+// Value: protects=a backup cannot name its own folders to write into the owner's home, settings, keys or login items; fails_when=restoreBackup trusts a manifest root's kind or path; why_new=safeTarget only checked entry names, not roots (pre-landing review, reproduced writing ~/.zshrc); seam=none; no_claim=symlinked homes (realpath only)
+test('a crafted backup that names its own folders writes only where a team could work', async (t) => {
+  const d = tmp(t, 'bk-roots');
+  const home = path.join(d, 'Users', 'sam');
+  put(path.join(home, '.zshrc'), 'original');
+  const shop = path.join(home, 'Documents', 'Shop');
+  const roots = {
+    u: { kind: 'userData', path: path.join(d, 'olddata') },
+    h: { kind: 'office', path: home },
+    l: { kind: 'folder', path: path.join(home, 'Library', 'LaunchAgents') },
+    s: { kind: 'folder', path: path.join(home, '.ssh') },
+    b: { kind: 'folder', path: path.join(home, '.local', 'bin') },
+    w: { kind: 'weird', path: path.join(home, 'Documents') },
+    ok: { kind: 'folder', path: shop }
+  };
+  const file = path.join(d, 'crafted.dbmbackup');
+  const w = new archive.BackupWriter(file, { v: 1, home, roots, businesses: [] });
+  for (const [r, p] of [['h', '.zshrc'], ['l', 'x.plist'], ['s', 'authorized_keys'], ['b', 'tool'], ['w', 'w.txt'], ['ok', 'menu.txt']]) await w.addBuffer(r, p, Buffer.from('EVIL'));
+  await w.finish();
+  await backup.restoreBackup(file, '', restoreTarget(d, home));
+  assert.equal(fs.readFileSync(path.join(home, '.zshrc'), 'utf8'), 'original', 'the home folder itself is never a root');
+  for (const p of [['Library', 'LaunchAgents', 'x.plist'], ['.ssh', 'authorized_keys'], ['.local', 'bin', 'tool'], ['Documents', 'w.txt']]) {
+    assert.equal(fs.existsSync(path.join(home, ...p)), false, p.join('/'));
+  }
+  assert.equal(fs.readFileSync(path.join(shop, 'menu.txt'), 'utf8'), 'EVIL', 'a business folder is restored');
+  assert.equal(backup.restorableFolder(path.join(home, 'Library', 'CloudStorage', 'Dropbox', 'Shop'), home), true, 'cloud storage stays usable');
+});
+
+// Value: protects=restoring over an office that is already there replaces its files, read only git objects included, and a folder named as an office that is not one keeps what it holds; fails_when=readEntries opens existing files to write (EACCES on 0444) or office roots overwrite any folder; why_new=every restore test wrote into empty folders (pre-landing review); seam=none; no_claim=Windows read only attributes (POSIX modes only)
+test('restoring over an office already there replaces its files, read only ones included', async (t) => {
+  const d = tmp(t, 'bk-over');
+  const home = path.join(d, 'Users', 'sam');
+  const office = path.join(home, 'HarnessAgents');
+  const obj = path.join(office, 'hive', '.git', 'objects', 'ab', 'cdef');
+  put(path.join(office, 'hive', 'registry.json'), '{"agents":{"old":{}}}');
+  put(obj, 'old object');
+  fs.chmodSync(obj, 0o444);
+  const notOffice = path.join(home, 'Documents', 'Stuff');
+  put(path.join(notOffice, 'a.txt'), 'mine');
+  const file = path.join(d, 'b.dbmbackup');
+  const w = new archive.BackupWriter(file, { v: 1, home, roots: { o: { kind: 'office', path: office }, n: { kind: 'office', path: notOffice } }, businesses: [] });
+  await w.addBuffer('o', 'hive/registry.json', Buffer.from('{"agents":{"new":{}}}'));
+  await w.addBuffer('o', 'hive/.git/objects/ab/cdef', Buffer.from('new object'), 0o444);
+  await w.addBuffer('n', 'a.txt', Buffer.from('from the backup'));
+  await w.finish();
+  await backup.restoreBackup(file, '', restoreTarget(d, home));
+  assert.equal(fs.readFileSync(path.join(office, 'hive', 'registry.json'), 'utf8'), '{"agents":{"new":{}}}');
+  assert.equal(fs.readFileSync(obj, 'utf8'), 'new object', 'a read only git object is replaced');
+  assert.equal(fs.readFileSync(path.join(notOffice, 'a.txt'), 'utf8'), 'mine', 'a folder that holds no office keeps its files');
+});
+
+// Value: protects=a Claude sign in file and earlier backups never go into a backup; fails_when=walk carries .credentials.json (Windows and Linux keep the sign in there) or *.dbmbackup; why_new=no test put either where a backup walks (pre-landing review); seam=none; no_claim=the macOS Keychain (never a file)
+test('a backup never carries a Claude sign in file or another backup', async (t) => {
+  const d = tmp(t, 'bk-skip');
+  const home = path.join(d, 'Users', 'sam');
+  const userData = path.join(d, 'data');
+  put(path.join(userData, 'config.json'), '{}');
+  put(path.join(userData, 'offices', 'abc', 'claude', '.credentials.json'), '{"token":"x"}');
+  put(path.join(userData, 'offices', 'abc', 'claude', 'settings.json'), '{}');
+  const shop = path.join(home, 'Documents', 'Shop');
+  put(path.join(shop, 'menu.txt'), 'menu');
+  put(path.join(shop, 'Dont_Be_Michael_backup_2026_11_01.dbmbackup'), 'an older backup');
+  const config = { harnessHome: path.join(home, 'NoOffice'), businessFolder: shop };
+  const file = path.join(shop, 'Dont_Be_Michael_backup_2026_11_20.dbmbackup');
+  await backup.writeBackup(file, 'correct horse', { userData, home, appVersion: '0.4.3', platform: 'win32', config, claudeDirFor: () => null, dbSnapshot: async () => false, secrets: () => ({}) });
+  const names = await entriesOf(file);
+  assert.ok(names.some((n) => n.endsWith('offices/abc/claude/settings.json')), names.join(','));
+  assert.ok(names.some((n) => n.endsWith('menu.txt')));
+  assert.ok(!names.some((n) => n.endsWith('.credentials.json')), 'no sign in');
+  assert.ok(!names.some((n) => n.endsWith('.dbmbackup')), 'neither itself nor an older backup');
+});
+
+// Value: protects=a restore that stops partway is told to the owner, who reopens the app; fails_when=the handler restarts on a failure or the panel drops the message; why_new=the IPC path only logged the failure (pre-landing review); seam=none; no_claim=layout (source check, no DOM harness)
+test('a restore that stops partway says so, and the owner reopens the app', () => {
+  const main = read('src/main/index.ts');
+  const h = main.slice(main.indexOf("ipcMain.handle('backup:restore'"), main.indexOf("ipcMain.handle('backup:reopen'"));
+  assert.match(h, /return \{ ok: false as const, error: reason === 'secrets not saved' \? 'secretsNotSaved' : 'stopped' \};/);
+  assert.ok(h.indexOf('restartApp(app)') > h.indexOf("'stopped'"), 'no restart after a failure');
+  assert.match(main, /ipcMain\.handle\('backup:reopen', \(\) => \{ allowQuit = true; restartApp\(app\);/);
+  assert.match(read('src/preload/index.ts'), /backupReopen: \(\): Promise<\{ ok: boolean \}> => ipcRenderer\.invoke\('backup:reopen'\)/);
+  const panel = read('src/renderer/src/components/BackupRestore.tsx');
+  assert.match(panel, /setState\(\{ kind: 'restoreStopped', secrets: res\.error === 'secretsNotSaved' \}\)/);
+  assert.match(panel, /onClick=\{\(\) => \{ void window\.cth\.backupReopen\(\); \}\}>\{t\('backup\.reopen'\)\}/);
+  const en = JSON.parse(read('src/renderer/src/i18n/locales/en.json')).backup;
+  for (const k of ['stopped', 'stoppedSecrets', 'reopen']) assert.ok(en[k], k);
+});
+
+// Value: protects=a link already inside a restored folder never leads a file outside it; fails_when=restore writes through a linked folder (safeTarget is only lexical); why_new=no test had a link on the disk (pre-landing review, outside voice); seam=none; no_claim=Windows junctions (POSIX links only)
+test('a link already in a restored folder never takes a file outside it', { skip: process.platform === 'win32' }, async (t) => {
+  const d = tmp(t, 'bk-link');
+  const home = path.join(d, 'Users', 'sam');
+  const shop = path.join(home, 'Documents', 'Shop');
+  const outside = path.join(d, 'outside');
+  fs.mkdirSync(outside, { recursive: true });
+  fs.mkdirSync(shop, { recursive: true });
+  fs.symlinkSync(outside, path.join(shop, 'linked'));
+  const file = path.join(d, 'l.dbmbackup');
+  const w = new archive.BackupWriter(file, { v: 1, home, roots: { s: { kind: 'folder', path: shop }, n: { kind: 'folder', path: path.join(home, 'Documents', 'New') } }, businesses: [] });
+  await w.addBuffer('s', 'linked/evil.txt', Buffer.from('EVIL'));
+  await w.addBuffer('s', 'menu.txt', Buffer.from('menu'));
+  await w.addBuffer('n', 'deep/a.txt', Buffer.from('a'));
+  await w.finish();
+  await backup.restoreBackup(file, '', restoreTarget(d, home));
+  assert.equal(fs.existsSync(path.join(outside, 'evil.txt')), false, 'not through the link');
+  assert.equal(fs.readFileSync(path.join(shop, 'menu.txt'), 'utf8'), 'menu');
+  assert.equal(fs.readFileSync(path.join(home, 'Documents', 'New', 'deep', 'a.txt'), 'utf8'), 'a', 'a folder not there yet is made');
+});

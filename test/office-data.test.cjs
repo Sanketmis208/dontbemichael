@@ -190,3 +190,20 @@ test('the reset keeps the store open for this business\'s rows, and forgets only
   assert.match(body, /persist\.eraseOffice\(office\)/);
   assert.match(body, /forgetOffice\(resetOfficeId\)/);
 });
+
+// Value: protects=a move of the business files that fails partway puts back what it moved, so the launch runs on the old places with nothing missing and the next launch moves them all; fails_when=moveIntoOffice leaves some files in offices/<id> while the app still reads userData (pre-landing review, outside voice); seam=none; no_claim=real disk errors (a folder in the way stands in for one)
+test('a move of the business files that fails partway puts back what it moved', () => {
+  const id = 'office-rollback';
+  fs.writeFileSync(path.join(userData, 'rb-one.json'), 'one');
+  fs.writeFileSync(path.join(userData, 'rb-two.json'), 'two');
+  // The third cannot move: where its folder would go, a file is in the way.
+  fs.mkdirSync(path.join(userData, 'offices', id), { recursive: true });
+  fs.writeFileSync(path.join(userData, 'offices', id, 'sub'), 'a file where a folder goes');
+  fs.mkdirSync(path.join(userData, 'sub'), { recursive: true });
+  fs.writeFileSync(path.join(userData, 'sub', 'x.json'), 'x');
+  assert.equal(config.moveIntoOffice(id, ['rb-one.json', 'rb-two.json', 'sub/x.json']), false);
+  assert.equal(fs.readFileSync(path.join(userData, 'rb-one.json'), 'utf8'), 'one', 'put back');
+  assert.equal(fs.readFileSync(path.join(userData, 'rb-two.json'), 'utf8'), 'two', 'put back');
+  assert.equal(fs.existsSync(path.join(userData, 'offices', id, 'rb-one.json')), false);
+  assert.equal(fs.readFileSync(path.join(userData, 'sub', 'x.json'), 'utf8'), 'x');
+});

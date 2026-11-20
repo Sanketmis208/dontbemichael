@@ -585,7 +585,7 @@ export const BUSINESS_DATA_FILES = [
  */
 export function moveIntoOffice(id: string, names: readonly string[]): boolean {
   const userData = app.getPath('userData');
-  let ok = true;
+  const moved: Array<[string, string]> = [];
   for (const name of names) {
     const from = join(userData, name);
     const to = join(userData, 'offices', id, name);
@@ -593,12 +593,18 @@ export function moveIntoOffice(id: string, names: readonly string[]): boolean {
       if (!existsSync(from) || existsSync(to)) continue;
       mkdirSync(dirname(to), { recursive: true });
       renameSync(from, to);
+      moved.push([from, to]);
     } catch (e) {
       console.error(`[config] could not move ${name} into the office:`, e);
-      ok = false;
+      // All or none: the move did not finish, so the app runs on the old
+      // places this launch; what this run moved goes back there.
+      for (const [back, there] of moved.reverse()) {
+        try { renameSync(there, back); } catch (err) { console.error(`[config] could not move ${there} back:`, err); }
+      }
+      return false;
     }
   }
-  return ok;
+  return true;
 }
 
 function configView(stored: HarnessConfig): HarnessConfig {

@@ -24,8 +24,8 @@
  * No electron import here: the caller hands in where things are and how to
  * reach the secrets and the database, so it tests as a node module.
  */
-import { existsSync, lstatSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { basename, join, relative, resolve, sep } from 'node:path';
+import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { BackupWriter, readEntries, readManifest, safeTarget, type EntryHeader } from './backupArchive';
 import { openSecrets, sealSecrets, type SealedSecrets } from './backupSecrets';
 import { isUsableTeamFolder } from './officeFile';
@@ -68,8 +68,13 @@ export const USER_DATA_ITEMS: readonly string[] = [
   ...new Set([...APP_DATA_ENTRIES, ...APP_DATA_KEPT, 'offices', 'Local Storage', 'config.before-offices.json'])
 ].filter((n) => !LEFT_OUT.has(n));
 
-/** Never carried, wherever they are. */
-const SKIP_NAMES = new Set(['.DS_Store', 'node_modules', 'hooks.sock', 'Thumbs.db']);
+/** Never carried, wherever they are. `.credentials.json` is where Claude Code
+ *  keeps its sign in off macOS (a business with its own Claude login has one
+ *  in its place): a sign in is never in a backup, the owner signs in again. */
+const SKIP_NAMES = new Set(['.DS_Store', 'node_modules', 'hooks.sock', 'Thumbs.db', '.credentials.json']);
+/** A backup file is never carried, so a backup saved in a business's folder
+ *  holds neither itself nor the ones before it. */
+const isBackupFile = (n: string): boolean => n.toLowerCase().endsWith('.dbmbackup');
 
 export interface BackupSource {
   userData: string;
@@ -140,7 +145,7 @@ function* walk(dir: string, except: string[]): Generator<string> {
   let names: string[] = [];
   try { names = readdirSync(dir); } catch { return; }
   for (const n of names) {
-    if (SKIP_NAMES.has(n)) continue;
+    if (SKIP_NAMES.has(n) || isBackupFile(n)) continue;
     const p = join(dir, n);
     if (except.some((x) => resolve(x) === resolve(p))) continue;
     let st;
@@ -262,6 +267,35 @@ export function movePathsInText(text: string, oldHome: string, newHome: string):
   return out;
 }
 
+/** Whether `target` is still inside `base` once links already on the disk are
+ *  followed: a folder there that is a link elsewhere never takes a file. */
+function staysInside(base: string, target: string): boolean {
+  const real = (p: string): string | null => { try { return realpathSync.native(p); } catch { return null; } };
+  // A path with its links followed as far as it exists on the disk.
+  const onDisk = (p: string): string | null => {
+    let d = resolve(p);
+    const rest: string[] = [];
+    while (!existsSync(d) && dirname(d) !== d) { rest.unshift(basename(d)); d = dirname(d); }
+    const r = real(d);
+    return r === null ? null : join(r, ...rest);
+  };
+  const root = onDisk(base);
+  const at = onDisk(dirname(target));
+  if (!root || !at) return false;
+  return at === root || at.startsWith(root + sep);
+}
+
+const ROOT_KINDS = new Set<RootKind>(['userData', 'office', 'folder', 'claude']);
+
+/** A folder a restore may write into: one setup could choose for a team
+ *  (isUsableTeamFolder), and not a dot folder anywhere under home. */
+export function restorableFolder(folder: string, home: string): boolean {
+  if (!isAbsolute(folder) || !isUsableTeamFolder(folder, home)) return false;
+  const rel = relative(resolve(home), resolve(folder));
+  if (!rel || rel.startsWith('..') || isAbsolute(rel)) return true;
+  return !rel.split(sep).some((part) => part.startsWith('.'));
+}
+
 export interface RestoreTarget {
   userData: string;
   home: string;
@@ -285,16 +319,24 @@ export async function restoreBackup(path: string, password: string, t: RestoreTa
   const to = (p: string): string => movePath(p, m.home, t.home);
   const bases: Record<string, { kind: RootKind; base: string }> = {};
   for (const [id, r] of Object.entries(m.roots)) {
-    if (!r || typeof r.path !== 'string') continue;
-    bases[id] = r.kind === 'userData' ? { kind: r.kind, base: t.userData }
-      : r.kind === 'claude' ? { kind: r.kind, base: t.claudeDirFor(to(r.path)) }
-        : { kind: r.kind, base: to(r.path) };
+    if (!r || typeof r.path !== 'string' || !ROOT_KINDS.has(r.kind)) continue;
+    if (r.kind === 'userData') { bases[id] = { kind: r.kind, base: t.userData }; continue; }
+    // The backup names its own folders: each must be one a team could work
+    // in, never the home folder, a dot folder in it or Library, so a crafted
+    // file cannot write into the owner's settings, keys or login items.
+    const folder = to(r.path);
+    if (!restorableFolder(folder, t.home)) continue;
+    if (r.kind === 'claude') { bases[id] = { kind: r.kind, base: t.claudeDirFor(folder) }; continue; }
+    // An office's files replace the office they came from; a folder that is
+    // there and is not that office keeps what it holds, like a business folder.
+    const isOffice = r.kind === 'office' && (!existsSync(folder) || existsSync(join(folder, 'hive', 'registry.json')));
+    bases[id] = { kind: isOffice ? 'office' : 'folder', base: folder };
   }
   const counts = await readEntries(path, (h: EntryHeader) => {
     const b = bases[h.r];
     if (!b) return null;
     const target = safeTarget(b.base, h.p);
-    if (!target) return null;
+    if (!target || !staysInside(b.base, target)) return null;
     // A document already on this computer is the owner's: it stays as it is.
     if (b.kind === 'folder' && existsSync(target)) return null;
     return target;

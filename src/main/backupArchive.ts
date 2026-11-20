@@ -16,7 +16,7 @@
  * the folder it is given for a root: an absolute path, a "..", or anything that
  * resolves outside is refused, so a crafted backup cannot write elsewhere.
  */
-import { createReadStream, createWriteStream, mkdirSync, utimesSync } from 'node:fs';
+import { createReadStream, createWriteStream, lstatSync, mkdirSync, unlinkSync, utimesSync } from 'node:fs';
 import { dirname, isAbsolute, resolve, sep } from 'node:path';
 import { createGunzip, createGzip, constants as zc } from 'node:zlib';
 import { once } from 'node:events';
@@ -195,7 +195,10 @@ export async function readEntries(
     const target = place(h);
     if (!target) { await b.take(h.s, null); skipped += 1; continue; }
     mkdirSync(dirname(target), { recursive: true });
-    const out = createWriteStream(target, { mode: (h.m & 0o777) || 0o600 });
+    // A file already there is replaced, not written through: a git object is
+    // read only (opening it to write fails), and a link would lead elsewhere.
+    try { const st = lstatSync(target); if (!st.isDirectory()) unlinkSync(target); } catch { /* not there */ }
+    const out = createWriteStream(target, { mode: (h.m & 0o777) || 0o600, flags: 'wx' });
     await b.take(h.s, async (chunk) => { if (!out.write(chunk)) await once(out, 'drain'); });
     out.end();
     await once(out, 'close');

@@ -729,6 +729,8 @@ const api = {
   /** Restore it: replaces what is on this computer, then the app reopens. */
   backupRestore: (path: string, password: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('backup:restore', path, password),
+  /** After a restore that stopped partway: reopen the app on what came back. */
+  backupReopen: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('backup:reopen'),
   onBackupProgress: (cb: (p: { files: number; bytes: number }) => void): (() => void) => {
     const listener = (_e: IpcRendererEvent, p: { files: number; bytes: number }) => cb(p);
     ipcRenderer.on('backup:progress', listener);

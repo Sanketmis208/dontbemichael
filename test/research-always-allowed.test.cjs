@@ -37,10 +37,10 @@ function layer(answer, terms) {
 }
 
 test('the list: one line each, no repeats, capped', () => {
-  assert.deepEqual(P.cleanPublicTerms(['Vivek Kumar', ' vivek  kumar ', 'https://github.com/agentvivekkumar', '', 7, 'a\nb', 'x'.repeat(200)]),
-    ['Vivek Kumar', 'https://github.com/agentvivekkumar']);
+  assert.deepEqual(P.cleanPublicTerms(['Dana Reyes', ' dana  reyes ', 'https://github.com/danareyes', '', 7, 'a\nb', 'x'.repeat(200)]),
+    ['Dana Reyes', 'https://github.com/danareyes']);
   assert.equal(P.cleanPublicTerms(Array.from({ length: 50 }, (_, i) => `term ${i}`)).length, P.MAX_PUBLIC_TERMS);
-  assert.deepEqual(P.cleanPublicTerms('Vivek'), [], 'only a list');
+  assert.deepEqual(P.cleanPublicTerms('Dana'), [], 'only a list');
 });
 
 test('Company profile is offered, never added, and what is on the list is not offered again', () => {
@@ -49,11 +49,11 @@ test('Company profile is offered, never added, and what is on the list is not of
 });
 
 test('the check is told the owner\'s entries are public, kept as written inside a link or handle', async () => {
-  const q = 'Read https://github.com/agentvivekkumar/dontbemichael/releases/ and list the last five releases';
-  const { l, prompts } = layer(JSON.stringify({ decision: 'PASS' }), ['Vivek Kumar']);
+  const q = 'Read https://github.com/danareyes/harborpine/releases/ and list the last five releases';
+  const { l, prompts } = layer(JSON.stringify({ decision: 'PASS' }), ['Dana Reyes']);
   assert.deepEqual(await l.inbound({ subject: 'Releases', body: q }), { decision: 'pass', subject: 'Releases', body: q });
   assert.match(prompts[0], /The business owner says these are the business's own and public\. They are not private: keep them as written, also inside a web address, an email address or a handle/);
-  assert.match(prompts[0], /- "Vivek Kumar"/);
+  assert.match(prompts[0], /- "Dana Reyes"/);
   const none = layer(JSON.stringify({ decision: 'PASS' }), []);
   await none.l.inbound({ subject: 'Releases', body: q });
   assert.doesNotMatch(none.prompts[0], /The business owner says these are/, 'no list, no line');

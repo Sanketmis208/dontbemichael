@@ -13,7 +13,8 @@ type State =
   | { kind: 'backingUp'; files: number; bytes: number }
   | { kind: 'backedUp'; path: string; bytes: number }
   | { kind: 'restorePicked'; path: string; summary: Summary }
-  | { kind: 'restoring' };
+  | { kind: 'restoring' }
+  | { kind: 'restoreStopped'; secrets: boolean };
 
 function size(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -67,6 +68,9 @@ export function BackupRestore({ restoreOnly = false, hasOffice = true }: { resto
     const res = await window.cth.backupRestore(path, password).catch(() => ({ ok: false, error: 'failed' }));
     // ok: the app reopens on the restored office.
     if (res.ok) return;
+    // Stopped after it began writing: the office is stopped, so the owner is
+    // told what happened and reopens the app on what came back.
+    if (res.error === 'stopped' || res.error === 'secretsNotSaved') { setState({ kind: 'restoreStopped', secrets: res.error === 'secretsNotSaved' }); return; }
     const back = state.kind === 'restorePicked' ? state : null;
     if (back) setState(back);
     setError(res.error === 'wrongPassword' ? t('backup.wrongPassword') : t('backup.couldNotRestore'));
@@ -116,6 +120,14 @@ export function BackupRestore({ restoreOnly = false, hasOffice = true }: { resto
         </div>
       )}
 
+      {state.kind === 'restoreStopped' && (
+        <div role="alert" style={panel}>
+          <span style={{ fontSize: 13, color: 'var(--cth-ink)' }}>{state.secrets ? t('backup.stoppedSecrets') : t('backup.stopped')}</span>
+          <div style={buttons}>
+            <PixelButton variant="primary" size="sm" onClick={() => { void window.cth.backupReopen(); }}>{t('backup.reopen')}</PixelButton>
+          </div>
+        </div>
+      )}
       {state.kind === 'restorePicked' && (
         <div style={panel}>
           <span style={{ fontSize: 13, color: 'var(--cth-ink)' }}>

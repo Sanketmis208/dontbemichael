@@ -2714,7 +2714,10 @@
     "restoreNow": "Restore",
     "restoring": "Restoring. The app reopens when it is done.",
     "wrongPassword": "That is not the backup password.",
-    "couldNotRestore": "Couldn't restore that backup. Nothing was changed."
+    "couldNotRestore": "Couldn't restore that backup. Nothing was changed.",
+    "stopped": "The restore stopped before it finished, so only part of the backup came back. Reopen the app, then restore the backup again.",
+    "stoppedSecrets": "Everything came back except the saved passwords and keys, which this computer would not keep. Reopen the app, then add them again in Settings.",
+    "reopen": "Reopen the app"
   },
   "addBusiness": {
     "backToOffice": "Back to the office",

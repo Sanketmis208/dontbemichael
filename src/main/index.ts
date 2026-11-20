@@ -4379,12 +4379,19 @@ ipcMain.handle('backup:restore', async (_evt, path: unknown, password: unknown) 
     });
     console.log(`[backup] restored ${res.written} files (${res.skipped} kept as they were)`);
   } catch (e) {
+    // Stopped partway: the owner is told, then reopens the app themselves
+    // (backup:reopen). Everything is already stopped, so nothing else runs.
     console.error('[backup] restore stopped:', e);
+    const reason = e instanceof Error ? e.message : String(e);
+    return { ok: false as const, error: reason === 'secrets not saved' ? 'secretsNotSaved' : 'stopped' };
   }
-  // The restored office opens on the next start, whatever happened above.
+  // The restored office opens on the next start.
   restartApp(app);
   return { ok: true as const };
 });
+
+// After a restore that stopped partway: the app reopens on what came back.
+ipcMain.handle('backup:reopen', () => { allowQuit = true; restartApp(app); return { ok: true as const }; });
 
 // ─── Address suggestions (shared/photon.ts) ──────────────────────────────────
 // What the owner typed in the street field goes to Photon (OpenStreetMap, free,

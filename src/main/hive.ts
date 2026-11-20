@@ -2703,7 +2703,8 @@ export class HiveManager {
     if (!home) return;
     try {
       mkdirSync(privateRoot(home), { recursive: true });
-      this.atomicWriteJson(join(privateRoot(home), RESEARCH_KEPT_FILE), all.slice(-MAX_KEPT_OPEN));
+      // The newest cards stay: a question asked again counts from its last try.
+      this.atomicWriteJson(join(privateRoot(home), RESEARCH_KEPT_FILE), [...all].sort((a, b) => a.at - b.at).slice(-MAX_KEPT_OPEN));
     } catch (e) { console.error('[research] saving what was kept back', e); }
   }
 
