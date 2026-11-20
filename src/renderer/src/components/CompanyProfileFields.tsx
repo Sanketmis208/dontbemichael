@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Field as SharedField, Panel, requiredMark } from './fieldText';
 import { StreetField } from './StreetField';
 import { SocialLinks } from './SocialLinks';
+import { HoursPicker } from './HoursPicker';
 import {
   ENTITY_TYPES, SERVICE_AREAS,
   type CompanyAddress, type CompanyProfile, type RequiredProfileField
@@ -156,18 +157,20 @@ export function CompanyProfileFields({ value, onChange, parts, needsIndustry, mi
               <input value={text(value.email)} onChange={(e) => set({ email: orUndefined(e.target.value) })} className="cth-input" style={fieldStyle} />
             </Field>
           </div>
-          <Field label={t('companyProfile.social')}>
+          {/* A group, not a <label>: a label passes a click on a button that goes
+              away (Remove, Set by day) to its first button. */}
+          <Field label={t('companyProfile.social')} group>
             {/* One field per link, the site named beside it (owner, 2026-11-19). */}
             <SocialLinks value={value.social} onChange={(social) => set({ social })} inputClassName="cth-input" inputStyle={fieldStyle} />
           </Field>
           </Panel>
 
           <Panel title={t('companyProfile.operateHead')}>
+          {/* Set by day; saved as the one line agents read (owner, 2026-11-19). */}
+          <Field label={t('companyProfile.hours')} group>
+            <HoursPicker value={value.hours} onChange={(hours) => set({ hours })} inputClassName="cth-input" inputStyle={fieldStyle} />
+          </Field>
           <div style={grid2}>
-            <Field label={t('companyProfile.hours')}>
-              <input value={text(value.hours)} onChange={(e) => set({ hours: orUndefined(e.target.value) })}
-                placeholder={t('companyProfile.hoursPlaceholder')} className="cth-input" style={fieldStyle} />
-            </Field>
             <Field label={t('companyProfile.timeZone')}>
               <select value={value.timeZone ?? ''} onChange={(e) => set({ timeZone: e.target.value || undefined })} className="cth-input" style={fieldStyle}>
                 <option value="">{t('companyProfile.notSet')}</option>
@@ -234,12 +237,13 @@ export function CompanyProfileFields({ value, onChange, parts, needsIndustry, mi
 
 /** A field in the app's style (fieldText): its label, then the control, then
  *  any hint; a required one says so beside its label. */
-function Field({ label, required, hint, children }: { label: string; required?: boolean; hint?: string; children: ReactNode }) {
+function Field({ label, required, hint, group, children }: { label: string; required?: boolean; hint?: string; group?: boolean; children: ReactNode }) {
   const { t } = useTranslation();
   return (
     <SharedField
       label={required ? <>{label}{' '}<span style={requiredMark}>{t('companyProfile.required')}</span></> : label}
       note={hint}
+      read={group}
     >{children}</SharedField>
   );
 }

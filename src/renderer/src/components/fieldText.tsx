@@ -68,8 +68,9 @@ export function Panel({ title, info, action, note, id, children, style }: {
 }
 
 /** One field: its label (and info icon), the control or text, then any hint.
- *  `read` for read only text: a named group, since there is nothing to type
- *  (a <label> would send clicks to its first button). */
+ *  `read` for read only text, or for several controls (a week of hours, a list
+ *  of links): a named group, since a <label> would send clicks to its first
+ *  button. */
 export function Field({ label, info, note, read = false, children, style }: {
   label: ReactNode; info?: string; note?: ReactNode; read?: boolean; children?: ReactNode; style?: CSSProperties;
 }) {
