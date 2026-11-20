@@ -273,6 +273,21 @@ export function saveBusinessDraft(p: { id?: string; home: string; step: string; 
   return id;
 }
 
+/**
+ * The open folder's business finished setup in Add a business and has never
+ * been opened: its office is made on this launch (homeReadyAtLaunch). Never
+ * closed, its team never started, not a draft. An office that ran once has
+ * a closedAt or a started team, so a lost one still shows "we can't find your
+ * office" and is never rebuilt empty. Pure over the stored config.
+ */
+export function neverOpenedBusiness(cfg: Pick<HarnessConfig, 'harnessHome' | 'offices' | 'officesMigrated'>): boolean {
+  if (!cfg.officesMigrated || !cfg.harnessHome) return false;
+  const id = officeIdIn({ harnessHome: cfg.harnessHome, offices: cfg.offices }, null);
+  const entry = id ? cfg.offices?.[id] : undefined;
+  if (!entry || entry.draft || entry.closedAt !== undefined) return false;
+  return entry.settings?.onboardingComplete === true && entry.settings?.businessTeamStarted !== true;
+}
+
 /** A business left before the end of its setup: where it stopped, to reopen there. */
 export function businessDraft(id: string): { id: string; home: string; step: string; settings: Partial<OfficeSettings> } | null {
   const cfg = readStoredConfig();

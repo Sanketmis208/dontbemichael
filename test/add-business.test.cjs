@@ -127,3 +127,40 @@ test('the words: present, no dashes, no hardcoded name', () => {
   assert.equal(en.claudeOwn, 'A different Claude account');
   for (const [k, v] of Object.entries(en)) assert.doesNotMatch(v, /[–—]| - |Michael/, k);
 });
+
+// Owner, 2026-11-19: finishing Add a business switched to the new business,
+// and it opened on "we can't find your office": its folder was made, its office
+// was not, and launch takes an empty folder for a lost office.
+test('a business just added opens on its first launch; a lost office still does not', (t) => {
+  const s = scene(t);
+  const { homeReadyAtLaunch } = loadTs('src/main/homeFolder.ts');
+  const realty = path.join(s.userData, 'HarnessAgents 2');
+  fs.mkdirSync(realty);
+  const res = s.settings.addBusiness({ home: realty, settings: { businessName: 'Northgate Realty', onboardingComplete: true } });
+  assert.equal(res.ok, true);
+  // The switch: the bakery closes and the new folder is the open one.
+  const cfg = s.stored();
+  cfg.offices[s.bakeryId].closedAt = 1;
+  cfg.harnessHome = realty;
+  fs.writeFileSync(path.join(s.userData, 'config.json'), JSON.stringify(cfg));
+  assert.equal(s.settings.neverOpenedBusiness(s.stored()), true);
+  assert.equal(homeReadyAtLaunch({ onboardingComplete: true, harnessHome: realty }, s.settings.neverOpenedBusiness(s.stored())), true, 'launch makes its office');
+
+  // Made, the office takes the business's own id, so its settings follow.
+  fs.mkdirSync(path.join(realty, 'hive'));
+  fs.writeFileSync(path.join(realty, 'hive', 'registry.json'), JSON.stringify({ godId: null, agents: {} }));
+  assert.equal(s.settings.adoptOpenOffice(), res.id);
+  assert.equal(s.file.readOfficeId(realty), res.id);
+
+  // Once it has run (its team started, or it closed), an empty folder is a lost office.
+  for (const ran of [{ settings: { onboardingComplete: true, businessTeamStarted: true } }, { closedAt: 5 }]) {
+    const c = s.stored();
+    c.offices[res.id] = { ...c.offices[res.id], ...ran, settings: { ...c.offices[res.id].settings, ...(ran.settings ?? {}) } };
+    fs.writeFileSync(path.join(s.userData, 'config.json'), JSON.stringify(c));
+    assert.equal(s.settings.neverOpenedBusiness(s.stored()), false, JSON.stringify(ran));
+  }
+  // Nor a draft, nor the business that was open before.
+  const back = s.stored(); back.harnessHome = s.bakery;
+  assert.equal(s.settings.neverOpenedBusiness(back), false);
+  assert.equal(s.settings.neverOpenedBusiness({ ...back, harnessHome: realty, offices: { x: { home: realty, settings: {}, draft: { step: 'team' } } } }), false);
+});

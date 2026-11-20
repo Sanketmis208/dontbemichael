@@ -35,11 +35,16 @@ export function homeFolderStatus(path: string | null | undefined): HomeFolderSta
 /**
  * Whether launch may bootstrap the office in place. Before onboarding there is
  * nothing to lose (and no home yet), so it is fine; after onboarding the office
- * must actually be there.
+ * must actually be there. One exception: `firstOpen`, a business whose setup
+ * was finished in Add a business and that has never been opened. Its folder
+ * was made but its office is made on its first launch, as a first setup's is
+ * (owner, 2026-11-19: a new business opened on "we can't find your office").
+ * The folder itself must still be there.
  */
-export function homeReadyAtLaunch(cfg: { onboardingComplete?: boolean; harnessHome?: string | null }): boolean {
+export function homeReadyAtLaunch(cfg: { onboardingComplete?: boolean; harnessHome?: string | null }, firstOpen = false): boolean {
   if (!cfg.onboardingComplete) return true;
-  return homeFolderStatus(cfg.harnessHome).hasOffice;
+  const status = homeFolderStatus(cfg.harnessHome);
+  return status.hasOffice || (firstOpen && status.exists);
 }
 
 /**

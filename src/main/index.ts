@@ -174,7 +174,7 @@ import { AUTO_FAILURE_REPORTS } from '../shared/buildFeatures';
 import { APP_NAME, APP_DATA_DIR, APP_URL_SCHEME } from '../shared/appName';
 import { copyOfficeData, homeFolderStatus, homeReadyAtLaunch } from './homeFolder';
 import { backfillOfficeRecord, findOffice, folderLayoutFor, isUsableTeamFolder, officeSwitchGuard, syncOfficeRecord } from './officeFile';
-import { addBusiness, adoptOpenOffice, businessDraft, businessNameAt, listBusinesses, migrateToOfficeSettings, noteOfficeClosed, officeClaudeDir, officesAfterMove, relocateBusiness, removeUnfinishedBusiness, saveBusinessDraft } from './officeSettings';
+import { addBusiness, adoptOpenOffice, businessDraft, businessNameAt, listBusinesses, migrateToOfficeSettings, neverOpenedBusiness, noteOfficeClosed, officeClaudeDir, officesAfterMove, relocateBusiness, removeUnfinishedBusiness, saveBusinessDraft } from './officeSettings';
 import { folderPolicy, AGENT_TMP_DIR, agentTmpName, researchFolderPolicy, withAgentTmpWall, withMemberWall, RESEARCH_TMP_DIR, shellTempWalls, withResearchWall, type AgentFolderPolicy, type FolderLayout } from '../shared/folderAccess';
 import { sandboxNetwork } from '../shared/webAccess';
 import { legacyBusinessFolder, touchesOffice } from '../shared/officeRecord';
@@ -7214,9 +7214,13 @@ app.whenReady().then(() => {
   // but only when the office is really there. If the owner moved or deleted the
   // folder, bootstrapping would quietly rebuild an EMPTY office at the old path;
   // instead nothing touches it and the renderer asks where it went (homeFolder.ts).
-  const homeReady = homeReadyAtLaunch(readConfig());
+  // A business just added and never opened has an empty folder: its office is
+  // made now, then takes the business's own id (neverOpenedBusiness).
+  const firstOpen = neverOpenedBusiness(readStoredConfig());
+  const homeReady = homeReadyAtLaunch(readConfig(), firstOpen);
   if (homeReady) {
     bootstrapHiveServices();
+    if (firstOpen) { try { adoptOpenOffice(); } catch (e) { console.error('[offices] first open:', e); } }
     // An office set up before office.json existed gets one now, if the config's
     // team is really this office's team (officeFile.ts).
     backfillOfficeRecord(readConfig());
