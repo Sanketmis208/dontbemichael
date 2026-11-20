@@ -2,6 +2,7 @@ import { useMemo, type CSSProperties, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Field as SharedField, Panel, requiredMark } from './fieldText';
 import { StreetField } from './StreetField';
+import { SocialLinks } from './SocialLinks';
 import {
   ENTITY_TYPES, SERVICE_AREAS,
   type CompanyAddress, type CompanyProfile, type RequiredProfileField
@@ -155,17 +156,9 @@ export function CompanyProfileFields({ value, onChange, parts, needsIndustry, mi
               <input value={text(value.email)} onChange={(e) => set({ email: orUndefined(e.target.value) })} className="cth-input" style={fieldStyle} />
             </Field>
           </div>
-          <Field label={t('companyProfile.social')} hint={t('companyProfile.socialHint')}>
-            <textarea
-              value={(value.social ?? []).join('\n')}
-              onChange={(e) => {
-                const links = e.target.value.split('\n').slice(0, 5);
-                set({ social: links.some((l) => l.trim()) ? links : undefined });
-              }}
-              rows={3}
-              className="cth-input"
-              style={{ ...fieldStyle, resize: 'vertical' }}
-            />
+          <Field label={t('companyProfile.social')}>
+            {/* One field per link, the site named beside it (owner, 2026-11-19). */}
+            <SocialLinks value={value.social} onChange={(social) => set({ social })} inputClassName="cth-input" inputStyle={fieldStyle} />
           </Field>
           </Panel>
 
