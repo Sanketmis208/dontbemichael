@@ -1,5 +1,5 @@
 import { useResearchName } from '@/shell/research';
-import { DEFAULT_HOME, businessHomeCandidates } from '@shared/officeHome';
+import { DEFAULT_HOME, businessHomeCandidates, numberedHomes } from '@shared/officeHome';
 import { CompanyProfileFields, localCurrency, localTimeZone } from './CompanyProfileFields';
 import { cityLine, cleanCompanyProfile, missingProfileFields, prefillLegalName, type CompanyProfile, type RequiredProfileField } from '@shared/companyProfile';
 import { useEffect, useRef, useState } from 'react';
@@ -352,7 +352,7 @@ export function OnboardingWizard({ onComplete, preview, add }: OnboardingWizardP
   useEffect(() => {
     if (home) return;
     // Add a business: the open office is most likely in the default folder, so
-    // the new one is suggested the first free "~/HarnessAgents N" (as Start new).
+    // the new one is suggested the first free "~/HarnessAgents_N" (as Start new).
     if (add) {
       void firstFreeHome().then((free) => setHome((h) => { if (h) return h; autoHome.current = free; return free; }));
       return;
@@ -362,7 +362,7 @@ export function OnboardingWizard({ onComplete, preview, add }: OnboardingWizardP
   }, []);
 
   // Add a business: once it has a name, its folder is named after it
-  // ("~/HarnessAgents Northgate Realty"; owner, 2026-11-19: "HarnessAgents 2"
+  // ("~/HarnessAgents_Northgate_Realty"; owner, 2026-11-19: "HarnessAgents 2"
   // said nothing with several businesses). Only while the folder is still the
   // app's suggestion: one the owner picked is never renamed.
   useEffect(() => {
@@ -419,16 +419,10 @@ export function OnboardingWizard({ onComplete, preview, add }: OnboardingWizardP
   const startNewOffice = async () => {
     // A new office needs its own folder: setting it up in this one would mix a
     // second team into the office that is already there. Suggest the first
-    // free "~/HarnessAgents N"; if none is free (or the check fails), leave the
+    // free "~/HarnessAgents_N"; if none is free (or the check fails), leave the
     // field empty so the home step asks the owner to pick one.
     setBusy(true);
-    let free = '';
-    for (let n = 2; n <= NEW_OFFICE_SUGGESTIONS; n++) {
-      const candidate = `${DEFAULT_HOME} ${n}`;
-      const st = await window.cth.homeStatus(candidate).catch(() => null);
-      if (!st) break;
-      if (!st.exists) { free = candidate; break; }
-    }
+    const free = await firstFreeHome();
     setHome(free);
     setResuming(false);
     setError(undefined);
@@ -1626,10 +1620,9 @@ function Dots({ step, steps }: { step: Step; steps: readonly Step[] }) {
 /** The steps a draft can go on from (D19): any but the resume screen. */
 const DRAFT_STEPS: readonly Step[] = ['business', 'details', 'team', 'home', 'orchestrator', 'permissions', 'ready'];
 
-/** The first free "~/HarnessAgents N", or '' when none is (the folder step asks). */
+/** The first free "~/HarnessAgents_N", or '' when none is (the folder step asks). */
 async function firstFreeHome(): Promise<string> {
-  const numbered = Array.from({ length: NEW_OFFICE_SUGGESTIONS - 1 }, (_, i) => `${DEFAULT_HOME} ${i + 2}`);
-  return firstFreeOf(numbered);
+  return firstFreeOf(numberedHomes(NEW_OFFICE_SUGGESTIONS));
 }
 
 /** The first of these folders not there yet, or '' (none, or the check failed). */
@@ -1642,8 +1635,8 @@ async function firstFreeOf(candidates: string[]): Promise<string> {
   return '';
 }
 
-/** A new business's folder, named after it ("~/HarnessAgents Northgate
- *  Realty", shared/officeHome.ts); the numbered one when its name makes none. */
+/** A new business's folder, named after it ("~/HarnessAgents_Northgate_Realty",
+ *  shared/officeHome.ts); the numbered one when its name makes none. */
 async function freeHomeFor(businessName: string): Promise<string> {
   return (await firstFreeOf(businessHomeCandidates(businessName, NEW_OFFICE_SUGGESTIONS))) || firstFreeHome();
 }
@@ -1681,7 +1674,7 @@ function ClaudeAccountChoice({ newName, openName, value, onChange }: {
     </div>
   );
 }
-/** How many "~/HarnessAgents N" names a new office tries before asking the owner to pick. */
+/** How many "~/HarnessAgents_N" names a new office tries before asking the owner to pick. */
 const NEW_OFFICE_SUGGESTIONS = 20;
 
 function nextStep(s: Step): Step {

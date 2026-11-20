@@ -19,13 +19,20 @@ const loadTs = require('./load-ts.cjs');
 const h = loadTs('src/shared/officeHome.ts');
 const read = (p) => fs.readFileSync(path.join(__dirname, '..', p), 'utf8');
 
-test('named after the business, beside the first office, numbered when taken', () => {
+test('named after the business, no spaces or special characters, numbered when taken', () => {
   assert.deepEqual(h.businessHomeCandidates('Northgate Realty', 3),
-    ['~/HarnessAgents Northgate Realty', '~/HarnessAgents Northgate Realty 2', '~/HarnessAgents Northgate Realty 3']);
-  assert.equal(h.businessHomeCandidates("Don't Be Michael", 1)[0], "~/HarnessAgents Don't Be Michael");
-  assert.equal(h.businessHomeCandidates('A/B Consulting', 1)[0], '~/HarnessAgents A-B Consulting', 'never a folder in a folder');
-  assert.equal(h.businessHomeCandidates('../../etc', 1)[0], '~/HarnessAgents etc');
-  assert.deepEqual(h.businessHomeCandidates('   ', 3), [], 'no name: the numbered folder instead');
+    ['~/HarnessAgents_Northgate_Realty', '~/HarnessAgents_Northgate_Realty_2', '~/HarnessAgents_Northgate_Realty_3']);
+  assert.equal(h.businessHomeCandidates("Don't Be Michael", 1)[0], '~/HarnessAgents_Dont_Be_Michael');
+  assert.equal(h.businessHomeCandidates('Harbor & Pine Bakery, LLC.', 1)[0], '~/HarnessAgents_Harbor_Pine_Bakery_LLC');
+  assert.equal(h.businessHomeCandidates('A/B Consulting', 1)[0], '~/HarnessAgents_A_B_Consulting', 'never a folder in a folder');
+  assert.equal(h.businessHomeCandidates('../../etc', 1)[0], '~/HarnessAgents_etc');
+  assert.equal(h.businessHomeCandidates('Café Lumière', 1)[0], '~/HarnessAgents_Café_Lumière', 'letters of any language stay');
+  for (const c of h.businessHomeCandidates('Some  very long business name that goes on and on and on past the limit', 2)) {
+    assert.doesNotMatch(c, /\s/);
+    assert.ok(c.length <= '~/HarnessAgents_'.length + 48 + 2);
+  }
+  assert.deepEqual(h.businessHomeCandidates('  !!  ', 3), [], 'no name: the numbered folder instead');
+  assert.deepEqual(h.numberedHomes(3), ['~/HarnessAgents_2', '~/HarnessAgents_3']);
   assert.equal(h.DEFAULT_HOME, '~/HarnessAgents');
 });
 
@@ -35,4 +42,6 @@ test('the wizard names an added business\'s folder once it has a name, and only 
   assert.match(wiz, /if \(!add \|\| !name \|\| step === 'business'\) return;\s*if \(home && home !== autoHome\.current\) return;/, 'a picked folder stays');
   assert.match(wiz, /if \(h && h !== autoHome\.current\) return h;\s*autoHome\.current = named;/);
   assert.match(wiz, /const where = home\.trim\(\) \|\| await freeHomeFor\(businessName\.trim\(\)\);/, 'Back to office too');
+  assert.match(wiz, /return firstFreeOf\(numberedHomes\(NEW_OFFICE_SUGGESTIONS\)\);/, 'the numbered ones carry no space either');
+  assert.doesNotMatch(wiz, /\$\{DEFAULT_HOME\} \$\{/);
 });
