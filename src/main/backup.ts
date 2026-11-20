@@ -224,6 +224,14 @@ export async function checkBackupPassword(path: string, password: string): Promi
   if (m.secrets) openSecrets(m.secrets, password);
 }
 
+/** The backup file's suggested name: letters, digits and underscores only
+ *  (owner, 2026-11-19), so it moves through any drive, cloud or email intact:
+ *  Dont_Be_Michael_backup_2026_11_19.dbmbackup. */
+export function backupFileName(now: Date = new Date()): string {
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return `Dont_Be_Michael_backup_${now.getFullYear()}_${pad(now.getMonth() + 1)}_${pad(now.getDate())}.dbmbackup`;
+}
+
 /** What is in a backup, for the restore screen. Throws 'not a backup file'. */
 export async function inspectBackup(path: string, home: string): Promise<BackupSummary> {
   const m = await readManifest<BackupManifest>(path);

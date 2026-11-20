@@ -109,7 +109,7 @@ import { CASE_DRAFT_TIMEOUT_MS, CaseStudyService, caseInput, savePaths } from '.
 import { readSiteLogo } from './siteLogo';
 import type { CaseFont } from '../shared/caseStudy';
 import { CostLedgerStore } from './costLedger';
-import { checkBackupPassword, inspectBackup, restoreBackup, writeBackup } from './backup';
+import { backupFileName, checkBackupPassword, inspectBackup, restoreBackup, writeBackup } from './backup';
 import { MIN_BACKUP_PASSWORD } from './backupSecrets';
 import { dntSet } from './doNotTrack';
 import { createFailureReporter, FLUSH_MS } from './failureReport';
@@ -4304,10 +4304,9 @@ function switchOffice(newHome: string, mode: 'move' | 'fresh', oldHome: string |
 ipcMain.handle('backup:create', async (evt, password: unknown) => {
   if (typeof password !== 'string' || password.length < MIN_BACKUP_PASSWORD) return { ok: false, error: 'password' };
   const win = BrowserWindow.fromWebContents(evt.sender);
-  const day = new Date().toISOString().slice(0, 10);
   const saveOpts = {
     title: 'Save the backup',
-    defaultPath: join(app.getPath('documents'), `Don't Be Michael backup ${day}.dbmbackup`),
+    defaultPath: join(app.getPath('documents'), backupFileName()),
     filters: [{ name: 'Backup', extensions: ['dbmbackup'] }]
   };
   const pick = win ? await dialog.showSaveDialog(win, saveOpts) : await dialog.showSaveDialog(saveOpts);

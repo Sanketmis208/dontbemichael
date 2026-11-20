@@ -86,6 +86,13 @@ test('passwords travel sealed: the right password opens them, a wrong one or a c
   assert.throws(() => sealing.sealSecrets(secrets, 'short'), /too short/);
 });
 
+test('the suggested file name has no spaces or special characters', () => {
+  const name = backup.backupFileName(new Date(2026, 10, 19));
+  assert.equal(name, 'Dont_Be_Michael_backup_2026_11_19.dbmbackup');
+  assert.match(name, /^[A-Za-z0-9_]+\.dbmbackup$/);
+  assert.match(read('src/main/index.ts'), /defaultPath: join\(app\.getPath\('documents'\), backupFileName\(\)\)/);
+});
+
 test('paths move to the new home folder, only whole folders', () => {
   assert.equal(backup.movePath('/Users/sam/Documents/Biz', '/Users/sam', '/Users/alex'), '/Users/alex/Documents/Biz');
   assert.equal(backup.movePath('/Users/samuel/x', '/Users/sam', '/Users/alex'), '/Users/samuel/x', 'not a prefix of another name');
