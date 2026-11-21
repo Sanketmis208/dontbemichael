@@ -95,7 +95,10 @@ export function AskMeTab() {
   // Michael's team upgrade card (docs/designs/team-upgrade-card.md) keeps All clear away too.
   const cliShown = cliUpdateToastVisible(cliUpdate, cliUpdateLater);
   // Michael's card for a new version (UpdateCard) keeps All clear away too.
-  const updateShown = updateCardShown(update, updateLater) && !updateRestarting;
+  // An update still waits while its restart is pending, so the board is not
+  // all clear, but the card steps aside for the quit warning.
+  const updateWaiting = updateCardShown(update, updateLater);
+  const updateShown = updateWaiting && !updateRestarting;
   // And a case study ready to view (CaseStudyCard).
   const caseScreenOpen = useStore((s) => s.caseStudyOpen);
   const caseShown = caseStudyWaiting && !caseScreenOpen;
@@ -289,7 +292,7 @@ export function AskMeTab() {
     return { open: openKey === key, toggle: () => setOpenId(openKey === key ? null : key), pin: () => setOpenId(key) };
   };
   // The whole board, whatever is picked: All clear and the answered list read it.
-  const boardEmpty = !engineCard && !updateShown && !caseShown && !silentShown && !cliShown && waiting.length === 0 && scheduleRequests.length === 0 && researchKept.length === 0 && offers.length === 0 && proposals.length === 0;
+  const boardEmpty = !engineCard && !updateWaiting && !caseShown && !silentShown && !cliShown && waiting.length === 0 && scheduleRequests.length === 0 && researchKept.length === 0 && offers.length === 0 && proposals.length === 0;
   // All clear shows, and with it Michael's one tip (owner, 2026-11-10).
   const showAllClear = boardEmpty && !onBreak && !researchNotice && !knowledgeNotice && !setupNotice && degraded.length === 0;
 

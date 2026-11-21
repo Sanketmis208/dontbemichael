@@ -379,7 +379,7 @@ export function App() {
   // click outside it (not the pill, which toggles it, nor the splitter).
   // Off the office the column is hidden, so a click on Tasks or the graph is
   // not "outside" it (ship review 2026-10-03).
-  const allClear = rightColumn === 'board' && floorView === 'office' && feed.status === 'ready' && feed.count === 0;
+  const allClear = rightColumn === 'board' && floorView === 'office' && feed.status === 'ready' && feed.count === 0 && !feed.updateRestarting;
   useEffect(() => {
     if (!allClear) return;
     const onDown = (e: PointerEvent) => {
