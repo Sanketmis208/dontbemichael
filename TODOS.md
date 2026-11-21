@@ -672,15 +672,6 @@ Go with it: keep only the owner's own words (the answer, the edit, the note) in 
 **Effort:** S
 **Priority:** P3
 
-### Parallel tool calls clear each other's detail
-
-**What:** Track detail per tool call so one call's PostToolUse does not clear another's.
-
-**Why:** With parallel calls, the row goes blank while a call is still running.
-
-**Effort:** S
-**Priority:** P3
-
 ### Replace the source-regex dialog tests with pure helpers
 
 **What:** Move the checks in `test/closing-time-dialog.test.cjs` that grep component source into tested helpers.
