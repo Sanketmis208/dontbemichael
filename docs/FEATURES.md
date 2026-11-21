@@ -228,9 +228,9 @@ moving, and brings you only the decisions that need you.
   pages or searches, in every office. A trust layer checks every message to Pete against the kinds
   of data you keep private and cleans Pete's answers. Pete is off until you turn them on, and sees
   none of your files. On a Mac nobody else's commands reach the internet.
-- Always allowed: in Settings, Research and privacy, list your business's own public names and
+- Allowed: in Settings, Research and privacy, list your business's own public names and
   links, and the privacy check keeps them as written in questions to Research. When the check
-  keeps words back, an Ask me card offers to always allow each one and ask again. Passwords and
+  keeps words back, an Ask me card lets you allow each one or keep it private, then asks again. Passwords and
   keys never go through, whatever the list says.
 
 ### 7. An office you can watch
@@ -340,7 +340,7 @@ moving, and brings you only the decisions that need you.
 - Back up everything to one file and restore it on a new computer, from Settings or the first setup
   screen. Saved passwords and keys are locked with a backup password; a restore writes only into
   the business's own folders and says when it stops partway.
-- Always allowed for the privacy check, and Ask me cards that offer to allow what it kept back.
+- An Allowed list for the privacy check, and Ask me cards that offer to allow what it kept back.
 - Address suggestions from OpenStreetMap, business hours by day, languages and currency from a list,
   one field per social link, Team setup four across with one office folder.
 - Ask me shows three questions at a time. Pete waits while he starts. Closing time tells and reminds
