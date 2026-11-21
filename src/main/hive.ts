@@ -2658,22 +2658,43 @@ export class HiveManager {
     }, PRIVACY_CHECK_SENDER));
   }
 
-  /** The kept back questions, newest first (Ask me). */
+  /** The kept back questions waiting on Ask me, newest first. */
   researchKept(): ResearchKept[] {
-    return this.readKept().map(({ again: _again, ...k }) => k).sort((a, b) => b.at - a.at);
+    return this.readKept().filter((k) => !k.closed)
+      .map(({ again: _again, closed: _closed, ...k }) => ({ ...k, private: k.private ?? [], sent: k.sent ?? [] }))
+      .sort((a, b) => b.at - a.at);
+  }
+
+  /** The owner's choice on one kept back piece: keep it private, or take that
+   *  back (it is then undecided, or allowed when it is on the owner's list). */
+  setKeptPrivate(id: string, part: string, on: boolean): boolean {
+    const all = this.readKept();
+    const k = all.find((x) => x.id === id && !x.closed);
+    const mine = k?.parts.find((p) => p.toLowerCase() === String(part).toLowerCase());
+    if (!k || !mine) return false;
+    const rest = (k.private ?? []).filter((p) => p.toLowerCase() !== mine.toLowerCase());
+    k.private = on ? [...rest, mine] : rest;
+    this.writeKept(all);
+    return true;
   }
 
   /**
-   * The owner's answer on a kept back card: 'again' sends the question once
-   * more from the one who asked, through the check with the owner's list as it
-   * is now (an entry they just allowed stays in); 'keep' closes it. Either way
-   * the card goes.
+   * The owner is done with a kept back card (owner, 2026-11-21: one Done, no
+   * card level Keep private). 'again' sends the question once more from the
+   * one who asked, through the check with the owner's list as it is now (what
+   * they just allowed stays in); 'keep' sends nothing. Either way the card
+   * goes. What the owner kept private is remembered with the question, so the
+   * same question kept back for the same words does not ask them again.
+   * 'later' is Done for now with something allowed: the question goes again
+   * so the work is not held up, and the card stays for the pieces still
+   * undecided. `allowed` is what of the card is allowed at this send; the card
+   * keeps it, so the same allowance is not sent twice.
    */
-  decideKept(id: string, action: 'again' | 'keep'): boolean {
+  decideKept(id: string, action: 'again' | 'keep' | 'later', allowed: readonly string[] = []): boolean {
     const all = this.readKept();
-    const k = all.find((x) => x.id === id);
+    const k = all.find((x) => x.id === id && !x.closed);
     if (!k) return false;
-    if (action === 'again') {
+    if (action !== 'keep') {
       const root = this.root();
       if (!root || !this.registry().agents[k.from]) return false;
       const outbox = join(root, 'agents', k.from, 'outbox');
@@ -2685,11 +2706,13 @@ export class HiveManager {
         return false;
       }
     }
-    this.writeKept(all.filter((x) => x.id !== id));
+    if (action === 'later') k.sent = k.parts.filter((p) => allowed.some((a) => a.toLowerCase() === p.toLowerCase()));
+    else if (k.private?.length) k.closed = true;
+    this.writeKept(action === 'later' || k.closed ? all : all.filter((x) => x.id !== id));
     return true;
   }
 
-  private readKept(): Array<ResearchKept & { again: { act: string; subject: string; body: string; conversation?: string } }> {
+  private readKept(): Array<Omit<ResearchKept, 'private' | 'sent'> & { private?: string[]; sent?: string[]; closed?: boolean; again: { act: string; subject: string; body: string; conversation?: string } }> {
     const home = this.getHome();
     if (!home) return [];
     try {
@@ -2704,7 +2727,9 @@ export class HiveManager {
     try {
       mkdirSync(privateRoot(home), { recursive: true });
       // The newest cards stay: a question asked again counts from its last try.
-      this.atomicWriteJson(join(privateRoot(home), RESEARCH_KEPT_FILE), [...all].sort((a, b) => a.at - b.at).slice(-MAX_KEPT_OPEN));
+      // Answered ones (kept for what the owner kept private) have their own cap.
+      const byTime = [...all].sort((a, b) => a.at - b.at);
+      this.atomicWriteJson(join(privateRoot(home), RESEARCH_KEPT_FILE), [...byTime.filter((k) => k.closed).slice(-MAX_KEPT_OPEN), ...byTime.filter((k) => !k.closed).slice(-MAX_KEPT_OPEN)]);
     } catch (e) { console.error('[research] saving what was kept back', e); }
   }
 
@@ -2717,8 +2742,19 @@ export class HiveManager {
     if (!body.trim() && !subject.trim()) return;
     const all = this.readKept();
     const same = all.find((x) => x.from === senderId && x.again.subject === subject && x.again.body === body);
-    if (same) {
-      same.parts = [...same.parts, ...parts.filter((p) => !same.parts.some((q) => q.toLowerCase() === p.toLowerCase()))].slice(0, 5);
+    const has = (list: readonly string[], p: string): boolean => list.some((q) => q.toLowerCase() === p.toLowerCase());
+    if (same?.closed) {
+      // Answered already: only words the owner has not kept private bring the
+      // card back, beside the ones they did.
+      const news = parts.filter((p) => !has(same.private ?? [], p));
+      if (!news.length) return;
+      same.parts = [...news, ...(same.private ?? [])].slice(0, 5);
+      same.private = (same.private ?? []).filter((p) => has(same.parts, p));
+      same.denied = denied;
+      same.closed = false;
+      same.at = Date.now();
+    } else if (same) {
+      same.parts = [...same.parts, ...parts.filter((p) => !has(same.parts, p))].slice(0, 5);
       same.denied = same.denied && denied;
       same.at = Date.now();
     } else {

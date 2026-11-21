@@ -8,9 +8,11 @@
  * ResearchKeptCards).
  *
  * Protects: the card shows only words really in the question; one card per
- * question; Ask again sends the same question again from the one who asked,
- * through the check; Keep private just closes it; Always allow writes the
- * owner's list from the owner's click alone.
+ * question; each piece is allowed or kept private on its own; Done sends the
+ * same question again from the one who asked, through the check, when
+ * anything was allowed, and nothing otherwise; what the owner kept private is
+ * not asked again; Always allow writes the owner's list from the owner's
+ * click alone.
  */
 
 const test = require('node:test');
@@ -98,9 +100,15 @@ test('wiring: the owner\'s click alone adds to the list; the card is on Ask me a
   assert.match(ask, /<ResearchKeptCards kept=\{researchKept\} refresh=\{refreshNeedsYou\}/);
   const card = read('src/renderer/src/components/ResearchKeptCards.tsx');
   assert.match(card, /window\.cth\.researchAllow\(part\)/);
-  assert.match(card, /disabled=\{busy !== null \|\| !anyAllowed\}/, 'Ask again once something is allowed');
+  assert.match(card, /researchKeptDecide\(k\.id, willAsk \? 'again' : 'keep'\)/, 'Done asks again only with an allowance not sent yet');
+  assert.match(card, /if \(willAsk\) await run\(k\.id, \(\) => window\.cth\.researchKeptDecide\(k\.id, 'later'\)\);\s*if \(f\.open\) f\.toggle\(\);/, 'Done for now asks again when something is allowed, then folds');
+  assert.match(card, /\{allDecided \? \(/, 'Done only once every piece is decided');
+  assert.match(card, /window\.cth\.researchKeptPrivate\(k\.id, part, true\)/);
+  assert.match(main, /ipcMain\.handle\('research:keptPrivate'/);
+  assert.match(main, /ipcMain\.handle\('research:disallow'/);
   const en = JSON.parse(read('src/renderer/src/i18n/locales/en.json')).askMe;
-  for (const k of ['keptTitle', 'keptCleaned', 'keptDenied', 'keptAllow', 'keptAllowed', 'keptHint', 'keptKeep', 'keptAgain', 'keptFailed']) {
+  assert.equal(en.keptAgain, undefined, 'no card level Ask again');
+  for (const k of ['keptTitle', 'keptCleaned', 'keptDenied', 'keptAllow', 'keptAllowAria', 'keptHint', 'keptKeep', 'keptKeepAria', 'keptWillAsk', 'keptDone', 'keptDoneForNow', 'keptFailed']) {
     assert.ok(en[k], k);
     assert.doesNotMatch(en[k], /[–—]| - /, k);
   }
@@ -175,4 +183,62 @@ test('a question kept back again stays when the cap drops the oldest card', asyn
   assert.ok(subjects.includes('Shop 0'), 'asked again just now, so it stays');
   assert.ok(subjects.includes('Shop 99'));
   assert.ok(!subjects.includes('Shop 1'), 'the oldest goes');
+});
+
+// Value: protects=the owner decides each piece once: what they kept private on a card is remembered when Done sends the question again, so the same words kept back again bring no new card, while a word they never saw brings the card back beside their earlier choice; fails_when=decideKept drops the private choices, recordKept ignores them, or setKeptPrivate accepts words not on the card; why_new=per piece Keep private and the single Done are new (owner, 2026-11-21); seam=none; no_claim=the model's verdicts (fake check), the card's rendering
+test('what the owner kept private on a card is not asked again when the question goes again', async (t) => {
+  const Q2 = 'Compare prices at Northwind Bakery and Contoso Cafe on Main Street';
+  const tries = [
+    { decision: 'deny', reason: 'Not sent', by: 'model', kinds: ['names'], parts: ['Northwind Bakery', 'Contoso Cafe'] },
+    { decision: 'clean', subject: 'Prices', body: 'Compare prices at Northwind Bakery and a cafe', removed: ['names'], parts: ['contoso cafe'] },
+    { decision: 'clean', subject: 'Prices', body: 'Compare prices at Northwind Bakery and a cafe', removed: ['names'], parts: ['Contoso Cafe', 'Main Street'] }
+  ];
+  const { hive, calls } = await office(t, (m, n) => tries[Math.min(n, tries.length) - 1]);
+  const ask = (name) => send(hive, 'ryan', { to: 'research', act: 'query', subject: 'Prices', body: Q2 }, name);
+  ask('a.json');
+  await route(hive);
+  const [card] = hive.researchKept();
+  assert.deepEqual(card.private, [], 'nothing decided yet');
+  assert.equal(hive.setKeptPrivate(card.id, 'Someone Else', true), false, 'only words on the card');
+  assert.equal(hive.setKeptPrivate(card.id, 'contoso cafe', true), true);
+  assert.deepEqual(hive.researchKept()[0].private, ['Contoso Cafe']);
+  assert.equal(hive.setKeptPrivate(card.id, 'Contoso Cafe', false), true, 'the choice can be taken back');
+  assert.deepEqual(hive.researchKept()[0].private, []);
+  hive.setKeptPrivate(card.id, 'Contoso Cafe', true);
+
+  assert.equal(hive.decideKept(card.id, 'again'), true, 'Done, with the bakery allowed');
+  assert.equal(hive.researchKept().length, 0, 'the card goes');
+  await route(hive);
+  assert.equal(calls.length, 2, 'checked again');
+  assert.equal(hive.researchKept().length, 0, 'the cafe was kept private already: no new card');
+  assert.equal(hive.decideKept(card.id, 'again'), false, 'an answered card is not answered twice');
+
+  ask('c.json');
+  await route(hive);
+  const back = hive.researchKept();
+  assert.equal(back.length, 1, 'a word the owner never saw brings the card back');
+  assert.deepEqual(back[0].parts, ['Main Street', 'Contoso Cafe']);
+  assert.deepEqual(back[0].private, ['Contoso Cafe'], 'their earlier choice still shows');
+  assert.equal(back[0].denied, false);
+});
+
+// Value: protects=Done for now with something allowed sends the question again at once and keeps the card for the undecided pieces, noting what it went with so the same allowance is not sent twice; fails_when=decideKept 'later' drops the card, sends nothing, or records words not on the card; why_new=owner 2026-11-21 chose that Done for now also asks again; seam=none; no_claim=the model's verdicts (fake check), which pieces the owner's list really holds (passed in)
+test('Done for now asks again and keeps the card for what is undecided', async (t) => {
+  const Q2 = 'Compare prices at Northwind Bakery and Contoso Cafe on Main Street';
+  const denied = { decision: 'deny', reason: 'Not sent', by: 'model', kinds: ['names'], parts: ['Northwind Bakery', 'Contoso Cafe'] };
+  const cleaned = { decision: 'clean', subject: 'Prices', body: 'Compare prices at Northwind Bakery and a cafe', removed: ['names'], parts: ['Contoso Cafe'] };
+  const { hive, calls } = await office(t, (m, n) => (n === 1 ? denied : cleaned));
+  send(hive, 'ryan', { to: 'research', act: 'query', subject: 'Prices', body: Q2 }, 'a.json');
+  await route(hive);
+  const [card] = hive.researchKept();
+  assert.deepEqual(card.sent, []);
+  assert.equal(hive.decideKept(card.id, 'later', ['northwind bakery', 'Not On The Card']), true);
+  assert.deepEqual(hive.researchKept()[0].sent, ['Northwind Bakery'], 'the card stays and notes what it went with');
+  await route(hive);
+  assert.equal(calls.length, 2, 'checked again');
+  assert.equal(calls[1].body, Q2);
+  const after = hive.researchKept();
+  assert.equal(after.length, 1, 'still the one card');
+  assert.deepEqual(after[0].parts, ['Northwind Bakery', 'Contoso Cafe']);
+  assert.equal(after[0].denied, false, 'it went this time');
 });

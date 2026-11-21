@@ -898,8 +898,13 @@ const api = {
   researchKept: (): Promise<ResearchKept[]> => ipcRenderer.invoke('research:kept'),
   /** Add words to the business's Always allowed list (the owner's click on Ask me). */
   researchAllow: (term: string): Promise<{ ok: boolean; full?: boolean }> => ipcRenderer.invoke('research:allow', term),
-  /** Ask again through the check, or keep private: the card goes either way. */
-  researchKeptDecide: (id: string, action: 'again' | 'keep'): Promise<{ ok: boolean }> => ipcRenderer.invoke('research:keptDecide', id, action),
+  /** Takes one piece back off the Always allowed list (the owner's Keep private on an allowed piece). */
+  researchDisallow: (term: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('research:disallow', term),
+  /** Keep one kept back piece private on its card, or take that back. */
+  researchKeptPrivate: (id: string, part: string, on: boolean): Promise<{ ok: boolean }> => ipcRenderer.invoke('research:keptPrivate', id, part, on),
+  /** Done on the card: ask again through the check, or send nothing; the card goes either way.
+   *  'later' (Done for now) asks again and leaves the card for what is undecided. */
+  researchKeptDecide: (id: string, action: 'again' | 'keep' | 'later'): Promise<{ ok: boolean }> => ipcRenderer.invoke('research:keptDecide', id, action),
   researchPrepare: (): Promise<{ ok: true; cwd: string } | { ok: false }> => ipcRenderer.invoke('research:prepare'),
   researchOff: (): Promise<{ ok: boolean; returned: number }> => ipcRenderer.invoke('research:off'),
   researchNoticeSeen: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('research:noticeSeen'),

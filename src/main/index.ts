@@ -5034,7 +5034,8 @@ ipcMain.handle('connectors:setGrant', (_evt, agentId: unknown, key: unknown, gra
  *  wait for it (turning it off sends them back, design review D7). */
 // What the privacy check kept back from team members' questions (Ask me),
 // and the owner's answers to it (owner, 2026-11-20). Always allow adds the
-// words to the business's Always allowed list: only this, and Settings, write it.
+// words to the business's Always allowed list, Keep private takes them off it:
+// only these, and Settings, write it.
 ipcMain.handle('research:kept', () => hive.researchKept());
 ipcMain.handle('research:allow', (_evt, term: unknown) => {
   const t = cleanPublicTerm(term);
@@ -5044,8 +5045,16 @@ ipcMain.handle('research:allow', (_evt, term: unknown) => {
   writeConfig({ researchPublic: cleanPublicTerms([...now, t]) });
   return { ok: true };
 });
+ipcMain.handle('research:disallow', (_evt, term: unknown) => {
+  const t = cleanPublicTerm(term);
+  if (!t) return { ok: false };
+  writeConfig({ researchPublic: cleanPublicTerms(readConfig().researchPublic).filter((x) => x.toLowerCase() !== t.toLowerCase()) });
+  return { ok: true };
+});
+ipcMain.handle('research:keptPrivate', (_evt, id: unknown, part: unknown, on: unknown) =>
+  typeof id === 'string' && typeof part === 'string' ? { ok: hive.setKeptPrivate(id, part, on === true) } : { ok: false });
 ipcMain.handle('research:keptDecide', (_evt, id: unknown, action: unknown) =>
-  typeof id === 'string' && (action === 'again' || action === 'keep') ? { ok: hive.decideKept(id, action) } : { ok: false });
+  typeof id === 'string' && (action === 'again' || action === 'keep' || action === 'later') ? { ok: hive.decideKept(id, action, cleanPublicTerms(readConfig().researchPublic)) } : { ok: false });
 ipcMain.handle('research:status', () => {
   const cfg = readConfig();
   return { on: !!cfg.research?.on, live: hive.researchOn(), waiting: hive.researchOn() ? hive.researchWaiting() : 0, notice: !!cfg.research?.notice };
