@@ -224,7 +224,7 @@ app.setName(APP_NAME);
 // starts. On every launch: a config already moved returns at once, and one
 // whose office is not there yet waits for it. The move is one way; the copy
 // kept from before it (config.before-offices.json) is what a downgrade needs.
-// Written to the office log once the hive is up (logOfficeEvent).
+// Written to the office log once the hive is up.
 let settingsMovedThisLaunch = false;
 try {
   const moved = migrateToOfficeSettings();
@@ -4280,13 +4280,6 @@ ipcMain.handle('config:changeHome', async (_evt, payload: unknown) => {
 /** A switch waiting for closing time to finish (D10). */
 let pendingSwitch: { newHome: string; mode: 'move' | 'fresh'; oldHome: string | null } | null = null;
 
-/** One line in the office log when a business moves its settings, switches or
- *  opens for the first time, so a support case can see when and on which
- *  version. The office id and the app version only: no business name, no path. */
-function logOfficeEvent(kind: 'office-settings-moved' | 'office-switch' | 'office-first-open', officeId: string | null): void {
-  try { hive.appendLog({ kind, officeId, appVersion: app.getVersion() }); } catch { /* best-effort */ }
-}
-
 /** Stop the open office and reopen the app on `newHome` (moving this office's
  *  data there first when `mode` is move). On success the app relaunches and
  *  this never returns; a failed copy keeps the open office running. */
@@ -4304,6 +4297,10 @@ function switchOffice(newHome: string, mode: 'move' | 'fresh', oldHome: string |
   try { memory.stop(); } catch (e) { console.error('[changeHome] memory.stop:', e); }
   try { memoryTidy.stop(); } catch (e) { console.error('[changeHome] memoryTidy.stop:', e); }
 
+  // One line in the open office's log (support sees when and on which
+  // version), the id and the version only. Before a move copies the hive
+  // folder, so the line goes with the office (docs/designs/separate-businesses.md).
+  hive.appendLog({ kind: 'office-switch', officeId: currentOfficeId(), appVersion: app.getVersion() });
   if (mode === 'move' && oldHome) {
     try {
       copyOfficeData(oldHome, newHome);
@@ -4323,8 +4320,6 @@ function switchOffice(newHome: string, mode: 'move' | 'fresh', oldHome: string |
   // A moved office keeps its settings: its entry goes with it. A fresh open
   // finds its own entry by the id in that folder.
   const movedOffices = mode === 'move' && oldHome ? officesAfterMove(oldHome, newHome) : null;
-  // The closing office's log, while config still points at it.
-  logOfficeEvent('office-switch', currentOfficeId());
   // Nothing the closing office still sends reaches the new one (switchingHome).
   switchingHome = true;
   writeConfig(movedOffices ? { harnessHome: newHome, offices: movedOffices } : { harnessHome: newHome });
@@ -6893,6 +6888,9 @@ function bootstrapHiveServices(): void {
   // Tell the hive what it is running inside, BEFORE anything spawns: the prompt
   // builder reads this, so an agent spawned earlier would never learn it.
   hive.setRuntimeInfo({ version: app.getVersion(), packaged: app.isPackaged, appPath: app.getAppPath() });
+  // A new office's first line, once (hive.logFirstOpen): a business set up on
+  // this launch, or the first one on a fresh install through config:update.
+  hive.logFirstOpen(currentOfficeId(), app.getVersion());
   // An app-start marker in the event log. log.jsonl had twelve event kinds and
   // none of them meant "the app restarted", so a relaunch, and more importantly a
   // switch between a packaged build and a local one, was invisible to every agent
@@ -7276,8 +7274,7 @@ app.whenReady().then(() => {
   if (homeReady) {
     bootstrapHiveServices();
     if (firstOpen) { try { adoptOpenOffice(); } catch (e) { console.error('[offices] first open:', e); } }
-    if (firstOpen) logOfficeEvent('office-first-open', currentOfficeId());
-    if (settingsMovedThisLaunch) logOfficeEvent('office-settings-moved', currentOfficeId());
+    if (settingsMovedThisLaunch) hive.appendLog({ kind: 'office-settings-moved', officeId: currentOfficeId(), appVersion: app.getVersion() });
     // An office set up before office.json existed gets one now, if the config's
     // team is really this office's team (officeFile.ts).
     backfillOfficeRecord(readConfig());
