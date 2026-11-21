@@ -100,9 +100,11 @@ test('setup ends on the Ready step with Claude, and Open the office waits for it
   assert.match(w, /const withReady = isClaudeProvider\(godProvider\);/);
   assert.match(w, /const lastStep: Step = withReady \? 'ready' : 'permissions';/);
   assert.match(w, /: s === 'permissions' \? 'ready'/);
-  assert.match(w, /\{step === 'ready' && <GetMichaelReady provider=\{godProvider\} onReadyChange=\{setEngineReady\} \/>\}/);
-  assert.match(w, /onClick=\{finish\} disabled=\{busy \|\| !engineReady\}>\s*\{busy \? t\('common\.saving'\) : t\('engineSetup\.openOffice'\)\}/);
-  assert.match(w, /\{step === 'ready' && !engineReady && \(\s*<PixelButton variant="ghost" size="md" onClick=\{finish\}/, 'Set up later still opens the office');
+  // In the first setup (add unset) the Ready step always waits for the sign in;
+  // only Add a business with a different Claude account signs in when it opens.
+  assert.match(w, /\{step === 'ready' && !\(add && claudeLogin === 'own'\) && <GetMichaelReady provider=\{godProvider\} onReadyChange=\{setEngineReady\} \/>\}/);
+  assert.match(w, /onClick=\{finish\} disabled=\{busy \|\| \(!engineReady && !\(add && claudeLogin === 'own'\)\)\}>\s*\{busy \? t\('common\.saving'\) : t\('engineSetup\.openOffice'\)\}/);
+  assert.match(w, /\{step === 'ready' && !engineReady && !\(add && claudeLogin === 'own'\) && \(\s*<PixelButton variant="ghost" size="md" onClick=\{finish\}/, 'Set up later still opens the office');
   // Value: protects=an owner whose Michael runs on another engine still has a way out of setup; fails_when=the permissions Finish button is removed or tied to Claude, so with no Ready step the last step has neither Next nor Finish; why_new=only the Claude path was pinned; seam=none (source pin, the renderer has no DOM harness)
   assert.match(w, /\{step !== lastStep && step !== 'resume' && \(/, 'Next hides only on the real last step');
   assert.match(w, /\{step === 'permissions' && lastStep === 'permissions' && \(\s*<PixelButton variant="primary" size="md" onClick=\{finish\}/);

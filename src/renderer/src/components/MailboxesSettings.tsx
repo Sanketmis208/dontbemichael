@@ -6,7 +6,7 @@ import { InfoTip } from './InfoTip';
 import { AddMailboxDialog } from './AddMailboxDialog';
 import { useHarnessConfig } from '@/hooks/useHarnessConfig';
 import { useStore } from '@/store/store';
-import { PROVIDER_PRESETS, googleLabel, isGoogleProvider, sendersFrom, type MailboxRecord } from '@shared/mailboxes';
+import { PROVIDER_PRESETS, googleLabel, isGoogleProvider, sendersFrom, suggestedMailboxAddress, type MailboxRecord } from '@shared/mailboxes';
 import { SENDING_LABEL_KEY } from './sendingLabels';
 import { groupName, hint, panelStyle } from './fieldText';
 
@@ -170,6 +170,8 @@ export function MailboxesSettings({ focus }: { focus?: { add?: boolean; seq: num
       {dialog && (
         <AddMailboxDialog
           fix={dialog.fix}
+          // The company's email from setup, when it is not a mailbox yet (owner, 2026-11-19).
+          suggestedAddress={dialog.fix ? undefined : suggestedMailboxAddress(config.companyProfile?.email, config.mailboxes ?? [])}
           onClose={() => { refocus(dialog.fix ? `fix-${dialog.fix.id}` : 'add'); setDialog(null); }}
           onSaved={() => { refocus(dialog.fix ? `fix-${dialog.fix.id}` : 'add'); setDialog(null); }}
         />

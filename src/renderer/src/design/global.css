@@ -691,3 +691,10 @@ canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
   100% { box-shadow: 0 0 0 3px transparent; }
 }
 @media (prefers-reduced-motion: reduce) { .cth-place-highlight { animation: none; box-shadow: 0 0 0 3px var(--cth-indigo); } }
+
+/* The business menu in the top bar (separate-businesses.md, DT1): the name is a
+   quiet button with the icon button hover (DESIGN.md 7.1), its rows the menu
+   hover. Keyboard focus keeps the global ring. */
+.cth-business-button:hover { background: var(--cth-neutral-soft) !important; }
+.cth-business-row:hover:not(:disabled) { background: var(--cth-neutral-soft) !important; }
+.cth-business-row:disabled { cursor: default !important; opacity: 0.6; }

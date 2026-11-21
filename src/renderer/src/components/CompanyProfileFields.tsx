@@ -1,6 +1,11 @@
 import { useMemo, type CSSProperties, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Field as SharedField, Panel, requiredMark } from './fieldText';
+import { StreetField } from './StreetField';
+import { SocialLinks } from './SocialLinks';
+import { HoursPicker } from './HoursPicker';
+import { LanguagesPicker } from './LanguagesPicker';
+import { currencyOptions } from '@shared/currencies';
 import {
   ENTITY_TYPES, SERVICE_AREAS,
   type CompanyAddress, type CompanyProfile, type RequiredProfileField
@@ -62,6 +67,7 @@ export function CompanyProfileFields({ value, onChange, parts, needsIndustry, mi
   const { t, i18n } = useTranslation();
   const timeZones = useMemo(() => supported('timeZone'), []);
   const currencies = useMemo(() => supported('currency'), []);
+  const currencyList = useMemo(() => currencyOptions(currencies, i18n.language), [currencies, i18n.language]);
   const months = useMemo(() => {
     try {
       const f = new Intl.DateTimeFormat(i18n.language, { month: 'long' });
@@ -107,8 +113,11 @@ export function CompanyProfileFields({ value, onChange, parts, needsIndustry, mi
           </Panel>
           <Panel title={t('companyProfile.addressHead')}>
           <Field label={t('companyProfile.street')} required>
-            <input value={text(value.address?.street)} onChange={(e) => setAddress({ street: orUndefined(e.target.value) })}
-              placeholder={t('companyProfile.streetPlaceholder')} aria-required aria-invalid={miss('street')} className="cth-input" style={fieldStyle} />
+            {/* Address suggestions as the street is typed (OpenStreetMap, free, no
+                key); a pick fills the rest of the address, all still editable. */}
+            <StreetField value={text(value.address?.street)} onType={(v) => setAddress({ street: orUndefined(v) })}
+              onPick={(a) => set({ address: { ...(value.address ?? {}), ...a } })}
+              placeholder={t('companyProfile.streetPlaceholder')} invalid={miss('street')} className="cth-input" style={fieldStyle} />
           </Field>
           <div style={grid2}>
             <Field label={t('companyProfile.city')} required>
@@ -151,26 +160,20 @@ export function CompanyProfileFields({ value, onChange, parts, needsIndustry, mi
               <input value={text(value.email)} onChange={(e) => set({ email: orUndefined(e.target.value) })} className="cth-input" style={fieldStyle} />
             </Field>
           </div>
-          <Field label={t('companyProfile.social')} hint={t('companyProfile.socialHint')}>
-            <textarea
-              value={(value.social ?? []).join('\n')}
-              onChange={(e) => {
-                const links = e.target.value.split('\n').slice(0, 5);
-                set({ social: links.some((l) => l.trim()) ? links : undefined });
-              }}
-              rows={3}
-              className="cth-input"
-              style={{ ...fieldStyle, resize: 'vertical' }}
-            />
+          {/* A group, not a <label>: a label passes a click on a button that goes
+              away (Remove, Set by day) to its first button. */}
+          <Field label={t('companyProfile.social')} group>
+            {/* One field per link, the site named beside it (owner, 2026-11-19). */}
+            <SocialLinks value={value.social} onChange={(social) => set({ social })} inputClassName="cth-input" inputStyle={fieldStyle} />
           </Field>
           </Panel>
 
           <Panel title={t('companyProfile.operateHead')}>
+          {/* Set by day; saved as the one line agents read (owner, 2026-11-19). */}
+          <Field label={t('companyProfile.hours')} group>
+            <HoursPicker value={value.hours} onChange={(hours) => set({ hours })} inputClassName="cth-input" inputStyle={fieldStyle} />
+          </Field>
           <div style={grid2}>
-            <Field label={t('companyProfile.hours')}>
-              <input value={text(value.hours)} onChange={(e) => set({ hours: orUndefined(e.target.value) })}
-                placeholder={t('companyProfile.hoursPlaceholder')} className="cth-input" style={fieldStyle} />
-            </Field>
             <Field label={t('companyProfile.timeZone')}>
               <select value={value.timeZone ?? ''} onChange={(e) => set({ timeZone: e.target.value || undefined })} className="cth-input" style={fieldStyle}>
                 <option value="">{t('companyProfile.notSet')}</option>
@@ -184,11 +187,11 @@ export function CompanyProfileFields({ value, onChange, parts, needsIndustry, mi
                 {SERVICE_AREAS.map((k) => <option key={k} value={k}>{t(`companyProfile.area.${k}`)}</option>)}
               </select>
             </Field>
-            <Field label={t('companyProfile.languages')}>
-              <input value={text(value.languages)} onChange={(e) => set({ languages: orUndefined(e.target.value) })}
-                placeholder={t('companyProfile.languagesPlaceholder')} className="cth-input" style={fieldStyle} />
-            </Field>
           </div>
+          {/* One chip per language, suggested as typed (owner, 2026-11-19). */}
+          <Field label={t('companyProfile.languages')} group>
+            <LanguagesPicker value={value.languages} onChange={(languages) => set({ languages })} inputClassName="cth-input" inputStyle={fieldStyle} />
+          </Field>
           </Panel>
 
           <Panel title={t('companyProfile.moneyHead')}>
@@ -197,7 +200,13 @@ export function CompanyProfileFields({ value, onChange, parts, needsIndustry, mi
               <select value={value.currency ?? ''} onChange={(e) => set({ currency: e.target.value || undefined })} className="cth-input" style={fieldStyle}>
                 <option value="">{t('companyProfile.notSet')}</option>
                 {value.currency && !currencies.includes(value.currency) && <option value={value.currency}>{value.currency}</option>}
-                {currencies.map((c) => <option key={c} value={c}>{c}</option>)}
+                {/* Named, common ones first (owner, 2026-11-19); the code is what is saved. */}
+                <optgroup label={t('companyProfile.currencyCommon')}>
+                  {currencyList.common.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
+                </optgroup>
+                <optgroup label={t('companyProfile.currencyAll')}>
+                  {currencyList.rest.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
+                </optgroup>
               </select>
             </Field>
             <Field label={t('companyProfile.fiscalMonth')}>
@@ -237,12 +246,13 @@ export function CompanyProfileFields({ value, onChange, parts, needsIndustry, mi
 
 /** A field in the app's style (fieldText): its label, then the control, then
  *  any hint; a required one says so beside its label. */
-function Field({ label, required, hint, children }: { label: string; required?: boolean; hint?: string; children: ReactNode }) {
+function Field({ label, required, hint, group, children }: { label: string; required?: boolean; hint?: string; group?: boolean; children: ReactNode }) {
   const { t } = useTranslation();
   return (
     <SharedField
       label={required ? <>{label}{' '}<span style={requiredMark}>{t('companyProfile.required')}</span></> : label}
       note={hint}
+      read={group}
     >{children}</SharedField>
   );
 }

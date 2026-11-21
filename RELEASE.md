@@ -1,12 +1,14 @@
-# Don't Be Michael v0.4.2
+# Don't Be Michael v0.4.3
 
 **An AI office for your small business.** Pick your kind of business, pick your team, and Michael, your office manager, runs the floor while you run the business.
 
-## What's new in 0.4.2
+## What's new in 0.4.3
 
-- **Team members attach files from their folder.** Ask a team member to email a client the statements in its folder, and the files go with the email. On Send on approval the card lists each file: open it, or take it off before you approve. A file a teammate keeps is handed over first.
-- **Slow shares no longer stall a turn,** and a network path is never shown as missing.
-- **Quoted text in the terminal links the file inside it,** when the quote is a sentence rather than a path.
+- **Run two separate businesses on one computer.** Each business keeps its own settings, saved passwords and keys, files, history and, if you choose, its own Claude account. The business name in the top bar switches between them, and switching closes the open office properly first.
+- **Add a business while the open one keeps working.** Setup opens over the office, and the new business's folder is named after it.
+- **Back up everything and restore it on a new computer.** One file holds every business, with saved passwords and keys locked by a backup password.
+- **Always allowed, for the privacy check.** List your business's own public names and links, and an Ask me card offers to allow what the check kept back.
+- **Setup is easier.** Address suggestions, business hours by day, languages and currency from a list, and Ask me cards three questions at a time.
 
 Every feature, release by release: [docs/FEATURES.md](https://github.com/agentvivekkumar/dontbemichael/blob/main/docs/FEATURES.md)
 
@@ -14,15 +16,15 @@ Every feature, release by release: [docs/FEATURES.md](https://github.com/agentvi
 
 | Platform | Download |
 |---|---|
-| Mac (Apple Silicon and Intel) | [`Dont-Be-Michael-0.4.2-mac-universal.dmg`](https://github.com/agentvivekkumar/dontbemichael/releases/latest/download/Dont-Be-Michael-0.4.2-mac-universal.dmg) |
+| Mac (Apple Silicon and Intel) | [`Dont-Be-Michael-0.4.3-mac-universal.dmg`](https://github.com/agentvivekkumar/dontbemichael/releases/latest/download/Dont-Be-Michael-0.4.3-mac-universal.dmg) |
 
 <!-- windows -->
-**Windows 11 (x64):** [`Dont-Be-Michael-0.4.2-win-x64-setup.exe`](https://github.com/agentvivekkumar/dontbemichael/releases/download/v0.4.2/Dont-Be-Michael-0.4.2-win-x64-setup.exe). ARM PCs aren't supported. This build is not yet signed with a Microsoft certificate: when Windows says **Windows protected your PC**, click **More info**, then **Run anyway**.
+**Windows 11 (x64):** [`Dont-Be-Michael-0.4.3-win-x64-setup.exe`](https://github.com/agentvivekkumar/dontbemichael/releases/download/v0.4.3/Dont-Be-Michael-0.4.3-win-x64-setup.exe). ARM PCs aren't supported. This build is not yet signed with a Microsoft certificate: when Windows says **Windows protected your PC**, click **More info**, then **Run anyway**.
 <!-- /windows -->
 
 Linux will follow.
 
-[Source code (zip)](https://github.com/agentvivekkumar/dontbemichael/archive/refs/tags/v0.4.2.zip) · [Source code (tar.gz)](https://github.com/agentvivekkumar/dontbemichael/archive/refs/tags/v0.4.2.tar.gz)
+[Source code (zip)](https://github.com/agentvivekkumar/dontbemichael/archive/refs/tags/v0.4.3.zip) · [Source code (tar.gz)](https://github.com/agentvivekkumar/dontbemichael/archive/refs/tags/v0.4.3.tar.gz)
 
 ## Installing on your Mac
 

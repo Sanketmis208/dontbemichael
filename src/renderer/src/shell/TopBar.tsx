@@ -12,6 +12,7 @@ import { NEEDS_YOU_PILL_ID, pillHidden } from './rightColumn';
 import { useResolvedGodName } from '@/hooks/useResolvedGodName';
 import lockupLight from '@brandkit/logo/lockup/dbm-lockup-horizontal-light.svg?url';
 import lockupDark from '@brandkit/logo/lockup/dbm-lockup-horizontal-dark.svg?url';
+import { BusinessMenu } from './BusinessMenu';
 
 /**
  * The v2 top bar (branding/DESIGN.md 7.1): lockup, view tabs, then the clock,
@@ -47,6 +48,9 @@ export function TopBar({ onOpenSettings }: { onOpenSettings: () => void }) {
     >
       <img className="cth-lockup-light" src={lockupLight} alt="Don't Be Michael" style={{ height: 22, width: 'auto', flexShrink: 0 }} />
       <img className="cth-lockup-dark" src={lockupDark} alt="Don't Be Michael" style={{ height: 22, width: 'auto', flexShrink: 0 }} />
+      {/* The open business, and switching (separate-businesses.md, DT1). Shown
+          only once each business keeps its own settings. */}
+      <BusinessMenu />
       <ViewTabs />
       <div style={{ marginInlineStart: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
         <ClockPill />

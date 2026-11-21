@@ -79,8 +79,12 @@ memory.
 - **Your logo is read from your own website.** When you press Get featured, the app reads the home page
   of the website in your company profile and the logo image it names, once, over HTTPS, from public
   addresses only, and keeps the logo in your office's private folder. That website sees an ordinary
-  web request from your computer. It is the one time the app itself reads a web page; everything
-  else on the internet goes through your Research team member. The page always shows your business
-  name, logo and website.
+  web request from your computer. It is one of two times the app itself reaches the web (address
+  suggestions, below, are the other); everything else on the internet goes through your Research
+  team member. The page always shows your business name, logo and website.
+- **Address suggestions come from OpenStreetMap.** As you type the street in setup or in your
+  company profile, the app sends only the text of that field to OpenStreetMap's Photon service
+  (photon.komoot.io), at most every 300 ms, with no name, email or other detail. A failure just
+  means no suggestions, and you type the address yourself.
 - A case study is a submission you choose to make, not usage data: the app does not tell us that
   you opened the screen, and nothing is sent in the background.

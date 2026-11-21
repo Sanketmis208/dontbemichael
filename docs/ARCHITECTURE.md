@@ -58,7 +58,15 @@ src/
     config.ts                harness config persistence + home setup; Claude Code's ~/.claude.json (folder trust,
                              the first-run welcome, an approved API key), written to a copy and swapped in;
                              folder trust is keyed as Claude Code looks it up (forward slashes on Windows, claudeProjectKey);
-                             a config.json it cannot read is copied beside it before the next save (damagedConfigCopy)
+                             a config.json it cannot read is copied beside it before the next save (damagedConfigCopy);
+                             readConfig and writeConfig route business fields to the open business's own entry
+                             (docs/designs/separate-businesses.md), and officeDataPath gives each business's place
+                             in the app's data folder (offices/<office id>/)
+    officeSettings.ts / officeKeys.ts   each business's own settings: config.json `offices[<office id>]` beside the
+                             install's own keys, one home per field (BUSINESS_KEYS, INSTALL_KEYS), the one time move
+                             at launch (migrateToOfficeSettings, config.before-offices.json kept for a downgrade),
+                             adoptOpenOffice, and the business list, Add a business and Find it behind the top bar's
+                             business menu and Settings, Your businesses (listBusinesses, addBusiness, relocateBusiness)
     engineSetup.ts           Get Michael ready: finds Claude without a shell, Claude's standalone install script,
                              sign in state (`claude auth status`), the Anthropic API key check
                              (docs/designs/get-michael-ready.md; status types in shared/engineSetup.ts)
@@ -90,6 +98,9 @@ src/
                              harness.db (the pure parts are in shared/runCompare.ts)
     teamMemory.ts            the dates and sources of each member's memory notes, for Pulse's Learning tiles
     claudeAccount.ts         which Claude plan the owner's account is on (plan fields of Claude Code's account record only)
+    claudeHome.ts            where Claude Code keeps its settings and `.claude.json` for this run, following
+                             CLAUDE_CONFIG_DIR, which the app sets for a business with its own Claude login
+                             (`userData/offices/<office id>/claude`); every Claude file the app reads or writes goes through it
     github.ts                GitHub issue + CI run ingestion via the gh CLI
     shellEnv.ts              resolve PATH and shell env for child processes
     mail.ts                  IMAP/SMTP client for connected mailboxes; the broker calls it for md-mail tool calls, and
@@ -125,7 +136,8 @@ src/
     standingCheck.ts         the separate quick check (hidden Claude, no tools) that an email fits a standing approval;
                              anything it can't read counts as no, so the email goes to the owner
     integrations.ts          the secret store: every saved password and key in one safeStorage-encrypted file
-                             (integration-secrets.json in userData, 0600); refuses to save over a file it can't read
+                             (integration-secrets.json in userData, 0600); refuses to save over a file it can't read;
+                             each business's entries are keyed by its office id (`@<office id>/<ref>`)
     atomicFile.ts            crash-safe file write (temp file, fsync, rename); the secret store's writer
     officeBreak.ts           the office break when Claude can't work: the plan's usage limit (hooks.ts reports the
                              StopFailure `rate_limit` and the status line's reset time), no credit left, or a sign in or
@@ -144,7 +156,13 @@ src/
     researchNotes.ts         Pete's files read only as plain files inside his own folder
     factoryReset.ts          what Settings, Reset & start over erases (app:resetAll in index.ts): everything the app
                              made for the office, in the office folder and the app's data folder; team folders,
-                             roster backups, the owner's own files and the Claude sign in stay
+                             roster backups, the owner's own files and the Claude sign in stay; with several businesses
+                             it erases only the open one's (its place, secrets, rows and settings entry)
+    backup.ts / backupArchive.ts / backupSecrets.ts   Settings, General, Backup (docs/designs/backup-restore.md):
+                             everything on this computer in one `.dbmbackup` gzip stream (the app's data folder by an
+                             allow list, a database snapshot, each office, business and team folder, the team's Claude
+                             conversations), saved passwords and keys sealed with a backup password (scrypt,
+                             AES-256-GCM), and restore with paths moved to the new home folder
     closingTime.ts           Closing Time shutdown protocol (the office reopens on next launch, shared/officeOpen.ts)
                              The closing time bar (ClosingTimeBar) lists who is still working (hook `detail` from hooks.ts toolDetail),
                              with Remind and Close without them (never pty:kill: that archives the agent).
@@ -204,7 +222,11 @@ src/
     restart.ts               restarts the app after a reset or a home change, and knows when a dev build cannot relaunch
     roster.ts                the roster on disk: agents, notes, worktree paths, archived entries and parked message queues, one
                              JSON file beside the hive (hive identity stays in registry.json)
-    officeFile.ts            <harnessHome>/office.json, the office's own record (shared/officeRecord.ts)
+    officeFile.ts            <harnessHome>/office.json, the office's own record (shared/officeRecord.ts), with its lasting
+                             id (ensureOfficeId); officeSwitchGuard refuses another business's office while settings
+                             are not yet per business
+    inheritedEnv.ts          drops the settings a Claude Code session hands down when the app was started inside one
+                             (a dev run), so the team and the checks never run on the host session's own
     skills.ts                skills: the ones installed for each CLI on this machine, and a catalog of what could be;
                              Settings, Skills is hidden in this build (SHOW_SKILLS), and skills keep working
     slack.ts / slack-trigger.cjs   Slack messages into Michael's queue over a bare http server that verifies every request
@@ -240,6 +262,11 @@ src/
                              off by default, then per agent;
                              books roles like Oscar default to Read only)
     officeOpen.ts            the Office open message each agent gets after closing time
+    officeHome.ts            where an added business's office folder goes (~/HarnessAgents_<business name>)
+    businessHours.ts / currencies.ts / languages.ts / socialSite.ts / photon.ts   the company profile's pickers:
+                             hours by day, written as one line agents read; the currency and language lists; a social
+                             link's site; address suggestions from Photon (OpenStreetMap), called from main
+    inboxSweep.ts            refuses a command that moves inbox messages picked by a wildcard, so none is filed unread
     cliUpdate.ts             whether live Claude agents run an older Claude Code than the one installed
                              (cliUpdate:status push, cliUpdate:current pull)
     folderAccess.ts          who may open and change which folder: sandbox, permission rules, hook checks;
@@ -290,6 +317,9 @@ src/
                              heldByBreak (Claude agents only)
     research.ts              the Research team member: its id, default name (Pete; the owner may rename it, and
                              researchText shows the current one), house rule 9, refusal reasons and the reply label
+    publicTerms.ts / researchKept.ts   Always allowed, the owner's list of the business's own public names and
+                             links the privacy check keeps as written (passwords and keys never pass), and what the
+                             check kept back from a question, offered on Ask me (ResearchKeptCards)
     dataClasses.ts           the kinds of data the owner keeps private (Settings, Research & privacy) and the fixed
                              patterns the trust layer marks them with
     webAccess.ts             who may use web pages and search (the Research agent alone, in every office), and the empty
@@ -370,6 +400,10 @@ src/
     MemoryNotes,             an agent's Memory tab as grouped notes; "Show the file" keeps the raw text
     OwnerViaMichaelBar,      replaces a team member's message box outside 1:1 (Message Michael / Talk 1:1)
     OfficeFolderMissing,     launch screen shown only when the office folder is missing
+    YourBusinesses,          Settings, General, Your businesses: the same rows as the top bar's business menu
+                             (shell/BusinessMenu.tsx, shell/businessMenuRows.ts), with Open, Find it and Remove
+    BackupRestore,           Settings, General, Backup: back up with a backup password, or restore (also on the first
+                             setup screen of a new computer)
     CliUpdateNotice,         "team upgrade ready" title-bar chip and corner note; its click runs closing time
                              with relaunch, "later" waits for a newer version (localStorage cth.cliUpdateLaterFor)
     TasksKanban,             dependency-aware kanban board (the Tasks view); the owner closes a card as Done,

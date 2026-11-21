@@ -1,3 +1,4 @@
+import { MAX_KEPT_OPEN, type ResearchKept } from '../shared/researchKept';
 /**
  * The Hive — the on-disk multi-agent coordination layer.
  *
@@ -19,10 +20,11 @@
  * Everything here runs in the Electron main process.
  */
 import { placeLinkRule } from '../shared/settingsPlaces';
+import { claudeSettingsDir } from './claudeHome';
 import { WEB_SETTINGS_UNREADABLE, WEB_TOOLS, type SandboxNetwork } from '../shared/webAccess';
 import {
   addressedToResearch, ANSWER_UNCHECKED, ANSWER_UNCHECKED_SUBJECT, hasAttachments, looksLikeInjection, NOT_SENT_SUBJECT,
-  PRIVACY_CHECK_SENDER, REFUSAL_CHECK_FAILED, REFUSAL_FILES, REFUSAL_NOT_DELIVERED, REFUSAL_OFF, REFUSAL_TOO_LONG, RESEARCH_HOUSE_RULE, RESEARCH_ID, RESEARCH_REPLY_LABEL,
+  PRIVACY_CHECK_SENDER, REFUSAL_CHECK_FAILED, REFUSAL_FILES, REFUSAL_NOT_DELIVERED, REFUSAL_NOT_RUNNING, REFUSAL_OFF, REFUSAL_TOO_LONG, RESEARCH_HOUSE_RULE, RESEARCH_ID, RESEARCH_REPLY_LABEL,
   RESEARCH_UNCHECKED_TOOL, NOT_SENT_SUBJECT_OUT, RESEARCH_ONLY_ASKERS, RESEARCH_NAME, RESEARCH_ROLE, isReservedName,
   SENT_AS_SUBJECT, sentAsBody, nameKey, researchText, cleanResearchName, RESEARCH_ONLY_SKILLS
 } from '../shared/research';
@@ -433,14 +435,17 @@ export function michaelInstructions(name: string, b: PromptBusiness, p: PromptPa
     '',
     '## Company foundations',
     'The company foundations are one document of questions each job needs answered about this business, such as who we sell to or our financial year, each answered once for the whole office. The app gives you the whole document at the start of each session and when it changes, with the empty questions the work hit, and gives each team member its own job\'s part. The app alone writes it: answers reach it from the owner\'s foundation cards and from what the team learns. When an answer names a company knowledge document, read it with get <id> before work that depends on that answer.',
-    'When a team member\'s work needs an empty question, the app tells you the first time ("Foundation gap"). Raise one card for it on Ask me unless one is open for that question, never one per task or per member: title it with the question, assign it to the team member whose work hit it, and give it one humanQA entry {"kind": "foundation", "foundation": "<question id>", "q": "<one bold sentence on what the work did without it, then which other jobs use the answer>", "askedAt": "<time>", "raisedBy": "<the member\'s id>"}. The owner answers it on the card, has the member draft it, or chooses Not now, which hides it for a week; the app writes the owner\'s answer into the foundations itself, so when the answer request comes, close the card as done. Never raise a card for a question no work has hit. The weekly Foundations check brings each still empty question back and has the team send what it holds, as its focus says. Some questions are lists (what we sell, customers today, competitors, money, who owes whom, the team, systems, suppliers): one stays open while it is only known so far, and the app tells you when the work saw something not on one ("Foundation gap") or a whole list passed its shelf life ("Foundation list past its shelf life"); raise its card by the same rule, with its "q" one bold sentence on what was seen, such as "Oscar saw a card that isn\'t on your accounts list.", or, past its shelf life, asking whether it is still the whole list. The card shows the owner each seen item to add, mark not ours or decide later.',
+    'When a team member\'s work needs an empty question, the app tells you the first time ("Foundation gap"). Raise one card for it on Ask me unless one is open for that question, never one per task or per member: title it with the question, assign it to the team member whose work hit it, and give it one humanQA entry {"kind": "foundation", "foundation": "<question id>", "q": "<one bold sentence on what the work did without it, naming anything it used instead, such as the customers or prices it went by, then which other jobs use the answer>", "askedAt": "<time>", "raisedBy": "<the member\'s id>"}. The owner answers it on the card, has the member draft it, or chooses Not now, which hides it for a week; the app writes the owner\'s answer into the foundations itself, so when the answer request comes, close the card as done. Never raise a card for a question no work has hit. The weekly Foundations check brings each still empty question back and has the team send what it holds, as its focus says. Some questions are lists (what we sell, competitors, money, the team, systems): one stays open while it is only known so far, and the app tells you when the work saw something not on one ("Foundation gap") or a whole list passed its shelf life ("Foundation list past its shelf life"); raise its card by the same rule, with its "q" one bold sentence on what was seen, such as "Oscar saw a card that isn\'t on your accounts list.", or, past its shelf life, asking whether it is still the whole list. The card shows the owner each seen item to add, mark not ours or decide later.',
     'When the owner\'s answer on any other card, or in your conversation, answers a foundations question, send it to "foundations" with "foundation": {"question": "<id>", "answer": "<under ' + FOUNDATION_CAP + ' characters, ' + LIST_CAP + ' for a list>", "source": {"owner": "<the id of the owner\'s message>"}}. For a list, add "complete": true only when the owner said it is the whole list; without it the list is saved as known so far. A seen item a team member drew from outside the office comes to you to check ("Seen item to check"), like an answer. "Reports that may rest on a changed answer" lists recent reports from the members whose job uses a list that changed: decide whether any needs redoing and ask its member; never redo it yourself. An answer a team member drew from outside the office, or says the owner taught it, comes to you to check ("Foundation answer to check"): send what you trust with "source": {"confirmed": "<why you trust it>"} and leave the rest. Trust a taught answer when it matches what the owner told you or what the office holds; when you cannot tell, tell the member to report it as a gap, so the owner is asked. When two answers differ, or a member suggests changing the owner\'s answer, the app keeps the first and tells you; ask the owner on a foundation card only when it matters.',
     '',
     '## Staying cheap',
     'The owner pays for every message each agent reads and writes. Keep hand-offs short, and when you wake to nothing that needs you, end your turn without writing.',
     '',
     '## Files',
-    `Act on each message in your inbox (${p.inbox}), then move it to ${p.inboxDone}. To send one, write a JSON file to your outbox (${p.outbox}) with "to" (the id in brackets on the roster, or "human" for the owner: answers in their conversation, and closing time), "act" (request, inform, query, done or refuse; request and query expect a reply), "subject" and "body". Cards live in tasks.json beside board.md in ${p.hiveRoot}; to ask the owner, set a card to "blocked" and add {"q": "...", "askedAt": "<time>", "raisedBy": "<id or god>"} to its humanQA list, keeping earlier entries. The hive folder holds only messages, notes and boards, so save documents in your own folder.${p.docText ? ` To read a Word, Excel or PowerPoint file, run ${p.docText} "<file>".` : ''} ${p.protocol} has the full message format.`
+    // Owner, 2026-11-20: Michael moved his whole inbox to .done after reading
+    // one message, and three closing time ACKs that had just arrived went with
+    // it unread; closing time hung. Only what he read moves, by name.
+    `Act on each message in your inbox (${p.inbox}), then move that message to ${p.inboxDone} by its own file name. Never move the inbox with a wildcard or all at once: a message that arrived while you worked would be filed unread, and you are not told of it again. Before you end your turn, look at the inbox once more. To send one, write a JSON file to your outbox (${p.outbox}) with "to" (the id in brackets on the roster, or "human" for the owner: answers in their conversation, and closing time), "act" (request, inform, query, done or refuse; request and query expect a reply), "subject" and "body". Cards live in tasks.json beside board.md in ${p.hiveRoot}; to ask the owner, set a card to "blocked" and add {"q": "...", "askedAt": "<time>", "raisedBy": "<id or god>"} to its humanQA list, keeping earlier entries. The hive folder holds only messages, notes and boards, so save documents in your own folder.${p.docText ? ` To read a Word, Excel or PowerPoint file, run ${p.docText} "<file>".` : ''} ${p.protocol} has the full message format.`
   ].join('\n');
 }
 
@@ -563,6 +568,9 @@ const HOPS_REMEMBERED = 5000;
 /** The owner's sent message ids and who got each, in the private folder: a
  *  member's shell can write the hive log, never this (Company foundations). */
 const OWNER_SAID_FILE = 'owner-said.jsonl';
+/** What the privacy check kept back from team members' questions, for Ask me
+ *  (shared/researchKept.ts), with each question's own words to ask again. */
+const RESEARCH_KEPT_FILE = 'research-kept.json';
 /** How much of its end ownerSaid reads: a cited owner message is recent, and
  *  a line is under 200 bytes. */
 const OWNER_SAID_SPAN = 1024 * 1024;
@@ -2065,12 +2073,14 @@ export class HiveManager {
     };
   }
 
-  /** Owner plugins to turn off for one agent session (#63). Reads ~/.claude only. */
+  /** Owner plugins to turn off for one agent session (#63). Reads the settings
+   *  folder Claude uses: CLAUDE_CONFIG_DIR when set, else ~/.claude. */
   private ownerPluginsOffForSession(): Record<string, false> {
     const out: Record<string, false> = {};
+    const dir = claudeSettingsDir();
     for (const p of [
-      join(homedir(), '.claude', 'settings.json'),
-      join(homedir(), '.claude', 'settings.local.json')
+      join(dir, 'settings.json'),
+      join(dir, 'settings.local.json')
     ]) {
       try {
         if (!existsSync(p)) continue;
@@ -2379,6 +2389,13 @@ export class HiveManager {
    *  "why messages are not queued and waited", D1 30 minutes). Nothing goes
    *  out unchecked meanwhile. */
   static TRUST_WAIT_MS = 30 * 60_000;
+  /** How long a question waits for Research to start when it is switched on
+   *  but not running: every member is marked stopped as the office opens and
+   *  started again within seconds (2026-11-19: a question waiting from before
+   *  a restart was refused as "Pete is off" six seconds before Pete started). */
+  static RESEARCH_START_WAIT_MS = 3 * 60_000;
+  /** When each message to Research first found it not running, by message. */
+  private researchStartWaits = new Map<string, number>();
   /** The gap before try `tries + 1`: 30 s, 1, 2 and 4 minutes, then every 5. */
   static trustRetryDelayMs(tries: number): number { return Math.min(5 * 60_000, 30_000 * 2 ** Math.max(0, tries)); }
   /** A deny that only says the check could not run this time. */
@@ -2641,6 +2658,81 @@ export class HiveManager {
     }, PRIVACY_CHECK_SENDER));
   }
 
+  /** The kept back questions, newest first (Ask me). */
+  researchKept(): ResearchKept[] {
+    return this.readKept().map(({ again: _again, ...k }) => k).sort((a, b) => b.at - a.at);
+  }
+
+  /**
+   * The owner's answer on a kept back card: 'again' sends the question once
+   * more from the one who asked, through the check with the owner's list as it
+   * is now (an entry they just allowed stays in); 'keep' closes it. Either way
+   * the card goes.
+   */
+  decideKept(id: string, action: 'again' | 'keep'): boolean {
+    const all = this.readKept();
+    const k = all.find((x) => x.id === id);
+    if (!k) return false;
+    if (action === 'again') {
+      const root = this.root();
+      if (!root || !this.registry().agents[k.from]) return false;
+      const outbox = join(root, 'agents', k.from, 'outbox');
+      try {
+        mkdirSync(outbox, { recursive: true });
+        this.atomicWriteJson(join(outbox, `${Date.now()}-asked-again.json`), { to: RESEARCH_ID, act: k.again.act, subject: k.again.subject, body: k.again.body, ...(k.again.conversation ? { conversation: k.again.conversation } : {}) });
+      } catch (e) {
+        console.error('[research] asking again', e);
+        return false;
+      }
+    }
+    this.writeKept(all.filter((x) => x.id !== id));
+    return true;
+  }
+
+  private readKept(): Array<ResearchKept & { again: { act: string; subject: string; body: string; conversation?: string } }> {
+    const home = this.getHome();
+    if (!home) return [];
+    try {
+      const v = JSON.parse(readFileSync(join(privateRoot(home), RESEARCH_KEPT_FILE), 'utf8')) as unknown;
+      return Array.isArray(v) ? v.filter((x) => x && typeof x.id === 'string' && Array.isArray(x.parts) && x.again && typeof x.again.body === 'string') : [];
+    } catch { return []; }
+  }
+
+  private writeKept(all: ReturnType<HiveManager['readKept']>): void {
+    const home = this.getHome();
+    if (!home) return;
+    try {
+      mkdirSync(privateRoot(home), { recursive: true });
+      // The newest cards stay: a question asked again counts from its last try.
+      this.atomicWriteJson(join(privateRoot(home), RESEARCH_KEPT_FILE), [...all].sort((a, b) => a.at - b.at).slice(-MAX_KEPT_OPEN));
+    } catch (e) { console.error('[research] saving what was kept back', e); }
+  }
+
+  /** A team member's question went to Research without some of its words, or
+   *  not at all: the owner is offered each one on Ask me (owner, 2026-11-20).
+   *  One card per question; the same question again adds to its card. */
+  private recordKept(senderId: string, msg: HiveMessage, partial: Partial<HiveMessage>, parts: string[], denied: boolean): void {
+    const subject = typeof partial.subject === 'string' ? partial.subject : '';
+    const body = typeof partial.body === 'string' ? partial.body : '';
+    if (!body.trim() && !subject.trim()) return;
+    const all = this.readKept();
+    const same = all.find((x) => x.from === senderId && x.again.subject === subject && x.again.body === body);
+    if (same) {
+      same.parts = [...same.parts, ...parts.filter((p) => !same.parts.some((q) => q.toLowerCase() === p.toLowerCase()))].slice(0, 5);
+      same.denied = same.denied && denied;
+      same.at = Date.now();
+    } else {
+      const reg = this.registry();
+      all.push({
+        id: typeof msg.id === 'string' ? msg.id : `kept-${Date.now()}`,
+        at: Date.now(), from: senderId, fromName: reg.agents[senderId]?.name?.trim() || null,
+        subject, parts, denied,
+        again: { act: typeof msg.act === 'string' ? msg.act : 'query', subject, body, ...(safeConversation(msg.conversation) ? { conversation: msg.conversation as string } : {}) }
+      });
+    }
+    this.writeKept(all);
+  }
+
   /** Michael hears of every message the privacy check kept from Research:
    *  who sent it, its subject and why, and what to do about it, so he can tell
    *  the owner what was stopped and where it is set (owner, 2026-10-14). His
@@ -2653,7 +2745,7 @@ export class HiveManager {
     const what = from === 'human' ? 'A note from the owner'
       : from === 'system' ? 'A message from the app'
         : `${reg.agents[from]?.name?.trim() || from}'s message`;
-    const next = reason === REFUSAL_CHECK_FAILED || reason === REFUSAL_NOT_DELIVERED
+    const next = reason === REFUSAL_CHECK_FAILED || reason === REFUSAL_NOT_DELIVERED || reason === REFUSAL_NOT_RUNNING
       ? 'This is an app problem. If it keeps happening, tell the owner.'
       : reason === REFUSAL_OFF
         ? `The owner turns ${n} on in Settings, Research & privacy.`
@@ -2847,7 +2939,19 @@ export class HiveManager {
       if (held) this.recordHeld('in', senderId, RESEARCH_ID, partial.subject, partial.body, held.why, held.error, senderId === (this.registry().godId ?? 'god') ? 'sender' : 'sender+michael');
       return 'denied';
     };
-    if (!on) return deny(REFUSAL_OFF);
+    if (!on) {
+      // Off only when the owner switched it off. Switched on but not running
+      // (starting with the office): the question waits in its outbox, then
+      // says it is not running, never that it is off.
+      if (!this.researchEnabled()) return deny(REFUSAL_OFF);
+      const key = `${senderId}:${String(msg.id ?? raw)}`;
+      const since = this.researchStartWaits.get(key) ?? Date.now();
+      this.researchStartWaits.set(key, since);
+      if (Date.now() - since < HiveManager.RESEARCH_START_WAIT_MS) return 'hold';
+      this.researchStartWaits.delete(key);
+      return deny(REFUSAL_NOT_RUNNING);
+    }
+    this.researchStartWaits.delete(`${senderId}:${String(msg.id ?? raw)}`);
     // Research not reporting (SD16): the question waits with Michael as it is,
     // before any check is paid for, and nobody is told it reached Research.
     if (this.memberMail?.(RESEARCH_ID) === 'hold') {
@@ -2862,8 +2966,11 @@ export class HiveManager {
     if (v.decision === 'deny') {
       const why = heldWhy(v, REFUSAL_CHECK_FAILED, REFUSAL_TOO_LONG);
       if (!why) this.recordChecked('in', senderId, RESEARCH_ID, 'stop', partial, undefined, { kinds: 'kinds' in v ? v.kinds : undefined });
+      if (!why && v.parts?.length) this.recordKept(senderId, msg, partial, v.parts, true);
       return deny(v.reason, why ? { why, error: v.error } : undefined);
     }
+    const kept = 'parts' in v && Array.isArray(v.parts) ? v.parts : [];
+    if (v.decision === 'clean' && kept.length) this.recordKept(senderId, msg, partial, kept, false);
     this.deliverToResearch(senderId, msg, v.subject, v.body);
     this.recordChecked('in', senderId, RESEARCH_ID, v.decision, partial, v, { kinds: 'removed' in v ? v.removed : undefined });
     if (v.decision === 'clean') this.tellSender(senderId, msg.id, msg.conversation, SENT_AS_SUBJECT, sentAsBody(v.subject, v.body, this.researchName()), true);

@@ -8,7 +8,7 @@ import { InfoTip } from './InfoTip';
 import { askedAgo } from './askHeadline';
 import { useStore } from '@/store/store';
 import { isComposingKey } from '@shared/imeGuard';
-import { FOUNDATION_QUESTIONS, capFor, draftPending, isLater, isListQuestion, joinListLines, jobsAsking, listLines, type FoundationId, type FoundationsView, type SeenItem } from '@shared/foundations';
+import { FOUNDATION_QUESTIONS, capFor, draftPending, isLater, isListQuestion, itemKey, joinListLines, jobsAsking, listLines, type FoundationId, type FoundationsView, type SeenItem } from '@shared/foundations';
 import { refreshNeedsYou } from '@/shell/useNeedsYou';
 import { saveFileAnswer, saveFolderAnswer, saveTextAnswer, type ListSave } from '@/shell/foundationSave';
 
@@ -42,9 +42,10 @@ const COUNTER_FROM = 40;
  * A list question (docs/designs/foundation-answers-stay-open.md, design
  * review, branding/DESIGN.md §7.27b): the box holds the list so far, one item
  * a line, and saving says it is the whole list. Under it, each thing the
- * team's work saw that the list lacks, with Add (into the box), Not ours and
- * Decide later (both saved at once, each with Undo). Save waits until every
- * seen item has one of the three; with one put off it saves the list so far.
+ * team's work saw that the list lacks, with Add (onto the saved list and into
+ * the box), Not ours and Decide later, each saved at once with its own Undo,
+ * so a few settled today stay settled. Save waits until every seen item has
+ * one of the three; with one put off it saves the list so far.
  */
 export function FoundationCard({ id, rowKey, taskId, q, askedAt, raiserId, raiserName, raiserIsMember = true, memberName, chipStyle, areaName, hidden = false, foundations, onAnswer, onSaved }: {
   id: FoundationId;
@@ -83,13 +84,10 @@ export function FoundationCard({ id, rowKey, taskId, q, askedAt, raiserId, raise
   const setDraft = useStore((s) => s.setAnswerDraft);
   const list = isListQuestion(id);
   const cap = capFor(id);
-  // A list card's added seen items and the list it started from live beside
-  // its draft, so Not now and a remount keep them (design review).
-  const addedKey = `${rowKey}\u0000added`;
+  // The list a list card started from lives beside its draft, so Not now and
+  // a remount keep it (design review).
   const baseKey = `${rowKey}\u0000base`;
-  const addedRaw = useStore((s) => s.answerDrafts[addedKey] ?? '');
   const base = useStore((s) => s.answerDrafts[baseKey]);
-  const added = useMemo<string[]>(() => { try { const v = JSON.parse(addedRaw || '[]'); return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []; } catch { return []; } }, [addedRaw]);
   const [busy, setBusy] = useState(false);
   // Which action did not go through, so the line names it.
   const [failed, setFailed] = useState<'save' | 'draft' | 'later' | null>(null);
@@ -97,10 +95,15 @@ export function FoundationCard({ id, rowKey, taskId, q, askedAt, raiserId, raise
   const [file, setFile] = useState<{ path: string; name: string; kind: 'file' | 'folder' } | null>(null);
   const [checking, setChecking] = useState(false);
   const [refused, setRefused] = useState<{ name: string; error: string; reason?: string } | null>(null);
-  // Seen items marked not ours on this card, the rows shown, a row's failure and the last spoken line.
+  // Seen items added or marked not ours on this card (each row keeps its
+  // Undo), the rows shown, a row's failure and the last spoken line.
+  const [addedNow, setAddedNow] = useState<SeenItem[]>([]);
   const [marked, setMarked] = useState<string[]>([]);
+  // Settled lines the owner closed: hidden on this card, the choice kept.
+  const [closed, setClosed] = useState<string[]>([]);
+  const close = (sid: string): void => setClosed((c) => [...c, sid]);
   const [showAll, setShowAll] = useState(false);
-  const [rowFailed, setRowFailed] = useState<{ id: string; what: 'notOurs' | 'later' } | null>(null);
+  const [rowFailed, setRowFailed] = useState<{ id: string; what: 'add' | 'full' | 'notOurs' | 'later' } | null>(null);
   const [said, setSaid] = useState('');
   const asked = foundations?.drafts?.[id];
   // A request waits 2 days; after that the card offers to ask again.
@@ -129,11 +132,16 @@ export function FoundationCard({ id, rowKey, taskId, q, askedAt, raiserId, raise
   const now = Date.now();
 
   // The list's seen items, newest first, and where each stands on this card.
-  const seen = useMemo(() => [...(foundations?.seen?.[id] ?? [])].sort((a, b) => b.at.localeCompare(a.at)), [foundations, id]);
-  const undecided = seen.filter((s) => !added.includes(s.id) && !isLater(s, now));
-  const putOff = seen.filter((s) => !added.includes(s.id) && isLater(s, now));
-  const markedRows = (foundations?.notOurs?.[id] ?? []).filter((n) => n.seen && marked.includes(n.seen.id));
-  const shownSeen = showAll ? seen : seen.slice(0, SEEN_SHOWN);
+  // An added one is off the saved list's seen items already; until the
+  // record comes back it is left out here too.
+  const added = addedNow.map((s) => s.id);
+  const seen = useMemo(() => [...(foundations?.seen?.[id] ?? [])].filter((s) => !addedNow.some((a) => a.id === s.id)).sort((a, b) => b.at.localeCompare(a.at)), [foundations, id, addedNow]);
+  const undecided = seen.filter((s) => !isLater(s, now));
+  const putOff = seen.filter((s) => isLater(s, now));
+  const markedRows = (foundations?.notOurs?.[id] ?? []).filter((n) => n.seen && marked.includes(n.seen.id) && !closed.includes(n.seen.id));
+  const addedRows = addedNow.filter((s) => !closed.includes(s.id));
+  const listed = seen.filter((s) => !closed.includes(s.id));
+  const shownSeen = showAll ? listed : listed.slice(0, SEEN_SHOWN);
   const expired = list && foundations?.hits?.[id]?.reason === 'expired';
   const length = list ? joinListLines(draft).length : text.length;
   const over = length > cap;
@@ -147,10 +155,8 @@ export function FoundationCard({ id, rowKey, taskId, q, askedAt, raiserId, raise
   const boxLabel = !list || !known ? t('foundations.card.yourAnswer')
     : known.source === 'owner' || known.source === 'profile' ? t('foundations.card.listSoFar') : t('foundations.card.listSoFarFrom', { name: nameOf(known.by) });
 
-  // The card leaves the board once saved; its added items go with it.
-  const clearList = (): void => { if (list) setDraft(addedKey, ''); };
+  // The card leaves the board once saved.
   const saved = (how: 'saved' | 'michael' | 'failed'): void => {
-    clearList();
     onSaved?.(how, list ? (whole ? 'whole' : 'soFar') : undefined);
   };
 
@@ -181,19 +187,30 @@ export function FoundationCard({ id, rowKey, taskId, q, askedAt, raiserId, raise
       (next ?? saveRef.current?.querySelector<HTMLButtonElement>('button'))?.focus();
     });
   };
-  const addItem = (s: SeenItem): void => {
+  // Add is saved at once: the item goes on the saved list and into the box,
+  // and the list the box started from moves with it, so no "changed" line.
+  const addItem = async (s: SeenItem): Promise<void> => {
+    setRowFailed(null);
+    const r = await window.cth.foundationsSeen(id, s.id, 'add').catch(() => null);
+    if (!r?.ok) { setRowFailed({ id: s.id, what: r?.error === 'too-long' ? 'full' : 'add' }); return; }
     const lines = draft.split('\n').map((l) => l.trim()).filter(Boolean);
-    setDraft(rowKey, [...lines, s.item].join('\n'));
-    setDraft(addedKey, JSON.stringify([...added, s.id]));
-    setSaid(t('foundations.card.seenAdded'));
+    if (!lines.some((l) => itemKey(l) === itemKey(s.item))) setDraft(rowKey, [...lines, s.item].join('\n'));
+    if (r.text !== undefined) setDraft(baseKey, r.text);
+    setAddedNow((a) => [...a, s]);
+    setSaid(t('foundations.card.seenAdded', { item: s.item }));
     focusNext(s.id);
+    refreshNeedsYou();
   };
-  const undoAdd = (s: SeenItem): void => {
+  const undoAdd = async (s: SeenItem): Promise<void> => {
+    const r = await window.cth.foundationsSeen(id, s.id, 'undoAdd').catch(() => null);
+    if (!r?.ok) return;
     const lines = draft.split('\n');
-    const i = lines.map((l) => l.trim()).lastIndexOf(s.item);
+    const i = lines.map((l) => itemKey(l)).lastIndexOf(itemKey(s.item));
     if (i >= 0) lines.splice(i, 1);
     setDraft(rowKey, lines.join('\n'));
-    setDraft(addedKey, JSON.stringify(added.filter((x) => x !== s.id)));
+    if (r.text !== undefined) setDraft(baseKey, r.text);
+    setAddedNow((a) => a.filter((x) => x.id !== s.id));
+    refreshNeedsYou();
   };
   const seenDo = async (s: SeenItem, action: 'notOurs' | 'undoNotOurs' | 'later' | 'undoLater'): Promise<void> => {
     setRowFailed(null);
@@ -348,7 +365,7 @@ export function FoundationCard({ id, rowKey, taskId, q, askedAt, raiserId, raise
         )}
       </div>
       {changedSince && <div role="status" style={{ marginTop: 6, fontSize: 11, lineHeight: '15px', color: 'var(--cth-ink-2)' }}>{t('foundations.card.listChanged')}</div>}
-      {list && (seen.length > 0 || markedRows.length > 0) && (
+      {list && (listed.length > 0 || addedRows.length > 0 || markedRows.length > 0) && (
         <div style={{ marginTop: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: 'var(--cth-ink-3)' }}>
             {t('foundations.card.seenTitle')}
@@ -357,13 +374,10 @@ export function FoundationCard({ id, rowKey, taskId, q, askedAt, raiserId, raise
           <ul aria-label={t('foundations.card.seenListLabel', { count: seen.length })} style={{ listStyle: 'none', margin: 0, padding: 0 }}>
             {shownSeen.map((s) => (
               <li key={s.id} style={{ marginTop: 6 }}>
-                {added.includes(s.id) ? (
-                  <div role="status" style={{ ...seenLine, background: 'var(--cth-green-soft)', color: 'var(--cth-green-text)' }}>
-                    {t('foundations.card.seenAdded')} <button type="button" onClick={() => undoAdd(s)} style={{ ...quietLink, fontSize: 11, color: 'var(--cth-green-text)', textDecoration: 'underline' }}>{t('foundations.card.undo')}</button>
-                  </div>
-                ) : isLater(s, now) ? (
+                {isLater(s, now) ? (
                   <div role="status" style={{ ...seenLine, background: 'var(--cth-neutral-soft)', color: 'var(--cth-ink-2)' }}>
                     <span dir="auto">{s.item}</span>: {t('foundations.card.seenBackNextWeek')} <button type="button" onClick={() => void seenDo(s, 'undoLater')} style={{ ...quietLink, fontSize: 11, textDecoration: 'underline' }}>{t('foundations.card.undo')}</button>
+                    <CloseLine item={s.item} onClose={() => close(s.id)} />
                   </div>
                 ) : (
                   <div style={{ padding: '8px 10px', borderRadius: 'var(--cth-r-lg)', background: 'var(--cth-amber-soft)' }}>
@@ -372,27 +386,36 @@ export function FoundationCard({ id, rowKey, taskId, q, askedAt, raiserId, raise
                       {[nameOf(s.by), s.ref ? s.ref.split(/[\\/]/).pop() : '', day(s.at)].filter(Boolean).join(' · ')}
                     </div>
                     <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 6, flexWrap: 'wrap' }}>
-                      <button type="button" data-seen-add={s.id} disabled={busy || !loaded} onClick={() => addItem(s)} aria-label={t('foundations.card.seenAddLabel', { item: s.item })} style={seenAddButton}>
+                      <button type="button" data-seen-add={s.id} disabled={busy || !loaded} onClick={() => void addItem(s)} aria-label={t('foundations.card.seenAddLabel', { item: s.item })} style={seenAddButton}>
                         {t('foundations.card.seenAdd')}
                       </button>
                       <button type="button" disabled={busy} onClick={() => void seenDo(s, 'notOurs')} aria-label={t('foundations.card.seenNotOursLabel', { item: s.item })} style={{ ...quietLink, minHeight: 24 }}>{t('foundations.card.seenNotOurs')}</button>
                       <button type="button" disabled={busy} onClick={() => void seenDo(s, 'later')} aria-label={t('foundations.card.seenLaterLabel', { item: s.item })} style={{ ...quietLink, minHeight: 24 }}>{t('foundations.card.seenLater')}</button>
                     </div>
-                    {rowFailed?.id === s.id && <div role="alert" style={{ marginTop: 4, fontSize: 11, color: 'var(--cth-coral-text)' }}>{t(rowFailed.what === 'notOurs' ? 'foundations.card.failedNotOurs' : 'foundations.card.failedPutOff')}</div>}
+                    {rowFailed?.id === s.id && <div role="alert" style={{ marginTop: 4, fontSize: 11, color: 'var(--cth-coral-text)' }}>{t(rowFailed.what === 'add' ? 'foundations.card.failedAdd' : rowFailed.what === 'full' ? 'foundations.card.addFull' : rowFailed.what === 'notOurs' ? 'foundations.card.failedNotOurs' : 'foundations.card.failedPutOff')}</div>}
                   </div>
                 )}
+              </li>
+            ))}
+            {addedRows.map((s) => (
+              <li key={`add-${s.id}`} style={{ marginTop: 6 }}>
+                <div role="status" style={{ ...seenLine, background: 'var(--cth-green-soft)', color: 'var(--cth-green-text)' }}>
+                  <span dir="auto">{t('foundations.card.seenAdded', { item: s.item })}</span> <button type="button" onClick={() => void undoAdd(s)} style={{ ...quietLink, fontSize: 11, color: 'var(--cth-green-text)', textDecoration: 'underline' }}>{t('foundations.card.undo')}</button>
+                  <CloseLine item={s.item} onClose={() => close(s.id)} />
+                </div>
               </li>
             ))}
             {markedRows.map((n) => (
               <li key={`not-${n.seen!.id}`} style={{ marginTop: 6 }}>
                 <div role="status" style={{ ...seenLine, background: 'var(--cth-indigo-soft)', color: 'var(--cth-indigo-text)' }}>
                   <span dir="auto">{t('foundations.card.seenMarkedNotOurs', { item: n.item })}</span> <button type="button" onClick={() => void seenDo(n.seen!, 'undoNotOurs')} style={{ ...quietLink, fontSize: 11, color: 'var(--cth-indigo-text)', textDecoration: 'underline' }}>{t('foundations.card.undo')}</button>
+                  <CloseLine item={n.item} onClose={() => close(n.seen!.id)} />
                 </div>
               </li>
             ))}
           </ul>
-          {seen.length > SEEN_SHOWN && !showAll && (
-            <button type="button" onClick={() => setShowAll(true)} style={{ ...quietLink, fontSize: 11, marginTop: 6 }}>{t('foundations.card.showMore', { count: seen.length - SEEN_SHOWN })}</button>
+          {listed.length > SEEN_SHOWN && !showAll && (
+            <button type="button" onClick={() => setShowAll(true)} style={{ ...quietLink, fontSize: 11, marginTop: 6 }}>{t('foundations.card.showMore', { count: listed.length - SEEN_SHOWN })}</button>
           )}
         </div>
       )}
@@ -427,7 +450,8 @@ export function FoundationCard({ id, rowKey, taskId, q, askedAt, raiserId, raise
       </div>
       {failed && <div role="alert" style={{ marginTop: 6, fontSize: 11, lineHeight: '15px', color: 'var(--cth-coral-text)' }}>{t(failed === 'save' ? 'foundations.card.failed' : failed === 'draft' ? 'foundations.card.failedDraft' : 'foundations.card.failedLater', { name: drafter })}</div>}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--cth-line)', fontSize: 11, color: 'var(--cth-ink-3)', flexWrap: 'wrap' }}>
-        <span>{t('foundations.card.usedBy', { count: jobs.length, jobs: jobList })}</span>
+        {/* A retired question is no job's: no "use this" with nobody before it. */}
+        {jobs.length > 0 && <span>{t('foundations.card.usedBy', { count: jobs.length, jobs: jobList })}</span>}
         <span style={{ marginInlineStart: 'auto' }}>{t('foundations.card.weekly')}</span>
       </div>
     </section>
@@ -463,6 +487,15 @@ const seenAddButton: CSSProperties = {
   background: 'var(--cth-card)', boxShadow: 'inset 0 0 0 1px var(--cth-line-2)', color: 'var(--cth-ink)',
   fontFamily: 'var(--cth-font-ui)', fontSize: 11.5, fontWeight: 600
 };
+/** The × that closes a settled line: the line goes, the choice stays. */
+function CloseLine({ item, onClose }: { item: string; onClose: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <button type="button" onClick={onClose} aria-label={t('foundations.card.closeLine', { item })} title={t('foundations.card.closeLine', { item })}
+      style={{ ...quietLink, float: 'inline-end', margin: '-4px -6px -4px 6px', fontSize: 13, lineHeight: '13px', color: 'inherit', minWidth: 24, minHeight: 24, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+  );
+}
+
 /** A seen row once it is settled on this card: one line with its Undo. */
 const seenLine: CSSProperties = {
   padding: '6px 10px', borderRadius: 'var(--cth-r-lg)', fontSize: 12, lineHeight: '17px'

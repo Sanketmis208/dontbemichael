@@ -36,7 +36,7 @@ test('rows say Gmail for gmail.com and GSuite for a company domain', () => {
 
 test('the dialog: the tile reads Gmail or GSuite, and Fix opens a Workspace mailbox on it', () => {
   const dialog = read('src/renderer/src/components/AddMailboxDialog.tsx');
-  assert.match(dialog, /useState<MailProvider>\(fix\?\.provider === 'google-workspace' \? 'gmail' : \(fix\?\.provider \?\? 'gmail'\)\)/);
+  assert.match(dialog, /useState<MailProvider>\(fix\?\.provider === 'google-workspace' \? 'gmail' : \(fix\?\.provider \?\? providerForAddress\(start\) \?\? 'gmail'\)\)/);
   assert.match(dialog, /p === 'gmail' \? t\('mailboxes\.googleTile'\)/);
   for (const loc of ['en']) {
     const m = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`)).mailboxes;

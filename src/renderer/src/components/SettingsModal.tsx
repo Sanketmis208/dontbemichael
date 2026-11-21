@@ -14,6 +14,10 @@ import { clearLocalState, restoreLocalState, snapshotLocalState } from '@/store/
 import { plainReasonKey } from '@/store/plainReason';
 import { SHOW_MAILBOXES, SHOW_SIMPLE_MODE_SWITCH } from '@shared/buildFeatures';
 import { InfoTip } from './InfoTip';
+import { OfficeGuardNotice, type OfficeGuard } from './OfficeGuardNotice';
+import { YourBusinesses } from './YourBusinesses';
+import { BackupRestore } from './BackupRestore';
+import type { BusinessRow } from '@/shell/businessMenuRows';
 import { KnowledgeDocList } from './KnowledgeDocList';
 import { PixelButton } from './PixelButton';
 import { SettingsHeroCard } from './SettingsHeroCard';
@@ -123,6 +127,8 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
   // Change-home flow: null until the user picks a new folder, then the sub-modal
   // confirms move-vs-fresh. Pre-selects 'move' (recommended - keeps the data).
   const [changeHome, setChangeHome] = useState<string | null>(null);
+  /** A switch refused because the settings belong to the open business. */
+  const [changeGuard, setChangeGuard] = useState<OfficeGuard | null>(null);
   const [changeMode, setChangeMode] = useState<'move' | 'fresh'>('move');
   const [changeBusy, setChangeBusy] = useState(false);
   const [changeErr, setChangeErr] = useState('');
@@ -133,6 +139,14 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
   // switching. Took over from the launch picker, which no longer shows on a
   // normal launch (owner, 2026-09-24).
   const [otherOffices, setOtherOffices] = useState<string[]>([]);
+  // Once each business keeps its own settings, the same businesses as the top
+  // bar's menu (separate-businesses.md, DT2); before that, the folders above.
+  const [businesses, setBusinesses] = useState<{ perOffice: boolean; businesses: BusinessRow[] } | null>(null);
+  const loadBusinesses = (): void => {
+    void window.cth.listBusinesses?.().then(setBusinesses).catch(() => { /* keep the last list */ });
+  };
+  useEffect(() => { loadBusinesses(); }, [config]);
+  const perOffice = !!businesses?.perOffice;
   useEffect(() => {
     let alive = true;
     const candidates = (config.recentHives ?? []).filter((h) => h && h !== config.harnessHome);
@@ -418,7 +432,7 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
   // --- Change home folder ---
   /** Pick a new folder, then open the move-vs-fresh sub-modal. */
   const pickNewHome = async () => {
-    setChangeErr('');
+    setChangeErr(''); setChangeGuard(null);
     const res = await window.cth.chooseFolder();
     if (!res.ok) return; // cancelled - no-op
     const st = await window.cth.homeStatus(res.path).catch(() => null);
@@ -431,18 +445,34 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
   /** Switch to another office this install has used. A different office, so the
    *  renderer's saved state goes (its own roster comes back from its folder). */
   const openOtherOffice = async (path: string) => {
-    setChangeErr('');
+    setChangeErr(''); setChangeGuard(null);
     const snap = snapshotLocalState();
     clearLocalState();
-    const res = await window.cth.changeHome(path, 'fresh').catch((e) => ({ ok: false, error: String(e) }));
-    if (!res.ok) { restoreLocalState(snap); setChangeErr(res.error ?? t('settings.changeHome.couldNotOpen')); }
+    const res: { ok: boolean; error?: string; guard?: OfficeGuard; closing?: boolean } = await window.cth.changeHome(path, 'fresh').catch((e) => ({ ok: false, error: String(e) }));
+    if (res.ok && res.closing) { switchingAfterClosing(snap); return; }
+    if (!res.ok) {
+      restoreLocalState(snap);
+      if (res.guard) setChangeGuard(res.guard);
+      else setChangeErr(res.error ?? t('settings.changeHome.couldNotOpen'));
+    }
+  };
+
+  /** The switch waits for closing time (separate-businesses.md, D10): this
+   *  office keeps working until it ends, so its saved state comes back (the
+   *  other business's window clears it as it opens), and Settings steps aside
+   *  for the closing bar, where Cancel switch and Switch now are. */
+  const switchingAfterClosing = (snap: Record<string, string> | null): void => {
+    if (snap) restoreLocalState(snap);
+    setChangeHome(null);
+    setChangeBusy(false);
+    onClose();
   };
 
   /** Apply the home-folder change. On success the app relaunches (never resolves);
    *  on failure we surface the error and the existing home keeps running. */
   const applyChangeHome = async () => {
     if (!changeHome) return;
-    setChangeBusy(true); setChangeErr('');
+    setChangeBusy(true); setChangeErr(''); setChangeGuard(null);
     // Moving copies the hive (incl. its .git) + palace, so the new home owns the
     // same renderer-side roster - keep localStorage. 'fresh' either starts an
     // empty office or opens one already in that folder; both bring their own
@@ -452,7 +482,13 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
     if (snap) clearLocalState();
     try {
       const res = await window.cth.changeHome(changeHome, changeMode);
-      if (!res.ok) { if (snap) restoreLocalState(snap); setChangeErr(res.error ?? t('settings.changeHome.couldNotChange')); setChangeBusy(false); }
+      if (res.ok && res.closing) { switchingAfterClosing(snap); return; }
+      if (!res.ok) {
+        if (snap) restoreLocalState(snap);
+        if (res.guard) setChangeGuard(res.guard);
+        else setChangeErr(res.error ?? t('settings.changeHome.couldNotChange'));
+        setChangeBusy(false);
+      }
       // ok === true never returns (the process relaunches).
     } catch (e) {
       if (snap) restoreLocalState(snap);
@@ -523,7 +559,11 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
                   ? [['fresh', t('settings.changeHome.openTitle'), t('settings.changeHome.openDesc')] as const]
                   : [
                     ['move', t('settings.changeHome.moveTitle'), t('settings.changeHome.moveDesc')] as const,
-                    ['fresh', t('settings.changeHome.freshTitle'), t('settings.changeHome.freshDesc')] as const
+                    // Once each business keeps its own settings, a new office here is a new
+                    // business, with its own settings and its own setup (D15).
+                    (perOffice
+                      ? ['fresh', t('settings.business.addHereTitle'), t('settings.business.addHereDesc')] as const
+                      : ['fresh', t('settings.changeHome.freshTitle'), t('settings.changeHome.freshDesc')] as const)
                   ]
                 ).map(([value, title, desc]) => {
                   const selected = changeMode === value;
@@ -555,9 +595,10 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
               {changeErr && (
                 <div style={{ fontSize: 12, lineHeight: '18px', color: 'var(--cth-coral-text)' }}>{changeErr}</div>
               )}
+              {changeGuard && <OfficeGuardNotice guard={changeGuard} onClose={() => setChangeGuard(null)} />}
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                <PixelButton variant="secondary" size="md" onClick={() => { setChangeHome(null); setChangeErr(''); }} disabled={changeBusy}>
+                <PixelButton variant="secondary" size="md" onClick={() => { setChangeHome(null); setChangeErr(''); setChangeGuard(null); }} disabled={changeBusy}>
                   {t('common.cancel')}
                 </PixelButton>
                 <PixelButton variant="primary" size="md" onClick={applyChangeHome} disabled={changeBusy}>
@@ -701,7 +742,9 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
                       {/* Home folder */}
                       <div style={group}>
                         <h3 style={groupName}>
-                          {t('settings.general.homeFolder')}
+                          {perOffice ? t('settings.business.title') : t('settings.general.homeFolder')}
+                          {/* A closed business waits, and runs again when it opens (D16). */}
+                          {perOffice && <InfoTip text={t('settings.business.tip')} />}
                         </h3>
                         <div style={{ display: 'flex', gap: 12, fontSize: 13, lineHeight: '20px', alignItems: 'center' }}>
                           <span style={{
@@ -713,7 +756,14 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
                         <span style={hint}>
                           {t('settings.general.homeFolderDesc')}
                         </span>
-                        {otherOffices.length > 0 && (
+                        {perOffice && businesses && (
+                          <YourBusinesses
+                            businesses={businesses.businesses}
+                            onOpen={(home) => { void openOtherOffice(home); }}
+                            onChanged={loadBusinesses}
+                          />
+                        )}
+                        {!perOffice && otherOffices.length > 0 && (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
                             <span style={{ fontSize: 14, color: 'var(--cth-ink-700)' }}>{t('settings.general.otherOffices')}</span>
                             {otherOffices.map((h) => (
@@ -732,6 +782,19 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
                         {changeErr && !changeHome && (
                           <div style={{ fontSize: 12, lineHeight: '18px', color: 'var(--cth-coral-text)', marginTop: 6 }}>{changeErr}</div>
                         )}
+                        {changeGuard && !changeHome && (
+                          <div style={{ marginTop: 6 }}>
+                            <OfficeGuardNotice guard={changeGuard} onClose={() => setChangeGuard(null)} />
+                          </div>
+                        )}
+                      </div>
+
+
+                      {/* Back up everything, or restore it on a new computer
+                          (docs/designs/backup-restore.md). */}
+                      <div style={group}>
+                        <h3 style={groupName}>{t('backup.title')}</h3>
+                        <BackupRestore hasOffice={!!config.onboardingComplete} />
                       </div>
 
 
@@ -1098,6 +1161,8 @@ export function SettingsModal({ config, onClose, initialSection, place }: Settin
                       config={config}
                       classes={pending.dataClasses ?? config.dataClasses}
                       onClassesChange={(next) => stage({ dataClasses: cleanDataClassOverrides(next) ?? {} } as Partial<HarnessConfig>)}
+                      publicTerms={pending.researchPublic ?? config.researchPublic}
+                      onPublicTermsChange={(next) => stage({ researchPublic: next } as Partial<HarnessConfig>)}
                     />
                   )}
 

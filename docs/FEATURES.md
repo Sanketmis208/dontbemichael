@@ -1,6 +1,6 @@
 # Don't Be Michael: features and changes
 
-Everything the app does today, and every release that got it here (0.0.1 to 0.4.2). Part 1 is
+Everything the app does today, and every release that got it here (0.0.1 to 0.4.3). Part 1 is
 written to be lifted onto the GitHub page and the website as it is; Part 2 is the full list, release
 by release.
 
@@ -228,6 +228,10 @@ moving, and brings you only the decisions that need you.
   pages or searches, in every office. A trust layer checks every message to Pete against the kinds
   of data you keep private and cleans Pete's answers. Pete is off until you turn them on, and sees
   none of your files. On a Mac nobody else's commands reach the internet.
+- Always allowed: in Settings, Research and privacy, list your business's own public names and
+  links, and the privacy check keeps them as written in questions to Research. When the check
+  keeps words back, an Ask me card offers to always allow each one and ask again. Passwords and
+  keys never go through, whatever the list says.
 
 ### 7. An office you can watch
 - A pod for each department around Michael's glass office, each with a plate in front of the
@@ -279,8 +283,25 @@ moving, and brings you only the decisions that need you.
 ### 8. Built for small business owners
 - Setup by kind of business: restaurant and food, retail, professional services, home services,
   SaaS and consulting, or anything else. Each comes with a suggested team.
+- Setup and the company profile save typing: address suggestions from OpenStreetMap as you type
+  the street, business hours set day by day, languages served and currency picked from a list,
+  and one field per social link with the site named. Team setup shows the members side by side
+  and asks for one office folder.
 - Runs on your computer with the Claude plan you already have. Plain words, no developer settings.
   A Windows 11 (x64) build ships with every release.
+- Run two separate businesses on one computer, such as a bakery and a real estate agency. Each
+  keeps its own settings, saved passwords and keys, files, history and, if you choose, its own
+  Claude account. The business name in the top bar switches between them: the open office closes
+  properly first, everyone finishing or handing off their step, then the other opens. The business
+  you are not in waits: its mail and schedules run again when you open it.
+- Add a business from the top bar or Settings while the open one keeps working. Setup opens over
+  the office, the new business's folder is named after it, and Back to the office keeps what you
+  typed for later. Settings, General lists every business with Open, Find it for a folder that
+  moved, and Remove for a setup never finished.
+- Back up everything on this computer to one file and restore it on a new one: every business with
+  its team, memory, tasks, history, knowledge, settings and the team's folders. Saved passwords and
+  keys are locked with a backup password you choose. Restore from Settings, General, or from the
+  first setup screen of a new computer, then sign in to Claude again.
 - When your Claude plan reaches its usage limit, the office takes a break. Ask me, the top bar and
   the floor say when work starts again. Nothing is typed into a Claude terminal meanwhile, and
   scheduled jobs still go out on time and wait in the inbox. At the reset the team carries on by
@@ -309,6 +330,21 @@ moving, and brings you only the decisions that need you.
   as a picture, and a part you select pastes as clean as the whole, in light or dark mode.
 
 ## Part 2: Every change, release by release
+
+### 0.4.3 (2026-11-20)
+- Two separate businesses on one computer: each keeps its own settings, saved passwords and keys,
+  files, history, spend caps and, optionally, its own Claude account. The business name in the top
+  bar switches; Settings, General lists every business with Open, Find it and Remove. A switch
+  closes the open office first. Existing installs move their settings on the first launch.
+- Add a business over the open office; Back to the office keeps what was typed.
+- Back up everything to one file and restore it on a new computer, from Settings or the first setup
+  screen. Saved passwords and keys are locked with a backup password; a restore writes only into
+  the business's own folders and says when it stops partway.
+- Always allowed for the privacy check, and Ask me cards that offer to allow what it kept back.
+- Address suggestions from OpenStreetMap, business hours by day, languages and currency from a list,
+  one field per social link, Team setup four across with one office folder.
+- Ask me shows three questions at a time. Pete waits while he starts. Closing time tells and reminds
+  Michael once everyone confirmed, and Michael files only the messages he read.
 
 ### 0.4.2 (2026-11-17)
 - A team member attaches files from its own folder, or a folder you named for its job, to an email.

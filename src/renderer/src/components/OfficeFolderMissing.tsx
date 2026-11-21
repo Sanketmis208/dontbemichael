@@ -7,6 +7,7 @@ import lockupDark from '@brandkit/logo/lockup/dbm-lockup-horizontal-dark.svg?url
 import { clearLocalState, restoreLocalState, snapshotLocalState } from '@/store/localState';
 import type { HarnessConfig } from '@/store/config';
 import { fieldLabel } from './fieldText';
+import { OfficeGuardNotice, type OfficeGuard } from './OfficeGuardNotice';
 
 // Split on both separators: a Windows office path holds no '/' at all.
 function folderName(path: string): string {
@@ -31,6 +32,7 @@ export function OfficeFolderMissing({ config }: { config: HarnessConfig }) {
   const [recents, setRecents] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const [guard, setGuard] = useState<OfficeGuard | null>(null);
   const [confirmStartOver, setConfirmStartOver] = useState(false);
 
   // Offer only recent folders that still hold an office: a dead entry here
@@ -46,7 +48,7 @@ export function OfficeFolderMissing({ config }: { config: HarnessConfig }) {
   /** Switch to a folder that holds an office. The same office, moved, so the
    *  renderer's saved state stays. Success relaunches and never returns. */
   const openOffice = async (path: string) => {
-    setError(undefined);
+    setError(undefined); setGuard(null);
     setBusy(true);
     const status = await window.cth.homeStatus(path).catch(() => null);
     if (!status?.hasOffice) {
@@ -54,8 +56,12 @@ export function OfficeFolderMissing({ config }: { config: HarnessConfig }) {
       setBusy(false);
       return;
     }
-    const res = await window.cth.changeHome(path, 'fresh').catch((e) => ({ ok: false, error: String(e) }));
-    if (!res.ok) { setError(res.error ?? t('officeMissing.couldNotOpen')); setBusy(false); }
+    const res: { ok: boolean; error?: string; guard?: OfficeGuard } = await window.cth.changeHome(path, 'fresh').catch((e) => ({ ok: false, error: String(e) }));
+    if (!res.ok) {
+      if (res.guard) setGuard(res.guard);
+      else setError(res.error ?? t('officeMissing.couldNotOpen'));
+      setBusy(false);
+    }
   };
 
   const find = async () => {
@@ -164,6 +170,7 @@ export function OfficeFolderMissing({ config }: { config: HarnessConfig }) {
           )}
         </div>
 
+        {guard && <OfficeGuardNotice guard={guard} onClose={() => setGuard(null)} />}
         {error && (
           <div role="alert" style={{
             padding: '8px 12px', borderRadius: 'var(--cth-r-md)', fontSize: 12.5, lineHeight: '18px',

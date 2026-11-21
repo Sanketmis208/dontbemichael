@@ -45,6 +45,15 @@ test('a moved or deleted folder is not, and neither is an emptied one', (t) => {
   assert.equal(homeFolderStatus(file).exists, false);
 });
 
+test('a business never opened may make its office in its empty folder, never in a missing one', (t) => {
+  const base = tmp(t);
+  const fresh = path.join(base, 'HarnessAgents 2');
+  fs.mkdirSync(fresh);
+  assert.equal(homeReadyAtLaunch({ onboardingComplete: true, harnessHome: fresh }, true), true);
+  assert.equal(homeReadyAtLaunch({ onboardingComplete: true, harnessHome: fresh }), false, 'only a business never opened');
+  assert.equal(homeReadyAtLaunch({ onboardingComplete: true, harnessHome: path.join(base, 'gone') }, true), false, 'the folder must be there');
+});
+
 test('before onboarding there is nothing to lose, so launch proceeds', () => {
   assert.equal(homeReadyAtLaunch({ onboardingComplete: false }), true);
   assert.equal(homeReadyAtLaunch({ onboardingComplete: true, harnessHome: '' }), false);
@@ -52,7 +61,7 @@ test('before onboarding there is nothing to lose, so launch proceeds', () => {
 
 test('a missing office is never rebuilt empty at launch, and nothing that feeds it starts', () => {
   const main = read('src/main/index.ts');
-  assert.match(main, /const homeReady = homeReadyAtLaunch\(readConfig\(\)\);\s*if \(homeReady\) \{?\s*bootstrapHiveServices\(\);/);
+  assert.match(main, /const firstOpen = neverOpenedBusiness\(readStoredConfig\(\)\);\s*const homeReady = homeReadyAtLaunch\(readConfig\(\), firstOpen\);\s*if \(homeReady\) \{?\s*bootstrapHiveServices\(\);\s*if \(firstOpen\) \{ try \{ adoptOpenOffice\(\); \}/);
 });
 
 test('a normal launch shows no picker; only a missing office shows the new screen', () => {

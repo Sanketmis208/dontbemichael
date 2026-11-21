@@ -35,11 +35,16 @@ export function homeFolderStatus(path: string | null | undefined): HomeFolderSta
 /**
  * Whether launch may bootstrap the office in place. Before onboarding there is
  * nothing to lose (and no home yet), so it is fine; after onboarding the office
- * must actually be there.
+ * must actually be there. One exception: `firstOpen`, a business whose setup
+ * was finished in Add a business and that has never been opened. Its folder
+ * was made but its office is made on its first launch, as a first setup's is
+ * (owner, 2026-11-19: a new business opened on "we can't find your office").
+ * The folder itself must still be there.
  */
-export function homeReadyAtLaunch(cfg: { onboardingComplete?: boolean; harnessHome?: string | null }): boolean {
+export function homeReadyAtLaunch(cfg: { onboardingComplete?: boolean; harnessHome?: string | null }, firstOpen = false): boolean {
   if (!cfg.onboardingComplete) return true;
-  return homeFolderStatus(cfg.harnessHome).hasOffice;
+  const status = homeFolderStatus(cfg.harnessHome);
+  return status.hasOffice || (firstOpen && status.exists);
 }
 
 /**
@@ -60,7 +65,9 @@ export function homeReadyAtLaunch(cfg: { onboardingComplete?: boolean; harnessHo
  * written again each time a team member starts.
  */
 export function copyOfficeData(oldHome: string, newHome: string): void {
-  const pairs = ['hive', 'palace', 'roster.json', 'roster-backups'].map((sub): [string, string] => [join(oldHome, sub), join(newHome, sub)]);
+  // office.json too: the office's id comes with it, so its settings do
+  // (docs/designs/separate-businesses.md).
+  const pairs = ['hive', 'palace', 'roster.json', 'roster-backups', 'office.json'].map((sub): [string, string] => [join(oldHome, sub), join(newHome, sub)]);
   for (const f of ['card-guard.json', 'house-rules-seen.json', 'research-stamp.key', 'research-threads.json', 'research-outbox', 'held.jsonl', 'checked.jsonl', 'checked-archive', 'checked-backfill.json', 'foundations.json', 'owner-said.jsonl', 'member-sessions.jsonl', 'mailbox-grant-notes.json', 'organized.jsonl', 'organized-archive', 'ask-list-since.json', 'leftovers-since.json']) pairs.push([join(privateRoot(oldHome), f), join(privateRoot(newHome), f)]);
   pairs.push([privateOwnerDir(oldHome), privateOwnerDir(newHome)]);
   for (const [src, dest] of pairs) {

@@ -381,5 +381,5 @@ test('main files a foundation card\'s document through company knowledge, reinde
   };
   const fit = body('const fileFit = fileFitCheck({');
   assert.equal(fit, body('const standingFit = standingFitCheck({'), "the file check runs with the standing check's deps");
-  assert.match(fit, /join\(app\.getPath\('userData'\), STANDING_CHECK_DIR\)/);
+  assert.match(fit, /officeDataPath\(STANDING_CHECK_DIR\)/);
 });

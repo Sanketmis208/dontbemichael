@@ -181,6 +181,26 @@ export function googleLabel(address: string): 'Gmail' | 'GSuite' {
   return /@(gmail|googlemail)\.com$/i.test(address.trim()) ? 'Gmail' : 'GSuite';
 }
 
+/** The service an address names by its domain, or null for a company
+ *  domain the address alone can't place (the dialog keeps its own choice). */
+export function providerForAddress(address: string): MailProvider | null {
+  const domain = address.trim().toLowerCase().split('@')[1] ?? '';
+  if (/^(gmail|googlemail)\.com$/.test(domain)) return 'gmail';
+  if (/^(icloud|me|mac)\.com$/.test(domain)) return 'icloud';
+  if (/^(yahoo|ymail|rocketmail)\.[a-z.]+$/.test(domain)) return 'yahoo';
+  if (/^zoho(mail)?\.[a-z.]+$/.test(domain)) return 'zoho';
+  return null;
+}
+
+/** The address Add a mailbox starts with (owner, 2026-11-19): the company's
+ *  public email from setup, unless it is not an address or is already a
+ *  mailbox. Else empty. */
+export function suggestedMailboxAddress(profileEmail: string | undefined, mailboxes: Array<Pick<MailboxRecord, 'address'>>): string {
+  const a = (profileEmail ?? '').trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a)) return '';
+  return mailboxes.some((m) => m.address.trim().toLowerCase() === a.toLowerCase()) ? '' : a;
+}
+
 /** Outlook and Microsoft 365 stopped accepting app passwords for IMAP; phase 1
  *  cannot connect them (design review 9B: the test fails with this reason). */
 export function isMicrosoftAddress(address: string): boolean {
