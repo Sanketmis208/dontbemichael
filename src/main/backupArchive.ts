@@ -124,7 +124,10 @@ class Bytes {
   private buf: Buffer = Buffer.alloc(0);
   private ended = false;
   private readonly it: AsyncIterator<Buffer>;
-  constructor(src: Readable) { this.it = (src as AsyncIterable<Buffer>)[Symbol.asyncIterator](); }
+  constructor(private readonly src: Readable, private readonly file?: Readable) { this.it = (src as AsyncIterable<Buffer>)[Symbol.asyncIterator](); }
+  /** Let go of the backup file, also when reading stopped before its end:
+   *  an open file cannot be moved or deleted on Windows. */
+  close(): void { this.src.destroy(); this.file?.destroy(); }
   private async more(): Promise<boolean> {
     if (this.ended) return false;
     const n = await this.it.next();
@@ -155,8 +158,9 @@ class Bytes {
 
 function open(path: string): Bytes {
   const gunzip = createGunzip();
-  createReadStream(path).on('error', (e) => gunzip.destroy(e)).pipe(gunzip);
-  return new Bytes(gunzip);
+  const file = createReadStream(path);
+  file.on('error', (e) => gunzip.destroy(e)).pipe(gunzip);
+  return new Bytes(gunzip, file);
 }
 
 /** The manifest, read without going through the files. */
@@ -169,6 +173,8 @@ export async function readManifest<T = unknown>(path: string): Promise<T> {
     return JSON.parse(m) as T;
   } catch (e) {
     throw e instanceof SyntaxError ? new Error('not a backup file') : e;
+  } finally {
+    b.close();
   }
 }
 
@@ -182,50 +188,55 @@ export async function readEntries(
   place: (h: EntryHeader) => string | null
 ): Promise<{ written: number; skipped: number }> {
   const b = open(path);
-  if ((await b.line()) + '\n' !== BACKUP_MAGIC) throw new Error('not a backup file');
-  if ((await b.line()) === null) throw new Error('not a backup file');
-  let written = 0;
-  let skipped = 0;
-  for (;;) {
-    const l = await b.line();
-    if (l === null) throw new Error('the backup file is cut short');
-    let h: EntryHeader & { end?: boolean };
-    try { h = JSON.parse(l); } catch { throw new Error('not a backup file'); }
-    if (h.end) break;
-    if (typeof h.s !== 'number' || h.s < 0 || !Number.isFinite(h.s)) throw new Error('not a backup file');
-    const target = place(h);
-    if (!target) { await b.take(h.s, null); skipped += 1; continue; }
-    mkdirSync(dirname(target), { recursive: true });
-    // Written beside the target and swapped in only once whole: a cut backup
-    // never leaves a file of the owner's half gone, a read only git object is
-    // replaced, and a link at the target is replaced, never written through.
-    const part = `${target}.dbm-restoring`;
-    try { unlinkSync(part); } catch { /* none left over */ }
-    const out = createWriteStream(part, { mode: (h.m & 0o777) || 0o600, flags: 'wx' });
-    // A file that cannot be opened or written (a full disk, a folder in the
-    // way) stops the restore with its error, never a wait with no end.
-    let failed: Error | null = null;
-    out.on('error', (e) => { failed = e; });
-    try {
-      await b.take(h.s, async (chunk) => {
-        if (failed) throw failed;
-        if (!out.write(chunk)) await once(out, 'drain');
-      });
-      out.end();
-      await finished(out);
-      // Windows refuses to rename over a read only file (a git object): make
-      // the one being replaced writable first. It stays whole until the swap.
-      try { if (lstatSync(target).isFile()) chmodSync(target, 0o600); } catch { /* not there */ }
-      renameSync(part, target);
-    } catch (e) {
-      out.destroy();
-      try { unlinkSync(part); } catch { /* never written */ }
-      throw e;
+  try {
+    if ((await b.line()) + '\n' !== BACKUP_MAGIC) throw new Error('not a backup file');
+    if ((await b.line()) === null) throw new Error('not a backup file');
+    let written = 0;
+    let skipped = 0;
+    for (;;) {
+      const l = await b.line();
+      if (l === null) throw new Error('the backup file is cut short');
+      let h: EntryHeader & { end?: boolean };
+      try { h = JSON.parse(l); } catch { throw new Error('not a backup file'); }
+      if (h.end) break;
+      if (typeof h.s !== 'number' || h.s < 0 || !Number.isFinite(h.s)) throw new Error('not a backup file');
+      const target = place(h);
+      if (!target) { await b.take(h.s, null); skipped += 1; continue; }
+      mkdirSync(dirname(target), { recursive: true });
+      // Written beside the target and swapped in only once whole: a cut backup
+      // never leaves a file of the owner's half gone, a read only git object is
+      // replaced, and a link at the target is replaced, never written through.
+      const part = `${target}.dbm-restoring`;
+      try { unlinkSync(part); } catch { /* none left over */ }
+      const out = createWriteStream(part, { mode: (h.m & 0o777) || 0o600, flags: 'wx' });
+      // A file that cannot be opened or written (a full disk, a folder in the
+      // way) stops the restore with its error, never a wait with no end.
+      let failed: Error | null = null;
+      out.on('error', (e) => { failed = e; });
+      try {
+        await b.take(h.s, async (chunk) => {
+          if (failed) throw failed;
+          if (!out.write(chunk)) await once(out, 'drain');
+        });
+        out.end();
+        await finished(out);
+        // Windows refuses to rename over a read only file (a git object): make
+        // the one being replaced writable first. It stays whole until the swap.
+        try { if (lstatSync(target).isFile()) chmodSync(target, 0o600); } catch { /* not there */ }
+        renameSync(part, target);
+      } catch (e) {
+        // Closed before it is deleted: Windows cannot delete an open file.
+        if (!out.closed) await new Promise<void>((done) => { out.once('close', () => done()); out.destroy(); });
+        try { unlinkSync(part); } catch { /* never written */ }
+        throw e;
+      }
+      // Keep the file's own time, so a restored office looks as it did.
+      if (h.t > 0) { try { utimesSync(target, new Date(), new Date(h.t)); } catch { /* the time only */ } }
+      written += 1;
     }
-    // Keep the file's own time, so a restored office looks as it did.
-    if (h.t > 0) { try { utimesSync(target, new Date(), new Date(h.t)); } catch { /* the time only */ } }
-    written += 1;
+    return { written, skipped };
+  } finally {
+    b.close();
   }
-  return { written, skipped };
 }
 

@@ -93,7 +93,8 @@ test('the suggested file name has no spaces or special characters', () => {
   assert.match(read('src/main/index.ts'), /defaultPath: join\(app\.getPath\('documents'\), backupFileName\(\)\)/);
 });
 
-test('paths move to the new home folder, only whole folders', () => {
+// Mac and Linux paths as written; Windows adds a drive to each (platform scoped).
+test('paths move to the new home folder, only whole folders', { skip: process.platform === 'win32' }, () => {
   assert.equal(backup.movePath('/Users/sam/Documents/Biz', '/Users/sam', '/Users/alex'), '/Users/alex/Documents/Biz');
   assert.equal(backup.movePath('/Users/samuel/x', '/Users/sam', '/Users/alex'), '/Users/samuel/x', 'not a prefix of another name');
   assert.equal(backup.movePath('/Volumes/Work/Biz', '/Users/sam', '/Users/alex'), '/Volumes/Work/Biz', 'outside home: as it was');
