@@ -4,7 +4,7 @@ import { PixelButton } from './PixelButton';
 import { Disclosure, Toggle } from './triggers/ui';
 import { Field, Panel, hint } from './fieldText';
 import {
-  APP_PASSWORD_STEPS, GOOGLE_APP_PASSWORDS_URL, GOOGLE_TWO_STEP_URL, IMAPS_PORT, PROVIDER_ORDER, PROVIDER_PRESETS, SMTPS_PORT, SUBMISSION_PORT,
+  appPasswordSteps, GOOGLE_APP_PASSWORDS_URL, GOOGLE_TWO_STEP_URL, IMAPS_PORT, PROVIDER_ORDER, PROVIDER_PRESETS, SMTPS_PORT, SUBMISSION_PORT,
   googleStepUrl, guessServers, isGoogleProvider, providerForAddress, type MailProvider, type MailServer, type MailboxRecord
 } from '@shared/mailboxes';
 
@@ -37,6 +37,7 @@ export function AddMailboxDialog({ fix, suggestedAddress, onClose, onSaved }: {
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const guessed = guessServers(address);
+  const steps = appPasswordSteps(provider, address);
   const [imapHost, setImapHost] = useState(fix?.provider === 'other' ? fix.imap.host : '');
   const [smtpHost, setSmtpHost] = useState(fix?.provider === 'other' ? fix.smtp.host : '');
   const [imapPort, setImapPort] = useState(String(fix?.imap.port ?? IMAPS_PORT));
@@ -147,7 +148,7 @@ export function AddMailboxDialog({ fix, suggestedAddress, onClose, onSaved }: {
             follow the one paragraph). */}
         {isGoogleProvider(provider) && <GoogleSteps address={address} />}
         {/* iCloud Mail, Yahoo and Zoho get the same cards. */}
-        {APP_PASSWORD_STEPS[provider] && <AppPasswordSteps provider={provider} pages={APP_PASSWORD_STEPS[provider]} />}
+        {steps && <AppPasswordSteps provider={provider} pages={steps} />}
         <Field label={t('mailboxes.password')}>
           <div style={{ display: 'flex', gap: 6 }}>
             <input

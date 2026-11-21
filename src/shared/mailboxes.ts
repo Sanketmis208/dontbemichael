@@ -178,6 +178,22 @@ export const APP_PASSWORD_STEPS: Partial<Record<MailProvider, (string | null)[]>
   zoho: ['https://mail.zoho.com/zm/#settings/all/mailaccounts', 'https://accounts.zoho.com/home#security/app_password', null]
 };
 
+/** Zoho's regions, by what follows zoho. or zohomail. in the address. Any
+ *  other address keeps the .com pages. */
+const ZOHO_REGIONS = ['eu', 'in', 'com.au', 'jp', 'com.cn', 'sa'];
+
+/** The step pages for a service, or null when it has none. Only the object's
+ *  own keys count, so a hand edited provider such as constructor gets none.
+ *  A regional Zoho address (zoho.eu, zohomail.in) gets its region's pages. */
+export function appPasswordSteps(provider: string, address: string): (string | null)[] | null {
+  if (!Object.hasOwn(APP_PASSWORD_STEPS, provider)) return null;
+  const pages = APP_PASSWORD_STEPS[provider as MailProvider] ?? null;
+  if (provider !== 'zoho' || !pages) return pages;
+  const region = (address.trim().toLowerCase().split('@')[1] ?? '').replace(/^zoho(mail)?\./, '');
+  if (!ZOHO_REGIONS.includes(region)) return pages;
+  return pages.map((url) => url && url.replace('.zoho.com/', `.zoho.${region}/`));
+}
+
 export function googleStepUrl(base: string, address: string): string {
   const a = address.trim();
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a) ? `${base}?authuser=${encodeURIComponent(a)}` : base;
