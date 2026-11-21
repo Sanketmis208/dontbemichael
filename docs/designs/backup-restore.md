@@ -19,15 +19,20 @@ One `.dbmbackup` file (src/main/backupArchive.ts): a gzip stream with a manifest
 | The app's data folder | config.json, every business's place (`offices/`), knowledge, journals, approvals, dock keys, pasted images, the window's saved state, the old config copy. The list follows factoryReset.ts's own lists (`USER_DATA_ITEMS`), so a new app file is never forgotten. Not: the secrets file, caches, scratch check folders, opened attachments, logs. | The new computer's data folder |
 | The database | A consistent snapshot (better-sqlite3 `backup`) taken while the app runs. | harness.db |
 | Each office folder | The hive (team, tasks, log, memory), the palace, roster, office.json, Research's desk. Not sockets, links or `.DS_Store`. | The same place under the new home folder |
-| Each business and team folder | The documents the team works in; a folder inside another is carried once. Not `node_modules`. | The same place under the new home folder; a file already there is kept |
+| Each business and team folder | The documents the team works in; a folder inside another is carried once. Only folders a restore puts back (`restorableFolder`): never the home folder itself, a dot folder, Library or Windows AppData. Not `node_modules`. | The same place under the new home folder; a file already there is kept |
 | The team's Claude conversations | ~/.claude/projects for each agent's folder, so their sessions resume. | Under the folder's new name |
 | Saved passwords and keys | Decrypted on this Mac, sealed with the backup password (scrypt, AES-256-GCM: src/main/backupSecrets.ts). | Re-locked to the new Mac (safeStorage) |
+
+No root carries a Claude sign in file (`.credentials.json`) or an earlier backup (`.dbmbackup`), wherever they sit (`SKIP_NAMES` and `isBackupFile`, src/main/backup.ts).
 
 ## Restore
 
 - From the first setup screen of a new computer ("Moving from another computer?"), or Settings, General, Backup.
 - The owner picks the file and sees when it was made and its businesses, then gives the backup password. The password is checked before anything stops: a wrong one changes nothing.
+- A backup with no saved passwords or keys needs no backup password.
+- An office already there has its files replaced, read only ones included; a business or team folder already there keeps its files. A link already on the disk is never followed out of its folder.
 - The office stops (as a reset does), every file goes back, and when the username differs every path under the old home folder moves to the new one: in the app's own JSON files (config, office.json, the registry, the roster) and in the database's office column (`movePathPrefix`). Then the app reopens on the restored office.
+- A restore that stops partway, such as on a file it cannot write, stops with that error and says so; the owner reopens the app.
 
 ## What cannot move
 
@@ -41,4 +46,4 @@ The Claude sign in (the Keychain) and its connectors (the claude.ai account). Af
 
 ## Tests
 
-test/backup-restore.test.cjs (7 cases: the format round trip with times; a crafted or cut file; the sealed passwords, wrong password and changed file; moving paths; what the app data part carries; a whole computer backed up and restored under another username; the wiring and copy). test/pulse-office-id.test.cjs moves the database's folder keyed rows under Electron's Node.
+test/backup-restore.test.cjs (17 cases: the format round trip with times; a crafted or cut file; the sealed passwords, wrong password and changed file; the file name with no spaces or special characters; moving paths; what the app data part carries; a whole computer backed up and restored under another username; the wiring and copy; two businesses in one backup; no secrets, no password; a crafted backup that names its own folders; restoring over an office already there; no Claude sign in file or earlier backup; a restore that stops partway; a link already in a restored folder (not on Windows); a file that cannot be written; only folders a restore puts back). test/pulse-office-id.test.cjs moves the database's folder keyed rows under Electron's Node.

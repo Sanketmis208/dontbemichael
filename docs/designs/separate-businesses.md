@@ -1,6 +1,6 @@
 # One owner, two unrelated businesses
 
-Status: CEO review in progress (2026-11-18). Strategy-only depth: which way to support it, not the implementation design.
+Status: step one built and complete (2026-11-20, see "Step one complete" below); step two deferred to TODOS.md. Reviews: CEO (2026-11-18, strategy-only depth: which way to support it, not the implementation design), eng and design (2026-11-18).
 
 Ask (owner, 2026-11-18): some owners run two businesses that share nothing, such as a bakery and a real estate agency. Explore the best way to support this.
 
@@ -346,7 +346,7 @@ Synthesized from this review's findings (strategy-only: next research, verificat
   - Surfaced by: BIZ-3 (D4); outside voice 2
   - Files: none (probe with Claude Code and two config folders)
   - Verify: two folders keep two signed in accounts and two connector lists; note the Claude Code version
-- [ ] **T5 (P1, human: ~1h / CC: ~15min)** — review — Run /plan-eng-review on step one and settle BIZ-5, BIZ-7 and BIZ-8
+- [x] **T5 (P1, human: ~1h / CC: ~15min)** (done 2026-11-18: the eng review below settled BIZ-5 by D10, BIZ-7 by D11 and BIZ-8 by D9) — review — Run /plan-eng-review on step one and settle BIZ-5, BIZ-7 and BIZ-8
   - Surfaced by: pending rows BIZ-5, BIZ-7, BIZ-8
   - Files: docs/designs/separate-businesses.md
   - Verify: the eng review report clears those rows
@@ -920,7 +920,7 @@ Lane A: T2 guard (independent, ships first). Lane B: office id → accessor → 
   - Surfaced by: Architecture 4, BIZ-3 (D4)
   - Files: src/main/claudeAccount.ts, src/main/hive.ts, src/main/config.ts, src/main/ptyEnv.ts, src/main/index.ts
   - Verify: a unit test that the office's folder drives terminal env and plan detection; live sign in of two accounts
-- [ ] **E7 (P1, human: ~2h / CC: ~10min)** — live check — Two offices switched five times; each Michael names its own business
+- [x] **E7 (P1, human: ~2h / CC: ~10min)** (done 2026-11-20: the owner switched businesses live and confirmed switching works, see "Step one complete" above) — live check — Two offices switched five times; each Michael names its own business
   - Surfaced by: Test review E2E
   - Files: none
   - Verify: live run in the dev office per the restart routine

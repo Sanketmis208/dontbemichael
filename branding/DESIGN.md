@@ -516,7 +516,9 @@ Names in parentheses are today's components that the v2 component replaces or re
 
 ### 7.1 Top bar
 
-Left to right: lockup (§1.5, 26 px mark); view tabs (§7.2); then, pushed right: clock
+Left to right: lockup (§1.5, 26 px mark); the business menu (BusinessMenu: the open
+business's name as a quiet menu button, capped at 220 px, listing every business with its
+state and Add a business; docs/designs/separate-businesses.md DT1); view tabs (§7.2); then, pushed right: clock
 pill (§7.3), version chip (§7.4), Report a problem (a solid `lemon` pill, `on-accent` text, 28 px high, 12/600 with a flag icon; its hover text is a native title and `aria-description`, and it reads "Couldn't open" for 2 s if the report page fails; docs/designs/report-problem-top-bar.md), icon buttons (theme, Settings; focus mode hidden in this build, `SHOW_FOCUS_MODE`; 32 × 32,
 `r-md`, `ink-2` icons, hover fills `card` with a `line` border), and the Needs you button
 (§7.5). The bar is a drag region; interactive children are `no-drag`. Coral stays Needs
@@ -1266,8 +1268,8 @@ Full window, no app chrome.
   Team, Manager, Permissions, Ready; five when Michael's engine is not Claude) in a `card` pill container, each a 22 px circle
   (done: `green` with a check; current: `ink` with the number; next: `line-2` ring with the
   number) joined by 1 px `line-2` rules; "Step 4 of 8" right, `t-meta`.
-- Body: a 560 px card with the step's fields. While the studio isn't showing (Business,
-  Details, Resume, or no team yet) the card is centered under the step indicator; once it
+- Body: a 560 px card with the step's fields (the Team step's is wider, below). While the
+  studio isn't showing (Business, Details, Team, Resume, or no team yet) the card is centered under the step indicator; once it
   shows, the card sits at the start edge and the studio (§8) fills the rest, reacting to
   the step. The card glides there over `--cth-dur-slow` (320 ms) as the studio fades in,
   and back on Back; reduced motion jumps. The soft glow behind the page follows: behind
@@ -1276,14 +1278,20 @@ Full window, no app chrome.
   as quiet rows in one `line` card, a 26 px neutral icon and a label each, the explanation
   behind an info icon (review, 2026-10-01: it was a grid of tinted tiles, one coral).
 - **Team step**: heading "Your team" with an info icon, one line "Suggested for Pro
-  Services. You can hire more later." Rows: checkbox, 36 px avatar, name 600, role `ink-3`,
-  tags ("in every pack" green soft; "always on" indigo soft for Michael, who has a lock and
-  no checkbox), connection chips ("needs: Email" with an indigo dot on `card-2`, "optional:
-  Calendar" with a dashed `line-2` border, "nothing to connect" `ink-3`), and a mono
-  "Works in Harbor & Pine/Finance" line with a "change" link. Unchecked rows at 55%.
+  Services. You can hire more later." The card is wide (up to 1400 px) with no studio beside
+  it (owner, 2026-11-19). One folder line under the heading: a folder icon, "Each person works
+  in their own folder inside ~/Documents/Harbor & Pine.", an info icon with the rest, and a
+  "change" link for the office folder ("use suggested" once changed); each member's folder
+  goes inside it, and is moved after setup if needed. The members are cards in a grid, four
+  across in a usual window (280 px minimum, 10 px gap), each 12 px padding and `r-lg`:
+  checkbox, 36 px avatar, name 600, role `ink-3`, summary, tags ("in every pack" green soft;
+  "always on" indigo soft for Michael, first, who has a lock and no checkbox), connection
+  chips ("needs: Email" with an indigo dot on `card-2`, "optional: Calendar" with a dashed
+  `line-2` border, "nothing to connect" `ink-3`). A picked card has a 2 px `ink` ring on
+  `card`; an unpicked one a 1 px `line` ring on `card-2`, its contents at 60%.
   Footer: "N picked, M to connect" and Back (secondary), Next (primary). The footer sticks
-  to the window's bottom edge, so Next stays in reach on a long step. Last in the list, one
-  unchecked row for Research (issue #230): Pete's own character, its current name, "Looks things up on the
+  to the window's bottom edge, so Next stays in reach on a long step. Last in the grid, one
+  unchecked card for Research (issue #230): Pete's own character, its current name, "Looks things up on the
   internet for the team, and sees no office data.", a "uses the internet" chip in the "always on"
   style; picked, it starts with the team.
 - **Ready step** (Get Michael ready, docs/designs/get-michael-ready.md): heading with an

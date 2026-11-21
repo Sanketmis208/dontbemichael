@@ -272,6 +272,8 @@ and signs you in where you can see it, or takes an Anthropic API key instead.
 **Also**
 - **Updates.** A new version downloads in the background and arrives as a card from Michael on Needs you, with Later and Restart to update (or Download, for an install that can't update itself). Nothing restarts until you click.
 - **Claude Code updates.** When Claude Code updates itself, team members already running stay on the old version until they restart. A "team upgrade ready" chip and note offer to close the office the safe way (everyone saves first) and reopen on the new version. Nothing restarts until you click.
+- **Two separate businesses.** Each business keeps its own settings, saved passwords and keys, files, history and, if you choose, its own Claude account. The business name in the top bar switches between them, closing the open office properly first, and Add a business sets up another while the open one keeps working. The business you are not in waits until you open it.
+- **Backup and restore.** One file holds everything on this computer: every business, its team, memory, tasks, history, knowledge, settings and the team's folders, with saved passwords and keys locked by a backup password. Restore it on a new computer from Settings, General, or from the first setup screen.
 
 <div align="right">(<a href="#what-it-is">↑ back to top</a>)</div>
 
@@ -321,7 +323,9 @@ follow.
   trust layer that keeps out the kinds of data you mark private in Settings, Research & privacy,
   and their answers are cleaned of instructions before your team reads them. They see none of your
   files, and they are off until you turn them on. On Windows, they can still reach your office files.
-  The one exception: when you start your case study, the app reads your logo from your own website.
+  Two exceptions: when you start your case study, the app reads your logo from your own website, and as
+  you type a street address, the app asks OpenStreetMap (Photon) for matching addresses, sending only
+  what you typed in that field.
 - **A case study, only if you send it.** Pulse can build a case study page of your office for
   our website. It goes out only when you press Send, from your own mailbox, after you agree we may
   publish it and take it down if you ask. See [`TELEMETRY.md`](./TELEMETRY.md#case-studies-you-send-us).
