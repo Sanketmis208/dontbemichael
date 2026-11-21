@@ -125,9 +125,15 @@ class Bytes {
   private ended = false;
   private readonly it: AsyncIterator<Buffer>;
   constructor(private readonly src: Readable, private readonly file?: Readable) { this.it = (src as AsyncIterable<Buffer>)[Symbol.asyncIterator](); }
-  /** Let go of the backup file, also when reading stopped before its end:
-   *  an open file cannot be moved or deleted on Windows. */
-  close(): void { this.src.destroy(); this.file?.destroy(); }
+  /** Let go of the backup file, also when reading stopped before its end, and
+   *  wait until it is let go: an open file cannot be moved or deleted on Windows. */
+  async close(): Promise<void> {
+    const file = this.file as (Readable & { closed?: boolean }) | undefined;
+    const closed = file && !file.closed ? once(file, 'close').catch(() => undefined) : Promise.resolve();
+    this.src.destroy();
+    file?.destroy();
+    await closed;
+  }
   private async more(): Promise<boolean> {
     if (this.ended) return false;
     const n = await this.it.next();
@@ -174,7 +180,7 @@ export async function readManifest<T = unknown>(path: string): Promise<T> {
   } catch (e) {
     throw e instanceof SyntaxError ? new Error('not a backup file') : e;
   } finally {
-    b.close();
+    await b.close();
   }
 }
 
@@ -236,7 +242,7 @@ export async function readEntries(
     }
     return { written, skipped };
   } finally {
-    b.close();
+    await b.close();
   }
 }
 

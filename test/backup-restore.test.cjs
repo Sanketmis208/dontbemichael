@@ -395,3 +395,22 @@ test('a cut backup leaves an existing file whole, and a link to a kept folder is
   assert.equal(backup.restorableFolder(path.join(home, 'Documents', 'Shop', 'link', 'NewFolder'), home), false, 'it really leads into .ssh');
   assert.equal(backup.restorableFolder(path.join(home, 'Documents', 'Shop', 'NewFolder'), home), true);
 });
+
+// Value: protects=reading a backup's manifest or files lets go of the file before it returns, so Windows can move or delete it; fails_when=readManifest or readEntries return with the file still open; why_new=Tests (Windows) failed on PR 716 when cleanup could not delete the backup; seam=none; no_claim=Windows itself (counts open files where /dev/fd lists them)
+test('reading a backup lets go of the file before it returns', { skip: !fs.existsSync('/dev/fd') }, async (t) => {
+  const d = tmp(t, 'bk-closed');
+  const file = path.join(d, 'c.dbmbackup');
+  const w = new archive.BackupWriter(file, { v: 1 });
+  await w.addBuffer('r', 'a.txt', Buffer.from('a'));
+  await w.finish();
+  const open = () => fs.readdirSync('/dev/fd').length;
+  const before = open();
+  await archive.readManifest(file);
+  assert.equal(open(), before, 'the manifest read lets go of the file');
+  await archive.readEntries(file, () => null);
+  assert.equal(open(), before, 'reading every file lets go of it');
+  const cut = path.join(d, 'cut.dbmbackup');
+  fs.writeFileSync(cut, zlib.gzipSync(Buffer.from([archive.BACKUP_MAGIC, '{"v":1}\n', '{"r":"r","p":"a","s":100,"m":420,"t":0}\n', 'short'].join(''))));
+  await assert.rejects(archive.readEntries(cut, () => path.join(d, 'out', 'a')), /cut short/);
+  assert.equal(open(), before, 'a cut backup lets go of it too');
+});
