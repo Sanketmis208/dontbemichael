@@ -6,7 +6,7 @@ All notable changes to this project are documented here. The format is based on
 
 Don't Be Michael keeps its own version line, starting at 0.0.1.
 
-## [Unreleased]
+## [0.4.3] (2026-11-20)
 
 ### Added
 - **Run two separate businesses on one computer.** Each business keeps its own settings, saved passwords and keys, files, history and, if you choose, its own Claude account. The business name in the top bar switches between them, and Settings, General lists every business with Open, Find it for a folder that moved, and Remove for a setup never finished. A switch closes the open office properly first. Everyone finishes or hands off their step, then the other business opens.

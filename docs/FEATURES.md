@@ -1,6 +1,6 @@
 # Don't Be Michael: features and changes
 
-Everything the app does today, and every release that got it here (0.0.1 to 0.4.2). Part 1 is
+Everything the app does today, and every release that got it here (0.0.1 to 0.4.3). Part 1 is
 written to be lifted onto the GitHub page and the website as it is; Part 2 is the full list, release
 by release.
 
@@ -330,6 +330,21 @@ moving, and brings you only the decisions that need you.
   as a picture, and a part you select pastes as clean as the whole, in light or dark mode.
 
 ## Part 2: Every change, release by release
+
+### 0.4.3 (2026-11-20)
+- Two separate businesses on one computer: each keeps its own settings, saved passwords and keys,
+  files, history, spend caps and, optionally, its own Claude account. The business name in the top
+  bar switches; Settings, General lists every business with Open, Find it and Remove. A switch
+  closes the open office first. Existing installs move their settings on the first launch.
+- Add a business over the open office; Back to the office keeps what was typed.
+- Back up everything to one file and restore it on a new computer, from Settings or the first setup
+  screen. Saved passwords and keys are locked with a backup password; a restore writes only into
+  the business's own folders and says when it stops partway.
+- Always allowed for the privacy check, and Ask me cards that offer to allow what it kept back.
+- Address suggestions from OpenStreetMap, business hours by day, languages and currency from a list,
+  one field per social link, Team setup four across with one office folder.
+- Ask me shows three questions at a time. Pete waits while he starts. Closing time tells and reminds
+  Michael once everyone confirmed, and Michael files only the messages he read.
 
 ### 0.4.2 (2026-11-17)
 - A team member attaches files from its own folder, or a folder you named for its job, to an email.

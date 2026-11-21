@@ -41,8 +41,8 @@ runs on your computer.
 > brings you only the calls that need you.
 
 > [!TIP]
-> **New in 0.4.2: team members attach files from their folder to an email.** On Send on approval
-> the card lists each file, to open or take off before you approve.
+> **New in 0.4.3: run two separate businesses on one computer.** Each keeps its own settings,
+> passwords and files, and the business name in the top bar switches between them.
 
 ## Contents
 

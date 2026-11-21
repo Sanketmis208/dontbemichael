@@ -1,4 +1,4 @@
-- **Team members attach files from their folder to an email.**
-- The approval card lists each file to open or take off.
-- A teammate hands over a file it keeps.
-- Slow shares no longer stall a turn.
+- **Run two separate businesses on one computer.**
+- Add a business while the open one keeps working.
+- Back up everything and restore it on a new computer.
+- Always allowed: your business's own public names pass the privacy check.
