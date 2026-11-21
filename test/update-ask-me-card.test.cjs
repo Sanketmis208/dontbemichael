@@ -97,7 +97,7 @@ test('a pending restart is not All clear on Ask me', () => {
   // Value: protects=the board does not say All clear while an update still waits behind the quit warning; fails_when=boardEmpty follows the restart aware check again; why_new=review on #725; seam=source pin; no_claim=the look (live check in the dev app)
   const ask = read('src/renderer/src/components/AskMeTab.tsx');
   assert.match(ask, /const updateWaiting = updateCardShown\(update, updateLater\);/);
-  assert.match(ask, /const updateShown = updateWaiting && !updateRestarting;/);
+  assert.doesNotMatch(ask, /updateShown/, 'the restart aware check lives in the count and the card');
   assert.match(ask, /const boardEmpty = !engineCard && !updateWaiting && /);
 });
 

@@ -91,14 +91,13 @@ export function AskMeTab() {
   const agents = useStore((s) => s.agents);
   const restorable = useStore((s) => s.restorableAgents);
   // One shared read with the pill, the strip and the chips (D3, eng R4).
-  const { tasks, requests: scheduleRequests, researchKept, offers, proposals, engineSetup, stop, researchNotice, knowledgeNotice, setupNotice, degraded, silent, foundations, update, updateLater, cliUpdate, cliUpdateLater, caseStudyWaiting, updateRestarting, count: needsCount } = useNeedsYou();
+  const { tasks, requests: scheduleRequests, researchKept, offers, proposals, engineSetup, stop, researchNotice, knowledgeNotice, setupNotice, degraded, silent, foundations, update, updateLater, cliUpdate, cliUpdateLater, caseStudyWaiting, count: needsCount } = useNeedsYou();
   // Michael's team upgrade card (docs/designs/team-upgrade-card.md) keeps All clear away too.
   const cliShown = cliUpdateToastVisible(cliUpdate, cliUpdateLater);
   // Michael's card for a new version (UpdateCard) keeps All clear away too.
   // An update still waits while its restart is pending, so the board is not
-  // all clear, but the card steps aside for the quit warning.
+  // all clear (the card itself steps aside for the quit warning).
   const updateWaiting = updateCardShown(update, updateLater);
-  const updateShown = updateWaiting && !updateRestarting;
   // And a case study ready to view (CaseStudyCard).
   const caseScreenOpen = useStore((s) => s.caseStudyOpen);
   const caseShown = caseStudyWaiting && !caseScreenOpen;
