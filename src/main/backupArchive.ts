@@ -16,7 +16,7 @@
  * the folder it is given for a root: an absolute path, a "..", or anything that
  * resolves outside is refused, so a crafted backup cannot write elsewhere.
  */
-import { createReadStream, createWriteStream, lstatSync, mkdirSync, unlinkSync, utimesSync } from 'node:fs';
+import { chmodSync, createReadStream, createWriteStream, lstatSync, mkdirSync, renameSync, unlinkSync, utimesSync } from 'node:fs';
 import { dirname, isAbsolute, resolve, sep } from 'node:path';
 import { createGunzip, createGzip, constants as zc } from 'node:zlib';
 import { once } from 'node:events';
@@ -196,20 +196,32 @@ export async function readEntries(
     const target = place(h);
     if (!target) { await b.take(h.s, null); skipped += 1; continue; }
     mkdirSync(dirname(target), { recursive: true });
-    // A file already there is replaced, not written through: a git object is
-    // read only (opening it to write fails), and a link would lead elsewhere.
-    try { const st = lstatSync(target); if (!st.isDirectory()) unlinkSync(target); } catch { /* not there */ }
-    const out = createWriteStream(target, { mode: (h.m & 0o777) || 0o600, flags: 'wx' });
+    // Written beside the target and swapped in only once whole: a cut backup
+    // never leaves a file of the owner's half gone, a read only git object is
+    // replaced, and a link at the target is replaced, never written through.
+    const part = `${target}.dbm-restoring`;
+    try { unlinkSync(part); } catch { /* none left over */ }
+    const out = createWriteStream(part, { mode: (h.m & 0o777) || 0o600, flags: 'wx' });
     // A file that cannot be opened or written (a full disk, a folder in the
     // way) stops the restore with its error, never a wait with no end.
     let failed: Error | null = null;
     out.on('error', (e) => { failed = e; });
-    await b.take(h.s, async (chunk) => {
-      if (failed) throw failed;
-      if (!out.write(chunk)) await once(out, 'drain');
-    });
-    out.end();
-    await finished(out);
+    try {
+      await b.take(h.s, async (chunk) => {
+        if (failed) throw failed;
+        if (!out.write(chunk)) await once(out, 'drain');
+      });
+      out.end();
+      await finished(out);
+      // Windows refuses to rename over a read only file (a git object): make
+      // the one being replaced writable first. It stays whole until the swap.
+      try { if (lstatSync(target).isFile()) chmodSync(target, 0o600); } catch { /* not there */ }
+      renameSync(part, target);
+    } catch (e) {
+      out.destroy();
+      try { unlinkSync(part); } catch { /* never written */ }
+      throw e;
+    }
     // Keep the file's own time, so a restored office looks as it did.
     if (h.t > 0) { try { utimesSync(target, new Date(), new Date(h.t)); } catch { /* the time only */ } }
     written += 1;

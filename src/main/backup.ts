@@ -269,18 +269,18 @@ export function movePathsInText(text: string, oldHome: string, newHome: string):
   return out;
 }
 
+/** A path with its links followed as far as it exists on the disk; the parts
+ *  not there yet are added as written (they cannot be links). */
+function onDisk(p: string): string | null {
+  let d = resolve(p);
+  const rest: string[] = [];
+  while (!existsSync(d) && dirname(d) !== d) { rest.unshift(basename(d)); d = dirname(d); }
+  try { return join(realpathSync.native(d), ...rest); } catch { return null; }
+}
+
 /** Whether `target` is still inside `base` once links already on the disk are
  *  followed: a folder there that is a link elsewhere never takes a file. */
 function staysInside(base: string, target: string): boolean {
-  const real = (p: string): string | null => { try { return realpathSync.native(p); } catch { return null; } };
-  // A path with its links followed as far as it exists on the disk.
-  const onDisk = (p: string): string | null => {
-    let d = resolve(p);
-    const rest: string[] = [];
-    while (!existsSync(d) && dirname(d) !== d) { rest.unshift(basename(d)); d = dirname(d); }
-    const r = real(d);
-    return r === null ? null : join(r, ...rest);
-  };
   const root = onDisk(base);
   const at = onDisk(dirname(target));
   if (!root || !at) return false;
@@ -292,13 +292,22 @@ const ROOT_KINDS = new Set<RootKind>(['userData', 'office', 'folder', 'claude'])
 /** A folder a restore may write into: one setup could choose for a team
  *  (isUsableTeamFolder), and not a dot folder anywhere under home. */
 export function restorableFolder(folder: string, home: string): boolean {
-  if (!isAbsolute(folder) || !isUsableTeamFolder(folder, home)) return false;
-  const rel = relative(resolve(home), resolve(folder));
-  if (!rel || rel.startsWith('..') || isAbsolute(rel)) return true;
-  const parts = rel.split(sep);
-  // Windows keeps settings and login items in AppData, as a Mac does in Library.
-  if (parts[0].toLowerCase() === 'appdata') return false;
-  return !parts.some((part) => part.startsWith('.'));
+  if (!isAbsolute(folder)) return false;
+  // Checked as written and where it really leads: a link, a junction or a
+  // Windows short name that ends in a kept folder is that folder.
+  const real = onDisk(folder);
+  const realHome = onDisk(home);
+  if (!real || !realHome) return false;
+  const fold = process.platform === 'darwin' || process.platform === 'win32' ? (p: string) => p.toLowerCase() : (p: string) => p;
+  for (const [f, h] of [[resolve(folder), resolve(home)], [real, realHome]]) {
+    if (!isUsableTeamFolder(f, h)) return false;
+    const rel = relative(fold(h), fold(f));
+    if (!rel || rel.startsWith('..') || isAbsolute(rel)) continue;
+    const parts = rel.split(sep);
+    // Windows keeps settings and login items in AppData, as a Mac does in Library.
+    if (parts[0] === 'appdata' || parts[0] === 'AppData' || parts.some((part) => part.startsWith('.'))) return false;
+  }
+  return true;
 }
 
 export interface RestoreTarget {

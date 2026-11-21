@@ -53,11 +53,13 @@ export function publicSuggestions(
 const escape = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** The text with every always allowed entry taken out (any case), for the
- *  shape checks: the business's own public email is not a contact detail. */
+ *  shape checks: the business's own public email is not a contact detail.
+ *  Only where the entry stands whole: an allowed domain (acme.com) never hides
+ *  another address at it (jane@acme.com), nor a longer name (acme.com.evil). */
 export function withoutPublicTerms(text: string, terms: readonly string[]): string {
   let out = text;
   for (const t of [...terms].sort((a, b) => b.length - a.length)) {
-    if (t) out = out.replace(new RegExp(escape(t), 'giu'), ' ');
+    if (t) out = out.replace(new RegExp(`(?<![\\p{L}\\p{N}@._%+-])${escape(t)}(?![\\p{L}\\p{N}@_-]|\\.[\\p{L}\\p{N}])`, 'giu'), ' ');
   }
   return out;
 }

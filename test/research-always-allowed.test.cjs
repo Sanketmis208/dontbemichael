@@ -84,3 +84,13 @@ test('only Settings writes it: a business setting, staged in Research & privacy'
     assert.doesNotMatch(en[k], /[–—]| - /, k);
   }
 });
+
+// Value: protects=an allowed entry is taken out of the shape checks only where it stands whole, so an allowed domain never hides another address at it; fails_when=withoutPublicTerms removes the entry as a bare substring; why_new=pre-landing review (targeted gate reader); seam=none; no_claim=the model's own judgment
+test('an allowed domain never hides another address at that domain', () => {
+  const D = loadTs('src/shared/dataClasses.ts');
+  const hit = (text, terms) => D.privatePatternHit(P.withoutPublicTerms(text, terms), { contact: 'private' });
+  assert.ok(hit('ask jane.doe@harborpine.example about it', ['harborpine.example']), 'another address at the domain is still a contact');
+  assert.ok(hit('mail sam@harborpine.example.evil.example', ['sam@harborpine.example']), 'a longer address is not the allowed one');
+  assert.equal(hit('write to hello@harborpine.example today', ['hello@harborpine.example']), null, 'the allowed address itself passes');
+  assert.equal(P.withoutPublicTerms('Read https://github.com/danareyes/harborpine/releases/', ['https://github.com/danareyes']).includes('danareyes'), false, 'an allowed link inside a longer one is taken out');
+});

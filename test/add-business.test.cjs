@@ -184,3 +184,19 @@ test('a finished business\'s id is never taken as a draft, and nothing is added 
   assert.deepEqual(s.settings.addBusiness({ home: other, settings: { businessName: 'X' } }), { ok: false, error: 'notPerOffice' });
   assert.equal(s.settings.saveBusinessDraft({ home: other, step: 'business', settings: {} }), null);
 });
+
+// Value: protects=a business added from setup starts under the open business's spend caps unless setup chose its own; fails_when=addBusiness saves only the wizard's fields; why_new=pre-landing review (targeted money reader); seam=none; no_claim=the wizard UI
+test('a business added from setup starts under the open business\'s spend caps', (t) => {
+  const s = scene(t);
+  const cfg = s.stored();
+  cfg.offices[s.bakeryId].settings = { ...cfg.offices[s.bakeryId].settings, costCapTokens: 750000, costCapUsd: 25, agentTokenCaps: { pam: 1000 } };
+  fs.writeFileSync(path.join(s.userData, 'config.json'), JSON.stringify(cfg));
+  const realty = path.join(s.userData, 'realty');
+  const res = s.settings.addBusiness({ home: realty, settings: { businessName: 'Northgate Realty' } });
+  assert.equal(res.ok, true);
+  const added = s.stored().offices[res.id].settings;
+  assert.deepEqual([added.costCapTokens, added.costCapUsd], [750000, 25]);
+  assert.equal(added.agentTokenCaps, undefined, 'a cap set for another business\'s member stays there');
+  const own = s.settings.addBusiness({ home: path.join(s.userData, 'cafe'), settings: { businessName: 'Contoso Cafe', costCapUsd: 5 } });
+  assert.equal(s.stored().offices[own.id].settings.costCapUsd, 5, 'its own cap wins');
+});

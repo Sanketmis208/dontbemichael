@@ -375,3 +375,22 @@ test('a backup takes only folders a restore puts back', (t) => {
   assert.equal(backup.restorableFolder(path.join(home, 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup'), home), false);
   assert.equal(backup.restorableFolder(shop, home), true);
 });
+
+// Value: protects=a cut backup never leaves the owner's file half gone, and a link inside a restore folder that leads to a kept folder is refused by its real path; fails_when=readEntries unlinks before the new copy is whole, or restorableFolder checks only the spelling; why_new=pre-landing review (outside voice pass 2); seam=none; no_claim=Windows short names (realpath on POSIX only)
+test('a cut backup leaves an existing file whole, and a link to a kept folder is refused', { skip: process.platform === 'win32' }, async (t) => {
+  const d = tmp(t, 'bk-whole');
+  const out = path.join(d, 'out');
+  put(path.join(out, 'registry.json'), 'the original');
+  const cut = path.join(d, 'cut.dbmbackup');
+  fs.writeFileSync(cut, zlib.gzipSync(Buffer.from([archive.BACKUP_MAGIC, '{"v":1}\n', '{"r":"r","p":"registry.json","s":1000,"m":420,"t":0}\n', 'short'].join(''))));
+  await assert.rejects(archive.readEntries(cut, (h) => archive.safeTarget(out, h.p)), /cut short/);
+  assert.equal(fs.readFileSync(path.join(out, 'registry.json'), 'utf8'), 'the original', 'kept whole');
+  assert.deepEqual(fs.readdirSync(out), ['registry.json'], 'no half written file left beside it');
+
+  const home = path.join(d, 'Users', 'sam');
+  fs.mkdirSync(path.join(home, '.ssh'), { recursive: true });
+  fs.mkdirSync(path.join(home, 'Documents', 'Shop'), { recursive: true });
+  fs.symlinkSync(path.join(home, '.ssh'), path.join(home, 'Documents', 'Shop', 'link'));
+  assert.equal(backup.restorableFolder(path.join(home, 'Documents', 'Shop', 'link', 'NewFolder'), home), false, 'it really leads into .ssh');
+  assert.equal(backup.restorableFolder(path.join(home, 'Documents', 'Shop', 'NewFolder'), home), true);
+});

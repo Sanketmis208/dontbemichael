@@ -20,7 +20,7 @@
  * launch move (migrateToOfficeSettings) sets it. The key lists and pure
  * helpers live in officeKeys.ts.
  */
-import { BUSINESS_DATA_FILES, configDefaults, keepConfigCopy, moveIntoOffice, officeDataPath, readStoredConfig, replaceConfig, writeConfig, type HarnessConfig } from './config';
+import { BUSINESS_DATA_FILES, configDefaults, keepConfigCopy, moveIntoOffice, officeDataPath, readConfig, readStoredConfig, replaceConfig, writeConfig, type HarnessConfig } from './config';
 import { copySecretsToOffices } from './integrations';
 import { describesBusiness, type OfficeRecord } from '../shared/officeRecord';
 import {
@@ -245,7 +245,11 @@ export function addBusiness(p: {
     if (there && offices[there]?.settings?.onboardingComplete === true) return { ok: false, error: 'exists' };
     id = there ?? (homeFolderStatus(p.home).hasOffice ? ensureOfficeId(p.home) : null) ?? randomUUID();
   }
-  const settings = { ...(pick(p.settings ?? {}, businessKeySet) as Partial<OfficeSettings>), onboardingComplete: true };
+  // A new business starts under the open business's budget unless setup chose
+  // its own: it never runs with no budget. Caps per member stay with the
+  // members they were set for.
+  const { agentTokenCaps: _members, ...budget } = spendCaps(readConfig());
+  const settings = { ...budget, ...(pick(p.settings ?? {}, businessKeySet) as Partial<OfficeSettings>), onboardingComplete: true };
   const { draft: _left, ...rest } = offices[id] ?? { home: p.home, settings: {} };
   offices[id] = { ...rest, home: p.home, settings };
   // Only how the app behaves; never which office is open (the switch does that).
@@ -347,6 +351,15 @@ export interface KnownOffice {
   record: OfficeRecord | null;
 }
 
+/** The owner's spend caps. Before the move every office ran under them, so
+ *  every office keeps them after it: a business never starts with no budget. */
+const SPEND_KEYS = ['costCapTokens', 'costCapUsd', 'agentTokenCaps'] as const;
+export function spendCaps(cfg: Partial<HarnessConfig>): Partial<OfficeSettings> {
+  const out: Record<string, unknown> = {};
+  for (const k of SPEND_KEYS) if (cfg[k] !== undefined) out[k] = cfg[k];
+  return out as Partial<OfficeSettings>;
+}
+
 /** The settings each office starts with after the move (pure). */
 export function settingsForMigration(cfg: Partial<HarnessConfig>, office: KnownOffice): { outcome: MigrationOutcome; settings: Partial<OfficeSettings> } {
   if (office.isThisBusiness) {
@@ -355,6 +368,7 @@ export function settingsForMigration(cfg: Partial<HarnessConfig>, office: KnownO
   const rec = office.record;
   if (describesBusiness(rec)) {
     const settings: Partial<OfficeSettings> = {
+      ...spendCaps(cfg),
       onboardingComplete: true,
       businessTeam: rec.team,
       businessTeamStarted: true,
@@ -367,7 +381,7 @@ export function settingsForMigration(cfg: Partial<HarnessConfig>, office: KnownO
     if (rec.companyProfile) settings.companyProfile = rec.companyProfile;
     return { outcome: 'identity', settings };
   }
-  return { outcome: 'setup', settings: {} };
+  return { outcome: 'setup', settings: spendCaps(cfg) };
 }
 
 /** The open office and the recent ones that still hold an office, once each. */

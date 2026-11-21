@@ -210,3 +210,16 @@ test('the pure rule: identity only from a record that describes a business', () 
   const idOnly = settings.settingsForMigration(cfg, { home: '/o', id: 'office-aaaa1111', isThisBusiness: false, record: { version: 1, id: 'office-aaaa1111', team: [] } });
   assert.equal(idOnly.outcome, 'setup');
 });
+
+// Value: protects=after the move every business keeps the owner's spend caps, the token budget, the dollar cap and each member's cap; fails_when=settingsForMigration gives another business or an unknown office only its identity; why_new=the caps became business settings and nothing checked they reach the other offices (pre-landing review, targeted money reader); seam=none; no_claim=the breaker itself (it reads readConfig, tested elsewhere)
+test('every business keeps the owner\'s spend caps after the move', () => {
+  const cfg = { onboardingComplete: true, businessName: 'Harbor Bakery', costCapTokens: 1000000, costCapUsd: 50, agentTokenCaps: { pam: 200000 } };
+  const record = { businessName: 'Northgate Realty', team: [{ agentId: 'pam', folder: '/x' }] };
+  const other = settings.settingsForMigration(cfg, { home: '/b', id: 'office-bbbb', isThisBusiness: false, record });
+  assert.equal(other.outcome, 'identity');
+  assert.deepEqual([other.settings.costCapTokens, other.settings.costCapUsd, other.settings.agentTokenCaps], [1000000, 50, { pam: 200000 }]);
+  const unknown = settings.settingsForMigration(cfg, { home: '/c', id: 'office-cccc', isThisBusiness: false, record: null });
+  assert.equal(unknown.outcome, 'setup');
+  assert.deepEqual(unknown.settings, { costCapTokens: 1000000, costCapUsd: 50, agentTokenCaps: { pam: 200000 } });
+  assert.deepEqual(settings.settingsForMigration({ onboardingComplete: true }, { home: '/c', id: 'office-cccc', isThisBusiness: false, record: null }).settings, {}, 'no caps set, none made up');
+});
