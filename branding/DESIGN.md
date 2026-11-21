@@ -2266,8 +2266,10 @@ ends with: "A file a team member attaches to an email is checked by what it hold
 and that copy is what goes out." (0.4.2). What stays private adds, after the table: "List your business's
 own public names and links as Always allowed, and the check keeps them as written in questions to Pete.
 When the check keeps words back, a card on Needs you offers to always allow each one and ask again.
-Passwords and keys never go through, whatever the list says." (0.4.3; the site says Needs you, the board's
-name, for the card). Where your data lives adds two things. After the first paragraph's last sentence, a
+Passwords and keys are always private, whatever the list says." (0.4.3; the site says Needs you, the board's
+name, for the card; and "are always private", as the line above the table does, never the app notes' "never go
+through": only a password or key in a recognisable shape is caught before a model reads it, so the page
+says what the app keeps, not what can't happen). Where your data lives adds two things. After the first paragraph's last sentence, a
 paragraph on backup: "Back up everything on this computer to one file: every business with its team,
 memory, tasks, history, knowledge, settings and the team's folders. Saved passwords and keys are locked
 with a backup password you choose. Restore it on a new computer from Settings, General, or from the first
