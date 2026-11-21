@@ -33,7 +33,7 @@ import { TopBar, NeedsYouStrip } from '@/shell/TopBar';
 import { setDialogsSuspended } from '@/shell/useDialog';
 import { useRestoreTeam } from '@/hooks/useRestoreTeam';
 import { NeedsYouBoard, RestoreTeamBanner } from '@/shell/NeedsYouBoard';
-import { setWorkStyleOffersSource, useNeedsYou } from '@/shell/useNeedsYou';
+import { setCaseStudyScreenOpen, setWorkStyleOffersSource, useNeedsYou } from '@/shell/useNeedsYou';
 import { readWorkStyleOffers } from '@/shell/workStyleOffers';
 import { columnAfterGoneHome } from '@/shell/closingFloor';
 import { watchReturningBindings } from '@/shell/releaseBindings';
@@ -67,6 +67,8 @@ export function App() {
   const setSidebarWidth = useStore(s => s.setSidebarWidth);
   const floorView = useStore(s => s.floorView);
   const caseStudyOpen = useStore(s => s.caseStudyOpen);
+  // The Ask me count leaves out the case study card while its screen is open.
+  useEffect(() => { setCaseStudyScreenOpen(caseStudyOpen); }, [caseStudyOpen]);
   const godId = useStore(s => s.agents.find((a) => a.isGod)?.id) ?? 'god';
 
   const [config, setConfig] = useState<HarnessConfig | null>(null);
@@ -377,7 +379,7 @@ export function App() {
   // click outside it (not the pill, which toggles it, nor the splitter).
   // Off the office the column is hidden, so a click on Tasks or the graph is
   // not "outside" it (ship review 2026-10-03).
-  const allClear = rightColumn === 'board' && floorView === 'office' && feed.status === 'ready' && feed.count === 0;
+  const allClear = rightColumn === 'board' && floorView === 'office' && feed.status === 'ready' && feed.count === 0 && !feed.updateRestarting;
   useEffect(() => {
     if (!allClear) return;
     const onDown = (e: PointerEvent) => {
