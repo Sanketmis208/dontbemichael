@@ -6,6 +6,30 @@ All notable changes to this project are documented here. The format is based on
 
 Don't Be Michael keeps its own version line, starting at 0.0.1.
 
+## [Unreleased]
+
+### Added
+- **Run two separate businesses on one computer.** Each business keeps its own settings, saved passwords and keys, files, history and, if you choose, its own Claude account. The business name in the top bar switches between them, and Settings, General lists every business with Open, Find it for a folder that moved, and Remove for a setup never finished. A switch closes the open office properly first. Everyone finishes or hands off their step, then the other business opens.
+- **Add a business while the open one keeps working.** Setup opens over the office, and the new business's folder is named after it. Back to the office keeps what you typed, and you go on from that step later.
+- **Back up everything and restore it on a new computer.** One file holds every business: the team, memory, tasks, history, knowledge, settings and the team's folders. Saved passwords and keys are locked with a backup password. Restore from Settings, General, or from the first setup screen on a new computer.
+- **Always allowed, for the privacy check.** In Settings, Research and privacy, list your business's own public names and links, and the check keeps them in questions to Research. When the check keeps words back, an Ask me card offers to always allow each one and ask again.
+- Address suggestions as you type the street; business hours set day by day; languages served and currency picked from a list; one field per social link, with the site named.
+- Ask me cards show three questions at a time.
+- Add a mailbox starts on the email you gave in setup.
+
+### Changed
+- Team setup shows the members side by side, four across, and asks for one office folder instead of one per member.
+- New office folders are named with no spaces or special characters.
+
+### Fixed
+- A question to Pete waits while he starts, instead of saying he is turned off.
+- Closing time tells Michael once everyone has confirmed and reminds him, and Michael files only the messages he read, so closing no longer hangs.
+- A member link opens the tab it names.
+- Business hours you never set show as not set, never as an unsaved 9 to 5.
+- A business you just added opens after setup, instead of saying the office can't be found.
+- Ask me can be read while the office opens or closes.
+- A list's save button says all for now, not the whole list, and a retired foundations question is never asked again.
+
 ## [0.4.2] (2026-11-17)
 
 ### Added

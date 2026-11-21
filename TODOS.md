@@ -2,6 +2,78 @@
 
 ## Two unrelated businesses (deferred from the CEO review of docs/designs/separate-businesses.md, 2026-11-18)
 
+### Write a line to the office log when a business moves, switches or is set up
+
+**What:** Settings migration, a switch and the first open of a new business each write one line to the hive log (log.jsonl) with the office id and the app version.
+
+**Why:** Today the move logs only to the console, so a support case cannot see when an office moved or switched, or on which version (Sections 3 and 8 of the plan).
+
+**Context:** Deferred from plan: docs/designs/separate-businesses.md. Planned in the CEO review, not built in step one; the owner chose to ship and defer it (2026-11-20).
+
+**Effort:** S (human) / S (CC)
+**Priority:** P1
+**Depends on:** None
+
+### Tag failure reports with the office id
+
+**What:** failures.jsonl rows and the reports sent from them carry the open office's id.
+
+**Why:** With two businesses on one install, a failure report cannot say which business it came from (T3 and Section 8).
+
+**Context:** Deferred from plan: docs/designs/separate-businesses.md. Planned in the CEO review, not built in step one; the owner chose to ship and defer it (2026-11-20).
+
+**Effort:** S (human) / S (CC)
+**Priority:** P1
+**Depends on:** None
+
+### Check at launch that the business name matches the office record
+
+**What:** At launch, compare the open office's settings business name with its office.json and report a mismatch.
+
+**Why:** A mismatch is the first sign of one business's settings reaching the other's office (Section 8).
+
+**Context:** Deferred from plan: docs/designs/separate-businesses.md. Planned in the CEO review, not built in step one; the owner chose to ship and defer it (2026-11-20).
+
+**Effort:** S (human) / S (CC)
+**Priority:** P1
+**Depends on:** None
+
+### Refuse two businesses sharing one business folder
+
+**What:** Add a business, and Settings when the business folder changes, refuse a business folder another business already uses.
+
+**Why:** Two businesses on one folder would mix their documents (Section 4 edge case). addBusiness refuses only the open office's folder and a finished office folder.
+
+**Context:** Deferred from plan: docs/designs/separate-businesses.md. Planned in the CEO review, not built in step one; the owner chose to ship and defer it (2026-11-20).
+
+**Effort:** S (human) / S (CC)
+**Priority:** P1
+**Depends on:** None
+
+### Refuse a mailbox another business already has
+
+**What:** Adding a mailbox checks every business's mailboxes and says the address belongs to that business.
+
+**Why:** Mailboxes are per business now, so the old one install check only looks at the open business (mail.ts, Section 4 edge case).
+
+**Context:** Deferred from plan: docs/designs/separate-businesses.md. Planned in the CEO review, not built in step one; the owner chose to ship and defer it (2026-11-20).
+
+**Effort:** S (human) / S (CC)
+**Priority:** P1
+**Depends on:** None
+
+### Name the business on a hire or deep link screen
+
+**What:** A link that hires or joins says which business it will join before anything happens.
+
+**Why:** With two businesses, a link opened while the wrong one is open would add to it (Section 3 threat table).
+
+**Context:** Deferred from plan: docs/designs/separate-businesses.md. Planned in the CEO review, not built in step one; the owner chose to ship and defer it (2026-11-20).
+
+**Effort:** S (human) / S (CC)
+**Priority:** P1
+**Depends on:** None
+
 ### Both businesses running at once in one app
 
 **What:** Step two of docs/designs/separate-businesses.md: each business runs as its own office process at the same time, with one window, a business switcher and a Needs you list marked by business.
@@ -294,18 +366,6 @@ Go with it: keep only the owner's own words (the answer, the edit, the note) in 
 
 **Effort:** S (human) / S (CC)
 **Priority:** P3
-**Depends on:** None
-
-### Key Pulse by a stable office id, not its folder path
-
-**What:** Store an office id in the office and key telemetry rows by it, or re-key rows when Settings moves the office; resolve the path with realpath meanwhile.
-
-**Why:** Moving the office, or reaching it by another spelling (a symlink, a different case), splits Pulse history and runs the backfill again under the new key.
-
-**Context:** From the /ship red team review, 2026-10-16. `pulseOffice()` in `index.ts` returns `expandTilde(harnessHome)`.
-
-**Effort:** M (human) / S (CC)
-**Priority:** P2
 **Depends on:** None
 
 ### Hand the hook secret over where another process cannot read it
@@ -968,6 +1028,20 @@ A live end-to-end run is required before adding an engine: Gemini has never been
 **Depends on:** None
 
 ## Completed
+
+### Key Pulse by a stable office id, not its folder path
+
+**What:** Store an office id in the office and key telemetry rows by it, or re-key rows when Settings moves the office; resolve the path with realpath meanwhile.
+
+**Why:** Moving the office, or reaching it by another spelling (a symlink, a different case), splits Pulse history and runs the backfill again under the new key.
+
+**Context:** From the /ship red team review, 2026-10-16. `pulseOffice()` in `index.ts` returns `expandTilde(harnessHome)`.
+
+**Effort:** M (human) / S (CC)
+**Priority:** P2
+**Depends on:** None
+**Completed:** unreleased, mit/promote-retry-5xx (2026-11-20). `pulseOffice()` returns the office's lasting id once settings are per office, and `persist.relabelOffice` moves existing rows from the folder to the id (E5 in docs/designs/separate-businesses.md).
+
 
 ### Sign and notarize the Mac build with an Apple Developer ID
 
