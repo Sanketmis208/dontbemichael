@@ -61,6 +61,17 @@ export const HIDDEN_ERRORS: Readonly<Record<string, string | null>> = {
   'unreadable: missing-part': 'answer-missing-part',
   'unreadable: question': 'answer-bad-question',
   'unreadable: home': 'answer-unasked-home',
+  // A Work style change that ended with nothing written, or whose call threw
+  // (owner, 2026-11-13): a retry never clears either, so the app hears of it.
+  'ended without an answer': 'session-ended',
+  // ...and the startup question or error its screen showed (issue 712). A
+  // sign in is the owner's to fix, never a report.
+  'ended without an answer: trust-folder': 'session-ended-trust-folder',
+  'ended without an answer: bypass-warning': 'session-ended-bypass-warning',
+  'ended without an answer: unknown-option': 'session-ended-unknown-option',
+  'ended without an answer: not-found': 'session-ended-not-found',
+  'ended without an answer: signed-out': null,
+  'threw': 'call-threw',
   'empty': 'answer-unparseable',
   'no verdict': 'answer-unparseable',
   // The hire check's answer, by the check it failed (issue 677).
@@ -120,7 +131,7 @@ export const LOG_KIND_CLASS: Readonly<Record<string, FailureClass>> = {
   'case-study-draft': 'none', 'case-study-logo': 'none', 'case-study-pdf': 'none', 'case-study-send': 'none', 'case-study-sent': 'none',
   'agent-hold': 'none', 'app-start': 'none', 'archive': 'none', 'card-reopen': 'none', 'clear': 'none',
   'clear-cancelled': 'none', 'clear-handoff-asked': 'none', 'closed-by-owner': 'none', 'compact': 'none',
-  'distinct-check': 'none', 'drain': 'none', 'file-handed-over': 'none', 'foundations': 'none', 'member-deleted': 'none',
+  'distinct-check': 'none', 'drain': 'none', 'file-handed-over': 'none', 'files-handed-over': 'none', 'foundations': 'none', 'member-deleted': 'none',
   'memory-read': 'none', 'memory-reset': 'none', 'memory-reset-start': 'none', 'memory-tidy': 'none',
   'memory-tidy-abort': 'none', 'message': 'none', 'message-held-for-trust-layer': 'none',
   'message-held-not-reporting': 'none', 'outbox-repair': 'none', 'owner-reply-unmatched': 'none',

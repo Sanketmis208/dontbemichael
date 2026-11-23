@@ -26,7 +26,7 @@ import {
   secretRefFor,
   INTEGRATION_ID_TAKEN
 } from '../shared/integrations';
-import { readConfig, writeConfig } from './config';
+import { openOfficeId, readConfig, readStoredConfig, writeConfig } from './config';
 import { SECRETS_FILE_UNREADABLE } from '../shared/secretStore';
 
 // ─── Registry (config-backed) ────────────────────────────────────────────────
@@ -117,6 +117,96 @@ function readSecretBlobForWrite(): Record<string, string> {
   return parsed as Record<string, string>;
 }
 
+/**
+ * The key a secret is stored under. Once settings are per office
+ * (docs/designs/separate-businesses.md) each business's secrets are kept under
+ * its office id, `@<id>/<ref>`, so two businesses with a mailbox or integration
+ * of the same id keep two passwords, and one never reads the other's. Keys
+ * from before the move stay in the file untouched (a downgrade reads them) and
+ * are never read after it; the move copies them to the business's offices
+ * (copySecretsToOffices). Null after the move with no office open: nowhere to
+ * keep a business's secret.
+ */
+function storedRef(secretRef: string): string | null {
+  if (!readStoredConfig().officesMigrated) return secretRef;
+  const id = openOfficeId();
+  return id ? `@${id}/${secretRef}` : null;
+}
+
+/**
+ * At the move: give each of these offices its own copy of every secret saved
+ * before it (still encrypted; nothing is decrypted). A copy already there is
+ * kept, so a move that stopped midway and runs again changes nothing it did.
+ * True when the copies are in the file, or there were none to make.
+ */
+export function copySecretsToOffices(ids: string[]): boolean {
+  try {
+    const blob = readSecretBlobForWrite();
+    let changed = false;
+    for (const [key, cipher] of Object.entries(blob)) {
+      if (key.startsWith('@')) continue;
+      for (const id of ids) {
+        const scoped = `@${id}/${key}`;
+        if (!(scoped in blob)) { blob[scoped] = cipher; changed = true; }
+      }
+    }
+    if (changed) writeSecretBlob(blob);
+    return true;
+  } catch (e) {
+    console.error('[integrations] could not copy saved secrets to the offices:', e instanceof Error ? e.message : String(e));
+    return false;
+  }
+}
+
+/**
+ * A backup (backup.ts): every saved secret, decrypted, by the key it is kept
+ * under. MAIN-INTERNAL ONLY: it goes straight into the backup sealed with the
+ * owner's backup password, never over IPC, never logged. One that cannot be
+ * decrypted on this computer is left out.
+ */
+export function exportSecrets(): Record<string, string> {
+  if (!canStoreSecrets()) return {};
+  const out: Record<string, string> = {};
+  for (const [key, cipher] of Object.entries(readSecretBlob())) {
+    try { out[key] = safeStorage.decryptString(Buffer.from(cipher, 'base64')); } catch { /* not readable here */ }
+  }
+  return out;
+}
+
+/**
+ * A restore: the secrets from a backup, locked to this computer (safeStorage),
+ * replacing the file. False, with nothing written, when this computer cannot
+ * keep secrets encrypted.
+ */
+export function importSecrets(secrets: Record<string, string>): boolean {
+  if (!canStoreSecrets()) return false;
+  const blob: Record<string, string> = {};
+  for (const [key, plain] of Object.entries(secrets)) {
+    if (typeof plain === 'string' && plain) blob[key] = safeStorage.encryptString(plain).toString('base64');
+  }
+  if (Object.keys(blob).length === 0) return true;
+  writeSecretBlob(blob);
+  return true;
+}
+
+/** A factory reset of one business: every secret kept under its office id.
+ *  Another office's, and the keys from before the move, stay. True when none
+ *  of them is left in the file. */
+export function deleteOfficeSecrets(id: string): boolean {
+  try {
+    const blob = readSecretBlobForWrite();
+    const prefix = `@${id}/`;
+    const mine = Object.keys(blob).filter((k) => k.startsWith(prefix));
+    if (mine.length === 0) return true;
+    for (const k of mine) delete blob[k];
+    if (Object.keys(blob).length === 0) rmSync(secretsPath(), { force: true });
+    else writeSecretBlob(blob);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Every secret lives in this one file, so a torn write would lose all of them:
  *  write it atomically (atomicFile.ts). */
 function writeSecretBlob(blob: Record<string, string>): void {
@@ -154,13 +244,15 @@ export function secretStoreUnavailableReason(platform: NodeJS.Platform = process
 export function setSecret(secretRef: string, plaintext: string): { ok: boolean; error?: string } {
   if (!secretRef) return { ok: false, error: 'secretRef required' };
   if (typeof plaintext !== 'string' || plaintext === '') return { ok: false, error: 'secret required' };
+  const key = storedRef(secretRef);
+  if (!key) return { ok: false, error: 'No office is open to keep this for.' };
   try {
     if (!safeStorage.isEncryptionAvailable()) {
       return { ok: false, error: secretStoreUnavailableReason() };
     }
     const cipher = safeStorage.encryptString(plaintext).toString('base64');
     const blob = readSecretBlobForWrite();
-    blob[secretRef] = cipher;
+    blob[key] = cipher;
     writeSecretBlob(blob);
     return { ok: true };
   } catch (e) {
@@ -171,8 +263,9 @@ export function setSecret(secretRef: string, plaintext: string): { ok: boolean; 
 /** Decrypt a secret. MAIN-INTERNAL ONLY — never expose this over IPC. Returns
  *  undefined if absent or undecryptable (the broker maps that to 503 no_secret). */
 export function getSecret(secretRef: string | undefined): string | undefined {
-  if (!secretRef) return undefined;
-  const cipher = readSecretBlob()[secretRef];
+  const key = secretRef ? storedRef(secretRef) : null;
+  if (!key) return undefined;
+  const cipher = readSecretBlob()[key];
   if (!cipher) return undefined;
   try {
     if (!safeStorage.isEncryptionAvailable()) return undefined;
@@ -184,8 +277,9 @@ export function getSecret(secretRef: string | undefined): string | undefined {
 
 /** Whether a secret is stored for this ref (no decryption). */
 export function hasSecret(secretRef: string | undefined): boolean {
-  if (!secretRef) return false;
-  return !!readSecretBlob()[secretRef];
+  const key = secretRef ? storedRef(secretRef) : null;
+  if (!key) return false;
+  return !!readSecretBlob()[key];
 }
 
 /** Delete a stored secret. Idempotent, and never throws. True when it is not
@@ -193,12 +287,14 @@ export function hasSecret(secretRef: string | undefined): boolean {
  *  in the file, because the file could not be read or written. */
 export function deleteSecret(secretRef: string | undefined): boolean {
   if (!secretRef) return true;
+  const key = storedRef(secretRef);
+  if (!key) return true;
   try {
     // An unreadable file throws here instead of reading as empty, which
     // would report the secret gone while it is still on disk.
     const blob = readSecretBlobForWrite();
-    if (!(secretRef in blob)) return true;
-    delete blob[secretRef];
+    if (!(key in blob)) return true;
+    delete blob[key];
     if (Object.keys(blob).length === 0) rmSync(secretsPath(), { force: true });
     else writeSecretBlob(blob);
     return true;

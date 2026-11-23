@@ -530,9 +530,11 @@ export function sectionFor(rec: FoundationsRecord, jobs: readonly FoundationJob[
 }
 
 /** What Michael carries: the whole document, and which questions the work hit
- *  while they are still open: empty, or a list only partly known. */
+ *  while they are still open: empty, or a list only partly known. A retired
+ *  question is never open, even with a hit from before it retired, so the
+ *  weekly check raises no card for it. */
 export function michaelFoundations(rec: FoundationsRecord, jobs: readonly FoundationJob[], nameOf: (id: string) => string = (id) => id, now = Date.now()): string {
-  const hit = (Object.keys(rec.hits) as FoundationId[]).filter((id) => !isSettled(rec, id, now));
+  const hit = (Object.keys(rec.hits) as FoundationId[]).filter((id) => !questionOf(id).retired && !isSettled(rec, id, now));
   const empty = hit.filter((id) => !rec.answers[id]);
   const partly = hit.filter((id) => !!rec.answers[id]).map((id) => (rec.hits[id]?.reason === 'expired' ? `${id} (past its shelf life)` : id));
   return [

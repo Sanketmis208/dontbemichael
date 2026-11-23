@@ -41,9 +41,8 @@ runs on your computer.
 > brings you only the calls that need you.
 
 > [!TIP]
-> **New in 0.3.8: a lighter app.** Features owners never used are gone, and when nothing needs you,
-> Michael offers one tip from your office. In 0.3.7, Ask me cards show the pages and files they
-> rest on.
+> **New in 0.4.3: run two separate businesses on one computer.** Each keeps its own settings,
+> passwords and files, and the business name in the top bar switches between them.
 
 ## Contents
 
@@ -128,6 +127,10 @@ business runs on, and each team member works from the one that matches its job.
   copies it across, so nobody opens another team member's folder. When you open an email a card
   is built on, a click on one of its attachments opens a read only copy in its own app; programs,
   scripts and other kinds the office doesn't take in stay in your mail app.
+- **Files from its folder go with its email.** A team member attaches files from its own folder,
+  or a folder you named for its job, as its Sending allows. On Send on approval the card lists each
+  file: open it in its own app, or take it off before you approve. A file a teammate keeps is
+  handed over first, into the sender's From teammates folder.
 - **Put it on a clock.** Add a schedule like "Check the support inbox" every hour in the same tab,
   with a focus area for each run, and the team member sorts new mail, answers it as its Sending
   setting allows and tells Michael what needs you. A new Executive Admin arrives with an Inbox to zero job already set.
@@ -269,6 +272,8 @@ and signs you in where you can see it, or takes an Anthropic API key instead.
 **Also**
 - **Updates.** A new version downloads in the background and arrives as a card from Michael on Needs you, with Later and Restart to update (or Download, for an install that can't update itself). Nothing restarts until you click.
 - **Claude Code updates.** When Claude Code updates itself, team members already running stay on the old version until they restart. A "team upgrade ready" chip and note offer to close the office the safe way (everyone saves first) and reopen on the new version. Nothing restarts until you click.
+- **Two separate businesses.** Each business keeps its own settings, saved passwords and keys, files, history and, if you choose, its own Claude account. The business name in the top bar switches between them, closing the open office properly first, and Add a business sets up another while the open one keeps working. The business you are not in waits until you open it.
+- **Backup and restore.** One file holds everything on this computer: every business, its team, memory, tasks, history, knowledge, settings and the team's folders, with saved passwords and keys locked by a backup password. Restore it on a new computer from Settings, General, or from the first setup screen.
 
 <div align="right">(<a href="#what-it-is">↑ back to top</a>)</div>
 
@@ -318,7 +323,9 @@ follow.
   trust layer that keeps out the kinds of data you mark private in Settings, Research & privacy,
   and their answers are cleaned of instructions before your team reads them. They see none of your
   files, and they are off until you turn them on. On Windows, they can still reach your office files.
-  The one exception: when you start your case study, the app reads your logo from your own website.
+  Two exceptions: when you start your case study, the app reads your logo from your own website, and as
+  you type a street address, the app asks OpenStreetMap (Photon) for matching addresses, sending only
+  what you typed in that field.
 - **A case study, only if you send it.** Pulse can build a case study page of your office for
   our website. It goes out only when you press Send, from your own mailbox, after you agree we may
   publish it and take it down if you ask. See [`TELEMETRY.md`](./TELEMETRY.md#case-studies-you-send-us).
@@ -388,5 +395,5 @@ The **source code** is licensed under the **MIT License**. See [`LICENSE`](./LIC
 
 ## Acknowledgements
 
-- [Munder Difflin](https://github.com/chaitanyagiri/munder-difflin) by Chaitanya Giri, for the inspiration. Don't Be Michael is a complete rewrite, built from the ground up so AI agents can run the everyday work of a small business.
+- Munder Difflin by Chaitanya G, for the inspiration. Don't Be Michael is a complete rewrite, built from the ground up so AI agents can run the everyday work of a small business.
 - [xterm.js](https://xtermjs.org/) · [node-pty](https://github.com/microsoft/node-pty) · [electron-vite](https://electron-vite.org/) · [CodeMirror](https://codemirror.net/) for the libraries this is built on.

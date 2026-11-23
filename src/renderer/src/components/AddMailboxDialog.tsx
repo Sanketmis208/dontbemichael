@@ -4,8 +4,8 @@ import { PixelButton } from './PixelButton';
 import { Disclosure, Toggle } from './triggers/ui';
 import { Field, Panel, hint } from './fieldText';
 import {
-  GOOGLE_APP_PASSWORDS_URL, GOOGLE_TWO_STEP_URL, IMAPS_PORT, PROVIDER_ORDER, PROVIDER_PRESETS, SMTPS_PORT, SUBMISSION_PORT,
-  googleStepUrl, guessServers, isGoogleProvider, type MailProvider, type MailServer, type MailboxRecord
+  appPasswordSteps, GOOGLE_APP_PASSWORDS_URL, GOOGLE_TWO_STEP_URL, IMAPS_PORT, PROVIDER_ORDER, PROVIDER_PRESETS, SMTPS_PORT, SUBMISSION_PORT,
+  googleStepUrl, guessServers, isGoogleProvider, providerForAddress, type MailProvider, type MailServer, type MailboxRecord
 } from '@shared/mailboxes';
 
 /**
@@ -19,20 +19,25 @@ import {
  * dialog, Escape closes, the password has a Show/Hide button, and the testing
  * and failure lines are announced politely.
  */
-export function AddMailboxDialog({ fix, onClose, onSaved }: {
+export function AddMailboxDialog({ fix, suggestedAddress, onClose, onSaved }: {
   /** The mailbox being fixed; absent when adding. */
   fix?: MailboxRecord;
+  /** Adding: the address to start with, the company's email from setup
+   *  (suggestedMailboxAddress); its service is picked when its domain names one. */
+  suggestedAddress?: string;
   onClose: () => void;
   onSaved: (rec: MailboxRecord) => void;
 }) {
   const { t } = useTranslation();
   // A mailbox saved as Google Workspace opens on the one Google tile, and
   // saves as gmail: the same servers (owner, 2026-10-26).
-  const [provider, setProvider] = useState<MailProvider>(fix?.provider === 'google-workspace' ? 'gmail' : (fix?.provider ?? 'gmail'));
-  const [address, setAddress] = useState(fix?.address ?? '');
+  const start = fix ? '' : (suggestedAddress ?? '');
+  const [provider, setProvider] = useState<MailProvider>(fix?.provider === 'google-workspace' ? 'gmail' : (fix?.provider ?? providerForAddress(start) ?? 'gmail'));
+  const [address, setAddress] = useState(fix?.address ?? start);
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const guessed = guessServers(address);
+  const steps = appPasswordSteps(provider, address);
   const [imapHost, setImapHost] = useState(fix?.provider === 'other' ? fix.imap.host : '');
   const [smtpHost, setSmtpHost] = useState(fix?.provider === 'other' ? fix.smtp.host : '');
   const [imapPort, setImapPort] = useState(String(fix?.imap.port ?? IMAPS_PORT));
@@ -142,6 +147,8 @@ export function AddMailboxDialog({ fix, onClose, onSaved }: {
             the paste (eng review, 2026-10-26: a business owner could not
             follow the one paragraph). */}
         {isGoogleProvider(provider) && <GoogleSteps address={address} />}
+        {/* iCloud Mail, Yahoo and Zoho get the same cards. */}
+        {steps && <AppPasswordSteps provider={provider} pages={steps} />}
         <Field label={t('mailboxes.password')}>
           <div style={{ display: 'flex', gap: 6 }}>
             <input
@@ -176,7 +183,7 @@ export function AddMailboxDialog({ fix, onClose, onSaved }: {
         )}
         </Panel>
 
-        {!isGoogleProvider(provider) && (
+        {provider === 'other' && (
           <div style={{ background: 'var(--cth-blue-soft)', borderRadius: 'var(--cth-r-md)', padding: '9px 12px', fontSize: 12.5, lineHeight: '18px', marginTop: 14, color: 'var(--cth-ink)' }}>
             {t(`mailboxes.help.${provider}`)}
           </div>
@@ -215,6 +222,24 @@ function GoogleSteps({ address }: { address: string }) {
         <div style={{ ...hint, marginTop: 6 }}>{t('mailboxes.google.step2Admin')}</div>
       </Step>
       <Step n={3} title={t('mailboxes.google.step3Title')} line={t('mailboxes.google.step3Line')} />
+    </ol>
+  );
+}
+
+/** The app password steps of iCloud Mail, Yahoo and Zoho, each page one
+ *  click away. The words are mailboxes.steps.<provider>.step<n>. */
+function AppPasswordSteps({ provider, pages }: { provider: MailProvider; pages: (string | null)[] }) {
+  const { t } = useTranslation();
+  return (
+    <ol style={{ listStyle: 'none', margin: '2px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {pages.map((url, i) => {
+        const key = `mailboxes.steps.${provider}.step${i + 1}`;
+        return (
+          <Step key={key} n={i + 1} title={t(`${key}Title`)} line={t(`${key}Line`)}>
+            {url && <PixelButton variant="secondary" size="sm" onClick={() => { void window.cth.openExternal(url); }}>{t(`${key}Open`)}</PixelButton>}
+          </Step>
+        );
+      })}
     </ol>
   );
 }

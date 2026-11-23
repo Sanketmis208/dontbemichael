@@ -91,6 +91,10 @@ export function refusalForClass(id: DataClassId): string {
 }
 export const REFUSAL_FILES = `Not sent to ${RESEARCH_NAME}: files can't be sent to ${RESEARCH_NAME}. Put the question in the message.`;
 export const REFUSAL_OFF = `Not sent: ${RESEARCH_NAME} is off, so nobody can look this up. Work without it.`;
+/** Switched on, but not running yet after the wait for it to start (every
+ *  member is started again as the office opens): not the owner's switch, and
+ *  not about the wording. */
+export const REFUSAL_NOT_RUNNING = `Not sent to ${RESEARCH_NAME}: ${RESEARCH_NAME} is not running right now. This is not about the wording, so send it again later.`;
 export const REFUSAL_UNSURE = `Not sent to ${RESEARCH_NAME}: the privacy check could not confirm it holds no private details. Ask again in plainer words, without names, contact details or figures.`;
 /** The check itself could not run (no answer, an answer it could not read,
  *  too slow, settings it could not read): still not sent, and not the wording. */

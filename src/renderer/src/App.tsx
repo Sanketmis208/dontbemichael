@@ -16,7 +16,7 @@ import { AgentDetailPanel } from '@/components/AgentDetailPanel';
 import { AddAgentModal } from '@/components/AddAgentModal';
 import { MichaelBooting } from '@/components/MichaelBooting';
 import { TeamClockingIn } from '@/components/TeamClockingIn';
-import { OnboardingWizard } from '@/components/OnboardingWizard';
+import { OnboardingWizard, type AddBusinessMode } from '@/components/OnboardingWizard';
 import { OfficeFolderMissing } from '@/components/OfficeFolderMissing';
 import { ClosingTimeBar, type ClosingTimeState } from '@/components/ClosingTimeBar';
 import { setCloseAndReopen } from '@/components/CliUpdateNotice';
@@ -33,7 +33,7 @@ import { TopBar, NeedsYouStrip } from '@/shell/TopBar';
 import { setDialogsSuspended } from '@/shell/useDialog';
 import { useRestoreTeam } from '@/hooks/useRestoreTeam';
 import { NeedsYouBoard, RestoreTeamBanner } from '@/shell/NeedsYouBoard';
-import { setWorkStyleOffersSource, useNeedsYou } from '@/shell/useNeedsYou';
+import { setCaseStudyScreenOpen, setWorkStyleOffersSource, useNeedsYou } from '@/shell/useNeedsYou';
 import { readWorkStyleOffers } from '@/shell/workStyleOffers';
 import { columnAfterGoneHome } from '@/shell/closingFloor';
 import { watchReturningBindings } from '@/shell/releaseBindings';
@@ -67,6 +67,8 @@ export function App() {
   const setSidebarWidth = useStore(s => s.setSidebarWidth);
   const floorView = useStore(s => s.floorView);
   const caseStudyOpen = useStore(s => s.caseStudyOpen);
+  // The Ask me count leaves out the case study card while its screen is open.
+  useEffect(() => { setCaseStudyScreenOpen(caseStudyOpen); }, [caseStudyOpen]);
   const godId = useStore(s => s.agents.find((a) => a.isGod)?.id) ?? 'god';
 
   const [config, setConfig] = useState<HarnessConfig | null>(null);
@@ -87,6 +89,20 @@ export function App() {
   // until the office closes or the owner goes back to work.
   const [closingOpen, setClosingOpen] = useState(false);
   const [closing, setClosing] = useState<ClosingTimeState | null>(null);
+  // Add a business (separate-businesses.md, DT3): the setup wizard over the
+  // floor while the open business keeps working; a draft goes on where it
+  // stopped. Asked for from the business menu and Settings (cth:add-business).
+  const [addBusiness, setAddBusiness] = useState<{ draft: AddBusinessMode['draft'] } | null>(null);
+  useEffect(() => {
+    const onAdd = (e: Event): void => {
+      const id = (e as CustomEvent<{ id?: string }>).detail?.id;
+      setSettingsOpen(false);
+      if (!id) { setAddBusiness({ draft: null }); return; }
+      void window.cth.businessDraft(id).then((draft) => setAddBusiness({ draft })).catch(() => setAddBusiness({ draft: null }));
+    };
+    window.addEventListener('cth:add-business', onAdd);
+    return () => window.removeEventListener('cth:add-business', onAdd);
+  }, []);
   const [vpWidth, setVpWidth] = useState<number>(window.innerWidth);
 
   // A closed bound hire who comes back gets their bindings back (SR3).
@@ -363,7 +379,7 @@ export function App() {
   // click outside it (not the pill, which toggles it, nor the splitter).
   // Off the office the column is hidden, so a click on Tasks or the graph is
   // not "outside" it (ship review 2026-10-03).
-  const allClear = rightColumn === 'board' && floorView === 'office' && feed.status === 'ready' && feed.count === 0;
+  const allClear = rightColumn === 'board' && floorView === 'office' && feed.status === 'ready' && feed.count === 0 && !feed.updateRestarting;
   useEffect(() => {
     if (!allClear) return;
     const onDown = (e: PointerEvent) => {
@@ -539,8 +555,15 @@ export function App() {
                 setClosing(null);
                 setClosingOpen(false);
               }}
-              onForceQuit={() => { void window.cth.confirmClose(); }}
+              // During a switch of business, the same button switches now (D20).
+              onForceQuit={() => { void (closing?.switching ? window.cth.switchNow() : window.cth.confirmClose()); }}
               onRetry={() => { void startClosingTime(reopenAsked.current ? { relaunch: true } : undefined); }}
+            />
+          )}
+          {addBusiness && (
+            <OnboardingWizard
+              onComplete={() => setAddBusiness(null)}
+              add={{ draft: addBusiness.draft, openBusinessName: config.businessName ?? '', onClose: () => setAddBusiness(null) }}
             />
           )}
         </div>

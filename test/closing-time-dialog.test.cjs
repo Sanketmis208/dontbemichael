@@ -142,10 +142,12 @@ test('quitting starts closing time on the floor, with no dialog (owner, 2026-09-
   // The bar takes the bottom bar's place; Cancel calls closing time off and tells main.
   assert.match(app, /\{closingOpen && \(\n\s+<ClosingTimeBar/);
   assert.match(app, /if \(closing\?\.phase !== 'error'\) cancelClosingTime\(\);\n\s+window\.cth\.cancelClose\(\);/);
-  assert.match(app, /onForceQuit=\{\(\) => \{ void window\.cth\.confirmClose\(\); \}\}/);
+  // A quit's Force quit is still the hard quit; during a switch of business the
+  // same button switches now (separate-businesses.md, D20).
+  assert.match(app, /onForceQuit=\{\(\) => \{ void \(closing\?\.switching \? window\.cth\.switchNow\(\) : window\.cth\.confirmClose\(\)\); \}\}/);
   // Force quit loses unsaved work, so it asks once.
   const bar = read('src/renderer/src/components/ClosingTimeBar.tsx');
-  assert.match(bar, /onClick=\{\(\) => setConfirmForce\(true\)\}>\{t\('quit\.forceQuit'\)\}/);
+  assert.match(bar, /onClick=\{\(\) => setConfirmForce\(true\)\}>\{sw \? t\('closingBar\.switchNow'\) : t\('quit\.forceQuit'\)\}/);
   for (const loc of ['en']) {
     const d = JSON.parse(read(`src/renderer/src/i18n/locales/${loc}.json`));
     for (const k of ['title', 'starting', 'left', 'leftPlural', 'hideWho', 'confirmForce', 'keepClosing', 'tryAgain']) assert.ok(d.closingBar[k], `${loc}: closingBar.${k}`);

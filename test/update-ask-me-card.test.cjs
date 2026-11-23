@@ -78,6 +78,35 @@ test('the update counts on Ask me, survives a re-check, and Later takes it off u
   assert.equal(r.newer, 1, 'a newer version asks again');
 });
 
+test('the update card does not count while a restart is under way', () => {
+  // Value: protects=the pill and the strip count only the cards Ask me shows; fails_when=the count keeps the card a restart hides, or a called off restart leaves it out; why_new=the count ran one ahead (TODOS.md); seam=none
+  const r = runFeed(`
+    feed.subscribeNeedsYou(() => {});
+    await tick(); await tick();
+    push(${JSON.stringify(downloaded)});
+    feed.setUpdateRestarting(true);
+    out.restarting = feed.getNeedsYouFeed().count;
+    feed.setUpdateRestarting(false);
+    out.calledOff = feed.getNeedsYouFeed().count;
+  `);
+  assert.equal(r.restarting, 0, 'the card steps aside for the quit warning');
+  assert.equal(r.calledOff, 1, 'a called off restart brings the card back');
+});
+
+test('a pending restart is not All clear on Ask me', () => {
+  // Value: protects=the board does not say All clear while an update still waits behind the quit warning; fails_when=boardEmpty follows the restart aware check again; why_new=review on #725; seam=source pin; no_claim=the look (live check in the dev app)
+  const ask = read('src/renderer/src/components/AskMeTab.tsx');
+  assert.match(ask, /const updateWaiting = updateCardShown\(update, updateLater\);/);
+  assert.doesNotMatch(ask, /updateShown/, 'the restart aware check lives in the count and the card');
+  assert.match(ask, /const boardEmpty = !engineCard && !updateWaiting && /);
+});
+
+test('Cancel on the closing bar does not close the Ask me column', () => {
+  // Value: protects=the click on Cancel during a restart is not taken as a click outside an empty column; fails_when=allClear forgets the pending restart; why_new=review on #725; seam=source pin; no_claim=the click itself (live check in the dev app)
+  const app = read('src/renderer/src/App.tsx');
+  assert.match(app, /const allClear = [^;]*feed\.count === 0 && !feed\.updateRestarting;/);
+});
+
 test('a status main already had when the window opened makes the card', () => {
   // Value: protects=an update found before the window listened still reaches Ask me; fails_when=the feed only follows pushes; why_new=new behavior; seam=none
   const r = runFeed(`

@@ -54,8 +54,9 @@ import { ATTACHMENT_MAX_BYTES, AttachmentSaveError, saveAttachmentFile } from '.
 
 export { ATTACHMENT_MAX_BYTES };
 import { emailLinkFor, type OriginalEmail } from '../shared/emailLink';
-import { OWN_SENDS_ONLY, proposalSendProblem, standingProblem, standingTooLong, threadFrom, STANDING_KIND_MAX, type MailProposal, type SendRecord, type StandingApproval, type StandingCheckEmail, type ThreadHeaders } from '../shared/mailProposals';
+import { OWN_SENDS_ONLY, approvedFiles, proposalSendProblem, standingProblem, standingTooLong, threadFrom, STANDING_KIND_MAX, type MailProposal, type SendRecord, type StandingApproval, type StandingCheckEmail, type ThreadHeaders } from '../shared/mailProposals';
 import { unfoundedMoneyReason } from '../shared/standingFacts';
+import { OUTGOING_HELD_MAX, OutgoingFileError, contentTypeOf, parseAttachPaths, type OutgoingFile, type OutgoingFiles } from './outgoingFiles';
 
 // Limits (eng review E6 left these to the implementer).
 const CALL_TIMEOUT_MS = 30_000;
@@ -67,6 +68,15 @@ const ATTACHMENT_CHUNK_BYTES = 1024 * 1024;
 /** What a read that timed out tells the agent: it clears on the next try. */
 export const READ_TIMEOUT_NOTE = 'The app opens a new connection on the next try, so try again at your next check; restarting the app is not needed.';
 const SEND_TIMEOUT_MS = 60_000;
+/** A send, a draft or a Sent copy with files waits longer: about 200 KB a
+ *  second on a slow line, up to what is left of md-mail's three minutes once
+ *  the files were read (OUTGOING_READ_BUDGET_MS, agent-attach-files.md). */
+const SEND_TIMEOUT_MAX_MS = 120_000;
+const SEND_BYTES_PER_SECOND = 200 * 1024;
+export function sendTimeoutFor(input: { files?: Array<{ content: Buffer }> }): number {
+  const bytes = (input.files ?? []).reduce((n, f) => n + f.content.length, 0);
+  return Math.min(SEND_TIMEOUT_MAX_MS, SEND_TIMEOUT_MS + Math.ceil((bytes * 4) / 3 / SEND_BYTES_PER_SECOND) * 1000);
+}
 const MX_LOOKUP_TIMEOUT_MS = 5_000;
 const SEARCH_DEFAULT = 20;
 const SEARCH_MAX = 50;
@@ -426,9 +436,11 @@ export interface ComposeInput {
   /** Threading headers from the member's own send record (a reply under a
    *  Send only grant): set instead of replyTo, so nothing is fetched (E1b). */
   thread?: ThreadHeaders;
-  /** Files the app itself made, such as the case study PDF
-   *  (docs/designs/case-study.md). Never set from an agent's input: the md-mail
-   *  tool builds ComposeInput field by field, so it can't reach this. */
+  /** Files the app itself holds: one it made, such as the case study PDF
+   *  (docs/designs/case-study.md), or one a member attached from its folder,
+   *  as the app read it inside the member's walls (agent-attach-files.md).
+   *  Never bytes from an agent's input: the md-mail tool builds ComposeInput
+   *  field by field, so it can't reach this. */
   files?: Array<{ filename: string; content: Buffer; contentType: string }>;
 }
 
@@ -1302,7 +1314,7 @@ export class MailService {
     const rec = this.record(id);
     const msg = await this.compose(id, rec.address, input, MailService.newMessageId(rec.address));
     const raw = await MailService.build(msg);
-    await this.inFolder(id, MailService.drafts, async (c, path) => { await c.append(path, raw, ['\\Draft', '\\Seen']); }, 'Saving the draft', true);
+    await this.inFolder(id, MailService.drafts, async (c, path) => { await c.append(path, raw, ['\\Draft', '\\Seen']); }, 'Saving the draft', true, sendTimeoutFor(input));
     return { saved: true, messageId: String(msg.messageId) };
   }
 
@@ -1369,12 +1381,13 @@ export class MailService {
     const stop = beforeSmtp?.();
     if (stop) throw new MailError('refused', `Not sent. ${stop}`);
     const smtp = this.createSmtp(rec.smtp, rec.address, this.password(id));
+    const sendStarted = Date.now();
     try {
       // Saved before the server sees it, so a stop before its answer never
       // leads to a second copy. If that can't be saved, nothing goes out.
       this.pending.set(key, { at: now, messageId });
       if (!this.saveJournal()) throw new MailError('unknown', 'The app could not record this send before sending it. Try again in a moment.');
-      await withTimeout(smtp.sendMail(msg), SEND_TIMEOUT_MS, 'Sending');
+      await withTimeout(smtp.sendMail(msg), sendTimeoutFor(input), 'Sending');
     } catch (e) {
       const err = classifyMailError(e);
       if (err.kind === 'timeout' || err.kind === 'network') {
@@ -1401,7 +1414,10 @@ export class MailService {
     // Gmail files sent mail itself; other services need the copy appended.
     if (rec.provider !== 'gmail' && rec.provider !== 'google-workspace') {
       const raw = await MailService.build(msg).catch(() => null);
-      if (raw) await this.inFolder(id, MailService.sentBox, async (c, path) => { await c.append(path, raw, ['\\Seen']); }, 'Saving to Sent', true).catch(() => undefined);
+      // Only what is left of the send's own time, so a big email's copy never
+      // carries the call past md-mail's three minutes (it is best-effort).
+      const sentLimit = Math.max(5_000, Math.min(sendTimeoutFor(input), SEND_TIMEOUT_MAX_MS - (Date.now() - sendStarted)));
+      if (raw) await this.inFolder(id, MailService.sentBox, async (c, path) => { await c.append(path, raw, ['\\Seen']); }, 'Saving to Sent', true, sentLimit).catch(() => undefined);
     }
     return { sent: true, messageId };
   }
@@ -1492,6 +1508,8 @@ export interface ProposalStore {
   recordSend(rec: SendRecord): void;
   sendRecord(agentId: string, mailbox: string, messageId: string): SendRecord | undefined;
   recentSends(agentId: string, mailbox: string, limit?: number): SendRecord[];
+  /** Bytes of file copies the member holds for emails not yet sent. */
+  heldFileBytes?(agentId: string): number;
 }
 
 /** The separate check that an email fits a standing approval. Null when it
@@ -1573,7 +1591,7 @@ async function keptRefs(svc: MailService, mailbox: string, input: ComposeInput):
   return { forward: input.forward && await keep(input.forward), attachFrom: input.attachFrom && attachFrom };
 }
 
-type MailRequestDeps = Pick<MailDeps, 'getConfig' | 'log'> & { memberFolder?: (agentId: string) => string | undefined; documentText?: (path: string) => Promise<string | null>; audit?: (event: Record<string, unknown>) => void; organized?: (moved: OrganizedMove) => void; proposals?: ProposalStore; fitCheck?: StandingFitCheck; present?: (agentId: string) => boolean; tellMichael?: (subject: string, body: string) => void };
+type MailRequestDeps = Pick<MailDeps, 'getConfig' | 'log'> & { outgoing?: Pick<OutgoingFiles, 'read' | 'keep' | 'settled' | 'drop' | 'load'>; memberFolder?: (agentId: string) => string | undefined; documentText?: (path: string) => Promise<string | null>; audit?: (event: Record<string, unknown>) => void; organized?: (moved: OrganizedMove) => void; proposals?: ProposalStore; fitCheck?: StandingFitCheck; present?: (agentId: string) => boolean; tellMichael?: (subject: string, body: string) => void };
 
 /** Messages Michael has already heard were flagged, so a re-read does not tell him twice. */
 const flaggedTold = new Set<string>();
@@ -1758,6 +1776,17 @@ async function runMailRequest(
     } catch (e) { console.error('[mail] send record not kept:', agentId, mailbox, String(out.messageId), e); }
   };
   const grantFlag = underGrant ? { grant: true } : {};
+  // Files from the member's own folder (agent-attach-files.md). An approved
+  // send carries the copies kept with its card, never the call's. None under a
+  // grant: its sent mail sits in a mailbox another member reads.
+  const attach = op === 'draft' || op === 'propose' || (op === 'send' && !proposalId) ? parseAttachPaths(body.attach_files) : { ok: true as const, paths: [] as string[] };
+  if (!attach.ok) return { status: 400, body: { error: attach.error } };
+  const attachPaths = attach.paths;
+  if (attachPaths.length && underGrant) {
+    return { status: 403, body: { error: 'You send only from this mailbox, so files from your folder can\'t go with an email from it. Attach them to an email from your own mailbox, or tell Michael.' } };
+  }
+  if (attachPaths.length && !deps.outgoing) return { status: 503, body: { error: 'Attaching files is not available right now. Tell Michael.' } };
+  const attachments = (files: OutgoingFile[]) => files.map((f) => ({ filename: f.name, content: f.bytes, contentType: contentTypeOf(f.kind) }));
 
   try {
     // Send on approval: the approved version the app kept goes out, never text
@@ -1784,6 +1813,19 @@ async function runMailRequest(
         return { status: 403, body: { error: `${refused} The email was withdrawn; write it again without that.` } };
       }
       const approved: ComposeInput = { to: p!.to, cc: p!.cc, subject: p!.approved?.subject ?? p!.subject, body: p!.approved?.body ?? p!.body, replyTo: p!.replyTo, forward: p!.forward, attachFrom: p!.attachFrom, thread: p!.thread };
+      // The copies taken when it was proposed, the ones the owner left on it,
+      // each checked against its hash. Gone or changed: withdrawn, never sent
+      // without them.
+      if (p!.files?.items.length) {
+        try {
+          if (!deps.outgoing) throw new OutgoingFileError('The files kept for this email can\'t be read right now.');
+          approved.files = deps.outgoing.load(p!.files, approvedFiles(p!));
+        } catch (e) {
+          if (!(e instanceof OutgoingFileError)) throw e;
+          deps.proposals.cancel({ id: p!.id }, e.message);
+          return { status: 409, body: { error: `${e.message} The email was withdrawn; propose it again with the files.` } };
+        }
+      }
       // A reply threads on the headers kept when it was proposed, so the email
       // it answers may since have been archived; a card from before that keeps
       // reading them through its reply id.
@@ -1816,7 +1858,7 @@ async function runMailRequest(
         console.error('[mail] mark sent failed:', p!.id, e);
       }
       recordGrantSend(out, approved);
-      try { deps.audit?.({ kind: 'mail-sent-approved', agentId, mailbox, proposal: p!.id, ...grantFlag }); } catch { /* the send stands */ }
+      try { deps.audit?.({ kind: 'mail-sent-approved', agentId, mailbox, proposal: p!.id, ...grantFlag, ...(approved.files?.length ? { files: approved.files.length, bytes: approved.files.reduce((n, f) => n + f.content.length, 0) } : {}) }); } catch { /* the send stands */ }
       return { status: 200, body: out };
     }
     // A standing approval: fixed facts first, then the separate check. An email
@@ -1825,7 +1867,7 @@ async function runMailRequest(
     if (op === 'send' && standingId && !canSend) {
       if (!deps.proposals) return { status: 503, body: { error: 'Approvals are not available right now. Tell Michael.' } };
       const rule = deps.proposals.getStanding(standingId);
-      const problem = standingProblem(rule, agentId, mailbox!, input);
+      const problem = standingProblem(rule, agentId, mailbox!, { ...input, files: attachPaths });
       if (problem) return { status: 409, body: { error: problem } };
       if (!input.to || !input.subject || !input.body.trim()) return { status: 400, body: { error: 'send needs "to", "subject" and "body".' } };
       // The same email sent again while the first is still being checked or sent
@@ -1977,7 +2019,16 @@ async function runMailRequest(
       return { status: 200, body: done };
     }
     if (!input.to || !input.subject) return { status: 400, body: { error: `${op} needs "to" and "subject".` } };
-    if (op === 'draft') return { status: 200, body: await svc.draft(mailbox!, input) };
+    // Read inside the member's walls before anything is drafted, filed or sent,
+    // so one refused file stops the email and the member hears which and why.
+    let read: OutgoingFile[] = [];
+    if (attachPaths.length && (op === 'draft' || op === 'propose' || op === 'send')) {
+      const got = await deps.outgoing!.read(agentId, attachPaths);
+      if (!got.ok) return { status: 400, body: { error: got.error } };
+      read = got.files;
+    }
+    const readBytes = read.reduce((n, f) => n + f.size, 0);
+    if (op === 'draft') return { status: 200, body: await svc.draft(mailbox!, read.length ? { ...input, files: attachments(read) } : input) };
     if (op === 'propose') {
       if (!deps.proposals) return { status: 503, body: { error: 'Approvals are not available right now. Tell Michael.' } };
       if (!input.body.trim()) return { status: 400, body: { error: 'propose needs a "body".' } };
@@ -1994,13 +2045,37 @@ async function runMailRequest(
       }
       // What it forwards or attaches is kept by Message-ID too, for the same reason.
       const kept = await keptRefs(svc, mailbox!, input);
-      const p = deps.proposals.file({ agentId, mailbox: mailbox!, to: input.to, cc: input.cc, subject: input.subject, body: input.body, replyTo: input.replyTo, forward: kept.forward, attachFrom: kept.attachFrom, ...(thread ? { thread } : {}), ...(offer ? { offerStanding: offer } : {}) });
+      // Its files are copied where no agent reaches; those copies are what go
+      // out once approved. Only so much may wait per member.
+      let files: ReturnType<NonNullable<MailRequestDeps['outgoing']>['keep']> | undefined;
+      if (read.length) {
+        const held = deps.proposals.heldFileBytes?.(agentId) ?? 0;
+        if (held + readBytes > OUTGOING_HELD_MAX) {
+          return { status: 409, body: { error: `You already have emails with files waiting for the owner, and these would take more room than the app keeps for you (${Math.round(OUTGOING_HELD_MAX / (1024 * 1024))} MB). Wait until the owner decides them, then propose this again.` } };
+        }
+        try { files = deps.outgoing!.keep(read); } catch (e) {
+          if (e instanceof OutgoingFileError) return { status: 409, body: { error: e.message } };
+          throw e;
+        }
+      }
+      let p: MailProposal;
+      try {
+        p = deps.proposals.file({ agentId, mailbox: mailbox!, to: input.to, cc: input.cc, subject: input.subject, body: input.body, replyTo: input.replyTo, forward: kept.forward, attachFrom: kept.attachFrom, ...(files ? { files } : {}), ...(thread ? { thread } : {}), ...(offer ? { offerStanding: offer } : {}) });
+      } catch (e) {
+        if (files) deps.outgoing!.drop(files.key);
+        throw e;
+      } finally { if (files) deps.outgoing!.settled(files.key); }
       return { status: 200, body: { proposal: p.id, state: 'waiting for the owner on Ask me', ...(p.replaces ? { replaced: p.replaces, note: `This replaces your earlier proposal ${p.replaces} for the same email; that id no longer works.` } : {}), next: 'Nothing is sent yet. You will get a message when the owner decides: approved (then call send with this proposal id), changes asked, or not sent. Do not send it another way.' } };
     }
-    const out = await svc.send(agentId, mailbox!, input, () => {
+    const out = await svc.send(agentId, mailbox!, read.length ? { ...input, files: attachments(read) } : input, () => {
       const a = mailAccess(deps.getConfig(), agentId, mailbox, 'send', undefined, { present: deps.present });
       return a.ok ? null : a.reason;
     });
+    // Files from a folder, by count and size only: the office log is committed
+    // to git and agents read it (D14).
+    if (read.length && !out.repeated) {
+      try { deps.audit?.({ kind: 'mail-sent-files', agentId, mailbox, messageId: String(out.messageId ?? ''), files: read.length, bytes: readBytes }); } catch { /* the send stands */ }
+    }
     if (underGrant && !out.repeated) {
       recordGrantSend(out, input);
       // Who wrote as another member's address, by id only: the office log is

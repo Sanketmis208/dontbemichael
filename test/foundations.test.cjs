@@ -293,7 +293,9 @@ test('a member citing an owner message can neither override the owner nor set th
   assert.equal(o.w.handle('ryan', { question: 'reference_customers', gap: 'posts' }), null);
   assert.ok(o.w.read().hits.reference_customers);
   // A retired question is no job's any more (decision 6).
-  assert.match(o.w.handle('ryan', { question: 'current_customers', gap: 'posts' }), /not one of your job's/);
+  assert.match(o.w.handle('ryan', { question: 'current_customers', gap: 'posts' }), /is retired/);
+  assert.match(o.w.handle('god', { question: 'current_customers', gap: 'posts' }), /is retired/, 'from Michael too');
+  assert.equal(o.w.read().hits.current_customers, undefined);
   // Michael raises a gap for any job's question.
   assert.equal(o.w.handle('god', { question: 'access', gap: 'the owner asked about passwords' }), null);
   assert.ok(o.w.read().hits.access);
@@ -1012,6 +1014,68 @@ test('the owner\'s save makes a list whole; an undecided seen item holds it; a p
   assert.deepEqual(o.w.ownerAnswer('hours', 'x'.repeat(F.FOUNDATION_CAP + 1)), { ok: false, error: 'too-long' }, 'a single answer keeps 300');
 });
 
+test('Add on a seen item is saved at once: on the list, off the seen items, known so far, and Undo takes it back', (t) => {
+  // Value: protects=an owner who adds a few seen items today keeps them without saving the whole list (owner report 2026-11-18: an added item came back as a suggestion); fails_when=Add lives only in the window until Save, makes the list whole, or Undo leaves the line; why_new=Add was the one seen action not saved at once; seam=none; no_claim=the card UI (source pins)
+  const o = writer(t);
+  const file = officeFile(o);
+  o.w.ownerAnswer('tools', 'Google Firebase');
+  o.w.handle('sadiq', { question: 'tools', gap: 'x', item: 'Stripe', source: { file } });
+  o.w.handle('sadiq', { question: 'tools', gap: 'x', item: 'Apple iCloud+ 2 TB', source: { file } });
+  const hitBefore = o.w.read().hits.tools;
+  const [stripe, icloud] = o.w.read().seen.tools;
+  o.told.length = 0;
+  assert.deepEqual(o.w.seenAction('tools', icloud.id, 'add'), { ok: true, text: 'Google Firebase; Apple iCloud+ 2 TB' });
+  let rec = o.w.read();
+  assert.equal(rec.answers.tools.text, 'Google Firebase; Apple iCloud+ 2 TB', 'on the saved list now, not only in the box');
+  assert.equal(rec.answers.tools.source, 'owner');
+  assert.equal(rec.answers.tools.coverage, 'known', 'only Save says it is the whole list');
+  assert.deepEqual(rec.seen.tools.map((s) => s.id), [stripe.id], 'it leaves the seen items; the other still waits');
+  assert.deepEqual(rec.hits.tools, hitBefore, 'the card is still open: no new note to Michael for the next seen item');
+  assert.equal(o.told.length, 0);
+  assert.deepEqual(o.w.seenAction('tools', icloud.id, 'add'), { ok: false }, 'added once');
+  // Save afterwards needs only the rest settled.
+  assert.deepEqual(o.w.seenAction('tools', icloud.id, 'undoAdd'), { ok: true, text: 'Google Firebase' });
+  rec = o.w.read();
+  assert.equal(rec.answers.tools.text, 'Google Firebase');
+  assert.deepEqual(rec.seen.tools.map((s) => s.id).sort(), [stripe.id, icloud.id].sort(), 'Undo brings it back');
+  assert.deepEqual(o.w.seenAction('tools', icloud.id, 'undoAdd'), { ok: false }, 'nothing left to undo');
+  // An empty list: Add starts it, Undo empties it again.
+  o.w.handle('sadiq', { question: 'competitors', gap: 'x', item: 'Acme', source: { file } });
+  const acme = o.w.read().seen.competitors[0];
+  assert.deepEqual(o.w.seenAction('competitors', acme.id, 'add'), { ok: true, text: 'Acme' });
+  assert.deepEqual(o.w.seenAction('competitors', acme.id, 'undoAdd'), { ok: true, text: '' });
+  assert.equal(o.w.read().answers.competitors, undefined);
+  assert.deepEqual(o.w.read().seen.competitors.map((s) => s.id), [acme.id]);
+  // A full list refuses it, and a single question has no seen items to add.
+  assert.deepEqual(o.w.ownerAnswer('offer', 'x'.repeat(F.LIST_CAP - 3)), { ok: true, complete: true });
+  o.w.handle('sadiq', { question: 'offer', gap: 'x', item: 'Audits', source: { file } });
+  const audits = o.w.read().seen.offer[0];
+  assert.deepEqual(o.w.seenAction('offer', audits.id, 'add'), { ok: false, error: 'too-long' });
+  assert.deepEqual(o.w.read().seen.offer.map((s) => s.id), [audits.id], 'still waiting');
+  assert.deepEqual(o.w.seenAction('customers', 'x', 'add'), { ok: false });
+});
+
+test('a seen item the saved list already names is settled: on save, and at launch for lists an older card saved', (t) => {
+  // Value: protects=an item the owner saved never waits as a suggestion (owner report 2026-11-18: Apple iCloud+ was on the saved list and still in Seen); fails_when=a save that lost its added ids keeps or refuses on items its text names, or an existing record keeps them; why_new=the old card kept added ids only in the window; seam=a record written as the old card left it; no_claim=the card UI
+  const o = writer(t);
+  const file = officeFile(o);
+  o.w.ownerAnswer('tools', 'Google Firebase');
+  o.w.handle('sadiq', { question: 'tools', gap: 'x', item: 'Apple iCloud+ 2 TB', source: { file } });
+  o.w.handle('sadiq', { question: 'tools', gap: 'x', item: 'Slack', source: { file } });
+  o.w.handle('sadiq', { question: 'tools', gap: 'x', item: 'Marcaria', source: { file } });
+  const slack = o.w.read().seen.tools.find((s) => s.item === 'Slack');
+  o.w.seenAction('tools', slack.id, 'later');
+  // No added ids, as a card that lost them sends: the text still settles it.
+  assert.deepEqual(o.w.ownerAnswer('tools', 'Google Firebase\napple iCloud+ 2 TB\nMarcaria', []), { ok: true, complete: false });
+  assert.deepEqual(o.w.read().seen.tools.map((s) => s.item), ['Slack'], 'only the put off one waits');
+  // A record an older card left: saved on the list, still waiting.
+  const rec = o.w.read();
+  const stale = { ...rec, answers: { ...rec.answers, tools: { ...rec.answers.tools, text: 'Google Firebase; Slack' } } };
+  o.w.save(stale);
+  o.w.migrateLists();
+  assert.equal(o.w.read().seen.tools, undefined, 'launch takes off what the list names');
+});
+
 test('Michael makes a list whole only with "complete": true from the owner\'s own words', (t) => {
   // Value: protects=a passing mention relayed by Michael never closes a list (eng R2); fails_when=Michael's owner relay always or never closes it; why_new=R2; seam=ownerSaid is the writer's injected owner list, as today; no_claim=Michael choosing the flag
   const o = writer(t);
@@ -1176,7 +1240,10 @@ test('the list card: one box from the saved list, seen rows with Add, Not ours a
   assert.match(card, /seenDo\(n\.seen!, 'undoNotOurs'\)/);
   assert.match(card, /!\(list && known\)/, 'Draft only while a list is empty (D6)');
   assert.match(card, /readOnly=\{busy \|\| \(list && !loaded\)\}/, 'a list box waits for its record');
-  assert.match(card, /seen\.slice\(0, SEEN_SHOWN\)/);
+  assert.match(card, /listed\.slice\(0, SEEN_SHOWN\)/);
+  assert.match(card, /foundationsSeen\(id, s\.id, 'add'\)/, 'Add is saved at once, like Not ours and Decide later');
+  assert.match(card, /foundationsSeen\(id, s\.id, 'undoAdd'\)/);
+  assert.equal((card.match(/<CloseLine /g) ?? []).length, 3, 'each settled line (added, put off, not ours) can be closed');
   assert.match(card, /aria-label=\{t\('foundations\.card\.seenAddLabel', \{ item: s\.item \}\)\}/);
   const save = read('src/renderer/src/shell/foundationSave.ts');
   assert.match(save, /with "complete": true/, 'Michael\'s fallback carries the whole list flag');
@@ -1201,6 +1268,24 @@ test('a retired list is told to Michael once, kept until its keeper takes it ove
   assert.equal(o.w.read().answers.current_customers.retiredKeptBy, 'ryan');
   assert.match(F.michaelFoundations(o.w.read(), ["marketing"], (id) => (id === "ryan" ? "Ryan" : id)), /taken over by Ryan/);
   assert.match(o.w.handle('ryan', { question: 'voice', retired: 'kept' }), /not a retired question/);
+});
+
+test('a retired question the work hit before it retired is never brought back: the hit goes and Michael withdraws its card', (t) => {
+  // Value: protects=no card for a retired question (owner, 2026-11-18: a customers today card came back after it retired); fails_when=Michael's open list names a retired question, the hit stays, or the note repeats; why_new=bug 2026-11-18; seam=a hit written before the question retired; no_claim=Michael withdrawing the card (model)
+  const o = writer(t, { deps: { jobs: () => ['marketing'], jobsOf: () => ['marketing'] } });
+  const rec = o.w.read();
+  o.w.save({ ...rec, hits: { ...rec.hits, current_customers: { first: '2026-11-06T15:01:47.538Z', last: '2026-11-06T15:01:47.538Z', count: 1, by: ['ryan'], evidence: 'Blog post written without it.', told: true } } });
+  assert.doesNotMatch(F.michaelFoundations(o.w.read(), ['marketing']), /current_customers/, 'not an empty question the work hit');
+  o.w.checkExpiry(true);
+  const notes = o.told.filter((m) => m.subject === 'Foundation question retired');
+  assert.equal(notes.length, 1);
+  assert.match(notes[0].body, /Withdraw any open foundation card for it and raise none again/);
+  assert.equal(o.w.read().hits.current_customers, undefined, 'the hit goes');
+  o.w.checkExpiry(true);
+  assert.equal(o.told.filter((m) => m.subject === 'Foundation question retired').length, 1, 'told once');
+  // The card names what the work went by, and a card with no job shows no "use this".
+  assert.match(read('src/main/hive.ts'), /naming anything it used instead/);
+  assert.match(read('src/renderer/src/components/FoundationCard.tsx'), /\{jobs\.length > 0 && <span>\{t\('foundations\.card\.usedBy'/);
 });
 
 test('a connected system answers only where a record lives, only from a member who reaches it, and never over the owner', (t) => {
@@ -1228,4 +1313,17 @@ test('a connected system answers only where a record lives, only from a member w
   assert.equal(F.holdsSystem(['QuickBooks'], 'q'), false);
   assert.equal(F.holdsSystem(['QuickBooks'], 'Books'), false);
   assert.equal(F.holdsSystem(['Email'], 'Mail'), false);
+});
+
+// Owner, 2026-11-19: "Save as the whole list" read as final, as if the list
+// could not change and the team would stop finding things. Saving means all
+// the owner knows of for now: seen items still come, and it can be changed.
+test('the save button says all for now, never a final list', () => {
+  const en = JSON.parse(require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'src/renderer/src/i18n/locales/en.json'), 'utf8')).foundations.card;
+  assert.equal(en.saveWhole, "Save, that's all for now");
+  assert.match(en.listHint, /anything new/);
+  for (const k of ['saveWhole', 'listHint', 'savedWhole', 'sentToMichaelWhole']) {
+    assert.doesNotMatch(en[k], /whole list/i, k);
+    assert.doesNotMatch(en[k], /[–—]| - /, k);
+  }
 });

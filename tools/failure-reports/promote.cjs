@@ -320,13 +320,42 @@ async function runPromotion({ gh, schemaFor, state: given, now, reportsRepo, rep
   return { state, failures, releasesSeen: releases.length };
 }
 
+/**
+ * Waits before each new try after a GitHub 5xx. A 502 or 503 is usually over
+ * in seconds, and without a retry one blip fails the whole run.
+ */
+const RETRY_DELAYS_MS = [1000, 3000];
+/**
+ * Retries a whole run may spend. During a real outage every call fails, and
+ * the run must still save its state inside the job's 2 minute limit.
+ */
+const RUN_RETRIES = 8;
+
+/**
+ * Tries a read (GET) or a whole value write (PATCH) again after a 5xx. A POST
+ * is sent once: a 5xx can come after GitHub made the issue or comment, and the
+ * report waits in the queue for the next run instead. A network error
+ * (status 0) is not tried again; its 15 s timeout would eat the run's budget.
+ */
+function retrying(send, sleep = (ms) => new Promise((r) => setTimeout(r, ms))) {
+  let left = RUN_RETRIES;
+  return async (token, method, p, body) => {
+    for (let i = 0; ; i++) {
+      const res = await send(token, method, p, body);
+      if (res.status < 500 || method === 'POST' || i >= RETRY_DELAYS_MS.length || left <= 0) return res;
+      left--;
+      await sleep(RETRY_DELAYS_MS[i]);
+    }
+  };
+}
+
 async function main() {
   const reportsRepo = process.env.GITHUB_REPOSITORY;
   const reportsToken = process.env.GITHUB_TOKEN;
   const mainToken = process.env.MAIN_ISSUES_TOKEN;
   if (!reportsRepo || !reportsToken || !mainToken) throw new Error('GITHUB_REPOSITORY, GITHUB_TOKEN and MAIN_ISSUES_TOKEN are required');
   // A network error is a status of 0, never a throw that loses the run's state.
-  const gh = async (token, method, p, body) => {
+  const gh = retrying(async (token, method, p, body) => {
     let res;
     try {
       res = await fetch(`https://api.github.com${p}`, {
@@ -341,7 +370,7 @@ async function main() {
     let json = null;
     try { json = await res.json(); } catch { /* empty */ }
     return { status: res.status, json };
-  };
+  });
   // Each release's own schema, fetched once by tag and imported as TypeScript.
   const cache = new Map();
   // A release with no schema file (404) or one that does not import has none
@@ -371,5 +400,5 @@ async function main() {
   if (out.failures.length) process.exitCode = 1;
 }
 
-module.exports = { runPromotion, newer, seenOnBody, emptyState, fingerprintHolds };
+module.exports = { runPromotion, newer, seenOnBody, emptyState, fingerprintHolds, retrying, RETRY_DELAYS_MS, RUN_RETRIES };
 if (require.main === module) main().catch((e) => { console.error(e); process.exit(1); });

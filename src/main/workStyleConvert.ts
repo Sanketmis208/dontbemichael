@@ -79,6 +79,13 @@ export async function convertWorkStyle(req: ConvertRequest, deps: ConvertDeps): 
       cwd: deps.cwd,
       command: deps.command,
       noTools: true,
+      // Its own throwaway Claude settings folder, which trusts the folder it
+      // runs in, with only that folder's settings and no hooks (issue 712: a
+      // trust question ended every job change; ship review: project settings
+      // a member left must never load here).
+      isolateConfig: true,
+      settingSources: 'user',
+      settingsJson: JSON.stringify({ disableAllHooks: true }),
       env: deps.env,
       timeoutMs: TIMEOUT_MS
     });
@@ -122,18 +129,43 @@ export interface ReviseRequest {
 /** Why a change could not be worked out, so the box says what to do instead
  *  of "try again" for a cause a retry never clears (owner, 2026-10-26): the
  *  request named nobody, Claude never took the prompt (signed out, or a
- *  screen waiting), Claude ran out of time, its answer could not be read, or
- *  anything else. */
-export type ReviseFailure = 'no-name' | 'not-started' | 'slow' | 'unreadable' | 'failed';
+ *  screen waiting), Claude ran out of time, its answer could not be read,
+ *  Michael's engine can't run it (Gemini), Claude ended without answering
+ *  (owner, 2026-11-13: a pack update card read "Try again in a moment" on
+ *  every try), or anything else. */
+export type ReviseFailure = 'no-name' | 'not-started' | 'slow' | 'unreadable' | 'engine' | 'stopped' | 'failed';
 export type ReviseResult = ReviseAnswer | { kind: 'error'; reason: ReviseFailure | 'cancelled' };
 
 /** A hidden run's failure as the owner's reason. */
-export function reviseFailure(result: { ok: boolean; error?: string }): ReviseFailure {
+export function reviseFailure(result: { ok: boolean; error?: string }, engine: HiddenModelEngine['engine'] = 'claude'): ReviseFailure {
   if (result.ok) return 'unreadable';
   if (/never took the prompt/.test(result.error ?? '')) return 'not-started';
   if (/timed out/.test(result.error ?? '')) return 'slow';
+  // Only an engine the runner cannot use is said as the engine: Codex says
+  // "engine unavailable" too when it fails to start (ship review, 2026-11-13).
+  if (result.error === 'engine unavailable' && engine !== 'claude' && engine !== 'codex') return 'engine';
+  if (result.error && ENDED_WITHOUT_ANSWER.includes(result.error)) return 'stopped';
   return 'failed';
 }
+
+/** The runners' words for a session that ended with nothing written: Claude
+ *  quit before answering (an option it refused, a crash). Not sign in or
+ *  credit, which Claude writes into the session as its answer. */
+const ENDED_WITHOUT_ANSWER: readonly string[] = ['no assistant response found in transcript', 'no assistant response'];
+
+/** The office log's reason for a failed change. A run that ended without an
+ *  answer or a call that threw is logged by a fixed word, so the failure
+ *  report carries it (failureReport.ts HIDDEN_ERRORS); the runner's own text
+ *  goes with it as `error`. Everything else is logged as the runner said it. */
+export function reviseLogReason(result: { ok: boolean; error?: string; exitCause?: string }, fail?: string): Record<string, string> {
+  if (result.ok) return { reason: fail ? `unreadable: ${fail}` : 'empty' };
+  // The startup question Claude stopped on, when its screen says (issue 712).
+  if (reviseFailure(result) === 'stopped') return { reason: result.exitCause && result.exitCause !== 'other' ? `${REVISE_ENDED}: ${result.exitCause}` : REVISE_ENDED, error: result.error ?? '' };
+  return { reason: result.error ?? 'failed' };
+}
+
+export const REVISE_ENDED = 'ended without an answer';
+export const REVISE_THREW = 'threw';
 
 const CHANGE_MAX = 1500;
 
@@ -228,6 +260,9 @@ export async function reviseWorkStyle(
       settingSources: 'user',
       settingsJson: JSON.stringify({ disableAllHooks: true }),
       dropTranscript: true,
+      // Its own throwaway settings folder, which trusts the folder it runs in
+      // (issue 712: "trust this folder?" defaults to "No, exit").
+      isolateConfig: true,
       env: deps.env,
       timeoutMs: TIMEOUT_MS,
       // No hidden thinking (owner, 2026-10-23): measured on a real change, the
@@ -245,10 +280,10 @@ export async function reviseWorkStyle(
     if (answer?.kind === 'ok') return withHandoffLines(answer, req, bound, deps.log);
     if (answer) return answer;
     // Which check failed, as a fixed word the failure report can carry (issue 676).
-    deps.log?.({ kind: 'work-style-revise-failed', reason: !result.ok ? (result.error ?? 'failed') : read && 'fail' in read ? `unreadable: ${read.fail}` : 'empty' });
-    return { kind: 'error', reason: reviseFailure(result) };
+    deps.log?.({ kind: 'work-style-revise-failed', ...reviseLogReason(result, read && 'fail' in read ? read.fail : undefined) });
+    return { kind: 'error', reason: reviseFailure(result, deps.engine) };
   } catch (e) {
-    deps.log?.({ kind: 'work-style-revise-failed', reason: String(e).slice(0, 200) });
+    deps.log?.({ kind: 'work-style-revise-failed', reason: REVISE_THREW, error: String(e).slice(0, 200) });
   }
   return { kind: 'error', reason: 'failed' };
 }
@@ -322,6 +357,13 @@ export async function checkFocusArea(req: FocusCheckRequest, deps: ConvertDeps):
       cwd: deps.cwd,
       command: deps.command,
       noTools: true,
+      // Its own throwaway Claude settings folder, which trusts the folder it
+      // runs in, with only that folder's settings and no hooks (issue 712: a
+      // trust question ended every job change; ship review: project settings
+      // a member left must never load here).
+      isolateConfig: true,
+      settingSources: 'user',
+      settingsJson: JSON.stringify({ disableAllHooks: true }),
       // A quick judgment, like the hire check: no extended thinking.
       thinking: false,
       env: deps.env,

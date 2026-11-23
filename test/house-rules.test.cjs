@@ -197,3 +197,14 @@ test("Michael's change option says the new version comes back, never that it goe
   assert.match(mockup, /<li>Change it, show me again<\/li>/);
   assert.doesNotMatch(mockup, /Send with my changes/);
 });
+
+// Owner, 2026-11-20: Michael moved his whole inbox to .done after reading one
+// message; three closing time ACKs that had just arrived went with it unread,
+// and closing time hung. He moves only what he read, by name.
+test('Michael files only the messages he read, by name, never the whole inbox', () => {
+  const text = michaelInstructions('Michael', { name: 'Northwind Cafe', city: 'Austin' }, { inbox: 'IN', inboxDone: 'DONE', outbox: 'OUT', protocol: 'p', hiveRoot: 'h' });
+  assert.match(text, /Act on each message in your inbox \(IN\), then move that message to DONE by its own file name\./);
+  assert.match(text, /Never move the inbox with a wildcard or all at once/);
+  assert.match(text, /Before you end your turn, look at the inbox once more\./);
+  assert.doesNotMatch(text, /[–—]/);
+});

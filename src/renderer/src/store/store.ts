@@ -464,6 +464,16 @@ interface State {
 
 const LS_SIDEBAR_WIDTH = 'cth.sidebarWidth';
 const LS_SIDEBAR_TAB = 'cth.sidebarTab';
+
+/** A link that opens a member at a tab (Access, Email from an Ask me card;
+ *  Profile, Work or Memory from Pulse) opens that tab in the person panel,
+ *  which reads sidebarTab; ccTabRequest alone reached only the Command Center
+ *  (owner, 2026-11-19: "Pam, Access, Email" opened Pam's Profile). Remembered
+ *  like a tab the owner picks. */
+function personTab(tab: SidebarTab): { sidebarTab: SidebarTab } {
+  try { window.localStorage.setItem(LS_SIDEBAR_TAB, tab); } catch { /* noop */ }
+  return { sidebarTab: tab };
+}
 const LS_PANEL_WIDE = 'cth.panelWide';
 const LS_DOCK_WIDE = 'cth.dockWide';
 const LS_AGENTS = 'cth.agents';
@@ -938,12 +948,12 @@ export const useStore = create<State>((set, get) => ({
   openAgentProfile: (agentId) => { attemptLeave({ selectedId: agentId, rightColumn: 'person' }, () => set((s) => {
     const seq = (s.ccTabRequest?.seq ?? 0) + 1;
     persistAgents(s.agents, agentId);
-    return { selectedId: agentId, ccTabRequest: { tab: 'profile', seq }, rightColumn: 'person' as const, centerClaim: 'column' as const, columnMinimized: false, ...officeView(s.floorView) };
+    return { selectedId: agentId, ccTabRequest: { tab: 'profile', seq }, ...personTab('profile'), rightColumn: 'person' as const, centerClaim: 'column' as const, columnMinimized: false, ...officeView(s.floorView) };
   })); },
   openAgentWork: (agentId) => { attemptLeave({ selectedId: agentId, rightColumn: 'person' }, () => set((s) => {
     const seq = (s.ccTabRequest?.seq ?? 0) + 1;
     persistAgents(s.agents, agentId);
-    return { selectedId: agentId, ccTabRequest: { tab: 'terminal', seq }, rightColumn: 'person' as const, centerClaim: 'column' as const, columnMinimized: false, ...officeView(s.floorView) };
+    return { selectedId: agentId, ccTabRequest: { tab: 'terminal', seq }, ...personTab('terminal'), rightColumn: 'person' as const, centerClaim: 'column' as const, columnMinimized: false, ...officeView(s.floorView) };
   })); },
   openAgentEmail: (agentId) => { attemptLeave({ selectedId: agentId, rightColumn: 'person' }, () => set((s) => {
     const seq = (s.ccTabRequest?.seq ?? 0) + 1;
@@ -951,6 +961,7 @@ export const useStore = create<State>((set, get) => ({
     return {
       selectedId: agentId,
       ccTabRequest: { tab: 'capabilities', seq },
+      ...personTab('capabilities'),
       emailRequest: { agentId, seq: (s.emailRequest?.seq ?? 0) + 1 },
       rightColumn: 'person' as const, centerClaim: 'column' as const, columnMinimized: false, ...officeView(s.floorView)
     };
@@ -965,6 +976,7 @@ export const useStore = create<State>((set, get) => ({
     return {
       selectedId,
       ccTabRequest: { tab: 'memory', seq },
+      ...personTab('memory'),
       memoryFocusRequest: { agentId, seq },
       rightColumn: 'person' as const,
       centerClaim: 'column' as const, columnMinimized: false,

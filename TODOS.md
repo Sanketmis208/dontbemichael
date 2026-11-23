@@ -1,5 +1,91 @@
 # TODOS
 
+## Two unrelated businesses (deferred from the CEO review of docs/designs/separate-businesses.md, 2026-11-18)
+
+### Write a line to the office log when a business moves, switches or is set up
+
+**What:** Settings migration, a switch and the first open of a new business each write one line to the hive log (log.jsonl) with the office id and the app version.
+
+**Why:** Today the move logs only to the console, so a support case cannot see when an office moved or switched, or on which version (Sections 3 and 8 of the plan).
+
+**Context:** Deferred from plan: docs/designs/separate-businesses.md. Planned in the CEO review, not built in step one; the owner chose to ship and defer it (2026-11-20).
+
+**Effort:** S (human) / S (CC)
+**Priority:** P1
+**Depends on:** None
+
+### Tag failure reports with the office id
+
+**What:** failures.jsonl rows and the reports sent from them carry the open office's id.
+
+**Why:** With two businesses on one install, a failure report cannot say which business it came from (T3 and Section 8).
+
+**Context:** Deferred from plan: docs/designs/separate-businesses.md. Planned in the CEO review, not built in step one; the owner chose to ship and defer it (2026-11-20).
+
+**Effort:** S (human) / S (CC)
+**Priority:** P1
+**Depends on:** None
+
+### Check at launch that the business name matches the office record
+
+**What:** At launch, compare the open office's settings business name with its office.json and report a mismatch.
+
+**Why:** A mismatch is the first sign of one business's settings reaching the other's office (Section 8).
+
+**Context:** Deferred from plan: docs/designs/separate-businesses.md. Planned in the CEO review, not built in step one; the owner chose to ship and defer it (2026-11-20).
+
+**Effort:** S (human) / S (CC)
+**Priority:** P1
+**Depends on:** None
+
+### Refuse two businesses sharing one business folder
+
+**What:** Add a business, and Settings when the business folder changes, refuse a business folder another business already uses.
+
+**Why:** Two businesses on one folder would mix their documents (Section 4 edge case). addBusiness refuses only the open office's folder and a finished office folder.
+
+**Context:** Deferred from plan: docs/designs/separate-businesses.md. Planned in the CEO review, not built in step one; the owner chose to ship and defer it (2026-11-20).
+
+**Effort:** S (human) / S (CC)
+**Priority:** P1
+**Depends on:** None
+
+### Refuse a mailbox another business already has
+
+**What:** Adding a mailbox checks every business's mailboxes and says the address belongs to that business.
+
+**Why:** Mailboxes are per business now, so the old one install check only looks at the open business (mail.ts, Section 4 edge case).
+
+**Context:** Deferred from plan: docs/designs/separate-businesses.md. Planned in the CEO review, not built in step one; the owner chose to ship and defer it (2026-11-20).
+
+**Effort:** S (human) / S (CC)
+**Priority:** P1
+**Depends on:** None
+
+### Name the business on a hire or deep link screen
+
+**What:** A link that hires or joins says which business it will join before anything happens.
+
+**Why:** With two businesses, a link opened while the wrong one is open would add to it (Section 3 threat table).
+
+**Context:** Deferred from plan: docs/designs/separate-businesses.md. Planned in the CEO review, not built in step one; the owner chose to ship and defer it (2026-11-20).
+
+**Effort:** S (human) / S (CC)
+**Priority:** P1
+**Depends on:** None
+
+### Both businesses running at once in one app
+
+**What:** Step two of docs/designs/separate-businesses.md: each business runs as its own office process at the same time, with one window, a business switcher and a Needs you list marked by business.
+
+**Why:** In step one the business the owner is not looking at pauses: its mail, schedules and agents wait. An owner running a bakery and a real estate agency needs both working all day.
+
+**Context:** Owner chose this direction in the CEO review (D1, option C) and deferred it until step one ships (D3). Step one moves every business field out of the shared `config.json` into the office, so this work starts from per office settings. Today the app holds one office per process (`requestSingleInstanceLock`, src/main/index.ts:2832) and one window; the earlier New Floor window shared one hive and was removed on 2026-10-03 (docs/FEATURES.md:879). Two Michaels at once doubles Claude usage. If the Mac user per business interim (OV-1) works, it is the stopgap until this ships.
+
+**Effort:** XL (human) / L (CC)
+**Priority:** P2
+**Depends on:** step one of docs/designs/separate-businesses.md
+
 ## Source links on cards (from the CEO review of docs/designs/ask-me-source-links.md, 2026-11-08)
 
 ### Links to connector records that come with only an id
@@ -37,20 +123,11 @@
 **Effort:** S
 **Priority:** P2
 
-### Wider phrasings for the two card checks
+### What the two card checks still can't read
 
-**What:** Teach the email link check possessive and verb forms ("Will's email", "Dana emailed us", "the message Will sent") and to leave Slack and chat threads alone; teach the change option check "Approve with my changes", "Send with my changes, then show me again", and to apply a negation only to the words just before "show me again".
+**What:** Five wordings the email link check and the change option check read by words alone and get wrong: "Go ahead with my changes" (an inside approval or a send, the label can't say), "Send it back to Pam with my edits" (flagged, since the label can't say whether Pam is in the office), the other side of that, a send back anywhere in a label switching off the send then show check ("Send it back to the client with my edits, then show me again" passes, as on `main`), a chat named in another sentence of the same question ("Approve the reply to Will Cox's message? Pam flagged it in Slack." passes, since the chat switch reads the whole question; per sentence would instead flag "Approve the reply? It's in the Slack thread."), and our own team's mail named with a possessive ("Approve Dwight's email for Acme?", "the office's email policy" are flagged; "noEmail" covers them).
 
-**Why:** Both checks are a backstop to Michael's rules and only read English words; these phrasings slip past or, for one compliant label, flag it until he uses the canonical wording. Ship review pass 2, 2026-11-05.
-
-**Effort:** S
-**Priority:** P3
-
-### The Ask me count can run one ahead for a moment
-
-**What:** Count the case study and update cards from the same check the cards render with (the case study screen open, a restart in progress).
-
-**Why:** While the case study tab is open, or while a restart is under way, the pill and the strip count a card Ask me hides. It clears when main hears the case study was seen, or when the app restarts. Red team, pass 1.
+**Why:** Both checks are a backstop to Michael's rules, read English words only, and have no way to know who a name is or what a draft is for. Left from the re-reviews of #686 (2026-11-08, 2026-11-09 and 2026-11-12); the rest of those lists is fixed.
 
 **Effort:** S
 **Priority:** P3
@@ -137,22 +214,6 @@ Go with it: keep only the owner's own words (the answer, the edit, the note) in 
 **Depends on:** None
 
 ## Connections
-
-### Step cards for iCloud, Yahoo and Zoho app passwords
-
-**What:** Give iCloud Mail, Yahoo and Zoho the same numbered step cards Google gets in Add a mailbox (eng review 2026-10-26, D3 B): each step with an Open button to that service's own two step and app password pages, and a plain line on what to copy.
-
-**Why:** Each still shows one paragraph with an address to type; the owner saw a business user struggle with the same paragraph for Google.
-
-**Pros:** One look across Add a mailbox; owners on those services set up without help.
-
-**Cons:** Three more providers' pages to find, link and keep current when they move.
-
-**Context:** The Google cards (AddMailboxDialog.tsx, Google steps) are built to take a per provider list of steps; start from `mailboxes.help.icloud/yahoo/zoho` in the locales and add each provider's steps and page addresses.
-
-**Effort:** human S / CC S
-**Priority:** P3
-**Depends on:** the Google step cards landing.
 
 ### One call at a time per connected app, and a throttle notice
 
@@ -282,18 +343,6 @@ Go with it: keep only the owner's own words (the answer, the edit, the note) in 
 **Priority:** P3
 **Depends on:** None
 
-### Key Pulse by a stable office id, not its folder path
-
-**What:** Store an office id in the office and key telemetry rows by it, or re-key rows when Settings moves the office; resolve the path with realpath meanwhile.
-
-**Why:** Moving the office, or reaching it by another spelling (a symlink, a different case), splits Pulse history and runs the backfill again under the new key.
-
-**Context:** From the /ship red team review, 2026-10-16. `pulseOffice()` in `index.ts` returns `expandTilde(harnessHome)`.
-
-**Effort:** M (human) / S (CC)
-**Priority:** P2
-**Depends on:** None
-
 ### Hand the hook secret over where another process cannot read it
 
 **What:** On engines and platforms where a sibling process can read another's environment (Linux /proc, Windows), pass the hook secret through a 0600 file or descriptor only that agent's sandbox can read, or check the peer on the socket.
@@ -385,20 +434,6 @@ Go with it: keep only the owner's own words (the answer, the edit, the note) in 
 **What:** In `saveFileAnswer` (`src/renderer/src/shell/foundationSave.ts`), when the card refuses the answer and `kgRemove` also fails, keep the document id, say so on the card, and remove it again at the next launch. Also ingest the bytes that were checked, not the path again (`src/main/foundations.ts` addFile, `knowledge.ts` ingest), so a file replaced in the seconds between check and save can't slip in.
 
 **Why:** Codex adversarial passes 1 and 2 (2026-10-23). Both need two things to go wrong at once, so they were left out of the ship.
-
-**Effort:** S
-**Priority:** P3
-**Depends on:** None
-
-## Terminal links (from the ship review of mit/named-links, 2026-10-13)
-
-### A quoted phrase that starts with a slash links as a path
-
-**What:** Quoted prose that starts with a real folder still links as one path: "/tmp is full, see notes.md" underlines the whole phrase and ⌘-click finds nothing. PR 378 (2026-10-17) fixed the case with a space next to a slash ("/ see notes.md" now links only notes.md); a phrase like this one has no such space, so the pattern cannot tell it from a real file named with spaces.
-
-**Why:** A link that leads nowhere reads as broken.
-
-**Context:** `PATH_TOKEN_RE` (`quotedPathRe`) in `src/shared/terminalPaths.ts`. Fix: check a quoted match exists on disk before underlining it (the chip path already does), and fall back to the file name inside it when it does not.
 
 **Effort:** S
 **Priority:** P3
@@ -958,6 +993,20 @@ A live end-to-end run is required before adding an engine: Gemini has never been
 **Depends on:** None
 
 ## Completed
+
+### Key Pulse by a stable office id, not its folder path
+
+**What:** Store an office id in the office and key telemetry rows by it, or re-key rows when Settings moves the office; resolve the path with realpath meanwhile.
+
+**Why:** Moving the office, or reaching it by another spelling (a symlink, a different case), splits Pulse history and runs the backfill again under the new key.
+
+**Context:** From the /ship red team review, 2026-10-16. `pulseOffice()` in `index.ts` returns `expandTilde(harnessHome)`.
+
+**Effort:** M (human) / S (CC)
+**Priority:** P2
+**Depends on:** None
+**Completed:** unreleased, mit/promote-retry-5xx (2026-11-20). `pulseOffice()` returns the office's lasting id once settings are per office, and `persist.relabelOffice` moves existing rows from the folder to the id (E5 in docs/designs/separate-businesses.md).
+
 
 ### Sign and notarize the Mac build with an Apple Developer ID
 

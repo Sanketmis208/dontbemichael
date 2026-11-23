@@ -199,14 +199,14 @@ test('the trust layer\'s checks keep no transcript of Research\'s text, and Rese
   const src = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
   const idx = src('src/main/index.ts');
   const layer = idx.slice(idx.indexOf('const trustLayer = makeTrustLayer({'), idx.indexOf('settings: () => dataClassSettings'));
-  assert.match(layer, /join\(app\.getPath\('userData'\), TRUST_CHECK_DIR\)/);
+  assert.match(layer, /officeDataPath\(TRUST_CHECK_DIR\)/);
   assert.match(layer, /dropTranscript: true/);
   assert.match(idx, /if \(isResearch\) pruneOldFiles\(dir, 7 \* 24 \* 60 \* 60_000\);\n\s+else setTimeout/);
   assert.match(idx, /const dir = isResearch \? ownResearchDir\(opts\.cwd, RESEARCH_TMP_DIR\) :/, 'its scratch folder only as a real folder');
   assert.match(layer, /sweepOldCheckTranscripts\(\);/, 'old check transcripts are swept');
   assert.match(idx, /for \(const folder of CHECK_FOLDERS\)/, 'and those a stopped check left in its own folder');
   // Run comparison and the case study draft have their own empty folders too (ship review: never the office folder).
-  assert.deepEqual([...loadTs('src/main/factoryReset.ts').CHECK_FOLDERS], ['standing-check', 'trust-check', 'run-compare', 'case-study']);
+  assert.deepEqual([...loadTs('src/main/factoryReset.ts').CHECK_FOLDERS], ['standing-check', 'trust-check', 'run-compare', 'case-study', 'job-check']);
   assert.doesNotMatch(idx, /setMineKey|setNotesFilter/, 'no copy of its notes is made for anyone (owner, 2026-10-16)');
   assert.match(idx, /claudeProjectsRoot\(\), \.\.\.teamFolders,/, 'its shell is walled from the projects folder wherever it is');
   // The guard itself: a link left in place of the scratch folder is replaced,

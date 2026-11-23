@@ -30,6 +30,21 @@ test('a file link in a terminal shows the file in Finder and never opens it', ()
   assert.match(pool, /void activatePath\(abs\);/);
 });
 
+test('a ⌘-click on an unchecked quoted path only reveals, and reveals only through activatePath or revealPath', () => {
+  // Value: protects=the click on an unchecked quoted match (no underline yet) is held to reveal only, like activatePath (re-review of #687 at 49b13c14, smaller item 1); fails_when=activateUnchecked calls any window.cth bridge but revealPath, calls revealPath more than once or on anything but res.path, or reveals the name inside without activatePath's disk check; why_new=the pin above read only activatePath's body, and a stray revealPath(nameAbs) kept the same set of calls (re-review of #687 at f7311548, test note B); seam=source pin (terminalPool imports xterm)
+  const pool = read('src/renderer/src/components/terminalPool.ts');
+  const at = pool.indexOf('async function activateUnchecked(abs: string, nameAbs: string | null): Promise<void> {');
+  assert.ok(at > 0, 'activateUnchecked takes the path and the one name inside it');
+  const body = pool.slice(at, pool.indexOf('\n}\n', at));
+  const bridges = [...body.matchAll(/window\.cth\.(\w+)/g)].map((m) => m[1]);
+  assert.deepEqual([...new Set(bridges)], ['revealPath'], 'the only bridge it calls is revealPath');
+  const calls = [...body.matchAll(/\b(?:await|void)\s+([\w.]+)\(/g)].map((m) => m[1]);
+  assert.deepEqual([...new Set(calls)].sort(), ['activatePath', 'pathStats.lookForClick', 'window.cth.revealPath'], 'it looks, reveals, or hands the name to activatePath, nothing else');
+  const reveals = [...body.matchAll(/window\.cth\.revealPath\(([^)]*)\)/g)].map((m) => m[1]);
+  assert.deepEqual(reveals, ['res.path'], 'it reveals once, only the path the disk check answered, never the name inside');
+  assert.doesNotMatch(body, /openPath|openExternal|openFile|openAskFile/);
+});
+
 /**
  * ORGANISATION is gone (owner, 2026-09-24 hid it; removed 2026-11-11): it was
  * configuration only and nothing read the key.

@@ -1,3 +1,4 @@
+import type { ResearchKept } from '@shared/researchKept';
 import { useSyncExternalStore } from 'react';
 import type { ScheduleRequest } from '@shared/missions';
 import type { MailProposal } from '@shared/mailProposals';
@@ -29,6 +30,9 @@ export interface NeedsYouFeed {
   tasks: HiveTask[];
   /** Schedule requests Michael passed on to the owner. */
   requests: ScheduleRequest[];
+  /** Questions to Research the privacy check kept words back from: one card
+   *  each, offering each piece to always allow (shared/researchKept.ts). */
+  researchKept: ResearchKept[];
   /** Owner answers Michael has not closed yet (card-lifecycle.md): the Tasks
    *  view shows those cards as with Michael. They wait on him, not the owner,
    *  so they are not in `count`. */
@@ -60,6 +64,12 @@ export interface NeedsYouFeed {
   /** A case study prepared in the background waits for the owner to open it:
    *  Michael's card on Ask me (CaseStudyCard), until opened or put off. */
   caseStudyWaiting: boolean;
+  /** The case study screen is open, so its card steps aside and does not count
+   *  (setCaseStudyScreenOpen, from App.tsx). */
+  caseStudyOpen: boolean;
+  /** A restart from the update card is under way, so the card steps aside and
+   *  does not count until the restart is called off (setUpdateRestarting). */
+  updateRestarting: boolean;
   /** Open asks, passed-on schedule requests, job description offers, emails to
    *  approve, one for an engine Michael cannot start on, one for a stop only
    *  the owner can fix (out of credit, sign in), one for an update, and one for a
@@ -71,6 +81,9 @@ export interface NeedsYouFeed {
   researchNotice: boolean;
   /** The one time card for an owner who had company knowledge off (a report). */
   knowledgeNotice: boolean;
+  /** The one time card for a business whose mail, schedules and connectors
+   *  were not carried over when settings moved per office (a report). */
+  setupNotice: boolean;
   /** Members that started with something missing (shared/degradedNotices.ts):
    *  one report card each, never coral, never in `count`. */
   degraded: DegradedNotice[];
@@ -86,7 +99,7 @@ const CLI_LATER_KEY = 'cth.cliUpdateLaterFor';
 function readCliLater(): string | null {
   try { return window.localStorage.getItem(CLI_LATER_KEY); } catch { return null; }
 }
-let feed: NeedsYouFeed = { status: 'unknown', tasks: [], requests: [], ownerRequests: [], offers: [], proposals: [], engineSetup: null, stop: null, silent: [], update: null, updateLater: null, cliUpdate: null, cliUpdateLater: readCliLater(), caseStudyWaiting: false, count: 0, reports: 0, researchNotice: false, knowledgeNotice: false, degraded: [], foundations: null };
+let feed: NeedsYouFeed = { status: 'unknown', tasks: [], requests: [], researchKept: [], ownerRequests: [], offers: [], proposals: [], engineSetup: null, stop: null, silent: [], update: null, updateLater: null, cliUpdate: null, cliUpdateLater: readCliLater(), caseStudyWaiting: false, caseStudyOpen: false, updateRestarting: false, count: 0, reports: 0, researchNotice: false, knowledgeNotice: false, setupNotice: false, degraded: [], foundations: null };
 // The offers need the team and the packs, which this module does not import;
 // the app hands it the reader at start (App.tsx).
 let offersSource: (() => Promise<WorkStyleOffer[]>) | null = null;
@@ -133,7 +146,7 @@ let taskReads = 0;
 let requestReads = 0;
 let ownerReads = 0;
 
-function publish(next: Partial<Pick<NeedsYouFeed, 'status' | 'tasks' | 'requests' | 'ownerRequests' | 'offers' | 'proposals' | 'engineSetup' | 'stop' | 'silent' | 'researchNotice' | 'knowledgeNotice' | 'degraded' | 'foundations' | 'update' | 'updateLater' | 'cliUpdate' | 'cliUpdateLater' | 'caseStudyWaiting'>>): void {
+function publish(next: Partial<Pick<NeedsYouFeed, 'status' | 'tasks' | 'requests' | 'researchKept' | 'ownerRequests' | 'offers' | 'proposals' | 'engineSetup' | 'stop' | 'silent' | 'researchNotice' | 'knowledgeNotice' | 'setupNotice' | 'degraded' | 'foundations' | 'update' | 'updateLater' | 'cliUpdate' | 'cliUpdateLater' | 'caseStudyWaiting' | 'caseStudyOpen' | 'updateRestarting'>>): void {
   // A poll that brings nothing new changes nothing, so nobody re-renders.
   const changed = (Object.keys(next) as Array<keyof typeof next>).some((k) => JSON.stringify(next[k]) !== JSON.stringify(feed[k]));
   if (!changed) return;
@@ -141,8 +154,8 @@ function publish(next: Partial<Pick<NeedsYouFeed, 'status' | 'tasks' | 'requests
   const merged = { ...feed, ...next };
   feed = {
     ...merged,
-    count: merged.tasks.reduce((n, t) => n + shownQuestions(t, merged.foundations).length, 0) + merged.requests.length + merged.offers.length + merged.proposals.length,
-    reports: merged.tasks.reduce((n, t) => n + openReportIndexes(t.humanQA).length, 0) + (merged.researchNotice ? 1 : 0) + (merged.knowledgeNotice ? 1 : 0) + merged.degraded.length
+    count: merged.tasks.reduce((n, t) => n + shownQuestions(t, merged.foundations).length, 0) + merged.requests.length + merged.researchKept.length + merged.offers.length + merged.proposals.length,
+    reports: merged.tasks.reduce((n, t) => n + openReportIndexes(t.humanQA).length, 0) + (merged.researchNotice ? 1 : 0) + (merged.knowledgeNotice ? 1 : 0) + (merged.setupNotice ? 1 : 0) + merged.degraded.length
   };
   // One more while Michael cannot start for want of his engine (get-michael-ready.md),
   // unless a sign in stop already says so: one problem, one card (eng R3).
@@ -152,9 +165,10 @@ function publish(next: Partial<Pick<NeedsYouFeed, 'status' | 'tasks' | 'requests
   // One per not reporting card (DESIGN.md §7.6b, SD1).
   const silent = silentCards(merged.silent).length;
   if (silent) feed = { ...feed, count: feed.count + silent };
-  if (updateCardShown(merged.update, merged.updateLater)) feed = { ...feed, count: feed.count + 1 };
+  // The update and case study cards count only while Ask me shows them.
+  if (updateCardShown(merged.update, merged.updateLater) && !merged.updateRestarting) feed = { ...feed, count: feed.count + 1 };
   if (cliUpdateToastVisible(merged.cliUpdate, merged.cliUpdateLater)) feed = { ...feed, count: feed.count + 1 };
-  if (merged.caseStudyWaiting) feed = { ...feed, count: feed.count + 1 };
+  if (merged.caseStudyWaiting && !merged.caseStudyOpen) feed = { ...feed, count: feed.count + 1 };
   for (const l of [...listeners]) l();
   // Ready after Michael could not start: hand the terminals that could not
   // start to useHive, which restarts exactly those (agents at work keep going).
@@ -199,6 +213,16 @@ function readTasks(): void {
   readEngine(false);
   readNotices(false);
   readFoundations(false);
+  readKept();
+}
+
+// A small file in the app's private folder, read with every poll.
+let keptReads = 0;
+function readKept(): void {
+  const mine = ++keptReads;
+  void window.cth.researchKept?.()
+    .then((all) => { if (mine === keptReads) publish({ researchKept: Array.isArray(all) ? all : [] }); })
+    .catch(() => { /* keep the last value */ });
 }
 
 // The one time cards (Research's, and company knowledge's for an owner who
@@ -213,6 +237,9 @@ function readNotices(force = true): void {
     .catch(() => { /* keep the last value */ });
   void window.cth.kgNotice?.()
     .then((s) => publish({ knowledgeNotice: !!s?.notice }))
+    .catch(() => { /* keep the last value */ });
+  void window.cth.officeSetupNotice?.()
+    .then((s) => publish({ setupNotice: !!s?.notice }))
     .catch(() => { /* keep the last value */ });
 }
 
@@ -272,6 +299,16 @@ function takeUpdate(s: unknown): void {
  *  starts again. The title bar badge and Settings still offer it. */
 export function putOffUpdate(version: string): void {
   publish({ updateLater: version });
+}
+
+/** The case study screen opened or closed: the card steps aside while it is open. */
+export function setCaseStudyScreenOpen(open: boolean): void {
+  publish({ caseStudyOpen: open });
+}
+
+/** A restart from the update card started, or was called off. */
+export function setUpdateRestarting(restarting: boolean): void {
+  publish({ updateRestarting: restarting });
 }
 
 /** Later on Michael's team upgrade card: off Ask me until a newer Claude Code
@@ -377,6 +414,7 @@ export function refreshNeedsYou(): void {
   readEngine();
   readTasks();
   readRequests();
+  readKept();
   readProposals();
   readOffers();
   readNotices();

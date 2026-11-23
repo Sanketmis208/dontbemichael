@@ -220,7 +220,7 @@ test('during a break nothing types into a Claude terminal, and schedules still r
   assert.doesNotMatch(index.slice(index.indexOf('function armHeartbeat('), index.indexOf('function liveWebContents(')), /officeBreak/, 'the heartbeat runs as configured');
   assert.doesNotMatch(index.slice(index.indexOf('function standupOnOfficeOpen('), index.indexOf('function migrateMissionOwners(')), /officeBreak|Break/, 'the launch standup runs as configured');
   assert.match(index, /if \(heldByBreak\(officeBreak\.view\(\), a\?\.provider\)\) continue;/);
-  assert.match(index, /persist\.open\(\); \} catch[^\n]*\n[^\n]*\n\s*armOfficeBreak\(\);/);
+  assert.match(index, /persist\.open\(\); \} catch[^\n]*\n(?:\s*\/\/[^\n]*\n)*\s*try \{ relabelPulseOffice\(\); \} catch[^\n]*\n[^\n]*\n\s*armOfficeBreak\(\);/);
   assert.match(read('src/renderer/src/hooks/useHive.ts'), /if \(heldByBreak\(getOfficeBreak\(\), target\.provider\) && !next\.manual\) return \{ sent: false \};/);
   // After a restart, the queue holds Claude terminals until main first says whether a saved break is on.
   assert.match(read('src/renderer/src/components/OfficeBreakNotice.tsx'), /return known \? view : \{ until: null, checking: false, reason: 'limit', again: false \};/);

@@ -3,15 +3,19 @@
  *
  * Plain node:fs, no electron import, so it tests as a node module.
  */
+import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import {
   configMatchesRegistry,
+  describesBusiness,
+  isOfficeId,
   officeRecordFromConfig,
   officeRecordFromRegistry,
   parseOfficeRecord,
   sameOfficeRecord,
+  withOfficeId,
   type OfficeConfigFields,
   type OfficeRecord,
   type RegistryAgentFields
@@ -64,8 +68,11 @@ export function syncOfficeRecord(cfg: OfficeConfigFields): boolean {
   // before it saves, and a missing office must not be recreated as a stray file.
   if (!existsSync(home)) return false;
   try {
-    if (sameOfficeRecord(readOfficeRecord(home), rec)) return false;
-    writeOfficeRecord(home, rec);
+    // The office's id outlives every description of it: keep it.
+    const existing = readOfficeRecord(home);
+    const next = withOfficeId(rec, existing?.id);
+    if (sameOfficeRecord(existing, next)) return false;
+    writeOfficeRecord(home, next);
     return true;
   } catch (e) {
     console.error('[office] could not save office.json:', e);
@@ -81,10 +88,89 @@ export function syncOfficeRecord(cfg: OfficeConfigFields): boolean {
  */
 export function backfillOfficeRecord(cfg: OfficeConfigFields): boolean {
   const home = cfg.harnessHome;
-  if (!home || !existsSync(home) || readOfficeRecord(home)) return false;
+  // A record holding only the office's id still needs its description.
+  if (!home || !existsSync(home) || describesBusiness(readOfficeRecord(home))) return false;
   const caseInsensitive = process.platform === 'darwin' || process.platform === 'win32';
   if (!configMatchesRegistry(cfg, readRegistryAgents(home), caseInsensitive)) return false;
   return syncOfficeRecord(cfg);
+}
+
+/**
+ * May the app switch to the office in `newHome` keeping the settings it has now?
+ *
+ * Several offices share one config, and a switch changes only the folder: the
+ * business name, mailboxes, schedules, grants and connectors stay. Opening
+ * another business's office would hand it this business's settings, and a new
+ * empty office would start with them. Until each office keeps its own settings
+ * (docs/designs/separate-businesses.md, step one), such a switch is refused.
+ *
+ * - 'ok': setup has not finished (nothing to carry over), or `newHome` is this
+ *   business's office: its registry has this team in the same folders (the
+ *   check backfillOfficeRecord uses), or its office.json names the same
+ *   business folder. A business with no team yet and an office with no record
+ *   and no members outside the hive cannot be told apart, so it is allowed.
+ * - 'otherBusiness': `newHome` holds an office that is not this business.
+ * - 'newBusiness': `newHome` holds no office, so a new one would start there.
+ *
+ * A move (the same office copied to an empty folder) never asks: it is the
+ * same business.
+ */
+export type OfficeSwitchGuard = 'ok' | 'otherBusiness' | 'newBusiness';
+
+export function officeSwitchGuard(cfg: OfficeConfigFields, newHome: string): OfficeSwitchGuard {
+  const mine = officeRecordFromConfig(cfg);
+  if (!mine) return 'ok';
+  if (!homeFolderStatus(newHome).hasOffice) return 'newBusiness';
+  const caseInsensitive = process.platform === 'darwin' || process.platform === 'win32';
+  const agents = readRegistryAgents(newHome);
+  if (mine.team.length > 0 && configMatchesRegistry(cfg, agents, caseInsensitive)) return 'ok';
+  const norm = (p: string) => {
+    const t = resolve(p).replace(/[\\/]+$/, '');
+    return caseInsensitive ? t.toLowerCase() : t;
+  };
+  const read = readOfficeRecord(newHome);
+  const theirs = describesBusiness(read) ? read : null;
+  if (theirs?.businessFolder && mine.businessFolder && norm(theirs.businessFolder) === norm(mine.businessFolder)) return 'ok';
+  if (mine.team.length === 0 && !theirs) {
+    const inside = norm(newHome) + sep;
+    const members = Object.values(agents ?? {}).filter((a) => typeof a?.cwd === 'string' && a.cwd && !(norm(a.cwd) + sep).startsWith(inside));
+    if (members.length === 0) return 'ok';
+  }
+  return 'otherBusiness';
+}
+
+/** The office's lasting id from its office.json, or null when it has none yet. */
+export function readOfficeId(home: string | null | undefined): string | null {
+  if (!home) return null;
+  const id = readOfficeRecord(home)?.id;
+  return isOfficeId(id) ? id : null;
+}
+
+/**
+ * The office's lasting id, made and saved in its office.json the first time.
+ * An office with no record gets one holding only the id, which setup and the
+ * launch backfill still treat as no description (describesBusiness). Null when
+ * the folder holds no office, or the id could not be saved: an id that is not
+ * on disk would be a different one next launch.
+ */
+export function ensureOfficeId(home: string | null | undefined, preferred?: string): string | null {
+  if (!home || !homeFolderStatus(home).hasOffice) return null;
+  const existing = readOfficeRecord(home);
+  if (isOfficeId(existing?.id)) return existing!.id!;
+  return setOfficeId(home, isOfficeId(preferred) ? preferred : randomUUID());
+}
+
+/** Give the office in this folder this id, keeping the rest of its record.
+ *  The id back once it is on disk, else null. */
+export function setOfficeId(home: string, id: string): string | null {
+  if (!isOfficeId(id) || !homeFolderStatus(home).hasOffice) return null;
+  try {
+    writeOfficeRecord(home, withOfficeId(readOfficeRecord(home) ?? { version: 1, team: [] }, id));
+  } catch (e) {
+    console.error('[office] could not save the office id:', e);
+    return null;
+  }
+  return readOfficeId(home) === id ? id : null;
 }
 
 function readRegistryAgents(home: string): Record<string, RegistryAgentFields> | undefined {
@@ -240,7 +326,9 @@ function findOfficeUnchecked(home: string): FoundOffice {
     const rec = fromFile ? { ...fromRegistry, ...stripEmpty(fromFile), team: fromRegistry.team } : fromRegistry;
     return { path: home, hasOffice: true, record: rec, source: 'registry' };
   }
-  return { path: home, hasOffice: true, record: fromFile, source: fromFile ? 'file' : null };
+  // A record holding only the office's id describes nothing to continue.
+  const described = describesBusiness(fromFile) ? fromFile : null;
+  return { path: home, hasOffice: true, record: described, source: described ? 'file' : null };
 }
 
 function stripEmpty(rec: OfficeRecord): Partial<OfficeRecord> {

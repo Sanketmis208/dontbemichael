@@ -298,9 +298,9 @@ test('setup opens on the office it found, and continuing uses the recorded team 
   // The owner sees the folders before continuing.
   assert.match(wiz, /foundPlan\?\.ok && foundPlan\.folders\.map/);
   // A new office never lands in the folder of the one it found: the first free
-  // "~/HarnessAgents N", or an empty field (the home step then asks) when none is.
-  assert.match(wiz, /if \(!st\.exists\) \{ free = candidate; break; \}/);
-  assert.match(wiz, /setHome\(free\);/);
+  // "~/HarnessAgents_N", or an empty field (the home step then asks) when none is.
+  assert.match(wiz, /const free = await firstFreeHome\(\);\s*setHome\(free\);/);
+  assert.match(wiz, /if \(!st\) return '';\s*if \(!st\.exists\) return candidate;/, 'only a folder not there yet');
 });
 
 test('team start brings back a member the registry knows but the floor lost, in its real folder', () => {

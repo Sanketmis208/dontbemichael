@@ -1,3 +1,4 @@
+import { INBOX_SWEEP_REASON, sweepsInbox } from '../shared/inboxSweep';
 /**
  * HookServer — the bridge between `claude` lifecycle hooks and the harness.
  *
@@ -771,6 +772,17 @@ export class HookServer {
         }
       };
     }
+    // Michael moves each inbox message by name, never with a wildcard: one
+    // filed messages that had arrived meanwhile unread, and held closing time
+    // twice (owner, 2026-11-20; shared/inboxSweep.ts).
+    if (event === 'PreToolUse' && agentId && p.tool_name === 'Bash') {
+      const cmd = (p.tool_input as { command?: unknown } | undefined)?.command;
+      let isGod = false;
+      try { const reg = this.hive.registry(); isGod = agentId === (reg.godId ?? 'god') || !!reg.agents[agentId]?.isGod; } catch { /* not Michael */ }
+      if (isGod && typeof cmd === 'string' && sweepsInbox(cmd)) {
+        return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: INBOX_SWEEP_REASON } };
+      }
+    }
     if (event === 'PreToolUse' && agentId && WEB_TOOLS.has(p.tool_name ?? '')) {
       // Unreadable settings fail closed, like the connector gate (D8).
       let d: ReturnType<typeof webAccess>;
@@ -1338,6 +1350,12 @@ export class HookServer {
     const own = [me.cwd ?? '', hiveRoot ? join(hiveRoot, 'agents', agentId) : ''];
     const command = input && typeof input === 'object' ? (input as Record<string, unknown>).command : undefined;
     return windowsShellWallDecision(process.platform, command, peers, own);
+  }
+
+  /** A read of `path` judged as this member's own file tools would be, before
+   *  the app reads a file the member named for an email (agent-attach-files.md). */
+  readCheck(agentId: string, path: string): { deny: boolean; reason?: string } {
+    return this.folderCheck(agentId, 'Read', { file_path: path }, undefined);
   }
 
   private folderCheck(agentId: string, tool: string, input: unknown, cwd: string | undefined): { deny: boolean; reason?: string } {

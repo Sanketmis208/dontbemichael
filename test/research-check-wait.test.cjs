@@ -209,3 +209,41 @@ test('a note whose check keeps failing is checked again under new privacy settin
   assert.ok(msgsIn(hive, 'research').some((m) => /Focus on flour/.test(m.body)));
   assert.equal(heldRows(home).length, 0);
 });
+
+// 2026-11-19, live: as the office opened every member was marked stopped and
+// started again within seconds; a question left from before the restart was
+// routed in between and refused as "Pete is off", though the owner had Pete on.
+test('switched on but not started yet: the question waits for Pete, then reaches him', async (t) => {
+  const layer = flakyLayer(0);
+  const { hive, home } = await office(t, layer);
+  hive.setArchived('research', true);
+  send(hive, 'pam', { to: 'research', act: 'query', subject: 'Release notes', body: 'What shipped this month' });
+  await route(hive, 3);
+  assert.equal(msgsIn(hive, 'pam').filter((m) => m.subject === R.NOT_SENT_SUBJECT).length, 0, 'never told Pete is off');
+  assert.equal(msgsIn(hive, 'god').filter((m) => /not sent/i.test(m.subject)).length, 0);
+  assert.equal(fs.readdirSync(path.join(hive.root(), 'agents', 'pam', 'outbox')).filter((f) => f.endsWith('.json')).length, 1, 'it waits in the outbox');
+  hive.setArchived('research', false);
+  await route(hive, 3);
+  assert.equal(msgsIn(hive, 'research').filter((m) => m.from === 'pam').length, 1, 'Pete gets it once started');
+  assert.equal(heldRows(home).length, 0);
+});
+
+test('still not running after the wait: "not running right now", never "off"; switched off: "off" at once', async (t) => {
+  const before = HiveManager.RESEARCH_START_WAIT_MS;
+  HiveManager.RESEARCH_START_WAIT_MS = 0;
+  t.after(() => { HiveManager.RESEARCH_START_WAIT_MS = before; });
+  const { hive } = await office(t, flakyLayer(0));
+  hive.setArchived('research', true);
+  send(hive, 'pam', { to: 'research', act: 'query', subject: 'Release notes', body: 'What shipped this month' });
+  await route(hive, 2);
+  const told = msgsIn(hive, 'pam').filter((m) => m.subject === R.NOT_SENT_SUBJECT).map((m) => m.body).join('\n');
+  assert.match(told, /is not running right now/);
+  assert.doesNotMatch(told, /is off/);
+  assert.match(msgsIn(hive, 'god').map((m) => m.body).join('\n'), /This is an app problem/, 'Michael does not send the owner to Settings');
+
+  const off = await office(t, flakyLayer(0));
+  off.hive.setResearchEnabled(() => false);
+  send(off.hive, 'pam', { to: 'research', act: 'query', subject: 'Release notes', body: 'What shipped this month' });
+  await route(off.hive, 1);
+  assert.match(msgsIn(off.hive, 'pam').filter((m) => m.subject === R.NOT_SENT_SUBJECT).map((m) => m.body).join('\n'), /is off/);
+});

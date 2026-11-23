@@ -6,6 +6,65 @@ All notable changes to this project are documented here. The format is based on
 
 Don't Be Michael keeps its own version line, starting at 0.0.1.
 
+## [0.4.3] (2026-11-20)
+
+### Added
+- **Run two separate businesses on one computer.** Each business keeps its own settings, saved passwords and keys, files, history and, if you choose, its own Claude account. The business name in the top bar switches between them, and Settings, General lists every business with Open, Find it for a folder that moved, and Remove for a setup never finished. A switch closes the open office properly first. Everyone finishes or hands off their step, then the other business opens.
+- **Add a business while the open one keeps working.** Setup opens over the office, and the new business's folder is named after it. Back to the office keeps what you typed, and you go on from that step later.
+- **Back up everything and restore it on a new computer.** One file holds every business: the team, memory, tasks, history, knowledge, settings and the team's folders. Saved passwords and keys are locked with a backup password. Restore from Settings, General, or from the first setup screen on a new computer.
+- **Always allowed, for the privacy check.** In Settings, Research and privacy, list your business's own public names and links, and the check keeps them in questions to Research. When the check keeps words back, an Ask me card offers to always allow each one and ask again.
+- Address suggestions as you type the street; business hours set day by day; languages served and currency picked from a list; one field per social link, with the site named.
+- Ask me cards show three questions at a time.
+- Add a mailbox starts on the email you gave in setup.
+
+### Changed
+- Team setup shows the members side by side, four across, and asks for one office folder instead of one per member.
+- New office folders are named with no spaces or special characters.
+
+### Fixed
+- A question to Pete waits while he starts, instead of saying he is turned off.
+- Closing time tells Michael once everyone has confirmed and reminds him, and Michael files only the messages he read, so closing no longer hangs.
+- A member link opens the tab it names.
+- Business hours you never set show as not set, never as an unsaved 9 to 5.
+- A business you just added opens after setup, instead of saying the office can't be found.
+- Ask me can be read while the office opens or closes.
+- A list's save button says all for now, not the whole list, and a retired foundations question is never asked again.
+
+## [0.4.2] (2026-11-17)
+
+### Added
+- **Team members attach files from their folder to an email.** A team member attaches files from its own folder, or a folder you named for its job, to a draft, a send or a send on approval, as its Sending allows. Each file is checked by what it holds, copied as it was, and that copy is what goes out, so a file changed later never goes in its place. On Send on approval the card lists each file: Open shows it in its own app, and you can take one off before you approve.
+- **A teammate hands over a file it keeps.** When the file sits with a teammate, the member asks that teammate, and the app copies it into the member's From teammates folder to attach. A copy that fails partway deletes nothing and says how far it got. Michael and the team never ask you to attach a file themselves.
+
+### Fixed
+- A path a team member names is checked on the disk at most three at a time, so a slow share no longer stalls a turn, and a network path is never shown as missing.
+- In the terminal, quoted text that starts with a folder links the file inside it when the whole quote is not a path (#687, with thanks to @Sanketmis208).
+- The failure reports promotion run tries a GitHub server error again before giving up.
+
+## [0.4.1] (2026-11-13)
+
+### Fixed
+- **Job changes work in every office.** In an office whose folder Claude Code had never been opened in, every job change, and the hire check, writing a work style, the focus check and memory tidy, stopped at Claude Code's "trust this folder?" question, whose default ends Claude, and failed. They now run in a folder of their own with their own Claude settings, so no question stops them and nothing a team member leaves there can change them.
+- A check that ends before answering now says which question or error it stopped on, in the office log and the failure report.
+
+## [0.4.0] (2026-11-13)
+
+### Fixed
+- **Job changes work on every Mac.** On a Mac whose Claude Code settings did not turn off its Bypass Permissions warning, every job change, and the other checks the app runs in the background, stopped at that warning and failed. They now answer it themselves, as team members already do.
+
+## [0.3.9] (2026-11-13)
+
+### Changed
+- **Pulse can change a job's set times for you.** For a job that runs at set times or on chosen days, Run less now offers its own times thinned and Run more offers them filled in, ready to apply with Undo, in place of only opening Schedules. The new times count from when you apply them, so a time added earlier today does not run at once.
+
+### Fixed
+- After the Mac sleeps, a window stuck on the loading screen is noticed and loaded again.
+- A link to a file whose path has spaces opens the file in a tab instead of showing the raw path, and a very long line in a team member's text no longer slows the preview.
+- A job change that cannot work says why: Michael needs Claude or Codex for it, or Claude stopped before answering. It no longer says to try again for something a retry cannot fix, and the app reports the failures that are its own.
+- Clicking a path that could not be checked shows nothing, instead of another file with the same name.
+- Saving an email attachment on Windows goes on to the next free name when the name is taken.
+- Opening files named in a team member's text is safer on a Mac and on Windows.
+
 ## [0.3.8] (2026-11-11)
 
 ### Added

@@ -1,6 +1,6 @@
 # Don't Be Michael: features and changes
 
-Everything the app does today, and every release that got it here (0.0.1 to 0.3.8). Part 1 is
+Everything the app does today, and every release that got it here (0.0.1 to 0.4.3). Part 1 is
 written to be lifted onto the GitHub page and the website as it is; Part 2 is the full list, release
 by release.
 
@@ -141,6 +141,12 @@ moving, and brings you only the decisions that need you.
   there. Programs, scripts and archives are refused, and what is saved is marked as a download and
   never run. A teammate who needs the file asks for it, and the app copies it across, so nobody
   opens another member's folder.
+- A team member attaches files from its own folder, or a folder you named for its job, to an
+  email it writes, as its Sending allows: on Send on approval the card lists each file with the
+  folder it came from, opens it in its own app, and lets you take one off before you approve.
+  The app reads each file inside the member's own folder walls and sends the copy it took then,
+  so a file changed later never goes out in its place. For a file a teammate keeps, the member
+  asks that teammate, and the app copies it into the member's From teammates folder to attach.
 
 ### 4. Jobs on a clock
 - Each team member's schedules sit on its Access tab. Name the job ("Check the support
@@ -222,6 +228,10 @@ moving, and brings you only the decisions that need you.
   pages or searches, in every office. A trust layer checks every message to Pete against the kinds
   of data you keep private and cleans Pete's answers. Pete is off until you turn them on, and sees
   none of your files. On a Mac nobody else's commands reach the internet.
+- Always allowed: in Settings, Research and privacy, list your business's own public names and
+  links, and the privacy check keeps them as written in questions to Research. When the check
+  keeps words back, an Ask me card offers to always allow each one and ask again. Passwords and
+  keys never go through, whatever the list says.
 
 ### 7. An office you can watch
 - A pod for each department around Michael's glass office, each with a plate in front of the
@@ -273,8 +283,25 @@ moving, and brings you only the decisions that need you.
 ### 8. Built for small business owners
 - Setup by kind of business: restaurant and food, retail, professional services, home services,
   SaaS and consulting, or anything else. Each comes with a suggested team.
+- Setup and the company profile save typing: address suggestions from OpenStreetMap as you type
+  the street, business hours set day by day, languages served and currency picked from a list,
+  and one field per social link with the site named. Team setup shows the members side by side
+  and asks for one office folder.
 - Runs on your computer with the Claude plan you already have. Plain words, no developer settings.
   A Windows 11 (x64) build ships with every release.
+- Run two separate businesses on one computer, such as a bakery and a real estate agency. Each
+  keeps its own settings, saved passwords and keys, files, history and, if you choose, its own
+  Claude account. The business name in the top bar switches between them: the open office closes
+  properly first, everyone finishing or handing off their step, then the other opens. The business
+  you are not in waits: its mail and schedules run again when you open it.
+- Add a business from the top bar or Settings while the open one keeps working. Setup opens over
+  the office, the new business's folder is named after it, and Back to the office keeps what you
+  typed for later. Settings, General lists every business with Open, Find it for a folder that
+  moved, and Remove for a setup never finished.
+- Back up everything on this computer to one file and restore it on a new one: every business with
+  its team, memory, tasks, history, knowledge, settings and the team's folders. Saved passwords and
+  keys are locked with a backup password you choose. Restore from Settings, General, or from the
+  first setup screen of a new computer, then sign in to Claude again.
 - When your Claude plan reaches its usage limit, the office takes a break. Ask me, the top bar and
   the floor say when work starts again. Nothing is typed into a Claude terminal meanwhile, and
   scheduled jobs still go out on time and wait in the inbox. At the reset the team carries on by
@@ -303,6 +330,52 @@ moving, and brings you only the decisions that need you.
   as a picture, and a part you select pastes as clean as the whole, in light or dark mode.
 
 ## Part 2: Every change, release by release
+
+### 0.4.3 (2026-11-20)
+- Two separate businesses on one computer: each keeps its own settings, saved passwords and keys,
+  files, history, spend caps and, optionally, its own Claude account. The business name in the top
+  bar switches; Settings, General lists every business with Open, Find it and Remove. A switch
+  closes the open office first. Existing installs move their settings on the first launch.
+- Add a business over the open office; Back to the office keeps what was typed.
+- Back up everything to one file and restore it on a new computer, from Settings or the first setup
+  screen. Saved passwords and keys are locked with a backup password; a restore writes only into
+  the business's own folders and says when it stops partway.
+- Always allowed for the privacy check, and Ask me cards that offer to allow what it kept back.
+- Address suggestions from OpenStreetMap, business hours by day, languages and currency from a list,
+  one field per social link, Team setup four across with one office folder.
+- Ask me shows three questions at a time. Pete waits while he starts. Closing time tells and reminds
+  Michael once everyone confirmed, and Michael files only the messages he read.
+
+### 0.4.2 (2026-11-17)
+- A team member attaches files from its own folder, or a folder you named for its job, to an email.
+  On Send on approval the card lists each file to open or take off. A file a teammate keeps is
+  handed over into the member's From teammates folder first.
+- A path check waits on the disk at most three at a time and never looks at a network path.
+- Quoted text in the terminal that starts with a folder links the file inside it (#687).
+- The failure reports promotion run tries a GitHub server error again.
+
+### 0.4.1 (2026-11-13)
+- Job changes, the hire check, writing a work style, the focus check and memory tidy work in every
+  office: where Claude Code had never been opened in the office folder, they stopped at its "trust
+  this folder?" question and failed. They now run in a folder of their own with their own Claude
+  settings. A check that ends before answering says which question or error it stopped on.
+
+### 0.4.0 (2026-11-13)
+- Job changes, such as a better job description offered for a team member, and the other checks the
+  app runs in the background work on every Mac: on a Mac whose Claude Code settings did not turn off
+  its Bypass Permissions warning, they stopped at that warning and failed every time.
+
+### 0.3.9 (2026-11-13)
+- For a job that runs at set times or on chosen days, Pulse's Run less offers its own times
+  thinned and Run more offers them filled in, ready to apply with Undo, in place of only opening
+  Schedules. The new times count from when you apply them, and Undo puts back exactly what was there.
+- After the Mac sleeps, a window stuck on the loading screen is noticed and loaded again.
+- A link to a file whose path has spaces opens the file in a tab instead of showing the raw path.
+- A job change that cannot work says why: Michael needs Claude or Codex for it, or Claude stopped
+  before answering. It no longer says to try again for something a retry cannot fix.
+- Clicking a path that could not be checked shows nothing, instead of another file with the same
+  name. Saving an email attachment on Windows goes on to the next free name when the name is taken.
+- Opening files named in a team member's text is safer on a Mac and on Windows.
 
 ### 0.3.8 (2026-11-11)
 - Once every question is answered, Needs you shows one quiet line for your answers and one tip

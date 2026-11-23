@@ -11,7 +11,11 @@ import type { CaseDraftResult, CaseInput, CaseOpen, CasePrep, CaseSaveResult, Ca
 import type { FoundationsView } from '../shared/foundations';
 import type { ResearchConfig } from '../shared/research';
 import type { DataClassId, DataClassSetting } from '../shared/dataClasses';
+import type { ResearchKept } from '../shared/researchKept';
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
+
+/** Which office the renderer's saved state belongs to. */
+const OFFICE_STAMP_KEY = 'cth.officeId';
 import type { OfficeRecord } from '../shared/officeRecord';
 import type { MailboxRecord, AgentCapabilities, MailProvider, MailServer } from '../shared/mailboxes';
 import type { OpenAttachmentResult, OriginalResult } from '../shared/emailLink';
@@ -257,6 +261,9 @@ export interface HarnessConfig {
   /** The owner's data classes that differ from the seeded defaults
    *  (shared/dataClasses.ts): what the team may send to Research. */
   dataClasses?: Partial<Record<DataClassId, DataClassSetting>>;
+  /** Always allowed (shared/publicTerms.ts): what the owner says is the
+   *  business's own and public, kept as written by the privacy check. */
+  researchPublic?: string[];
   /** Team members that failed their first start, tried again (and only they)
    *  on each later launch until they start. */
   businessTeamRetry?: string[];
@@ -428,6 +435,9 @@ export interface ClosingTimeEvent {
   godLive: boolean;
   /** The app reopens itself after closing. */
   relaunch: boolean;
+  /** Closing to open another business: "Closing <from> to open <to>" (to is
+   *  null for a business with no name yet). */
+  switching?: { from: string; to: string | null };
 }
 
 /** Per-agent operator-control state (#7C.1–7C.3). */
@@ -543,7 +553,7 @@ const api = {
       handoffs?: Array<{ toId: string; scope: string }>; drops?: Array<{ toId: string; scope: string }> }
     | { kind: 'question'; question: string; choices: Array<{ label: string; suggested?: boolean }> }
     | { kind: 'home'; question: string }
-    | { kind: 'error'; reason: 'no-name' | 'not-started' | 'slow' | 'unreadable' | 'failed' | 'cancelled' }
+    | { kind: 'error'; reason: 'no-name' | 'not-started' | 'slow' | 'unreadable' | 'engine' | 'stopped' | 'failed' | 'cancelled' }
   > => ipcRenderer.invoke('workStyle:convert', { ...req, to: 'revise' }),
   /** Where a rewrite is (starting, reading, writing) and what it has written
    *  so far, by its request id. Returns the unsubscribe. */
@@ -686,8 +696,52 @@ const api = {
    *  into the new folder (old kept as a safety net); 'fresh' just re-points and
    *  bootstraps an empty home. On success the app relaunches (never resolves);
    *  on failure (e.g. copy error) returns { ok: false, error }. */
-  changeHome: (newHome: string, mode: 'move' | 'fresh'): Promise<{ ok: boolean; error?: string }> =>
+  /** Resolves ok with `closing` when the switch waits for closing time (the
+   *  closing bar takes over; the app reopens on the other office when it ends). */
+  changeHome: (newHome: string, mode: 'move' | 'fresh'): Promise<{ ok: boolean; error?: string; guard?: 'otherBusiness' | 'newBusiness'; closing?: boolean }> =>
     ipcRenderer.invoke('config:changeHome', { newHome, mode }),
+  /** Switch now from the closing bar, without waiting for the team (D20). */
+  switchNow: (): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('office:switchNow'),
+  /** Every business on this install for the business menu (DT1); perOffice is
+   *  false before settings are per office, when there is one business and no menu. */
+  listBusinesses: (): Promise<{ perOffice: boolean; businesses: Array<{ id: string; home: string; name: string | null; state: 'open' | 'closed' | 'missing' | 'setup'; closedAt?: number }> }> =>
+    ipcRenderer.invoke('office:list'),
+  /** Find it: point a business whose folder went missing at its folder (only the same office). */
+  relocateBusiness: (id: string, path: string): Promise<{ ok: boolean; error?: 'notFound' | 'notThatOffice' }> =>
+    ipcRenderer.invoke('office:relocate', id, path),
+  /** Add a business (DT3): file the wizard's answers under the new business's
+   *  own entry, never the open one's; the renderer then switches to it. */
+  addBusiness: (p: { id?: string; home: string; settings: Record<string, unknown>; install?: Record<string, unknown> }): Promise<{ ok: boolean; id?: string; error?: string }> =>
+    ipcRenderer.invoke('office:addBusiness', p),
+  /** Back to office from Add a business: keep what was typed as Setup not finished. */
+  saveBusinessDraft: (p: { id?: string; home: string; step: string; settings: Record<string, unknown> }): Promise<string | null> =>
+    ipcRenderer.invoke('office:saveDraft', p),
+  /** A business left before the end of its setup, to reopen the wizard where it stopped. */
+  businessDraft: (id: string): Promise<{ id: string; home: string; step: string; settings: Record<string, unknown> } | null> =>
+    ipcRenderer.invoke('office:draft', id),
+  /** Back up everything on this computer to a file the owner picks, secrets
+   *  sealed with `password` (docs/designs/backup-restore.md). */
+  backupCreate: (password: string): Promise<{ ok: boolean; error?: string; path?: string; files?: number; bytes?: number }> =>
+    ipcRenderer.invoke('backup:create', password),
+  /** Pick a backup file and read what is in it, before anything is restored. */
+  backupPick: (): Promise<{ ok: boolean; error?: string; path?: string; summary?: { createdAt: number; appVersion: string; businesses: string[]; hasSecrets: boolean; fromOtherHome: boolean } }> =>
+    ipcRenderer.invoke('backup:pick'),
+  /** Restore it: replaces what is on this computer, then the app reopens. */
+  backupRestore: (path: string, password: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('backup:restore', path, password),
+  /** After a restore that stopped partway: reopen the app on what came back. */
+  backupReopen: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('backup:reopen'),
+  onBackupProgress: (cb: (p: { files: number; bytes: number }) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, p: { files: number; bytes: number }) => cb(p);
+    ipcRenderer.on('backup:progress', listener);
+    return () => ipcRenderer.removeListener('backup:progress', listener);
+  },
+  /** Address suggestions for what was typed in the street field (Photon,
+   *  OpenStreetMap). ok false: none this time; the fields are typed by hand. */
+  suggestAddress: (typed: string, lang?: string): Promise<{ ok: boolean; suggestions?: Array<{ label: string; address: { street?: string; city?: string; region?: string; postalCode?: string; country?: string } }> }> =>
+    ipcRenderer.invoke('address:suggest', typed, lang),
+  /** Remove a business whose setup was never finished (not the open one). */
+  removeUnfinishedBusiness: (id: string): Promise<boolean> => ipcRenderer.invoke('office:removeUnfinished', id),
   /** Whether a folder (default: the current home) exists and holds an office. */
   homeStatus: (path?: string): Promise<{ path: string | null; exists: boolean; hasOffice: boolean }> =>
     ipcRenderer.invoke('config:homeStatus', path),
@@ -840,14 +894,20 @@ const api = {
   connectorsSeen: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('connectors:seen'),
   /** Research, the one team member on the internet (shared/research.ts). */
   researchStatus: (): Promise<{ on: boolean; live: boolean; waiting: number; notice: boolean }> => ipcRenderer.invoke('research:status'),
+  /** What the privacy check kept back from team members' questions (shared/researchKept.ts). */
+  researchKept: (): Promise<ResearchKept[]> => ipcRenderer.invoke('research:kept'),
+  /** Add words to the business's Always allowed list (the owner's click on Ask me). */
+  researchAllow: (term: string): Promise<{ ok: boolean; full?: boolean }> => ipcRenderer.invoke('research:allow', term),
+  /** Ask again through the check, or keep private: the card goes either way. */
+  researchKeptDecide: (id: string, action: 'again' | 'keep'): Promise<{ ok: boolean }> => ipcRenderer.invoke('research:keptDecide', id, action),
   researchPrepare: (): Promise<{ ok: true; cwd: string } | { ok: false }> => ipcRenderer.invoke('research:prepare'),
   researchOff: (): Promise<{ ok: boolean; returned: number }> => ipcRenderer.invoke('research:off'),
   researchNoticeSeen: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('research:noticeSeen'),
   /** Company knowledge has no switch now: whether this owner, who had turned it off, is still to be told. */
   kgNotice: (): Promise<{ notice: boolean }> => ipcRenderer.invoke('kg:notice'),
   kgNoticeSeen: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('kg:noticeSeen'),
-  /** The page's first script ran: main's boot watchdog stops waiting. */
-  rendererStarted: (): void => ipcRenderer.send('app:rendererStarted'),
+  officeSetupNotice: (): Promise<{ notice: boolean }> => ipcRenderer.invoke('office:setupNotice'),
+  officeSetupNoticeSeen: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('office:setupNoticeSeen'),
   /** Members that started with something missing: Michael's report cards on Ask me. */
   degradedNotices: (): Promise<DegradedNotice[]> => ipcRenderer.invoke('degraded:list'),
   degradedDismiss: (agentId: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('degraded:dismiss', agentId),
@@ -1160,7 +1220,7 @@ const api = {
   /** The owner's answer from a foundation card; it always wins. */
   foundationsAnswer: (id: string, text: string, added?: string[]): Promise<{ ok: boolean; error?: string; complete?: boolean }> => ipcRenderer.invoke('foundations:answer', id, text, added),
   /** A seen item on a list card: Not ours, Decide later, or an undo of either. */
-  foundationsSeen: (id: string, seenId: string, action: 'notOurs' | 'undoNotOurs' | 'later' | 'undoLater'): Promise<{ ok: boolean }> => ipcRenderer.invoke('foundations:seen', id, seenId, action),
+  foundationsSeen: (id: string, seenId: string, action: 'add' | 'undoAdd' | 'notOurs' | 'undoNotOurs' | 'later' | 'undoLater'): Promise<{ ok: boolean; text?: string; error?: 'too-long' }> => ipcRenderer.invoke('foundations:seen', id, seenId, action),
   /** One file for a foundation card, from the OS picker. */
   foundationsPickFile: (): Promise<{ ok: true; path: string; name: string } | { ok: false; error: string }> => ipcRenderer.invoke('foundations:pickFile'),
   /** Read, check and add a card's file to company knowledge (nothing is added
@@ -1306,8 +1366,10 @@ const api = {
   skipNotice: (taskId: string, index: number): Promise<{ ok: boolean }> => ipcRenderer.invoke('hive:skipNotice', taskId, index),
   /** Send on approval: emails waiting for the owner on Ask me, and the owner's decision. */
   listMailProposals: (): Promise<MailProposal[]> => ipcRenderer.invoke('mailProposals:list'),
-  decideMailProposal: (id: string, decision: ProposalDecision, edit: { subject?: string; body?: string }, note?: string, standing?: string): Promise<{ ok: boolean; error?: string }> =>
+  decideMailProposal: (id: string, decision: ProposalDecision, edit: { subject?: string; body?: string; files?: number[] }, note?: string, standing?: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('mailProposals:decide', id, decision, edit, note, standing),
+  /** One file on an email card, opened in its own app from the copy the app kept (agent-attach-files.md). */
+  openMailProposalFile: (id: string, index: number): Promise<{ ok: boolean; reason?: 'gone' | 'failed' }> => ipcRenderer.invoke('mailProposals:openFile', id, index),
   /** Standing approvals: kinds of email an agent may send without asking. */
   listMailStanding: (agentId: string): Promise<StandingApproval[]> => ipcRenderer.invoke('mailStanding:list', agentId),
   /** A Send only member's latest sends from that mailbox, newest first (at most 5). */
@@ -1492,6 +1554,30 @@ const api = {
     notes?: string;
   }): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('update:simulate', opts)
 };
+
+// The renderer's saved state (localStorage `cth.*`: cards, selection, queues,
+// floor view) belongs to the business it was saved in. Before the page's own
+// code reads it, check it is the open business's, whatever way the app got
+// here (separate-businesses.md). State from before settings were per office
+// has no stamp and is the open office's own, so it is stamped, not cleared.
+keepRendererStateWithItsOffice();
+
+function keepRendererStateWithItsOffice(): void {
+  try {
+    const id: unknown = ipcRenderer.sendSync('office:currentIdSync');
+    if (typeof id !== 'string' || !id) return;
+    const was = window.localStorage.getItem(OFFICE_STAMP_KEY);
+    if (was && was !== id) {
+      const keys: string[] = [];
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const k = window.localStorage.key(i);
+        if (k && k.startsWith('cth.')) keys.push(k);
+      }
+      for (const k of keys) window.localStorage.removeItem(k);
+    }
+    if (was !== id) window.localStorage.setItem(OFFICE_STAMP_KEY, id);
+  } catch { /* no storage, or an older main: nothing to check */ }
+}
 
 contextBridge.exposeInMainWorld('cth', api);
 

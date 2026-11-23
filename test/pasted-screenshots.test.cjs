@@ -35,9 +35,9 @@ test('a pasted screenshot is saved in the app folder, not the OS temp folder', (
   assert.equal(fs.readFileSync(file.path, 'utf8'), 'png bytes');
   // The main process saves into userData, never app.getPath('temp').
   const main = fs.readFileSync(path.resolve(__dirname, '..', 'src/main/index.ts'), 'utf8');
-  assert.match(main, /savePaste\(pastesDir\(app\.getPath\('userData'\)\), img\.toPNG\(\)\)/);
+  assert.match(main, /savePaste\(officeDataPath\('pastes'\), img\.toPNG\(\)\)/);
   assert.doesNotMatch(main, /cth-pastes/);
-  assert.match(main, /sweepOldPastes\(pastesDir\(app\.getPath\('userData'\)\), PASTE_KEEP_MS, Date\.now\(\), JSON\.stringify\(roster\.read\(\)\?\.queues \?\? \{\}\)\);/, 'old pastes are cleared at startup, but not one a queued message names');
+  assert.match(main, /sweepOldPastes\(officeDataPath\('pastes'\), PASTE_KEEP_MS, Date\.now\(\), JSON\.stringify\(roster\.read\(\)\?\.queues \?\? \{\}\)\);/, 'old pastes are cleared at startup, but not one a queued message names');
 });
 
 test('startup removes only old pasted screenshots', (t) => {

@@ -8,7 +8,8 @@
 
 import { execFile, execFileSync } from 'node:child_process';
 import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readSync, realpathSync, rmSync, writeFileSync, type Stats } from 'node:fs';
-import { basename, join, relative } from 'node:path';
+import { openNoFollow } from './noFollow';
+import { basename, dirname, join, relative } from 'node:path';
 import { attachmentKind } from '../shared/attachmentKind';
 import { cleanFolderName } from '../shared/folderName';
 
@@ -17,6 +18,10 @@ export const ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
 
 /** The subfolder saved attachments go to, inside the member's own folder. */
 export const ATTACHMENTS_FOLDER = 'Email attachments';
+
+/** Where files a teammate handed over from its own folder land, inside the
+ *  receiving member's folder (agent-attach-files.md, teammate hand-off). */
+export const TEAMMATE_FILES_FOLDER = 'From teammates';
 
 const COPIES_MAX = 50;
 
@@ -57,41 +62,41 @@ export function attachmentStem(name: string): string {
 
 /** The subfolder when it is a plain folder of the member's own, else null. A
  *  member's shell writes its folder, so a link here could lead anywhere. */
-function plainAttachmentsDir(realFolder: string): string | null {
-  const dir = join(realFolder, ATTACHMENTS_FOLDER);
+function plainAttachmentsDir(realFolder: string, sub = ATTACHMENTS_FOLDER): string | null {
+  const dir = join(realFolder, sub);
   const st = lstatSync(dir);
   return st.isDirectory() && !st.isSymbolicLink() && realpathSync(dir) === dir ? dir : null;
 }
 
 /** The subfolder, made if need be. Refused when anything on the way is a link
  *  that leads out of the member's folder. */
-function attachmentsDir(folder: string): string {
+function attachmentsDir(folder: string, sub = ATTACHMENTS_FOLDER): string {
   let real: string;
   try { real = realpathSync(folder); } catch { throw new AttachmentSaveError('Your folder could not be found.'); }
-  const dir = join(real, ATTACHMENTS_FOLDER);
+  const dir = join(real, sub);
   try {
     mkdirSync(dir, { recursive: true });
-    if (plainAttachmentsDir(real)) return dir;
+    if (plainAttachmentsDir(real, sub)) return dir;
   } catch (e) {
-    throw new AttachmentSaveError(`The ${ATTACHMENTS_FOLDER} folder could not be made: ${(e as NodeJS.ErrnoException).code ?? 'unknown error'}.`);
+    throw new AttachmentSaveError(`The ${sub} folder could not be made: ${(e as NodeJS.ErrnoException).code ?? 'unknown error'}.`);
   }
-  throw new AttachmentSaveError(`${ATTACHMENTS_FOLDER} in your folder is not a plain folder, so nothing was saved.`);
+  throw new AttachmentSaveError(`${sub} in your folder is not a plain folder, so nothing was saved.`);
 }
 
 /** Saves the bytes under a name of their own and returns its path. The same
  *  file saved again returns the first copy, so a retry leaves no duplicates. */
 export function saveAttachmentFile(
-  input: { folder: string; name: string; ending: string; bytes: Buffer },
+  input: { folder: string; name: string; ending: string; bytes: Buffer; subfolder?: string },
   mark: (path: string) => void = markFromOutside
 ): string {
-  const dir = attachmentsDir(input.folder);
+  const dir = attachmentsDir(input.folder, input.subfolder);
   const stem = attachmentStem(input.name);
   for (let n = 1; n <= COPIES_MAX; n++) {
     const path = join(dir, `${stem}${n === 1 ? '' : ` (${n})`}.${input.ending}`);
     let fd: number;
     try {
       // Exclusive and no following a link: nothing already there is touched.
-      fd = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0), 0o600);
+      fd = openNoFollow(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw new AttachmentSaveError(`The file could not be saved: ${(e as NodeJS.ErrnoException).code ?? 'unknown error'}.`);
       try {
@@ -124,7 +129,7 @@ export function saveAttachmentFile(
  *  otherwise stop the whole app. */
 function readPlainFile(path: string): { bytes: Buffer; st: Stats } | null {
   let fd: number;
-  try { fd = openSync(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0)); } catch { return null; }
+  try { fd = openNoFollow(path, constants.O_RDONLY | (constants.O_NONBLOCK ?? 0)); } catch { return null; }
   try {
     const st = fstatSync(fd);
     if (!st.isFile() || st.nlink !== 1) return null;
@@ -138,6 +143,35 @@ function readPlainFile(path: string): { bytes: Buffer; st: Stats } | null {
     }
     return { bytes: bytes.subarray(0, got), st };
   } finally { closeSync(fd); }
+}
+
+/**
+ * Several files saved in order (teammate hand-off). The first one that can't
+ * be saved stops the rest; those already saved stay where they are and are
+ * named in the answer. Nothing is ever removed: the folder is the member's own,
+ * and its shell can swap it for a link at any moment, so a delete by path could
+ * reach a file outside it (review, ship 2026-11-17).
+ */
+export function saveFilesInOrder(input: { folder: string; subfolder: string; files: Array<{ name: string; ending: string; bytes: Buffer }> }): { paths: string[]; error?: string } {
+  const paths: string[] = [];
+  for (const f of input.files) {
+    try {
+      paths.push(saveAttachmentFile({ folder: input.folder, name: f.name, ending: f.ending, bytes: f.bytes, subfolder: input.subfolder }, () => {}));
+    } catch (e) {
+      if (!(e instanceof AttachmentSaveError)) throw e;
+      return { paths, error: e.message };
+    }
+  }
+  return { paths };
+}
+
+/** Whether a path sits directly in the member's own Email attachments, the
+ *  only place a saved email file is handed on from. */
+export function inAttachmentsFolder(file: string, fromFolder: string): boolean {
+  try {
+    const own = plainAttachmentsDir(realpathSync(fromFolder));
+    return !!own && dirname(realpathSync(file)) === own;
+  } catch { return false; }
 }
 
 /**

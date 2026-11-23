@@ -340,7 +340,8 @@ test('pictures are pasted one by one before a cleaned prompt, and Enter and onPr
   t.mock.timers.tick(1500); // boot went quiet: the prompt is due
   for (let i = 0; i < 40; i++) t.mock.timers.tick(50);
   proc.exit();
-  assert.deepEqual(await done, { ok: false, error: 'no assistant response found in transcript' });
+  // An ended session says what its screen showed (issue 712): nothing it knows here.
+  assert.deepEqual(await done, { ok: false, error: 'no assistant response found in transcript', exitCause: 'other' });
 
   const writes = events.filter((e) => e[0] === 'write').map((e) => e[1]);
   const at = (s) => events.findIndex((e) => e[0] === 'write' && e[1] === s);
@@ -380,5 +381,5 @@ test('main files a foundation card\'s document through company knowledge, reinde
   };
   const fit = body('const fileFit = fileFitCheck({');
   assert.equal(fit, body('const standingFit = standingFitCheck({'), "the file check runs with the standing check's deps");
-  assert.match(fit, /join\(app\.getPath\('userData'\), STANDING_CHECK_DIR\)/);
+  assert.match(fit, /officeDataPath\(STANDING_CHECK_DIR\)/);
 });

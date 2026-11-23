@@ -225,7 +225,7 @@ test('wiring: a button opens Settings at the group or a member\'s Access tab at 
   assert.match(modal, /classList\.add\('cth-place-highlight'\)/);
   const mail = read('src/renderer/src/components/MailboxesSettings.tsx');
   assert.match(mail, /setOpen\(true\);\s+if \(focus\.add\) setDialog\(\{\}\);/);
-  assert.match(read('src/renderer/src/store/store.ts'), /ccTabRequest: \{ tab: 'capabilities', seq \},\s+emailRequest:/);
+  assert.match(read('src/renderer/src/store/store.ts'), /ccTabRequest: \{ tab: 'capabilities', seq \},\s+\.\.\.personTab\('capabilities'\),\s+emailRequest:/);
   const caps = read('src/renderer/src/components/CapabilitiesTab.tsx');
   assert.match(caps, /setCollapsed\(\(c\) => \(\{ \.\.\.c, email: false \}\)\);/);
   assert.match(caps, /<div ref=\{emailRef\} data-email-group/);

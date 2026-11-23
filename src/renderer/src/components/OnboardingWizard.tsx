@@ -1,4 +1,5 @@
 import { useResearchName } from '@/shell/research';
+import { DEFAULT_HOME, businessHomeCandidates, numberedHomes } from '@shared/officeHome';
 import { CompanyProfileFields, localCurrency, localTimeZone } from './CompanyProfileFields';
 import { cityLine, cleanCompanyProfile, missingProfileFields, prefillLegalName, type CompanyProfile, type RequiredProfileField } from '@shared/companyProfile';
 import { useEffect, useRef, useState } from 'react';
@@ -23,16 +24,31 @@ import type { ToolStatus } from '@shared/toolCatalog';
 import type { OfficePack } from '@shared/officePack';
 import type { AgentDefinitionV2 } from '@shared/agentDefinition';
 import {
-  OFFICE_KEY, folderNames, initialPicks, folderFor, michaelFolderFor, connectionsNeeded, teamPlan,
+  OFFICE_KEY, folderNames, initialPicks, connectionsNeeded, teamPlan,
   type FolderSuggestions
 } from '@shared/teamPlan';
 import { missingBusinessFields, type BusinessField } from '@shared/businessProfile';
 import { useResolvedGodName } from '@/hooks/useResolvedGodName';
 import { teamPlanFromRecord, type OfficeRecord } from '@shared/officeRecord';
 import { fieldLabel, groupName, requiredMark } from './fieldText';
+import { BackupRestore } from './BackupRestore';
+
+/** Add a business (docs/designs/separate-businesses.md, DT3, D19): the wizard
+ *  runs over the open business, which keeps working, and its answers go to the
+ *  new business's own entry. */
+export interface AddBusinessMode {
+  /** A business left before the end of its setup, to go on where it stopped. */
+  draft: { id: string; home: string; step: string; settings: Record<string, unknown> } | null;
+  /** The open business's name, for "Same as <name>" on the Ready step. */
+  openBusinessName: string;
+  /** Leave the wizard: back to the office, or the switch has started. */
+  onClose: () => void;
+}
 
 export interface OnboardingWizardProps {
   onComplete: (config: HarnessConfig) => void;
+  /** Set for Add a business; absent for the first setup. */
+  add?: AddBusinessMode;
   /** Open on a later step with the first answers filled in. Only for the
    *  reference screens (tools/studio-lab/reference.tsx); the app never sets it. */
   preview?: { step: 'business' | 'team' | 'ready'; businessType: string; businessName: string };
@@ -68,11 +84,17 @@ const PROVIDER_BLURB_KEYS: Partial<Record<AgentProvider, string>> = {
   codex: 'onboarding.providerBlurb.codex'
 };
 
-export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps) {
+export function OnboardingWizard({ onComplete, preview, add }: OnboardingWizardProps) {
   const { t } = useTranslation();
   // Onboarding runs before god exists in the store, so read the persisted name.
   const godName = useResolvedGodName();
-  const [step, setStep] = useState<Step>(preview?.step ?? 'business');
+  // A draft left by Back to office goes on where it stopped (D19).
+  const draft = add?.draft ?? null;
+  const draftSettings = (draft?.settings ?? {}) as { businessType?: string; businessName?: string; companyProfile?: CompanyProfile };
+  const [step, setStep] = useState<Step>(preview?.step ?? (draft && DRAFT_STEPS.includes(draft.step as Step) ? draft.step as Step : 'business'));
+  // Add a business: this business's own Claude login, or the open one's (D4, E6).
+  const [claudeLogin, setClaudeLogin] = useState<'shared' | 'own'>('shared');
+  const [draftId, setDraftId] = useState<string | undefined>(draft?.id);
 
   // WHAT BUSINESS THIS IS — the first and most consequential question, because it
   // decides the suggested cast, the office hours, and every agent's starting tool
@@ -80,12 +102,12 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
   // the owner to classify themselves before the app had earned anything, and it
   // forked every subsequent string into two registers. There is one register now,
   // and it is the plain one.
-  const [businessType, setBusinessType] = useState<string | undefined>(preview?.businessType);
-  const [businessName, setBusinessName] = useState(preview?.businessName ?? '');
+  const [businessType, setBusinessType] = useState<string | undefined>(preview?.businessType ?? draftSettings.businessType);
+  const [businessName, setBusinessName] = useState(preview?.businessName ?? draftSettings.businessName ?? '');
   // The company profile (src/shared/companyProfile.ts): the essentials on step
   // 1, everything else optional on step 2. Time zone and currency start from
   // the Mac's own settings.
-  const [profile, setProfile] = useState<CompanyProfile>(() => ({ timeZone: localTimeZone(), currency: localCurrency() }));
+  const [profile, setProfile] = useState<CompanyProfile>(() => ({ timeZone: localTimeZone(), currency: localCurrency(), ...(draftSettings.companyProfile ?? {}) }));
   // Step 2's legal name starts as the step 1 business name, and follows a
   // rename on step 1 until the owner types a legal name of their own.
   const legalNameFilled = useRef<string | undefined>(undefined);
@@ -210,21 +232,13 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
     const h = folderSuggestions?.home;
     return h && (p === h || p.startsWith(h + '/')) ? '~' + p.slice(h.length) : p;
   };
-  const chooseTeamFolder = async (key: string) => {
+  // The office folder; each member's folder goes inside it.
+  const chooseOfficeFolder = async () => {
     setError(undefined);
     const res = await window.cth.chooseFolder();
     if (!res.ok) { if (res.error !== 'cancelled') setError(res.error); return; }
-    // Michael's folder is private to him, so it can't be a team member's own
-    // folder (src/shared/folderAccess.ts).
-    const same = (a?: string) => !!a && a.replace(/[\\/]+$/, '').toLowerCase() === res.path.replace(/[\\/]+$/, '').toLowerCase();
-    if (key !== OFFICE_KEY && same(michaelFolderFor(folderSuggestions, folderOverrides))) {
-      setError(t('addAgent.errFolderShared'));
-      return;
-    }
-    setFolderOverrides((o) => ({ ...o, [key]: res.path }));
+    setFolderOverrides({ [OFFICE_KEY]: res.path });
   };
-  const resetTeamFolder = (key: string) =>
-    setFolderOverrides((o) => { const n = { ...o }; delete n[key]; return n; });
   const connLabel: Record<string, string> = {
     email: t('onboarding.team.conn.email'),
     quickbooks: t('onboarding.team.conn.quickbooks'),
@@ -249,13 +263,11 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
     if (a.connections.length === 0) chips.push({ tone: 'ok', label: t('onboarding.team.nothingToConnect') });
     return chips;
   };
-  const folderLabels = {
-    worksIn: t('onboarding.team.worksIn'),
-    change: t('onboarding.team.change'),
-    useSuggested: t('onboarding.team.useSuggested')
-  };
 
-  const [home, setHome] = useState<string>('');
+  const [home, setHome] = useState<string>(draft?.home ?? '');
+  /** The folder the app suggested (Add a business), so it can be renamed for
+   *  the business; anything else in `home` was picked by the owner. */
+  const autoHome = useRef('');
   const [autoMode, setAutoMode] = useState<boolean>(true);
   const [godProvider, setGodProvider] = useState<AgentProvider>('claude');
   const [godModel, setGodModel] = useState<string | undefined>(
@@ -338,9 +350,37 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
   // at the config-write boundary AND at ensureHarnessHome's mkdir, so every
   // downstream reader still sees one absolute path. No new IPC surface.
   useEffect(() => {
-    if (!home) setHome(DEFAULT_HOME);
+    if (home) return;
+    // Add a business: the open office is most likely in the default folder, so
+    // the new one is suggested the first free "~/HarnessAgents_N" (as Start new).
+    if (add) {
+      void firstFreeHome().then((free) => setHome((h) => { if (h) return h; autoHome.current = free; return free; }));
+      return;
+    }
+    setHome(DEFAULT_HOME);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Add a business: once it has a name, its folder is named after it
+  // ("~/HarnessAgents_Northgate_Realty"; owner, 2026-11-19: "HarnessAgents 2"
+  // said nothing with several businesses). Only while the folder is still the
+  // app's suggestion: one the owner picked is never renamed.
+  useEffect(() => {
+    const name = businessName.trim();
+    if (!add || !name || step === 'business') return;
+    if (home && home !== autoHome.current) return;
+    let alive = true;
+    void freeHomeFor(name).then((named) => {
+      if (!alive || !named) return;
+      setHome((h) => {
+        if (h && h !== autoHome.current) return h;
+        autoHome.current = named;
+        return named;
+      });
+    });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   // An office already in the suggested home folder (a reinstall, or a new data
   // folder): offer to continue it exactly as it is, by folder. Continuing never
@@ -349,6 +389,8 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
   const [resuming, setResuming] = useState(false);
   const foundPlan = found ? teamPlanFromRecord(found.record) : null;
   useEffect(() => {
+    // Adding a business never takes over the open office's folder.
+    if (add) return;
     let alive = true;
     void window.cth.officeFind(DEFAULT_HOME)
       .then((f) => {
@@ -377,21 +419,30 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
   const startNewOffice = async () => {
     // A new office needs its own folder: setting it up in this one would mix a
     // second team into the office that is already there. Suggest the first
-    // free "~/HarnessAgents N"; if none is free (or the check fails), leave the
+    // free "~/HarnessAgents_N"; if none is free (or the check fails), leave the
     // field empty so the home step asks the owner to pick one.
     setBusy(true);
-    let free = '';
-    for (let n = 2; n <= NEW_OFFICE_SUGGESTIONS; n++) {
-      const candidate = `${DEFAULT_HOME} ${n}`;
-      const st = await window.cth.homeStatus(candidate).catch(() => null);
-      if (!st) break;
-      if (!st.exists) { free = candidate; break; }
-    }
+    const free = await firstFreeHome();
     setHome(free);
     setResuming(false);
     setError(undefined);
     setBusy(false);
     setStep('business');
+  };
+
+  const backToOffice = async (): Promise<void> => {
+    if (!add) return;
+    if (businessName.trim() || businessType) {
+      const where = home.trim() || await freeHomeFor(businessName.trim());
+      if (where) {
+        const id = await window.cth.saveBusinessDraft({
+          id: draftId, home: where, step,
+          settings: { businessType: businessType === OTHER_BUSINESS ? undefined : businessType, businessName: businessName.trim() || undefined, businessCity: businessCity.trim() || undefined, companyProfile: cleanCompanyProfile(profile) }
+        }).catch(() => null);
+        if (id) setDraftId(id);
+      }
+    }
+    add.onClose();
   };
 
   const pickHome = async () => {
@@ -443,7 +494,7 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
       // Michael's engine and model become the team's default too: the starter
       // team and later hires start on what the owner picked here.
       const config = await window.cth.getConfig();
-      const next = await window.cth.updateConfig({
+      const patch: Partial<HarnessConfig> = {
         onboardingComplete: true,
         // The pack drives the starter cast. '__other__' is recorded as unset: no
         // pack applies, so Michael asks rather than silently picking one.
@@ -469,7 +520,27 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
         godProvider,
         godModel,
         ...teamDefaultsFromMichael(config, godProvider, godModel)
-      });
+      };
+      if (add) {
+        // The new business's own entry, never the open one's; then the switch,
+        // which closes the open office first (closing time, D10, D19).
+        const saved = await window.cth.addBusiness({ id: draftId, home: harnessHome, settings: { ...patch, claudeLogin }, install: patch });
+        if (!saved.ok) {
+          setError(saved.error === 'exists' ? t('addBusiness.exists') : saved.error === 'isOpen' ? t('addBusiness.isOpen') : t('onboarding.errSaveSetup'));
+          setBusy(false);
+          if (saved.error === 'exists' || saved.error === 'isOpen') setStep('home');
+          return;
+        }
+        setDraftId(saved.id);
+        const sw = await window.cth.changeHome(harnessHome, 'fresh').catch((e) => ({ ok: false, error: String(e) }));
+        setBusy(false);
+        // Saved either way: a switch that could not start leaves it in the
+        // business menu to open later.
+        if (!sw.ok) { setError(sw.error ?? t('businessMenu.couldNotSwitch')); return; }
+        add.onClose();
+        return;
+      }
+      const next = await window.cth.updateConfig(patch);
       setBusy(false);
       onComplete(next);
     } catch (e) {
@@ -494,9 +565,17 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
   // The card is centered whenever the studio isn't showing (Business, Details,
   // Resume, or no team yet) and sits in its column when it is; the move and the
   // glow follow this one flag (docs/designs/onboarding-centered.md).
-  const hasStudio = (step === 'team' || step === 'home' || step === 'orchestrator' || step === 'permissions' || step === 'ready') && teamAgents.length > 0;
+  // Not on Team itself: picking the team needs the room for who each member
+  // is and does, not their seats (owner, 2026-11-19). The studio fills in after.
+  // Each step opens at its top: the window scrolls as one, and kept the place
+  // the last step was left at (owner, 2026-11-19: Team opened midway down).
+  const scroller = useRef<HTMLDivElement>(null);
+  useEffect(() => { scroller.current?.scrollTo({ top: 0 }); }, [step]);
+  const hasStudio = (step === 'home' || step === 'orchestrator' || step === 'permissions' || step === 'ready') && teamAgents.length > 0;
+  // Team is a wide card, the members side by side, so the list doesn't run long.
+  const cardTrack = step === 'team' ? 'minmax(0, 1400px)' : 'minmax(0, 560px)';
   return (
-    <div style={{
+    <div ref={scroller} style={{
       position: 'fixed', inset: 0, zIndex: 200, overflowY: 'auto',
       background: 'var(--cth-bg)',
       display: 'flex', flexDirection: 'column'
@@ -514,6 +593,15 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
             {t('onboarding.stepOf', { n: stepIndex + 1, total: steps.length })}
           </span>
         )}
+        {add && (
+          // The open business never stopped; going back keeps what was typed
+          // as Setup not finished, to go on from the business menu (D19).
+          <span className="cth-titlebar-nodrag" style={{ marginInlineStart: stepIndex >= 0 ? 12 : 'auto' }}>
+            <PixelButton variant="secondary" size="sm" disabled={busy} onClick={() => { void backToOffice(); }}>
+              {t('addBusiness.backToOffice')}
+            </PixelButton>
+          </span>
+        )}
       </div>
       {/* `margin: auto` centers while the card fits and falls back to a normal
           scroll once it doesn't (a centered flex item that overflows is clipped
@@ -522,7 +610,7 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
           start track closes and the end track holds it. The fr values animate. */}
       <div className="cth-onb-body" style={{
         flex: 1, display: 'grid', columnGap: 0, padding: '8px 28px 28px', width: '100%', maxWidth: 1440, margin: '0 auto', boxSizing: 'border-box',
-        gridTemplateColumns: hasStudio ? 'minmax(0, 0fr) minmax(0, 560px) minmax(0, 1fr)' : 'minmax(0, 1fr) minmax(0, 560px) minmax(0, 1fr)'
+        gridTemplateColumns: hasStudio ? `minmax(0, 0fr) ${cardTrack} minmax(0, 1fr)` : `minmax(0, 1fr) ${cardTrack} minmax(0, 1fr)`
       }}>
         <div style={{ gridColumn: 2, gridRow: 1, minWidth: 0, margin: step === 'team' ? '0' : 'auto 0' }}>
           <div role="region" aria-label={stepTitle} style={{
@@ -539,7 +627,15 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
           </div>
           <div style={{ padding: '14px 22px 22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-            {damagedCopy && (step === 'business' || step === 'resume') && (
+            {/* A new computer: bring the office over from a backup instead of
+                setting it up (docs/designs/backup-restore.md). */}
+            {!add && !preview && step === 'business' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={{ fontSize: 13, color: 'var(--cth-ink-2)' }}>{t('backup.moving')}</span>
+                <BackupRestore restoreOnly hasOffice={false} />
+              </div>
+            )}
+            {!add && damagedCopy && (step === 'business' || step === 'resume') && (
               <div role="status" data-damaged-config style={{
                 borderRadius: 'var(--cth-r-md)', padding: '8px 10px',
                 background: 'var(--cth-amber-soft)', color: 'var(--cth-amber-text)',
@@ -971,31 +1067,30 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
 
                 {/* The folder idea, said once, in plain words: each person has a
                     folder; put their documents there; they save their work there. */}
+                {/* One line; the rest behind the (i) (owner, 2026-11-19: the list
+                    started below a long paragraph). Only the office folder is
+                    chosen here: each member's folder goes inside it (owner,
+                    2026-11-19: a change link on every card was too much). A
+                    member's folder can still be moved after setup. */}
                 {folderSuggestions && (
-                  <div style={{
-                    borderRadius: 'var(--cth-r-md)',
-                    display: 'flex', gap: 10, alignItems: 'flex-start', padding: 10,
-                    background: 'var(--cth-sky-light)', boxShadow: 'inset 0 0 0 1px var(--cth-line-2)',
-                    fontSize: 14, lineHeight: '20px', color: 'var(--cth-ink-700)'
-                  }}>
-                    <span style={{ flexShrink: 0, marginTop: 1 }}><Icon name="folder" /></span>
-                    <span>{t('onboarding.team.folderNote', { root: tildePath(folderSuggestions.root) })}</span>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 14, lineHeight: '20px', color: 'var(--cth-ink-700)' }}>
+                    <span style={{ flexShrink: 0, display: 'flex' }}><Icon name="folder" /></span>
+                    <span>{t('onboarding.team.folderLine', { root: tildePath(folderSuggestions.root) })}</span>
+                    <InfoTip text={t('onboarding.team.folderNote', { root: tildePath(folderSuggestions.root) })} />
+                    <button type="button" onClick={() => { void chooseOfficeFolder(); }} style={linkBtn}>{t('onboarding.team.change')}</button>
+                    {folderOverrides[OFFICE_KEY] !== undefined && (
+                      <button type="button" onClick={() => setFolderOverrides({})} style={linkBtn}>{t('onboarding.team.useSuggested')}</button>
+                    )}
                   </div>
                 )}
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {/* Side by side: four across in a usual window, fewer when narrow. */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
                   <TeamCard
                     character="michael"
                     name={t('onboarding.team.managerName')}
                     summary={t('onboarding.team.managerSummary')}
                     chips={[{ tone: 'muted', label: t('onboarding.team.alwaysOn') }]}
-                    folder={michaelFolderFor(folderSuggestions, folderOverrides)}
-                    folderNote={t('onboarding.team.sharedFolder')}
-                    displayPath={tildePath}
-                    overridden={folderOverrides[OFFICE_KEY] !== undefined}
-                    onChangeFolder={() => { void chooseTeamFolder(OFFICE_KEY); }}
-                    onUseSuggested={() => resetTeamFolder(OFFICE_KEY)}
-                    labels={folderLabels}
                   />
                   {teamAgents.map((a) => (
                     <TeamCard
@@ -1006,12 +1101,6 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
                       chips={agentChips(a)}
                       picked={!!teamPicked[a.id]}
                       onTogglePicked={() => { setError(undefined); setTeamPicked((p) => ({ ...p, [a.id]: !p[a.id] })); }}
-                      folder={folderFor(a, folderSuggestions, folderOverrides)}
-                      displayPath={tildePath}
-                      overridden={folderOverrides[a.id] !== undefined}
-                      onChangeFolder={() => { void chooseTeamFolder(a.id); }}
-                      onUseSuggested={() => resetTeamFolder(a.id)}
-                      labels={folderLabels}
                     />
                   ))}
                   <TeamCard
@@ -1021,11 +1110,6 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
                     chips={[{ tone: 'muted', label: t('research.teamTag') }]}
                     picked={researchPicked}
                     onTogglePicked={() => setResearchPicked((v) => !v)}
-                    displayPath={tildePath}
-                    overridden={false}
-                    onChangeFolder={() => undefined}
-                    onUseSuggested={() => undefined}
-                    labels={folderLabels}
                   />
                 </div>
 
@@ -1035,7 +1119,16 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
               </>
             )}
 
-            {step === 'ready' && <GetMichaelReady provider={godProvider} onReadyChange={setEngineReady} />}
+            {step === 'ready' && add && (
+              <ClaudeAccountChoice
+                newName={businessName.trim() || t('addBusiness.thisBusiness')}
+                openName={add.openBusinessName || t('addBusiness.openBusiness')}
+                value={claudeLogin}
+                onChange={setClaudeLogin}
+              />
+            )}
+            {/* Its own account is signed in when it opens, in its own Claude folder. */}
+            {step === 'ready' && !(add && claudeLogin === 'own') && <GetMichaelReady provider={godProvider} onReadyChange={setEngineReady} />}
 
             {step === 'permissions' && (
               <>
@@ -1255,13 +1348,13 @@ export function OnboardingWizard({ onComplete, preview }: OnboardingWizardProps)
                     {busy ? t('common.saving') : t('common.finish')}
                   </PixelButton>
                 )}
-                {step === 'ready' && !engineReady && (
+                {step === 'ready' && !engineReady && !(add && claudeLogin === 'own') && (
                   <PixelButton variant="ghost" size="md" onClick={finish} disabled={busy}>
                     {t('engineSetup.setUpLater')}
                   </PixelButton>
                 )}
                 {step === 'ready' && (
-                  <PixelButton variant="primary" size="md" onClick={finish} disabled={busy || !engineReady}>
+                  <PixelButton variant="primary" size="md" onClick={finish} disabled={busy || (!engineReady && !(add && claudeLogin === 'own'))}>
                     {busy ? t('common.saving') : t('engineSetup.openOffice')}
                   </PixelButton>
                 )}
@@ -1395,14 +1488,12 @@ const CHIP_FG: Record<TeamChip['tone'], string> = {
 };
 
 /**
- * One member of the starter team (wireframe screen 2, plus the folder they work
- * in — Decision 47). `picked` undefined means not pickable: Michael, always on.
- * The folder row sits OUTSIDE the label so its buttons aren't nested inside
- * the checkbox's click target.
+ * One member of the starter team (wireframe screen 2). `picked` undefined means
+ * not pickable: Michael, always on. Their folder is not shown: only the office
+ * folder is chosen on this step (owner, 2026-11-19).
  */
 function TeamCard({
-  character, name, summary, chips, picked, onTogglePicked,
-  folder, folderNote, displayPath, overridden, onChangeFolder, onUseSuggested, labels
+  character, name, summary, chips, picked, onTogglePicked
 }: {
   character?: string;
   name: string;
@@ -1410,22 +1501,19 @@ function TeamCard({
   chips: TeamChip[];
   picked?: boolean;
   onTogglePicked?: () => void;
-  folder?: string;
-  folderNote?: string;
-  displayPath: (p: string) => string;
-  overridden: boolean;
-  onChangeFolder: () => void;
-  onUseSuggested: () => void;
-  labels: { worksIn: string; change: string; useSuggested: string };
 }) {
   const pickable = picked !== undefined;
   const active = !pickable || picked;
   const isMichael = character === 'michael';
-  // The folder row lines up under the text: checkbox + gap + avatar + gap.
-  const textIndent = (pickable ? 18 + 12 : 18 + 12) + 36 + 12;
   const [first, ...rest] = name.split(' · ');
+  // A card in the Team grid; picked ones carry the stronger ring.
   return (
-    <div style={{ padding: '12px 4px', borderTop: '1px solid var(--cth-line)', opacity: active ? 1 : 0.55 }}>
+    <div style={{
+      display: 'flex', flexDirection: 'column', padding: 12, borderRadius: 'var(--cth-r-lg)', minWidth: 0,
+      background: active ? 'var(--cth-card)' : 'var(--cth-card-2)',
+      boxShadow: `inset 0 0 0 ${active && pickable ? 2 : 1}px ${active && pickable ? 'var(--cth-ink)' : 'var(--cth-line)'}`
+    }}>
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, opacity: active ? 1 : 0.6 }}>
       <label style={{ display: 'flex', gap: 12, alignItems: 'flex-start', cursor: pickable ? 'pointer' : 'default' }}>
         {pickable ? (
           <input
@@ -1446,11 +1534,11 @@ function TeamCard({
             {rest.length > 0 && <span style={{ fontSize: 14, color: 'var(--cth-ink-3)' }}>{rest.join(' · ')}</span>}
           </span>
           <span style={{ display: 'block', fontSize: 14, lineHeight: '20px', color: 'var(--cth-ink-2)' }}>{summary}</span>
-          <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 7 }}>
+          <span style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
             {chips.map((c) => (
               <span key={c.label} style={{
                 display: 'inline-flex', alignItems: 'center', gap: 5,
-                fontSize: 14, fontWeight: 600, lineHeight: '20px', padding: '2px 9px', borderRadius: 999,
+                fontSize: 12, fontWeight: 600, lineHeight: '16px', padding: '1px 8px', borderRadius: 999,
                 background: CHIP_BG[c.tone], color: CHIP_FG[c.tone],
                 boxShadow: c.tone === 'optional' ? 'none' : c.tone === 'need' ? 'inset 0 0 0 1px var(--cth-line-2)' : 'none',
                 border: c.tone === 'optional' ? '1px dashed var(--cth-line-2)' : 'none'
@@ -1462,23 +1550,7 @@ function TeamCard({
           </span>
         </span>
       </label>
-
-      {active && folder && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
-          marginTop: 8, marginInlineStart: textIndent, fontSize: 14, color: 'var(--cth-ink-3)', minWidth: 0
-        }}>
-          <Icon name="folder" />
-          <span>{labels.worksIn}</span>
-          <span title={folder} style={{
-            fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink-2)', minWidth: 0, maxWidth: '100%',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
-          }}>{displayPath(folder)}</span>
-          {folderNote && <span>{folderNote}</span>}
-          <button type="button" onClick={onChangeFolder} style={linkBtn}>{labels.change}</button>
-          {overridden && <button type="button" onClick={onUseSuggested} style={linkBtn}>{labels.useSuggested}</button>}
-        </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -1544,9 +1616,65 @@ function Dots({ step, steps }: { step: Step; steps: readonly Step[] }) {
   );
 }
 
-/** Where setup suggests the office lives, and looks for an existing one. */
-const DEFAULT_HOME = '~/HarnessAgents';
-/** How many "~/HarnessAgents N" names a new office tries before asking the owner to pick. */
+
+/** The steps a draft can go on from (D19): any but the resume screen. */
+const DRAFT_STEPS: readonly Step[] = ['business', 'details', 'team', 'home', 'orchestrator', 'permissions', 'ready'];
+
+/** The first free "~/HarnessAgents_N", or '' when none is (the folder step asks). */
+async function firstFreeHome(): Promise<string> {
+  return firstFreeOf(numberedHomes(NEW_OFFICE_SUGGESTIONS));
+}
+
+/** The first of these folders not there yet, or '' (none, or the check failed). */
+async function firstFreeOf(candidates: string[]): Promise<string> {
+  for (const candidate of candidates) {
+    const st = await window.cth.homeStatus(candidate).catch(() => null);
+    if (!st) return '';
+    if (!st.exists) return candidate;
+  }
+  return '';
+}
+
+/** A new business's folder, named after it ("~/HarnessAgents_Northgate_Realty",
+ *  shared/officeHome.ts); the numbered one when its name makes none. */
+async function freeHomeFor(businessName: string): Promise<string> {
+  return (await firstFreeOf(businessHomeCandidates(businessName, NEW_OFFICE_SUGGESTIONS))) || firstFreeHome();
+}
+
+/** Add a business, Ready step (mockup frame 4; D4, E6): the Claude account the
+ *  new business runs on. A different account is its own sign in, connectors and
+ *  plan, signed in when it opens. */
+function ClaudeAccountChoice({ newName, openName, value, onChange }: {
+  newName: string; openName: string; value: 'shared' | 'own'; onChange: (v: 'shared' | 'own') => void;
+}) {
+  const { t } = useTranslation();
+  const option = (v: 'shared' | 'own', title: string, desc: string) => (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={value === v}
+      onClick={() => onChange(v)}
+      style={{
+        textAlign: 'start', cursor: 'pointer', padding: '10px 12px', border: 'none', borderRadius: 'var(--cth-r-lg)',
+        background: 'var(--cth-card)', boxShadow: `inset 0 0 0 ${value === v ? 2 : 1}px ${value === v ? 'var(--cth-ink)' : 'var(--cth-line-2)'}`,
+        display: 'flex', flexDirection: 'column', gap: 3, fontFamily: 'var(--cth-font-ui)'
+      }}
+    >
+      <span style={{ fontSize: 13.5, fontWeight: value === v ? 700 : 500, color: 'var(--cth-ink)' }}>{title}</span>
+      <span style={{ fontSize: 12.5, color: 'var(--cth-ink-3)' }}>{desc}</span>
+    </button>
+  );
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <h3 style={groupName} id="add-business-claude">{t('addBusiness.claudeTitle', { name: newName })}</h3>
+      <div role="radiogroup" aria-labelledby="add-business-claude" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {option('shared', t('addBusiness.claudeSame', { name: openName }), t('addBusiness.claudeSameDesc'))}
+        {option('own', t('addBusiness.claudeOwn'), t('addBusiness.claudeOwnDesc'))}
+      </div>
+    </div>
+  );
+}
+/** How many "~/HarnessAgents_N" names a new office tries before asking the owner to pick. */
 const NEW_OFFICE_SUGGESTIONS = 20;
 
 function nextStep(s: Step): Step {

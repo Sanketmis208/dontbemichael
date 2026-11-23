@@ -26,5 +26,5 @@ test('setup goes from the team straight to the next step, and asks for a folder 
   assert.match(check, /if \(!where\) \{[\s\S]*?setStep\('home'\);/, 'no folder to suggest: ask');
   assert.match(check, /setError\(t\('onboarding\.resume\.folderInUse'\)\);\s*setStep\('home'\);/, 'a folder holding another office: ask');
   assert.match(check, /setStep\('resume'\);/, 'an office that can be continued: offer it');
-  assert.match(settings, /\{t\('settings\.general\.homeFolder'\)\}[\s\S]*?onClick=\{pickNewHome\}/, 'Settings changes the folder later');
+  assert.match(settings, /t\('settings\.general\.homeFolder'\)\}[\s\S]*?onClick=\{pickNewHome\}/, 'Settings changes the folder later');
 });

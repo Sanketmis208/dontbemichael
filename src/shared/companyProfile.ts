@@ -70,7 +70,7 @@ const AREA_WORDS: Record<ServiceArea, string> = {
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 const MAX_FIELD = 200;
-const MAX_SOCIAL = 5;
+export const MAX_SOCIAL = 5;
 
 const clean = (v: unknown): string | undefined => {
   if (typeof v !== 'string') return undefined;

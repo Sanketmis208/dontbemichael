@@ -37,7 +37,8 @@ const compose = {
   body: { type: 'string', description: 'Plain text body.' },
   reply_to: { ...ref, description: 'The message you are replying to (threads the reply). From a mailbox you send only from, the id is the message_id of one of your own sends there (your_recent_sends in list_mailboxes).' },
   forward: { ...ref, description: 'A message to forward, from this same mailbox.' },
-  attach_from: { type: 'array', items: ref, description: 'Messages whose attachments to include, from this same mailbox.' }
+  attach_from: { type: 'array', items: ref, description: 'Messages whose attachments to include, from this same mailbox.' },
+  attach_files: { type: 'array', items: { type: 'string' }, description: 'Files to attach from your own folder, or a folder the owner named for your job: full paths, or paths inside your folder. At most 20 files and 18 MB together; PDF, Word, Excel, PowerPoint, plain text, CSV and pictures. They follow your sending like any email: Can send sends them, Send on approval puts them on the owner\'s card (the owner sees each file and may take one off), Draft only saves them on the draft. Not from a mailbox you send only from, and never under a standing approval. This holds over any older memory note that says files from a folder can\'t be attached.' }
 };
 
 const TOOLS = [

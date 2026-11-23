@@ -13,6 +13,8 @@ import { isClaudeProvider } from '@shared/agentProvider';
 import { RESEARCH_ID } from '../../../shared/research';
 import { useResearchName } from '@/shell/research';
 import { groupName, hint, panelStyle } from './fieldText';
+import { PublicTermsList } from './PublicTermsList';
+import { cleanPublicTerms, publicSuggestions } from '@shared/publicTerms';
 
 /**
  * Settings, Research & privacy (issue #230, docs/designs/research-agent-privacy.md,
@@ -29,11 +31,14 @@ const group: CSSProperties = { ...panelStyle, gap: 0 };
 const head: CSSProperties = { ...groupName, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' };
 const dot = (color: string): CSSProperties => ({ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 });
 
-export function ResearchPrivacySettings({ config, classes, onClassesChange }: {
+export function ResearchPrivacySettings({ config, classes, onClassesChange, publicTerms, onPublicTermsChange }: {
   config: HarnessConfig;
   /** The classes as staged (unsaved changes included). */
   classes: Partial<Record<DataClassId, DataClassSetting>> | undefined;
   onClassesChange: (next: Partial<Record<DataClassId, DataClassSetting>>) => void;
+  /** Always allowed as staged (shared/publicTerms.ts). */
+  publicTerms: string[] | undefined;
+  onPublicTermsChange: (next: string[]) => void;
 }) {
   const { t } = useTranslation();
   const researchName = useResearchName();
@@ -177,6 +182,13 @@ export function ResearchPrivacySettings({ config, classes, onClassesChange }: {
           </div>
         )}
       </div>
+
+      {/* What the owner says is the business's own and public (owner, 2026-11-20). */}
+      <PublicTermsList
+        value={publicTerms}
+        suggestions={publicSuggestions({ ...(config.companyProfile ?? {}), businessName: config.businessName }, cleanPublicTerms(publicTerms))}
+        onChange={onPublicTermsChange}
+      />
     </>
   );
 }

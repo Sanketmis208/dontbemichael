@@ -107,7 +107,15 @@ test('every app data file the main process names is erased by a reset or kept on
   for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.ts'))) {
     for (const m of fs.readFileSync(path.join(dir, f), 'utf8').matchAll(/getPath\('userData'\),\s*'([^']+)'/g)) names.add(m[1]);
   }
-  assert.ok(names.size >= 10, 'the scan finds the app data files');
+  assert.ok(names.size >= 6, 'the scan finds the app data files');
+  // A business's own files, kept per office once settings are per office
+  // (officeDataPath): erased by a reset, before the move as after it.
+  const business = new Set();
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.ts'))) {
+    for (const m of fs.readFileSync(path.join(dir, f), 'utf8').matchAll(/officeDataPath\('([^']+)'\)/g)) business.add(m[1]);
+  }
+  assert.ok(business.size >= 5, 'the scan finds the business files');
+  for (const n of business) assert.ok(APP_DATA_ENTRIES.includes(n), `${n} belongs to a business, so a reset erases it`);
   // Files reached through a helper or a variable, which the scan can't see.
   for (const n of ['pastes', 'updater.log', 'last-run-version']) names.add(n);
   assert.match(fs.readFileSync(path.join(dir, 'pastes.ts'), 'utf8'), /return join\(userData, 'pastes'\);/);
@@ -180,16 +188,18 @@ test('app:resetAll erases the office data before it resets the config', () => {
   const body = handler.slice(0, handler.indexOf('\n});'));
   const erase = body.indexOf('eraseOfficeData(');
   assert.ok(erase > 0, 'the reset calls eraseOfficeData');
-  assert.ok(erase < body.indexOf('\n  resetConfig();'), 'before the config forgets the office folder');
+  assert.ok(erase < body.indexOf('\n  forgetOffice(resetOfficeId);'), 'before the config forgets the office folder');
   assert.match(body, /\.\.\.\(researchDesk\(\) \? projectDirs\(researchDesk\(\)!\) : \[\]\),/, 'Research\'s conversation too, in either folder spelling');
-  assert.match(body, /\.\.\.CHECK_FOLDERS\.flatMap\(\(f\) => projectDirs\(join\(userData, f\)\)\)/);
+  assert.match(body, /\.\.\.CHECK_FOLDERS\.flatMap\(\(f\) => projectDirs\(officeDataPath\(f\)\)\)/);
   assert.match(body, /const kgRoot = knowledge\.root\(\);/, 'the knowledge store where it really is, read before the config resets');
-  assert.match(body, /knowledgeRoot: resolve\(kgRoot\) !== resolve\(join\(userData, 'knowledge'\)\) \? kgRoot : null/);
-  assert.ok(body.indexOf('const kgRoot') < body.indexOf('\n  resetConfig();'));
+  assert.match(body, /knowledgeRoot: resolve\(kgRoot\) !== resolve\(officeDataPath\('knowledge'\)\) \? kgRoot : null/);
+  assert.ok(body.indexOf('const kgRoot') < body.indexOf('\n  forgetOffice(resetOfficeId);'));
   // The stops are shared with Reset memory (stopForReset); the full reset
-  // runs all of them, the store's close included.
-  assert.match(body, /\n  stopForReset\('reset'\);\n/, 'every stop, before anything is erased');
-  assert.ok(body.indexOf("stopForReset('reset')") < erase);
+  // runs all of them. Before settings are per office the store closes with
+  // them; after, it stays open to erase this business's rows, then closes.
+  assert.match(body, /\n  stopForReset\('reset', \{ keepPersist: !!resetOfficeId \}\);\n/, 'every stop, before anything is erased');
+  assert.ok(body.indexOf("stopForReset('reset'") < erase);
+  assert.ok(body.indexOf('persist.eraseOffice(') < body.indexOf('persist.close();'), 'the rows go, then the store closes');
   const helper = src.slice(src.indexOf('function stopForReset('), src.indexOf("ipcMain.handle('app:resetAll'"));
   for (const call of ['clearMissionTimers()', 'hive.stopRouter()', 'hookServer.stop()', 'memoryTidy.stop()', 'ptyManager.killAll()', 'integrationBroker.stop()', 'mailService.closeAll()']) {
     assert.ok(helper.includes(call), `the shared stops include ${call}`);

@@ -17,6 +17,11 @@ import { MAX_AGENT_TOKEN_CAP } from '../shared/tokenCaps';
 import { expandTilde, normalizeHiveHome } from './fs';
 import { isHeldRename, RENAME_RETRY_MS, sleepSync, writeFileAtomic } from './atomicFile';
 import type { IntegrationRecord } from '../shared/integrations';
+import { randomUUID } from 'node:crypto';
+import { businessKeySet, installKeySet, officeIdIn, officesWith, pick, settingsIn, type OfficeEntry, type OfficeSettings } from './officeKeys';
+import { ensureOfficeId, readOfficeId } from './officeFile';
+import { homeFolderStatus } from './homeFolder';
+import { claudeJsonFile, claudeSettingsDir } from './claudeHome';
 
 /** A recurring schedule. The type and every rule about it (ownership, next run,
  *  what a run sends) live in shared/missions.ts so main, preload and the
@@ -253,6 +258,9 @@ export interface HarnessConfig {
   /** The owner's data classes that differ from the seeded defaults
    *  (shared/dataClasses.ts): what the team may send to Research. */
   dataClasses?: Partial<Record<DataClassId, DataClassSetting>>;
+  /** Always allowed (shared/publicTerms.ts): what the owner says is the
+   *  business's own and public, kept as written by the privacy check. */
+  researchPublic?: string[];
   /** Team members that failed their first start, tried again (and only they)
    *  on each later launch until they start. */
   businessTeamRetry?: string[];
@@ -288,6 +296,11 @@ export interface HarnessConfig {
    *  secret store under `apikey:anthropic` and handed to each Claude agent as
    *  ANTHROPIC_API_KEY at start. */
   claudeAuth?: 'account' | 'apiKey';
+  /** This business's own Claude login (docs/designs/separate-businesses.md,
+   *  BIZ-3, D4): 'own' keeps its sign in, connectors and conversations in its
+   *  own Claude folder in the app's data folder; unset or 'shared' uses the
+   *  Claude sign in the app already uses. A second account is a second plan. */
+  claudeLogin?: 'shared' | 'own';
   /** What the owner pays for their Claude plan a month, in USD (Settings > Agents).
    *  Unset: the detected plan's list price. Pulse splits it by share of the work. */
   planPriceMonthly?: number;
@@ -412,6 +425,18 @@ export interface HarnessConfig {
   tvShowOffices?: boolean;
   /** Per-CLI-provider default model slug, used to pre-fill the model picker. */
   providerDefaultModels?: Partial<Record<AgentProvider, string>>;
+  /** Each business's own settings, by office id (src/main/officeSettings.ts,
+   *  docs/designs/separate-businesses.md). Read and written only through
+   *  officeSettings / updateOfficeSettings. */
+  offices?: Record<string, OfficeEntry>;
+  /** Set when the business settings that used to sit at the top level were
+   *  moved into `offices` (migrateToOfficeSettings). Its version, 1. */
+  officesMigrated?: number;
+  /** This business's identity came from its office.json when settings moved
+   *  per office, but its mailboxes, schedules, grants and connectors were
+   *  another business's and were not carried over: tell the owner once, on
+   *  first open (docs/designs/separate-businesses.md, D11). */
+  setupNoticePending?: boolean;
 
 }
 
@@ -441,6 +466,12 @@ const DEFAULTS: HarnessConfig = {
   // switched on once at launch (knowledgeOnSeeded).
   knowledgeGraph: { enabled: true }
 };
+
+/** A fresh copy of the defaults: nested values (missions, knowledgeGraph) are
+ *  not shared with DEFAULTS, so a caller may change what it gets. */
+export function configDefaults(): HarnessConfig {
+  return structuredClone(DEFAULTS);
+}
 
 function configPath(): string {
   return join(app.getPath('userData'), 'config.json');
@@ -480,7 +511,14 @@ function dropRemovedWebhookData<T>(p: string, parsed: T): T {
   return next as T;
 }
 
-export function readConfig(): HarnessConfig {
+/**
+ * config.json as stored, with the defaults filled in. Before the move to per
+ * office settings (officesMigrated unset) this is what every reader sees; after
+ * it, only the install part is meant to be read from here, and the business
+ * settings live in `offices`. readConfig() is the view to use; this is for the
+ * code that files settings by office (officeSettings.ts).
+ */
+export function readStoredConfig(): HarnessConfig {
   const p = configPath();
   // No file yet = a first run with nothing to migrate; the defaults ARE the
   // post-migration shape. Deliberately does not persist — a bare read must not
@@ -493,6 +531,103 @@ export function readConfig(): HarnessConfig {
   } catch {
     return { ...DEFAULTS };
   }
+}
+
+/**
+ * The config every reader sees. Before the move it is config.json as today.
+ * After it, the install fields come from the top of config.json and the
+ * business fields from the open office's own entry (its saved ones over the
+ * defaults), so the same readConfig().businessName, .mailboxes or .missions
+ * read the business that is open, and no reader can read another one's
+ * (docs/designs/separate-businesses.md). Other businesses' entries are never
+ * part of it.
+ */
+export function readConfig(): HarnessConfig {
+  return configView(readStoredConfig());
+}
+
+function businessPart(cfg: HarnessConfig): Partial<OfficeSettings> {
+  return pick(cfg, businessKeySet) as Partial<OfficeSettings>;
+}
+
+/** The open office's id once settings are per office; null before the move,
+ *  or when no office is open. */
+export function openOfficeId(stored: HarnessConfig = readStoredConfig()): string | null {
+  if (!stored.officesMigrated) return null;
+  return officeIdIn(stored, readOfficeId(stored.harnessHome));
+}
+
+/**
+ * Where the app keeps one of its own files or folders that belong to a
+ * business (journals, dock keys, pasted images, check folders, knowledge):
+ * `userData/offices/<id>/<name>` for the open office once settings are per
+ * office, else `userData/<name>` as before. After the move with no office open
+ * (the missing office screen), `userData/offices/none/<name>`: never another
+ * business's, and nothing runs there.
+ */
+export function officeDataPath(name: string): string {
+  const stored = readStoredConfig();
+  const userData = app.getPath('userData');
+  if (!stored.officesMigrated) return join(userData, name);
+  return join(userData, 'offices', openOfficeId(stored) ?? 'none', name);
+}
+
+/** A business's own files in the app's data folder from before the move. */
+export const BUSINESS_DATA_FILES = [
+  'mail-send-journal.json', 'broker-write-journal.json', 'mail-proposals.json', 'owner-dock-keys.json', 'pastes', 'knowledge'
+] as const;
+
+/**
+ * At the move: put these files and folders of the app's data folder into the
+ * office's own place (officeDataPath), so the business keeps its journals,
+ * approvals, pasted images and knowledge. One already there is kept (a move
+ * that stopped midway and runs again). False when one could not be moved.
+ */
+export function moveIntoOffice(id: string, names: readonly string[]): boolean {
+  const userData = app.getPath('userData');
+  const moved: Array<[string, string]> = [];
+  for (const name of names) {
+    const from = join(userData, name);
+    const to = join(userData, 'offices', id, name);
+    try {
+      if (!existsSync(from) || existsSync(to)) continue;
+      mkdirSync(dirname(to), { recursive: true });
+      renameSync(from, to);
+      moved.push([from, to]);
+    } catch (e) {
+      console.error(`[config] could not move ${name} into the office:`, e);
+      // All or none: the move did not finish, so the app runs on the old
+      // places this launch; what this run moved goes back there.
+      for (const [back, there] of moved.reverse()) {
+        try { renameSync(there, back); } catch (err) { console.error(`[config] could not move ${there} back:`, err); }
+      }
+      return false;
+    }
+  }
+  return true;
+}
+
+function configView(stored: HarnessConfig): HarnessConfig {
+  const { offices: _offices, ...rest } = stored;
+  if (!stored.officesMigrated) return rest as HarnessConfig;
+  const id = openOfficeId(stored);
+  const install = pick(rest, installKeySet);
+  return dropRetiredMissions({ ...install, ...settingsIn(stored, id, businessPart(DEFAULTS)) } as HarnessConfig);
+}
+
+/**
+ * The office id business settings are saved under for this folder: its own
+ * (office.json), else the entry last opened from it, else a new one. A folder
+ * that holds an office gets the new id in its office.json at once; one that
+ * does not yet (setup has not made it) keeps it in the entry, and the office
+ * takes it when it is made (adoptOpenOffice). Null with no folder at all.
+ */
+function officeIdForSave(stored: HarnessConfig, home: string | null | undefined): string | null {
+  if (!home) return null;
+  const known = officeIdIn({ harnessHome: home, offices: stored.offices }, readOfficeId(home));
+  if (known) return known;
+  if (homeFolderStatus(home).hasOffice) return ensureOfficeId(home);
+  return randomUUID();
 }
 
 /** (#140, the upgrade path) A config.json persisted BEFORE `writeConfig`
@@ -587,7 +722,7 @@ function persistConfig(patched: HarnessConfig): HarnessConfig {
   // Saving one setting stores only that setting, so fill the rest back in first:
   // subscribers must see the same complete config a read gives them, never a
   // half-filled one.
-  const view = normalizeStoredHomes({ ...DEFAULTS, ...next });
+  const view = configView(normalizeStoredHomes({ ...DEFAULTS, ...next }));
   // The change is already saved, so one failed subscriber must not fail the save
   // for its caller, nor stop the subscribers after it.
   for (const listener of configWriteListeners) {
@@ -596,8 +731,30 @@ function persistConfig(patched: HarnessConfig): HarnessConfig {
   return next;
 }
 
+/** Save this whole config in place of the stored one: unlike writeConfig, a
+ *  field left out is removed. Only the move to per office settings uses it. */
+export function replaceConfig(next: HarnessConfig): HarnessConfig {
+  return persistConfig(next);
+}
+
+/** Copy config.json, as it is on disk, to `name` beside it, unless that copy
+ *  already exists (the first copy is the one to keep). True when the copy is
+ *  there afterwards, or there was no config.json to copy. */
+export function keepConfigCopy(name: string): boolean {
+  const p = configPath();
+  const copy = join(dirname(p), name);
+  try {
+    if (existsSync(copy) || !existsSync(p)) return true;
+    copyFileSync(p, copy);
+    return existsSync(copy);
+  } catch (e) {
+    console.error(`[config] could not keep a copy as ${name}:`, e);
+    return false;
+  }
+}
+
 export function writeConfig(patch: Partial<HarnessConfig>): HarnessConfig {
-  const current = readConfig();
+  const current = readStoredConfig();
   const next: HarnessConfig = { ...current, ...patch };
   // Project INGESTION — a registered repo is typed by hand ("~/dev/foo") as often
   // as it is picked from the folder dialog. Expand `~` here so the persisted list
@@ -624,7 +781,32 @@ export function writeConfig(patch: Partial<HarnessConfig>): HarnessConfig {
     next.harnessHome = home;
     next.recentHives = recentHives;
   }
-  return persistConfig(next);
+  if (!current.officesMigrated) return configView(persistConfig(next));
+  return configView(persistConfig(routedToOffice(current, next, patch)));
+}
+
+/**
+ * After the move: the business fields of a save go to the open office's entry
+ * (the folder being opened, when the save also sets harnessHome), and the top
+ * of config.json keeps install fields only. A business field saved with no
+ * folder at all has nowhere to go and is left out.
+ */
+function routedToOffice(current: HarnessConfig, merged: HarnessConfig, patch: Partial<HarnessConfig>): HarnessConfig {
+  // `merged` has the save applied (registeredRepos and harnessHome cleaned up).
+  const business: Record<string, unknown> = {};
+  for (const k of Object.keys(patch)) if (businessKeySet.has(k)) business[k] = (merged as unknown as Record<string, unknown>)[k];
+  const top: Record<string, unknown> = { ...merged };
+  for (const k of businessKeySet) delete top[k];
+  const out = top as unknown as HarnessConfig;
+  if (Object.keys(business).length === 0) return out;
+  const home = out.harnessHome;
+  const id = officeIdForSave(current, home);
+  if (!home || !id) {
+    console.error('[config] business settings with no office to save them in were left out:', Object.keys(business).join(', '));
+    return out;
+  }
+  out.offices = officesWith(out, id, home, business) as Record<string, OfficeEntry>;
+  return out;
 }
 
 /** Set or clear one agent's token ceiling against the latest config on disk.
@@ -652,14 +834,22 @@ export function setAgentTokenCap(agentId: unknown, tokenCap: unknown): HarnessCo
   const agentTokenCaps = { ...(current.agentTokenCaps ?? {}) };
   if (tokenCap === undefined) delete agentTokenCaps[agentId];
   else agentTokenCaps[agentId] = tokenCap;
-  return persistConfig({
-    ...current,
-    agentTokenCaps
-  });
+  return writeConfig({ agentTokenCaps });
 }
 
 /** Wipe the persisted config back to first-run defaults so the app boots into
  *  onboarding again. Used by the "reset & start over" flow. */
+/** A factory reset of the open business once settings are per office: its
+ *  entry goes, the install settings and every other business stay. Before the
+ *  move (no id) it is resetConfig(). */
+export function forgetOffice(id: string | null): HarnessConfig {
+  const stored = readStoredConfig();
+  if (!id || !stored.officesMigrated) return resetConfig();
+  const offices = { ...(stored.offices ?? {}) };
+  delete offices[id];
+  return configView(persistConfig({ ...stored, offices }));
+}
+
 export function resetConfig(): HarnessConfig {
   // Saved like any other change, so a reset announces itself too.
   persistConfig({ ...DEFAULTS });
@@ -722,7 +912,9 @@ export function ensureHarnessHome(path: string): { ok: boolean; error?: string }
 }
 
 function ensureClaudeGlobalPermissions(home: string): void {
-  const dir = join(home, '.claude');
+  // The folder Claude really uses (CLAUDE_CONFIG_DIR, for a business with its
+  // own login or an owner's export), else ~/.claude (claudeHome.ts).
+  const dir = claudeSettingsDir(home);
   const p = join(dir, 'settings.json');
   try {
     let s: Record<string, unknown> = {};
@@ -752,7 +944,10 @@ type ClaudeConfig = Record<string, unknown> & { projects?: Record<string, Claude
  *  it changed something. A file that is not a JSON object is left alone.
  *  True when the file now holds the change (written, or already there). */
 function updateClaudeJson(home: string, change: (c: ClaudeConfig) => boolean): boolean {
-  const p = join(home, '.claude.json');
+  // `<CLAUDE_CONFIG_DIR>/.claude.json` when one is set, else ~/.claude.json:
+  // an approval written where Claude does not read stops every agent at the
+  // trust question (claudeHome.ts).
+  const p = claudeJsonFile(home);
   // Claude Code writes this file too. Write a copy beside it and swap it in, so
   // a crash never leaves it half written, and start again (up to three times)
   // when Claude changed it between our read and our write, so its edit is kept.
@@ -874,15 +1069,16 @@ export function approveClaudeApiKey(key: string, home: string = homedir()): bool
  *
  *  Each file is an independent best-effort boundary: unsafe existing contents
  *  are preserved without preventing the other file from being handled safely. */
-export function ensureClaudePermissionsAccepted(cwd?: string, opts: { approveKey?: string } = {}): void {
+export function ensureClaudePermissionsAccepted(cwd?: string, opts: { approveKey?: string } = {}): boolean {
   let home: string;
-  try { home = homedir(); } catch { return; }
-  if (!home) return;
+  try { home = homedir(); } catch { return false; }
+  if (!home) return false;
 
   ensureClaudeGlobalPermissions(home);
   // One read and at most one write of ~/.claude.json per start: it holds every
-  // project's history and runs to megabytes for a busy owner.
-  updateClaudeJson(home, (c) => {
+  // project's history and runs to megabytes for a busy owner. True when the
+  // file now holds it all (written, or already there).
+  return updateClaudeJson(home, (c) => {
     let changed = markClaudeOnboarded(c);
     if (cwd && trustClaudeFolder(c, cwd)) changed = true;
     if (opts.approveKey && approveClaudeKeyIn(c, opts.approveKey)) changed = true;

@@ -15,6 +15,7 @@ import { answerMessages, askAsText, isAnswered, isReport, isWithdrawn, labeledAn
 import { noticeKindOf } from '@shared/noticeCards';
 import { isComposingKey } from '@shared/imeGuard';
 import { ScheduleRequestCards } from './ScheduleRequestCards';
+import { ResearchKeptCards } from './ResearchKeptCards';
 import { WorkStyleUpdateCards } from './WorkStyleUpdateCards';
 import { MailProposalCards } from './MailProposalCards';
 import { EngineSetupCard } from './EngineSetupCard';
@@ -90,11 +91,13 @@ export function AskMeTab() {
   const agents = useStore((s) => s.agents);
   const restorable = useStore((s) => s.restorableAgents);
   // One shared read with the pill, the strip and the chips (D3, eng R4).
-  const { tasks, requests: scheduleRequests, offers, proposals, engineSetup, stop, researchNotice, knowledgeNotice, degraded, silent, foundations, update, updateLater, cliUpdate, cliUpdateLater, caseStudyWaiting, count: needsCount } = useNeedsYou();
+  const { tasks, requests: scheduleRequests, researchKept, offers, proposals, engineSetup, stop, researchNotice, knowledgeNotice, setupNotice, degraded, silent, foundations, update, updateLater, cliUpdate, cliUpdateLater, caseStudyWaiting, count: needsCount } = useNeedsYou();
   // Michael's team upgrade card (docs/designs/team-upgrade-card.md) keeps All clear away too.
   const cliShown = cliUpdateToastVisible(cliUpdate, cliUpdateLater);
   // Michael's card for a new version (UpdateCard) keeps All clear away too.
-  const updateShown = updateCardShown(update, updateLater);
+  // An update still waits while its restart is pending, so the board is not
+  // all clear (the card itself steps aside for the quit warning).
+  const updateWaiting = updateCardShown(update, updateLater);
   // And a case study ready to view (CaseStudyCard).
   const caseScreenOpen = useStore((s) => s.caseStudyOpen);
   const caseShown = caseStudyWaiting && !caseScreenOpen;
@@ -103,6 +106,11 @@ export function AskMeTab() {
   // A sign in stop already asks the owner to sign in: one card (eng R3).
   const engineCard = setupCardShown({ engineSetup, stop });
   const onBreak = !!useOfficeBreak();
+  // The office opening (the team clocking in) or closing (closing time): the
+  // asks are read only until it is open (askLock below).
+  const officeClosing = useStore((s) => s.officeClosing);
+  const officeOpening = useStore((s) => s.opening.kind === 'opening');
+  const askLock: 'closing' | 'opening' | null = officeClosing ? 'closing' : officeOpening ? 'opening' : null;
   const refreshScheduleRequests = refreshNeedsYou;
   // Drafts live in the STORE (keyed by row) — switching tabs unmounts this
   // view, and a half-typed answer must survive the round trip.
@@ -224,6 +232,7 @@ export function AskMeTab() {
   // The board top to bottom: schedule changes, Work style updates, mail, then the rows.
   const cards: BoardCard[] = [
     ...scheduleRequests.map((r) => ({ key: `schedule:${r.id}`, dept: deptOf(r.agentId) })),
+    ...researchKept.map((k) => ({ key: `kept:${k.id}`, dept: deptOf(k.from) })),
     ...offers.map((o) => ({ key: `offer:${decisionId(o.key, o.agentId)}`, dept: deptOf(o.agentId) })),
     ...proposals.map((p) => ({ key: `mail:${p.id}`, dept: deptOf(p.agentId) })),
     ...waiting.map((r) => ({ key: r.key, dept: rowDept(r), keep: isReport(r.ask) }))
@@ -282,9 +291,9 @@ export function AskMeTab() {
     return { open: openKey === key, toggle: () => setOpenId(openKey === key ? null : key), pin: () => setOpenId(key) };
   };
   // The whole board, whatever is picked: All clear and the answered list read it.
-  const boardEmpty = !engineCard && !updateShown && !caseShown && !silentShown && !cliShown && waiting.length === 0 && scheduleRequests.length === 0 && offers.length === 0 && proposals.length === 0;
+  const boardEmpty = !engineCard && !updateWaiting && !caseShown && !silentShown && !cliShown && waiting.length === 0 && scheduleRequests.length === 0 && researchKept.length === 0 && offers.length === 0 && proposals.length === 0;
   // All clear shows, and with it Michael's one tip (owner, 2026-11-10).
-  const showAllClear = boardEmpty && !onBreak && !researchNotice && !knowledgeNotice && degraded.length === 0;
+  const showAllClear = boardEmpty && !onBreak && !researchNotice && !knowledgeNotice && !setupNotice && degraded.length === 0;
 
   /** The answer a row would send: the owner's words, labeled with the option
    *  or the questions it answers (ask-me-options.md, 5A). */
@@ -398,7 +407,23 @@ export function AskMeTab() {
       <UpdateCard update={update} later={updateLater} />
       <CaseStudyCard waiting={caseStudyWaiting} />
       <CliUpdateCard status={cliUpdate} later={cliUpdateLater} />
+      {/* While the office opens or closes, the asks below can be read but not
+          answered (owner, 2026-11-19): a reply then reaches a team that is not
+          there to act on it. The cards above stay usable, since signing Claude
+          in or fixing a stop is how an opening that is stuck gets going. */}
+      {askLock && (
+        <div role="status" style={{ flexShrink: 0, fontSize: 12.5, lineHeight: '18px', color: 'var(--cth-ink-3)', padding: '0 2px' }}>
+          {askLock === 'closing' ? translate('askMe.lockedClosing') : translate('askMe.lockedOpening')}
+        </div>
+      )}
+      <div
+        data-askme-locked={askLock || undefined}
+        {...(askLock ? ({ inert: '' } as Record<string, string>) : {})}
+        style={{ display: 'flex', flexDirection: 'column', gap: 12, flexShrink: 0, opacity: askLock ? 0.55 : 1, transition: 'opacity 200ms var(--cth-ease)' }}
+      >
       <ScheduleRequestCards requests={scheduleRequests} refresh={refreshScheduleRequests} look={memberLook} hiddenIds={hiddenOf('schedule:')} fold={foldFor('schedule:')} />
+      {/* What the privacy check kept back from a question to Research (owner, 2026-11-20). */}
+      <ResearchKeptCards kept={researchKept} refresh={refreshNeedsYou} look={memberLook} hiddenIds={hiddenOf('kept:')} fold={foldFor('kept:')} />
       <WorkStyleUpdateCards offers={offers} look={memberLook} hiddenIds={hiddenOf('offer:')} fold={foldFor('offer:')} />
       <MailProposalCards proposals={proposals} refresh={refreshNeedsYou} look={memberLook} hiddenIds={hiddenOf('mail:')} fold={foldFor('mail:')} />
       {/* Always mounted, so screen readers announce the line when it fills. */}
@@ -410,7 +435,7 @@ export function AskMeTab() {
       </div>
       {/* Nothing left (D4, D8): All clear, one light line, and what was just
           answered. The column closes on the next click outside it. */}
-      {boardEmpty && !onBreak && !researchNotice && !knowledgeNotice && degraded.length === 0 && (
+      {boardEmpty && !onBreak && !researchNotice && !knowledgeNotice && !setupNotice && degraded.length === 0 && (
         <div style={{ padding: '4px 2px 2px' }}>
           <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--cth-ink)' }}>{translate('shell.allClear')}</div>
           <div style={{ marginTop: 4, fontSize: 13, lineHeight: '19px', color: 'var(--cth-ink-3)' }}>{translate(`shell.allClearLine${line}`, { godName })}</div>
@@ -714,9 +739,11 @@ export function AskMeTab() {
       {/* A report, after the questions like every Report card (DESIGN.md 7.8). */}
       {researchNotice && <ResearchNoticeCard />}
       {knowledgeNotice && <KnowledgeNoticeCard />}
+      {setupNotice && <SetupNoticeCard />}
       {degraded.map((n) => (
         <DegradedNoticeCard key={n.agentId} notice={n} name={agents.find((a) => a.id === n.agentId)?.name ?? n.name} />
       ))}
+      </div>
     </div>
   );
 }
@@ -786,6 +813,30 @@ function KnowledgeNoticeCard() {
           seen();
           window.dispatchEvent(new CustomEvent('cth:open-settings', { detail: { section: 'Memory & Knowledge' } }));
         }}>{t('knowledgeNotice.open')}</PixelButton>
+      </div>
+    </section>
+  );
+}
+
+/** The one time card for a business that kept only its name and team when
+ *  settings moved per office (docs/designs/separate-businesses.md, D11): its
+ *  mailboxes, schedules and connectors are set up again in Settings. */
+function SetupNoticeCard() {
+  const { t } = useTranslation();
+  const seen = (): void => { void window.cth.officeSetupNoticeSeen?.().then(() => refreshNeedsYou()).catch(() => undefined); };
+  return (
+    <section aria-label={t('setupNotice.title')} style={card}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--cth-ink)' }}>{t('setupNotice.title')}</span>
+        <span style={reportTag}>{t('askMe.report')}</span>
+      </div>
+      <p style={{ margin: '8px 0 12px', fontSize: 12.5, lineHeight: '18px', color: 'var(--cth-ink)' }}>{t('setupNotice.body')}</p>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+        <PixelButton variant="secondary" size="sm" onClick={seen}>{t('askMe.gotIt')}</PixelButton>
+        <PixelButton variant="primary" size="sm" onClick={() => {
+          seen();
+          window.dispatchEvent(new CustomEvent('cth:open-settings', { detail: { section: 'Connections' } }));
+        }}>{t('setupNotice.open')}</PixelButton>
       </div>
     </section>
   );

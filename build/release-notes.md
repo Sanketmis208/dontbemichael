@@ -1,4 +1,4 @@
-- **A lighter app.** Voice, webhooks, Slack and unused engines are gone.
-- Pulse lists each change you applied, with its own Undo.
-- All clear offers one tip or what the team did today.
-- The prompts you type are no longer saved.
+- **Run two separate businesses on one computer.**
+- Add a business while the open one keeps working.
+- Back up everything and restore it on a new computer.
+- Always allowed: your business's own public names pass the privacy check.

@@ -516,7 +516,9 @@ Names in parentheses are today's components that the v2 component replaces or re
 
 ### 7.1 Top bar
 
-Left to right: lockup (§1.5, 26 px mark); view tabs (§7.2); then, pushed right: clock
+Left to right: lockup (§1.5, 26 px mark); the business menu (BusinessMenu: the open
+business's name as a quiet menu button, capped at 220 px, listing every business with its
+state and Add a business; docs/designs/separate-businesses.md DT1); view tabs (§7.2); then, pushed right: clock
 pill (§7.3), version chip (§7.4), Report a problem (a solid `lemon` pill, `on-accent` text, 28 px high, 12/600 with a flag icon; its hover text is a native title and `aria-description`, and it reads "Couldn't open" for 2 s if the report page fails; docs/designs/report-problem-top-bar.md), icon buttons (theme, Settings; focus mode hidden in this build, `SHOW_FOCUS_MODE`; 32 × 32,
 `r-md`, `ink-2` icons, hover fills `card` with a `line` border), and the Needs you button
 (§7.5). The bar is a drag region; interactive children are `no-drag`. Coral stays Needs
@@ -1266,8 +1268,8 @@ Full window, no app chrome.
   Team, Manager, Permissions, Ready; five when Michael's engine is not Claude) in a `card` pill container, each a 22 px circle
   (done: `green` with a check; current: `ink` with the number; next: `line-2` ring with the
   number) joined by 1 px `line-2` rules; "Step 4 of 8" right, `t-meta`.
-- Body: a 560 px card with the step's fields. While the studio isn't showing (Business,
-  Details, Resume, or no team yet) the card is centered under the step indicator; once it
+- Body: a 560 px card with the step's fields (the Team step's is wider, below). While the
+  studio isn't showing (Business, Details, Team, Resume, or no team yet) the card is centered under the step indicator; once it
   shows, the card sits at the start edge and the studio (§8) fills the rest, reacting to
   the step. The card glides there over `--cth-dur-slow` (320 ms) as the studio fades in,
   and back on Back; reduced motion jumps. The soft glow behind the page follows: behind
@@ -1276,14 +1278,20 @@ Full window, no app chrome.
   as quiet rows in one `line` card, a 26 px neutral icon and a label each, the explanation
   behind an info icon (review, 2026-10-01: it was a grid of tinted tiles, one coral).
 - **Team step**: heading "Your team" with an info icon, one line "Suggested for Pro
-  Services. You can hire more later." Rows: checkbox, 36 px avatar, name 600, role `ink-3`,
-  tags ("in every pack" green soft; "always on" indigo soft for Michael, who has a lock and
-  no checkbox), connection chips ("needs: Email" with an indigo dot on `card-2`, "optional:
-  Calendar" with a dashed `line-2` border, "nothing to connect" `ink-3`), and a mono
-  "Works in Harbor & Pine/Finance" line with a "change" link. Unchecked rows at 55%.
+  Services. You can hire more later." The card is wide (up to 1400 px) with no studio beside
+  it (owner, 2026-11-19). One folder line under the heading: a folder icon, "Each person works
+  in their own folder inside ~/Documents/Harbor & Pine.", an info icon with the rest, and a
+  "change" link for the office folder ("use suggested" once changed); each member's folder
+  goes inside it, and is moved after setup if needed. The members are cards in a grid, four
+  across in a usual window (280 px minimum, 10 px gap), each 12 px padding and `r-lg`:
+  checkbox, 36 px avatar, name 600, role `ink-3`, summary, tags ("in every pack" green soft;
+  "always on" indigo soft for Michael, first, who has a lock and no checkbox), connection
+  chips ("needs: Email" with an indigo dot on `card-2`, "optional: Calendar" with a dashed
+  `line-2` border, "nothing to connect" `ink-3`). A picked card has a 2 px `ink` ring on
+  `card`; an unpicked one a 1 px `line` ring on `card-2`, its contents at 60%.
   Footer: "N picked, M to connect" and Back (secondary), Next (primary). The footer sticks
-  to the window's bottom edge, so Next stays in reach on a long step. Last in the list, one
-  unchecked row for Research (issue #230): Pete's own character, its current name, "Looks things up on the
+  to the window's bottom edge, so Next stays in reach on a long step. Last in the grid, one
+  unchecked card for Research (issue #230): Pete's own character, its current name, "Looks things up on the
   internet for the team, and sees no office data.", a "uses the internet" chip in the "always on"
   style; picked, it starts with the team.
 - **Ready step** (Get Michael ready, docs/designs/get-michael-ready.md): heading with an
@@ -1700,12 +1708,15 @@ review 2026-11-03). Same card as §7.27a, with these changes:
   clamped to two lines, `dir="auto"`; under it the app's own line in `amber-text` 11 px: the
   member, the file it was seen in, the day. Add is a 26 px secondary button; Not ours and Decide
   later are quiet links with 24 px targets, each named for its item.
-  - Add puts the name on a new line in the box; the row becomes a `green-soft` line "Added to the
-    list. Save to keep it." with Undo.
+  - Add is saved at once (owner, 2026-11-18): the name goes on the saved list, known so far, and
+    on a new line in the box; the row becomes a `green-soft` line "Card ending 1005 is on the
+    list." with Undo, under the undecided rows. A full list refuses it with a `coral-text` line.
   - Not ours is saved at once; the row becomes an `indigo-soft` line "Card ending 1005 is marked
     not ours." with Undo until the card leaves the board; a failure is a `coral-text` line.
   - Decide later is saved at once; the row becomes a `neutral-soft` line "Back next week." with
     Undo. Focus moves to the next undecided Add, else to Save; each change is spoken politely.
+  - Each settled line ends in a quiet × ("Close the line about Card ending 1005") that hides the
+    line on this card and keeps the choice.
 - **Primary button**: "Save as the whole list"; "Save the list so far" while an item is put off;
   "Still all of them" on a card past its shelf life whose box matches the saved list. Held until
   every seen item is added, not ours or put off. It never truncates.
@@ -2022,6 +2033,13 @@ switch is hidden and both platform panels show, Mac first. Under 480 px it spans
 in two equal halves (`minmax(0, 1fr)` columns); under 420 px it drops its icons. Without JS each platform's steps get a visible "Install on a Mac" or
 "Install on Windows" heading.
 
+Since 0.4.3 (owner, 2026-11-20, site CEO review D8): /download carries one moving note for owners on a
+new computer, as a plain `ink-2` paragraph after the Recently added list and before the install steps.
+It belongs to neither platform panel, so it shows whichever is chosen and with scripts off: "Moving from
+another computer? Back up on the old one in Settings, General, then choose Restore on the first setup
+screen of the new one and sign in to Claude again." It says "a new computer" and "the new one", never
+"any computer": a restore onto another kind of computer is not covered (docs/designs/backup-restore.md).
+
 ### 9.9 Beta tag (web)
 
 Retired on the web (owner, 2026-10-09): Mac and Windows get equal billing, and the app as a
@@ -2062,6 +2080,11 @@ Send on approval, not Draft only (§7.12; owner, 2026-11-04). Two columns (5:7) 
 stacked below; under 480 px the switch is three equal columns whose labels may wrap to two
 lines, and the card's buttons wrap at 44 px tall.
 
+Since 0.4.2 (owner, 2026-11-20): the list under the frame ends with one more line, after the three
+settings: "A team member can attach files from its own folder, or a folder you named for its job. On Send
+on approval the card lists each file: open it, or take it off before you approve." The approval card in
+the picture stays as drawn, with no file rows.
+
 ### 9.12 Setup inset (web)
 
 In How it works' Setup section (§9.22), a quiet inset for setup's last step (§7.25 Ready
@@ -2070,6 +2093,18 @@ step): `card-2` fill, inset `line`, `r-xl`, no shadow, padding 16 × 20. Michael
 installed for you if it's missing" and "Sign in with your Claude plan, or an Anthropic API
 key"), and an `ink-3` line under them. No buttons: nothing in it can be clicked. One row at
 980 px and up; under that the text stacks beside the avatar.
+
+Since 0.4.3 (owner, 2026-11-20, site CEO review D3 and D4): under the two insets (this one and §9.18),
+How it works' Setup section ends with two plain `ink-2` paragraphs, no picture (the business menu picture
+is deferred until both businesses can run at once; site TODOS.md). First: "Run two separate businesses on
+one computer, such as a bakery and a real estate agency. Each keeps its own settings, saved passwords and
+keys, files, history and, if you choose, its own Claude account. The business name in the top bar switches
+between them, and the open office closes properly first. The business you are not in waits until you open
+it." Second: "Setup saves typing: address suggestions as you type the street, business hours day by day,
+and languages and currency from a list." Wherever the site itself says two businesses (here, the home FAQ
+answer in §9.19 and llms.txt), the words "the business you are not in waits until you open it" go with it,
+as a sentence or a clause. /download's Recently added list is the release's own lead ins and is exempt.
+The site says "two", the app's word, until the app's own claim changes.
 
 ### 9.13 Task board (web)
 
@@ -2166,6 +2201,10 @@ rows, Passwords and keys and "and 7 more kinds kept private", linking to /securi
 states no limit notes for this feature (owner, 2026-10-14). The section never scrolls
 sideways.
 
+Since 0.4.3 (owner, 2026-11-20): the first note, Keeps your business data in, ends with one more sentence:
+"Your business's own public names and links can be Always allowed, so the check keeps them as written."
+The notes stay three, and the settings picture stays as drawn.
+
 ### 9.16 Security page (web)
 
 `/security`, a page to read, not to sell (owner, 2026-10-14): the site nav and footer, no
@@ -2221,6 +2260,27 @@ the website in the company profile, once (TELEMETRY.md, Case studies you send us
 down promise on the site (owner, 2026-11-04). The same rule covers the home page's
 hero, meta, JSON-LD, FAQ and privacy section (§9.15) and llms.txt. Headings sit
 closer to their text than to the section above; the page never scrolls sideways at 320 px.
+
+Since 0.3.9 to 0.4.3 (owner, 2026-11-20, site CEO review D3 and D10). Who is given what: the mail line
+ends with: "A file a team member attaches to an email is checked by what it holds and copied as it was,
+and that copy is what goes out." (0.4.2). What stays private adds, after the table: "List your business's
+own public names and links as Always allowed, and the check keeps them as written in questions to Pete.
+When the check keeps words back, a card on Needs you offers to always allow each one and ask again.
+Passwords and keys are always private, whatever the list says." (0.4.3; the site says Needs you, the board's
+name, for the card; and "are always private", as the line above the table does, never the app notes' "never go
+through": only a password or key in a recognisable shape is caught before a model reads it, so the page
+says what the app keeps, not what can't happen). Where your data lives adds two things. After the first paragraph's last sentence, a
+paragraph on backup: "Back up everything on this computer to one file: every business with its team,
+memory, tasks, history, knowledge, settings and the team's folders. Saved passwords and keys are locked
+with a backup password you choose. Restore it on a new computer from Settings, General, or from the first
+setup screen, then sign in to Claude again. Restoring replaces what is on that computer." The last
+sentence is the app's own warning on the restore screen and the one backup limit the site states (owner
+D10); the limit on restoring to another kind of computer is not said, and the copy keeps to "a new
+computer". And after the Get featured sentences: "As you type a street address, the app asks OpenStreetMap
+for matching addresses, sending only what you typed in that field." (TELEMETRY.md, Address suggestions
+come from OpenStreetMap). Every sentence here holds on Mac and Windows; one that turns out not to on
+Windows is reworded to what holds on both, or dropped.
+
 ### 9.17 Pulse (web)
 
 The full Pulse is a How it works section (§9.22) after the file tabs and before the "Everything
@@ -2288,6 +2348,10 @@ recommendation, no other tiles and no notes, and its label carries only what is 
 the board in the fourth question (§9.19), with an `h3` "Pulse" and the line "What got done this week,
 what it cost, and each team member's time and cost."
 
+Since 0.3.9 (owner, 2026-11-20): on How it works, the Ways to save note gains one sentence, after "Undo
+puts it back.": "For a job that runs at set times, Run less and Run more offer its own times thinned or
+filled in." The picture's recommendation stays as drawn.
+
 ### 9.18 Setup foundations inset (web)
 
 Under the setup inset (§9.12) on How it works, a second quiet inset with the same fill, inset line, radius and
@@ -2344,6 +2408,18 @@ and the JSON-LD copy matches them word for word. Coral appears only on the Needs
 line's "You answer once" (§2). Sections are 96 px apart, and the page never scrolls sideways, also at
 320 px with a scrollbar.
 
+Since 0.4.3 (owner, 2026-11-20, site CEO review D3, D5 and D6): "Questions owners ask" holds seven items.
+The new one is fifth, after which mailboxes work and before whether there is a paid version (the maker
+question, added 2026-11-18, stays last): "Can I run more than one business?", answered "Yes. Run two
+separate businesses on one computer, such as a bakery and a real estate agency. Each keeps its own
+settings, saved passwords and keys, files, history and, if you choose, its own Claude account. The
+business name in the top bar switches between them, and the business you are not in waits until you open
+it." The answer to where your data goes ends with one more sentence, after the sentences already there,
+which stay word for word: "Back it all up to one file, with saved passwords and keys locked by a backup
+password, and restore it on a new computer." The JSON-LD copy matches both, word for word. The words a
+visitor sees when the page loads are counted after these edits and the trust card sentence (§9.20), and
+that count is the new cap, at most 933 (it was 910 from 2026-11-18); above 933 goes back to the owner.
+
 ### 9.20 Trust cards (web)
 
 The home page's third question: one `card` panel (`r-2xl`, `shadow-md`, padding 40, 28 under 980 px)
@@ -2357,6 +2433,10 @@ a refund or posts in public without you, and emails wait for your OK unless you 
 answers that come back through the trust layer lose any instructions aimed at AI, and email is read
 as the sender's words, never orders).
 Every sentence follows §9.16's rule: it says what the app keeps, gives or tells, never "can't".
+
+Since 0.4.3 (owner, 2026-11-20, site CEO review D6): Kept on your computer ends with one more sentence,
+"Back it all up to one file and restore it on a new computer.", so the card answers what happens when
+that computer is replaced. The other two cards are unchanged.
 
 ### 9.21 Job cards and the flow line (web)
 
@@ -2380,6 +2460,18 @@ Privacy and the trust layer (§9.15); The board with its notes (§9.13); Files (
 memory question. Links shared before the move (`/#setup`, `/#story`, `/#sending`, `/#privacy`,
 `/#board`, `/#files`, `/#pulse`, `/#handled`, `/#open-source`) land on the same section here. The page never scrolls
 sideways, also at 320 px with a scrollbar.
+
+Since 0.4.3 (owner, 2026-11-20): the Reset memory section holds a second folded question after the first,
+"Can I move the office to a new computer?", answered "Yes. Settings, General backs up everything on this
+computer to one file: every business with its team, memory, tasks, history, knowledge, settings and the
+team's folders, with saved passwords and keys locked by a backup password you choose. On the new
+computer, choose Restore on the first setup screen, then sign in to Claude again." The site's fallback
+version is v0.4.3 (20 NOV; Mac 182 MB, Windows 89 MB, each the installer's size in MB rounded as
+latest.js rounds it), and /download's static Recently added list is 0.4.3's first three lead ins.
+llms.txt says each line of this catch up in the page's own sentence, ending with its release in
+brackets (since v0.3.9, v0.4.2 or v0.4.3): a Businesses line with the waits sentence, backup and the
+moving note under Data, attachments under Sending, Always allowed under Privacy and the internet, set
+times under Pulse, easier setup and the OpenStreetMap sentence, and Status "Latest version v0.4.3".
 
 ### 9.23 Customer band (web)
 
@@ -2673,6 +2765,7 @@ Needs you rework on `design/studio-v2`, through 2026-10-01). Each row is **Fix**
 | 2026-10-26 | Web: the customer band (§9.23), businesses already running the app, between the hero and the four questions (§9.19): eyebrow "Already running at", one card per business with its own logo in a 120 x 48 box, its name, its kind of business and a link to its site. First: TalBiz Solutions. Logos are served from the site, never the business's own site; `llms.txt` and the home JSON-LD name the same businesses. |
 | 2026-11-05 | Ask me department row: chips in each department's wash with measured contrast (§3.4), the count line and new card dot, cards kept white (§7.8); mail, schedule and Work style cards fold like questions (§7.8). |
 | 2026-11-04 | Web: the site catches up with 0.3.2 to 0.3.5, for owners. A new mailbox starts on Send on approval (§9.11, §9.20, §9.21); Office and PDF files show their words in a tab (§9.14); Real costs and the Pulse picture count only the office's own use at the plan's rate, Spent $17.48 (§9.17); Custom REST integrations given per member (§9.5, §9.16); attachments, file handover and the Get featured disclosure on /security (§9.16); the mailboxes FAQ says Only send email (§9.16). |
+| 2026-11-20 | Web: the site catches up with 0.3.9 to 0.4.3, for owners. Two separate businesses, with "the business you are not in waits until you open it" wherever the site says it, and easier setup (§9.12); backup and restore on /security with "Restoring replaces what is on that computer.", in the home FAQ, the trust card, the Reset memory section and a moving note on /download (§9.8, §9.16, §9.19, §9.20, §9.22); attachments (§9.11, §9.16); Always allowed (§9.15, §9.16); the OpenStreetMap address sentence (§9.16); Pulse set times (§9.17); a seventh home FAQ question and a home word cap of at most 933 (§9.19); fallback v0.4.3, Windows 89 MB (§9.22). Site CEO and eng reviews, owner D3 to D11. |
 
 ---
 

@@ -63,6 +63,10 @@ export interface ClosingTimeEvent {
   godLive: boolean;
   /** The app reopens itself after closing (a Claude Code update, cliUpdate.ts). */
   relaunch: boolean;
+  /** Closing to open another business (docs/designs/separate-businesses.md,
+   *  D10, D20): the names the bar shows, "Closing <from> to open <to>". `to`
+   *  is null for a business with no name yet. Absent on a plain closing. */
+  switching?: { from: string; to: string | null };
 }
 
 export type ClosingTimeActionResult = { ok: true } | { ok: false; error: string };
@@ -91,8 +95,18 @@ export class ClosingTimeController {
   private active = false;
   private godId = 'god';
   private relaunch = false;
+  private switching: { from: string; to: string | null } | null = null;
   private workers = new Set<string>();
   private acked = new Set<string>();
+  /** Michael was told every team member confirmed (tellMichaelAllIn). */
+  private toldAllIn = false;
+  /** The note again while he has not closed (tellMichaelAllIn). */
+  private allInTimer: NodeJS.Timeout | null = null;
+  /** How long Michael has to close after the note before it comes again, and
+   *  how many times it comes again (2026-11-20: a note filed unread with the
+   *  confirmations it followed held closing time). */
+  static ALL_IN_REMIND_MS = 45_000;
+  static ALL_IN_REMINDERS = 2;
   private excused = new Set<string>();
   private lastRemind = new Map<string, number>();
   /** Set once COMPLETE is accepted. `active` stays true through the teardown
@@ -138,10 +152,13 @@ export class ClosingTimeController {
 
   /** Kick off the protocol. Returns an error string when the floor cannot run
    *  it (no live god agent) so the UI can fall back to the hard quit. */
-  start(opts: { relaunch?: boolean } = {}): { ok: boolean; error?: string } {
+  start(opts: { relaunch?: boolean; switching?: { from: string; to: string | null } } = {}): { ok: boolean; error?: string } {
     if (this.active) {
       // Already closing down after COMPLETE: nothing to restart.
       if (this.concluded) return { ok: false, error: 'Closing time has finished; the app is closing.' };
+      // A switch asked for while the office is already closing: the closing
+      // carries on, now to open that business.
+      if (opts.switching) this.switching = opts.switching;
       // Re-pressed while running (e.g. from the timeout view): keep waiting,
       // unless Michael is gone, when waiting can never end.
       if (!this.getLiveAgentIds().includes(this.godId)) {
@@ -172,6 +189,7 @@ export class ClosingTimeController {
       })
     );
     this.acked = new Set();
+    this.toldAllIn = false;
     this.excused = new Set();
     this.lastRemind = new Map();
     this.concluded = false;
@@ -181,6 +199,7 @@ export class ClosingTimeController {
     this.owedWaitNote = new Set();
     this.active = true;
     this.relaunch = opts.relaunch === true;
+    this.switching = opts.switching ?? null;
 
     const names = [...this.workers]
       .map((id) => `${reg.agents[id]?.name ?? id} (${id})`)
@@ -223,9 +242,24 @@ export class ClosingTimeController {
     return { ok: true };
   }
 
+  /**
+   * The owner chose Switch now: stop waiting, quietly. The office is about to
+   * stop and open another business, so nobody is told to go back to work
+   * (a cancel would), and no event goes to the bar, which stays up until the
+   * app relaunches. Steers no hook boundary has read yet are dropped.
+   */
+  stopForSwitch(): void {
+    if (!this.active) return;
+    this.cleanup();
+    this.concluded = true;
+    this.control?.clearSteers(this.godId);
+    for (const id of this.workers) this.control?.clearSteers(id);
+  }
+
   /** Human changed their mind — stand the floor back up. */
   cancel(): void {
     if (!this.active) return;
+    this.switching = null;
     this.cleanup();
     this.excused = new Set();
     this.lastRemind = new Map();
@@ -488,6 +522,7 @@ export class ClosingTimeController {
         // Closed without, but confirmed anyway: it moves to confirmed.
         this.excused.delete(msg.from);
         this.emitProgress();
+        this.tellMichaelAllIn();
       }
       return;
     }
@@ -528,6 +563,49 @@ export class ClosingTimeController {
     }
   }
 
+  /**
+   * Every team member has confirmed: Michael hears it from the app, naming
+   * them, once per closing. Seen live (2026-11-20): Michael moved his whole
+   * inbox to .done after reading one ACK, and the three that had just arrived
+   * went with it unread; the app had all four, Michael thought he was still
+   * waiting, and closing time hung. The app's own count is what lets the
+   * office close, so it says so.
+   */
+  private tellMichaelAllIn(): void {
+    if (this.toldAllIn || this.concluded) return;
+    const reg = this.hive.registry();
+    if (this.pendingIds(reg).length > 0) return;
+    this.toldAllIn = true;
+    const names = [...this.acked].map((id) => `${reg.agents[id]?.name ?? id} (${id})`).join(', ') || 'nobody';
+    const note = (again: boolean): void => {
+      try {
+        this.hive.send({
+          to: 'god',
+          act: 'inform',
+          subject: again ? 'Closing time: everyone has confirmed (again)' : 'Closing time: everyone has confirmed',
+          body: [
+            `Every team member has sent CLOSING-TIME-ACK: ${names}. Their notes are in your inbox, or in inbox/.done if you moved them there.`,
+            'Do not wait for anything more: update tasks.json and board.md now, then send CLOSING-TIME-COMPLETE ("to": "human").'
+          ].join('\n')
+        }, 'human');
+      } catch (e) { console.error('[closing-time] telling Michael everyone confirmed', e); }
+    };
+    note(false);
+    // Again while he has not closed: a note filed unread with the
+    // confirmations it followed held closing time (2026-11-20).
+    let left = ClosingTimeController.ALL_IN_REMINDERS;
+    const again = (): void => {
+      this.allInTimer = setTimeout(() => {
+        this.allInTimer = null;
+        if (!this.active || this.concluded || left <= 0) return;
+        left--;
+        note(true);
+        if (left > 0) again();
+      }, ClosingTimeController.ALL_IN_REMIND_MS);
+    };
+    again();
+  }
+
   private armTimeout(): void {
     if (this.timeoutTimer) clearTimeout(this.timeoutTimer);
     this.timeoutTimer = setTimeout(() => {
@@ -538,6 +616,7 @@ export class ClosingTimeController {
   private cleanup(): void {
     if (this.timeoutTimer) { clearTimeout(this.timeoutTimer); this.timeoutTimer = null; }
     if (this.teardownTimer) { clearTimeout(this.teardownTimer); this.teardownTimer = null; }
+    if (this.allInTimer) { clearTimeout(this.allInTimer); this.allInTimer = null; }
     this.active = false;
   }
 
@@ -554,7 +633,8 @@ export class ClosingTimeController {
       notReporting,
       godId: this.godId,
       godLive: this.getLiveAgentIds().includes(this.godId),
-      relaunch: this.relaunch
+      relaunch: this.relaunch,
+      ...(this.switching ? { switching: this.switching } : {})
     };
     try { this.getWebContents()?.send('app:closingTime', ev); } catch { /* window tore down */ }
   }

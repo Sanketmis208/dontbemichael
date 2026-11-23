@@ -36,7 +36,10 @@ test('a new team member gets its own folder inside Michael\'s, suffixed with its
 
 test('Michael\'s folder is never a team member\'s own folder', () => {
   assert.match(modal, /if \(michaelFolder && samePath\(michaelFolder, cwd\)\)/);
-  assert.match(wizard, /key !== OFFICE_KEY && same\(michaelFolderFor\(folderSuggestions, folderOverrides\)\)/);
+  // Setup sets only the office folder (owner, 2026-11-19); each member's is
+  // the suggestion inside it, so it is never the office folder itself.
+  assert.match(wizard, /setFolderOverrides\(\{ \[OFFICE_KEY\]: res\.path \}\);/);
+  assert.doesNotMatch(wizard, /setFolderOverrides\(\(o\) => \(\{ \.\.\.o, \[key\]/, 'no member folder is set during setup');
   assert.doesNotMatch(en.addAgent.errFolderShared, /[–—]/);
 });
 

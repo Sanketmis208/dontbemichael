@@ -13,6 +13,7 @@ import { ANSWER_MARK, screenAnswer } from './screenAnswer';
 import { tokenizeCommand } from '../shared/commandLine';
 import { pasteSafe } from '../shared/pasteSafe';
 import { buildCmdCommandLine } from './pty';
+import { exitCause, plainLines } from '../shared/agentExit';
 
 /**
  * Shared helper: run a HIDDEN interactive claude session (ephemeral PTY) and
@@ -98,6 +99,28 @@ export interface HiddenClaudeOptions {
   images?: string[];
 }
 
+/** The settings every hidden session is started with: the caller's, with
+ *  Claude Code's bypass mode warning answered, as each team member's own
+ *  settings answer it (hive.ts). The session runs in bypass mode and that
+ *  warning's default is "No, exit", so the Enter that sends the prompt quit
+ *  Claude before it wrote anything whenever the owner's ~/.claude/settings.json
+ *  did not answer it (ensureClaudeGlobalPermissions leaves a file it cannot
+ *  read alone): every job change on that Mac failed as "no assistant response"
+ *  (owner, 2026-11-13; reproduced with Claude Code 2.1.323). Null for caller
+ *  settings that are not a JSON object: the check is not run without them
+ *  (they turn off hooks), never run with less. */
+export function hiddenSettings(settingsJson?: string): string | null {
+  let base: Record<string, unknown> = {};
+  if (settingsJson) {
+    try {
+      const parsed: unknown = JSON.parse(settingsJson);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+      base = parsed as Record<string, unknown>;
+    } catch { return null; }
+  }
+  return JSON.stringify({ ...base, skipDangerousModePermissionPrompt: true, skipAutoPermissionPrompt: true });
+}
+
 /** How long each pasted picture is given to attach before the next paste. */
 const IMAGE_PASTE_MS = 600;
 
@@ -111,6 +134,21 @@ let hiddenClaudeAuthEnv: () => Record<string, string> = () => ({});
 export function setHiddenClaudeAuthEnv(source: () => Record<string, string>): void {
   hiddenClaudeAuthEnv = source;
 }
+
+/** Why a session ended before it answered, from the screen it left, as a
+ *  closed word for the office log and the failure report: a startup question
+ *  it stopped on, or what agentExit reads from its last lines. */
+export type HiddenExitCause = 'trust-folder' | 'bypass-warning' | ReturnType<typeof exitCause>;
+export function hiddenExitCause(tail: string): HiddenExitCause {
+  // Claude Code draws words with cursor moves, so the plain text has no spaces.
+  const text = plainLines(tail).slice(-30).join('\n').toLowerCase().replace(/\s+/g, '');
+  if (text.includes('itrustthisfolder')) return 'trust-folder';
+  if (text.includes('bypasspermissionsmode') && text.includes('no,exit')) return 'bypass-warning';
+  return exitCause(tail);
+}
+
+/** How much of the session's output is kept for hiddenExitCause. */
+const EXIT_TAIL_CHARS = 16_384;
 
 /** How often the live preview is read off the screen. */
 const SCREEN_READ_MS = 300;
@@ -129,6 +167,8 @@ export interface HiddenClaudeResult {
   /** The assistant's final text response (stripped of any TUI framing). */
   text?: string;
   error?: string;
+  /** Set when the session ended before it answered. */
+  exitCause?: HiddenExitCause;
 }
 
 export { pasteSafe };
@@ -216,7 +256,9 @@ export function runHiddenClaude(prompt: string, opts: HiddenClaudeOptions): Prom
       ...(opts.noTools ? ['--tools', '', '--strict-mcp-config'] : ['--strict-mcp-config', '--disallowedTools', ...disallowed]),
     ];
     if (opts.settingSources) args.push('--setting-sources', opts.settingSources);
-    if (opts.settingsJson) args.push('--settings', opts.settingsJson);
+    const settings = hiddenSettings(opts.settingsJson);
+    if (settings === null) { resolve({ ok: false, error: 'could not prepare background check' }); return; }
+    args.push('--settings', settings);
     for (const d of addDirs) { args.push('--add-dir', d); }
 
     const bootCapMs = opts.bootCapMs ?? 7000;
@@ -310,9 +352,13 @@ export function runHiddenClaude(prompt: string, opts: HiddenClaudeOptions): Prom
       ensureKilled(pid);
     };
 
+    // The session's last output, for hiddenExitCause only; dropped when it ends
+    // (it can hold the pasted prompt and the answer).
+    let tail = '';
     const finish = (r: HiddenClaudeResult) => {
       if (settled) return;
       settled = true;
+      tail = '';
       if (bootTimer) { clearTimeout(bootTimer); bootTimer = null; }
       if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
       if (answerPoll) { clearInterval(answerPoll); answerPoll = null; }
@@ -411,6 +457,7 @@ export function runHiddenClaude(prompt: string, opts: HiddenClaudeOptions): Prom
     opts.signal?.addEventListener('abort', onAbort);
 
     ptyProc.onData((data) => {
+      if (!settled) tail = (tail + data).slice(-EXIT_TAIL_CHARS);
       screen?.write(data);
       if (!promptSent) {
         // Boot phase: reset quiet timer; send prompt once output goes quiet.
@@ -427,7 +474,7 @@ export function runHiddenClaude(prompt: string, opts: HiddenClaudeOptions): Prom
     ptyProc.onExit(() => {
       if (settled) { removeIsolated(); return; }
       const text = ownAnswer();
-      finish(text ? { ok: true, text } : { ok: false, error: 'no assistant response found in transcript' });
+      finish(text ? { ok: true, text } : { ok: false, error: 'no assistant response found in transcript', exitCause: hiddenExitCause(tail) });
     });
   });
 }
