@@ -26,18 +26,6 @@
 **Priority:** P1
 **Depends on:** None
 
-### Check at launch that the business name matches the office record
-
-**What:** At launch, compare the open office's settings business name with its office.json and report a mismatch.
-
-**Why:** A mismatch is the first sign of one business's settings reaching the other's office (Section 8).
-
-**Context:** Deferred from plan: docs/designs/separate-businesses.md. Planned in the CEO review, not built in step one; the owner chose to ship and defer it (2026-11-20).
-
-**Effort:** S (human) / S (CC)
-**Priority:** P1
-**Depends on:** None
-
 ### Refuse two businesses sharing one business folder
 
 **What:** Add a business, and Settings when the business folder changes, refuse a business folder another business already uses.

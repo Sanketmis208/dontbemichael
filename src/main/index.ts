@@ -173,11 +173,11 @@ import { claudeCliFlags, claudeCliVersion, lastClaudeCliVersion } from './claude
 import { AUTO_FAILURE_REPORTS } from '../shared/buildFeatures';
 import { APP_NAME, APP_DATA_DIR, APP_URL_SCHEME } from '../shared/appName';
 import { copyOfficeData, homeFolderStatus, homeReadyAtLaunch } from './homeFolder';
-import { backfillOfficeRecord, findOffice, folderLayoutFor, isUsableTeamFolder, officeSwitchGuard, syncOfficeRecord } from './officeFile';
+import { backfillOfficeRecord, findOffice, folderLayoutFor, isUsableTeamFolder, officeSwitchGuard, readOfficeRecord, syncOfficeRecord } from './officeFile';
 import { addBusiness, adoptOpenOffice, businessDraft, businessNameAt, listBusinesses, migrateToOfficeSettings, neverOpenedBusiness, noteOfficeClosed, officeClaudeDir, officesAfterMove, relocateBusiness, removeUnfinishedBusiness, saveBusinessDraft } from './officeSettings';
 import { folderPolicy, AGENT_TMP_DIR, agentTmpName, researchFolderPolicy, withAgentTmpWall, withMemberWall, RESEARCH_TMP_DIR, shellTempWalls, withResearchWall, type AgentFolderPolicy, type FolderLayout } from '../shared/folderAccess';
 import { sandboxNetwork } from '../shared/webAccess';
-import { legacyBusinessFolder, touchesOffice } from '../shared/officeRecord';
+import { businessNameMismatch, legacyBusinessFolder, touchesOffice } from '../shared/officeRecord';
 import { cleanCompanyProfile, companyProfileContext } from '../shared/companyProfile';
 import { scheduledRunBody } from '../shared/scheduleMessage';
 import { OFFICE_OPEN_SUBJECT, officeClosedInLog, officeOpenBody } from '../shared/officeOpen';
@@ -7267,6 +7267,15 @@ app.whenReady().then(() => {
     // An office set up before office.json existed gets one now, if the config's
     // team is really this office's team (officeFile.ts).
     backfillOfficeRecord(readConfig());
+    // The office's settings and its office.json should name the same business.
+    // When they differ, another business's settings may have reached this
+    // office (separate-businesses.md, Section 8): a line in the office log,
+    // without either name. The office opens as usual.
+    try {
+      const cfg = readConfig();
+      const rec = cfg.harnessHome ? readOfficeRecord(cfg.harnessHome) : null;
+      if (businessNameMismatch(cfg, rec)) hive.appendLog({ kind: 'office-name-mismatch', officeId: rec?.id ?? null });
+    } catch (e) { console.error('[office] name check:', e); }
   }
   else console.warn('[home] office folder missing, waiting for the owner:', readConfig().harnessHome);
   // Survive sleep/lock. macOS freezes libuv timers during true system sleep, so a
