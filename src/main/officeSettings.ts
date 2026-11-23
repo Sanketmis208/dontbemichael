@@ -310,6 +310,29 @@ export function noteOfficeClosed(now: number = Date.now()): void {
   writeConfig({ offices: { ...cfg.offices, [id]: { ...cfg.offices[id], closedAt: now } } });
 }
 
+/**
+ * Every other business on this install with the addresses of its mailboxes,
+ * so Settings can refuse one address for two businesses (Section 4). Only the
+ * saved records are read: no business is opened, and no password is touched.
+ * Empty before the move, when the app has one business.
+ */
+export function otherBusinessMailboxes(): Array<{ name: string | null; addresses: string[] }> {
+  const cfg = readStoredConfig();
+  if (!cfg.officesMigrated) return [];
+  const openId = officeIdIn(cfg, readOfficeId(cfg.harnessHome));
+  const out: Array<{ name: string | null; addresses: string[] }> = [];
+  for (const [id, entry] of Object.entries(cfg.offices ?? {})) {
+    if (id === openId || !entry) continue;
+    const s = entry.settings ?? {};
+    const boxes = Array.isArray(s.mailboxes) ? s.mailboxes : [];
+    const addresses = boxes.map((m) => m?.address).filter((a): a is string => typeof a === 'string' && !!a.trim());
+    if (!addresses.length) continue;
+    const name = typeof s.businessName === 'string' && s.businessName.trim() ? s.businessName.trim() : null;
+    out.push({ name, addresses });
+  }
+  return out;
+}
+
 /** How the app behaves, without any business's settings. */
 export function installConfig(): InstallConfig {
   return pick(readStoredConfig(), installKeySet) as InstallConfig;

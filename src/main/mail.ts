@@ -2110,6 +2110,9 @@ export interface MailAdminDeps {
   present?(agentId: string): boolean;
   /** Whether this computer can encrypt a password right now. Absent: assumed. */
   canStoreSecrets?(): boolean;
+  /** The other businesses on this install and their mailbox addresses, so one
+   *  address is never connected to two. Absent: none. */
+  otherBusinesses?(): Array<{ name: string | null; addresses: string[] }>;
 }
 
 /** What the owner reads when the password could not be kept encrypted on this
@@ -2161,6 +2164,15 @@ export async function saveMailbox(svc: MailService, admin: MailAdminDeps, preset
   const fixing = input.id ? existing.find((m) => m.id === input.id) : undefined;
   if (existing.some((m) => m.address.toLowerCase() === address.toLowerCase() && m.id !== fixing?.id)) {
     return { ok: false, kind: 'invalid', reason: `${address} is already connected.` };
+  }
+  // Mailboxes are per business, so the check above sees only the open one. A
+  // new address another business already has is refused too, naming it.
+  if (!fixing) {
+    const other = admin.otherBusinesses?.().find((b) => b.addresses.some((a) => a.trim().toLowerCase() === address.toLowerCase()));
+    if (other) {
+      const whose = other.name ? `${other.name}, another business on this computer` : 'another business on this computer';
+      return { ok: false, kind: 'invalid', reason: `${address} already belongs to ${whose}. Each business needs its own mailbox, so connect a different address here.` };
+    }
   }
   // A password this computer cannot encrypt is never saved, so say so before
   // logging in to the provider, not after a test that worked.

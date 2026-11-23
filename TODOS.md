@@ -50,18 +50,6 @@
 **Priority:** P1
 **Depends on:** None
 
-### Refuse a mailbox another business already has
-
-**What:** Adding a mailbox checks every business's mailboxes and says the address belongs to that business.
-
-**Why:** Mailboxes are per business now, so the old one install check only looks at the open business (mail.ts, Section 4 edge case).
-
-**Context:** Deferred from plan: docs/designs/separate-businesses.md. Planned in the CEO review, not built in step one; the owner chose to ship and defer it (2026-11-20).
-
-**Effort:** S (human) / S (CC)
-**Priority:** P1
-**Depends on:** None
-
 ### Name the business on a hire or deep link screen
 
 **What:** A link that hires or joins says which business it will join before anything happens.
