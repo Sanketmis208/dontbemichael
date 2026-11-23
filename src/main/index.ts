@@ -140,7 +140,7 @@ import { agentIntegrations, fillSavedCall, hasIntegrationTools, integrationLevel
 import { RosterStore } from './roster';
 import { PASTE_KEEP_MS, savePaste, sweepOldPastes } from './pastes';
 import { CASE_STUDY_DIR, CHECK_FOLDERS, JOB_CHECK_DIR, RUN_COMPARE_DIR, STANDING_CHECK_DIR, TRUST_CHECK_DIR, eraseOfficeData } from './factoryReset';
-import { autoMemoryFolders, eraseMemoryTargets, foldersFromRoster, gitTopOf, idsFromCostRows, idsFromRecord, memberIdsIn, memoryResetTargets } from './memoryReset';
+import { autoMemoryFolders, eraseMemoryTargets, foldersFromRoster, gitTopOf, idsFromCostRows, idsFromRecord, memberIdsIn, memoryResetTargets, transcriptsFromRecord } from './memoryReset';
 import { groupMembers, hardKillTree, isAlive, KILL_GRACE_MS, snapshotRemains } from './procKill';
 import { ControlRegistry } from './control';
 import { WorkerWakeWatchdog, type WorkerWakeFacts } from './workerWake';
@@ -6331,7 +6331,7 @@ const runCompare = new RunCompare({
   getKv: (key) => persist.getKv(key),
   setKv: (key, value) => persist.setKv(key, value),
   // The private record only: hive/log.jsonl is writable by members' shells.
-  sessionsOf: (agentId) => [...(idsFromRecord(hive.privateSessionsText()).get(agentId) ?? [])],
+  transcriptsOf: (agentId) => [...(transcriptsFromRecord(hive.privateSessionsText()).get(agentId)?.values() ?? [])],
   projectsRoot: claudeProjectsRoot,
   runModel: (prompt) => {
     const cfg = readConfig();

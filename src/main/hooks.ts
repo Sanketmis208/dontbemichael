@@ -580,8 +580,12 @@ export class HookServer {
     }
 
     // Capture the Claude Code session id for idempotent --resume + cost dedup
-    // (Lane A #6.6a). Cheap: recordSession writes only when it changes.
-    if (agentId && !subagent && p.session_id) this.hive.recordSession(agentId, p.session_id);
+    // (Lane A #6.6a). Cheap: recordSession writes only when it changes. Its
+    // transcript is kept only when it sits in Claude's own projects folder.
+    if (agentId && !subagent && p.session_id) {
+      const tp = typeof p.transcript_path === 'string' && isClaudeTranscript(p.transcript_path) ? p.transcript_path : undefined;
+      this.hive.recordSession(agentId, p.session_id, tp);
+    }
 
     // Feed the breaker its hook-derived loop signal: a tool that actually ran.
     // A repeated identical (name+input) PostToolUse is the runaway-loop tell.

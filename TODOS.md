@@ -163,15 +163,6 @@ Go with it: keep only the owner's own words (the answer, the edit, the note) in 
 **Effort:** M
 **Priority:** P2
 
-### Run comparison reads transcripts it finds by name
-
-**What:** Record each member session's transcript path (and size) when the app starts the session, and have run comparison read only that file, instead of finding `<session id>.jsonl` anywhere under Claude's projects folder.
-
-**Why:** On a Mac members' shells are walled off from that folder, but on Windows a member's shell could write a file under its own session id. The member's own transcript already holds whatever it chose to say, and every suggestion still waits for the owner's Review and Apply, so this is defense in depth. The injection screen on a suggestion is a pattern list, not a boundary; the owner's Apply is (adversarial review, DeepSeek, 2026-10-26).
-
-**Effort:** S
-**Priority:** P3
-
 ### Voice confirms for schedules and settings carry no target
 
 **What:** Carry the staged schedule id or setting key on the pending confirm, and cancel when the confirm names another one, as `namesSomeoneElse` does for members.

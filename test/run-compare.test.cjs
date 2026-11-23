@@ -99,7 +99,7 @@ test('the call is isolated on Michael\'s engine, and members\' sessions come fro
   // Value: protects=D4 and the trust finding; fails_when=the call keeps a transcript or pasted text, has tools or hooks, or sessions are read from hive/log.jsonl; why_new=architecture finding 1, D4; seam=source; no_claim=Claude Code honoring the flags (hiddenClaude tests)
   const src = read('src/main/index.ts');
   const block = src.slice(src.indexOf('const runCompare = new RunCompare({'), src.indexOf("ipcMain.handle('runCompare:lastRuns'"));
-  assert.match(block, /sessionsOf: \(agentId\) => \[\.\.\.\(idsFromRecord\(hive\.privateSessionsText\(\)\)\.get\(agentId\) \?\? \[\]\)\]/);
+  assert.match(block, /transcriptsOf: \(agentId\) => \[\.\.\.\(transcriptsFromRecord\(hive\.privateSessionsText\(\)\)\.get\(agentId\)\?\.values\(\) \?\? \[\]\)\]/);
   for (const flag of [/noTools: true/, /dropTranscript: true/, /isolateConfig: true/, /settingSources: 'user'/, /disableAllHooks: true/, /engine: cfg\.godProvider \?\? 'claude'/, /engineModel: cfg\.godModel/]) assert.match(block, flag);
   assert.doesNotMatch(read('src/main/runCompare.ts'), /log\.jsonl'/, 'never the hive log');
   assert.match(block, /tellMichael: \(subject, body\) => \{ if \(hive\.enabled\(\)\) hive\.send\(\{ to: hiveGodId\(\), act: 'inform', subject, body \}, 'system'\); \}/);

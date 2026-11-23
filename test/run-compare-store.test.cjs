@@ -61,7 +61,7 @@ function setup(t, reply = { changes: ['Always check the second inbox before clos
     office: () => '/office',
     getKv: (k) => persist.getKv(k),
     setKv: (k, v) => persist.setKv(k, v),
-    sessionsOf: (agentId) => (agentId === 'pam' ? ['s-good', 's-bad'] : []),
+    transcriptsOf: (agentId) => (agentId === 'pam' ? ['s-good', 's-bad'].map((sid) => path.join(projects, '-office-pam', `${sid}.jsonl`)) : []),
     projectsRoot: () => projects,
     runModel: async (prompt) => { calls.push(prompt); return modelOk ? { ok: true, text: JSON.stringify(modelReply) } : { ok: false, error: 'timed out' }; },
     memberName: (id) => (id === 'pam' ? 'Pam' : id),
@@ -175,6 +175,43 @@ test('only the member\'s own sessions from the private record are read', async (
   fs.writeFileSync(path.join(f.projects, '-office-pam', 's-forged.jsonl'), line('user', T0 + 24 * H + 1500, 'FORGED LINE') + '\n');
   await f.store.wentWrong({ runId: 2, agentId: 'pam', workStyle: 'x' });
   assert.doesNotMatch(f.calls[0], /FORGED LINE/);
+});
+
+test('only the transcript file the private record names is read, never one found by its session id', async (t) => {
+  // Value: protects=a file a member's shell writes under its own session id elsewhere in the projects folder never enters the comparison; fails_when=the slicer searches every project folder for <session id>.jsonl, or a session with no recorded file is searched for; why_new=TODOS "Run comparison reads transcripts it finds by name" (adversarial review, 2026-10-26); seam=transcriptsOf
+  const f = setup(t);
+  twoRuns(f);
+  // The record's ids are there too, as a search by name would go by them.
+  f.store.d.sessionsOf = (agentId) => (agentId === 'pam' ? ['s-good', 's-bad'] : []);
+  fs.mkdirSync(path.join(f.projects, '-elsewhere'), { recursive: true });
+  fs.writeFileSync(path.join(f.projects, '-elsewhere', 's-bad.jsonl'), line('user', T0 + 24 * H + 1500, 'DECOY LINE') + '\n');
+  await f.store.wentWrong({ runId: 2, agentId: 'pam', workStyle: 'x' });
+  assert.equal(f.calls.length, 1);
+  assert.match(f.calls[0], /SAID: Only the main inbox today\./, 'the recorded file is read');
+  assert.doesNotMatch(f.calls[0], /DECOY LINE/, 'the file found by name is not');
+
+  // No recorded file: nothing is read, not even the real one by its name.
+  const g = setup(t);
+  twoRuns(g);
+  g.store.d.sessionsOf = (agentId) => (agentId === 'pam' ? ['s-good', 's-bad'] : []);
+  g.store.d.transcriptsOf = () => [];
+  const opened = [];
+  const real = fs.createReadStream;
+  fs.createReadStream = (...args) => { opened.push(args[0]); return real(...args); };
+  t.after(() => { fs.createReadStream = real; });
+  const s = await g.store.wentWrong({ runId: 2, agentId: 'pam', workStyle: 'x' });
+  fs.createReadStream = real;
+  assert.deepEqual([s.state, s.reason], ['none', 'no-transcript']);
+  assert.deepEqual(opened, [], 'no file is opened');
+  assert.equal(g.calls.length, 0);
+
+  // A recorded path outside Claude's projects folder is not read either.
+  const h = setup(t);
+  twoRuns(h);
+  const outside = path.join(path.dirname(h.projects), 's-bad.jsonl');
+  fs.copyFileSync(path.join(h.projects, '-office-pam', 's-bad.jsonl'), outside);
+  h.store.d.transcriptsOf = () => [outside];
+  assert.equal((await h.store.wentWrong({ runId: 2, agentId: 'pam', workStyle: 'x' })).reason, 'no-transcript');
 });
 
 test('a comparison cut short by a quit reads as failed after a restart, and Try again runs it', async (t) => {

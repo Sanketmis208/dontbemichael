@@ -11,8 +11,8 @@
  * to the owner's card.
  */
 import { createReadStream } from 'node:fs';
-import { readdir, stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { stat } from 'node:fs/promises';
+import { basename, resolve, sep } from 'node:path';
 import { createInterface } from 'node:readline';
 import type Database from 'better-sqlite3';
 import { looksLikeInjection } from '../shared/research';
@@ -38,8 +38,8 @@ export interface RunCompareDeps {
   office: () => string | null;
   getKv: <T>(key: string) => T | undefined;
   setKv: (key: string, value: unknown) => void;
-  /** A member's session ids from the private session record. */
-  sessionsOf: (agentId: string) => string[];
+  /** A member's session files, as the private session record has them. */
+  transcriptsOf: (agentId: string) => string[];
   projectsRoot: () => string;
   /** The one comparison call (isolated, no tools; index.ts sets it up). */
   runModel: (prompt: string) => Promise<{ ok: boolean; text?: string; error?: string }>;
@@ -227,23 +227,19 @@ export class RunCompare {
     return { ...base, state: 'ready', goodRunId: good.id, change: parsed.change, why: parsed.why };
   }
 
-  /** The member's session files, by the private record, with when each was last written. */
+  /**
+   * The member's session files, with when each was last written: only the
+   * files the private record names, never a search by session id (a member's
+   * shell could write a file named for its own session elsewhere). A session
+   * with no recorded file is left out.
+   */
   private async sessionFiles(agentId: string): Promise<Array<{ path: string; mtime: number }>> {
-    const ids = new Set(this.d.sessionsOf(agentId).filter((s) => /^[A-Za-z0-9_-]+$/.test(s)));
-    if (!ids.size) return [];
+    const root = resolve(this.d.projectsRoot()) + sep;
     const out: Array<{ path: string; mtime: number }> = [];
-    const root = this.d.projectsRoot();
-    let dirs: string[] = [];
-    // Without blocking: the projects folder holds every project Claude ever opened.
-    try { dirs = await readdir(root); } catch { return []; }
-    for (const dir of dirs) {
-      let names: string[] = [];
-      try { names = await readdir(join(root, dir)); } catch { continue; }
-      for (const n of names) {
-        if (!n.endsWith('.jsonl') || !ids.has(n.slice(0, -6))) continue;
-        const path = join(root, dir, n);
-        try { out.push({ path, mtime: (await stat(path)).mtimeMs }); } catch { /* gone */ }
-      }
+    for (const f of new Set(this.d.transcriptsOf(agentId))) {
+      const path = resolve(f);
+      if (!path.startsWith(root) || !/^[A-Za-z0-9_-]+\.jsonl$/.test(basename(path))) continue;
+      try { out.push({ path, mtime: (await stat(path)).mtimeMs }); } catch { /* gone */ }
     }
     return out;
   }
