@@ -713,18 +713,6 @@ Go with it: keep only the owner's own words (the answer, the edit, the note) in 
 
 ## Agents and 1:1
 
-### End a hidden Claude call early when it can't answer
-
-**What:** A hidden call whose session is stuck on a trust or sign-in screen now waits for its full timeout (60 to 180 seconds). Detect a known blocking screen, or no transcript at all, and give up early so the rules fallback answers quickly.
-
-**Why:** The owner waits on "checking..." for a minute when Claude is signed out.
-
-**Context:** From the /ship pre-landing review (2026-09-27): `captureAndFinish` in `src/main/hiddenClaude.ts` re-arms until its own answer appears.
-
-**Effort:** S
-**Priority:** P3
-**Depends on:** nothing.
-
 ### Test Michael deciding schedule requests end to end
 
 **What:** Runtime tests for `receiveScheduleRequest`, `michaelDecides`, `decideScheduleRequest` and `sweepScheduleRequests` in `src/main/index.ts` (unknown id, stale, escalated, pending list, the 12 hour escalation), which today are checked by source patterns only.
