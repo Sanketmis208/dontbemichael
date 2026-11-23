@@ -200,3 +200,66 @@ test('a business added from setup starts under the open business\'s spend caps',
   const own = s.settings.addBusiness({ home: path.join(s.userData, 'cafe'), settings: { businessName: 'Contoso Cafe', costCapUsd: 5 } });
   assert.equal(s.stored().offices[own.id].settings.costCapUsd, 5, 'its own cap wins');
 });
+
+// Value: protects=two businesses never share one business folder, from Add a business or from a save of the open business (Section 4 edge case); fails_when=addBusiness or businessFolderTakenBy stop checking the other entries' businessFolder, or compare raw strings; why_new=the folder checks above are about the office folder only; seam=none; no_claim=the wizard UI
+test('never another business\'s business folder, from Add a business or a save in Settings', (t) => {
+  const s = scene(t);
+  const bakeryDocs = path.join(s.userData, 'Documents', 'Harbor & Pine Bakery');
+  const cfg = s.stored();
+  cfg.offices[s.bakeryId].settings.businessFolder = bakeryDocs;
+  fs.writeFileSync(path.join(s.userData, 'config.json'), JSON.stringify(cfg));
+  const realty = path.join(s.userData, 'realty');
+  const taken = { ok: false, error: 'folderTaken', name: 'Harbor & Pine Bakery' };
+  assert.deepEqual(s.settings.addBusiness({ home: realty, settings: { businessName: 'Northgate Realty', businessFolder: bakeryDocs } }), taken);
+  assert.deepEqual(s.settings.addBusiness({ home: realty, settings: { businessName: 'Northgate Realty', businessFolder: bakeryDocs + path.sep } }), taken, 'a trailing separator is the same folder');
+  assert.deepEqual(Object.keys(s.stored().offices), [s.bakeryId], 'nothing saved when refused');
+
+  const realtyDocs = path.join(s.userData, 'Documents', 'Northgate Realty');
+  const added = s.settings.addBusiness({ home: realty, settings: { businessName: 'Northgate Realty', businessFolder: realtyDocs } });
+  assert.equal(added.ok, true, 'a folder of its own is fine');
+
+  // Settings: the open bakery's business folder changing.
+  assert.deepEqual(s.settings.businessFolderTakenBy(realtyDocs), { id: added.id, name: 'Northgate Realty' });
+  assert.deepEqual(s.settings.businessFolderTakenBy(realtyDocs + path.sep), { id: added.id, name: 'Northgate Realty' });
+  assert.equal(s.settings.businessFolderTakenBy(bakeryDocs), null, 'the open business keeps its own folder');
+  assert.equal(s.settings.businessFolderTakenBy(path.join(s.userData, 'Documents', 'Bakery 2')), null);
+
+  // A draft finishing in place is not refused for its own folder.
+  const florist = path.join(s.userData, 'florist');
+  const floristDocs = path.join(s.userData, 'Documents', 'Corner Florist');
+  const id = s.settings.saveBusinessDraft({ home: florist, step: 'ready', settings: { businessName: 'Corner Florist', businessFolder: floristDocs } });
+  assert.deepEqual(s.settings.addBusiness({ id, home: florist, settings: { businessName: 'Corner Florist', businessFolder: floristDocs } }), { ok: true, id });
+});
+
+// Value: protects=setup asks before any folder is made, with the right business exempt: Add a business never takes the open business's folder, its own setup keeps its own; fails_when=add mode exempts the open business, or own setup refuses its own folder; why_new=the wizard's check runs before ensureHarnessHome and foldersEnsure, so addBusiness's refusal comes too late to stop folders being made; seam=none; no_claim=the wizard UI
+test('the check setup runs before making folders: Add a business, and the open business\'s own setup', (t) => {
+  const s = scene(t);
+  const bakeryDocs = path.join(s.userData, 'Documents', 'Harbor & Pine Bakery');
+  const cfg = s.stored();
+  cfg.offices[s.bakeryId].settings.businessFolder = bakeryDocs;
+  fs.writeFileSync(path.join(s.userData, 'config.json'), JSON.stringify(cfg));
+  const realtyDocs = path.join(s.userData, 'Documents', 'Northgate Realty');
+  const id = s.settings.saveBusinessDraft({ home: path.join(s.userData, 'realty'), step: 'team', settings: { businessName: 'Northgate Realty', businessFolder: realtyDocs } });
+
+  // Add a business: the open business's folder is taken, the draft's own is not.
+  assert.deepEqual(s.settings.businessFolderTakenBy(bakeryDocs, { id: null }), { id: s.bakeryId, name: 'Harbor & Pine Bakery' });
+  assert.deepEqual(s.settings.businessFolderTakenBy(bakeryDocs + path.sep, { id }), { id: s.bakeryId, name: 'Harbor & Pine Bakery' });
+  assert.equal(s.settings.businessFolderTakenBy(realtyDocs, { id }), null, 'the draft keeps its own folder');
+  assert.deepEqual(s.settings.businessFolderTakenBy(realtyDocs, { id: null }), { id, name: 'Northgate Realty' }, 'a different new business may not take the draft\'s');
+  assert.equal(s.settings.businessFolderTakenBy(path.join(s.userData, 'Documents', 'Cafe'), { id: null }), null);
+
+  // The open business's own setup: its own folder is fine, another's is not.
+  assert.equal(s.settings.businessFolderTakenBy(bakeryDocs), null);
+  assert.deepEqual(s.settings.businessFolderTakenBy(realtyDocs), { id, name: 'Northgate Realty' });
+});
+
+test('another business\'s business folder in other letter case', { skip: process.platform === 'linux' && 'Linux folder names are case sensitive' }, (t) => {
+  const s = scene(t);
+  const bakeryDocs = path.join(s.userData, 'Documents', 'Harbor & Pine Bakery');
+  const cfg = s.stored();
+  cfg.offices[s.bakeryId].settings.businessFolder = bakeryDocs;
+  cfg.offices.other = { home: path.join(s.userData, 'realty'), settings: { businessName: 'Northgate Realty', businessFolder: path.join(s.userData, 'Documents', 'Northgate') } };
+  fs.writeFileSync(path.join(s.userData, 'config.json'), JSON.stringify(cfg));
+  assert.deepEqual(s.settings.addBusiness({ home: path.join(s.userData, 'cafe'), settings: { businessFolder: bakeryDocs.toUpperCase() } }), { ok: false, error: 'folderTaken', name: 'Harbor & Pine Bakery' });
+  assert.equal(s.settings.businessFolderTakenBy(path.join(s.userData, 'Documents', 'NORTHGATE')).name, 'Northgate Realty');
+});

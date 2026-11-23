@@ -38,18 +38,6 @@
 **Priority:** P1
 **Depends on:** None
 
-### Refuse two businesses sharing one business folder
-
-**What:** Add a business, and Settings when the business folder changes, refuse a business folder another business already uses.
-
-**Why:** Two businesses on one folder would mix their documents (Section 4 edge case). addBusiness refuses only the open office's folder and a finished office folder.
-
-**Context:** Deferred from plan: docs/designs/separate-businesses.md. Planned in the CEO review, not built in step one; the owner chose to ship and defer it (2026-11-20).
-
-**Effort:** S (human) / S (CC)
-**Priority:** P1
-**Depends on:** None
-
 ### Refuse a mailbox another business already has
 
 **What:** Adding a mailbox checks every business's mailboxes and says the address belongs to that business.

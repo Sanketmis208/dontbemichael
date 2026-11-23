@@ -174,7 +174,7 @@ import { AUTO_FAILURE_REPORTS } from '../shared/buildFeatures';
 import { APP_NAME, APP_DATA_DIR, APP_URL_SCHEME } from '../shared/appName';
 import { copyOfficeData, homeFolderStatus, homeReadyAtLaunch } from './homeFolder';
 import { backfillOfficeRecord, findOffice, folderLayoutFor, isUsableTeamFolder, officeSwitchGuard, syncOfficeRecord } from './officeFile';
-import { addBusiness, adoptOpenOffice, businessDraft, businessNameAt, listBusinesses, migrateToOfficeSettings, neverOpenedBusiness, noteOfficeClosed, officeClaudeDir, officesAfterMove, relocateBusiness, removeUnfinishedBusiness, saveBusinessDraft } from './officeSettings';
+import { addBusiness, adoptOpenOffice, businessDraft, businessFolderTakenBy, businessNameAt, listBusinesses, migrateToOfficeSettings, neverOpenedBusiness, noteOfficeClosed, officeClaudeDir, officesAfterMove, relocateBusiness, removeUnfinishedBusiness, saveBusinessDraft } from './officeSettings';
 import { folderPolicy, AGENT_TMP_DIR, agentTmpName, researchFolderPolicy, withAgentTmpWall, withMemberWall, RESEARCH_TMP_DIR, shellTempWalls, withResearchWall, type AgentFolderPolicy, type FolderLayout } from '../shared/folderAccess';
 import { sandboxNetwork } from '../shared/webAccess';
 import { legacyBusinessFolder, touchesOffice } from '../shared/officeRecord';
@@ -4173,6 +4173,12 @@ ipcMain.handle('config:update', (_evt, patch: Partial<HarnessConfig>) => {
   const hiveWasEnabled = hive.enabled();
   const modelBefore = readConfig().embeddingModel ?? 'minilm';
   const profileBefore = cleanCompanyProfile(readConfig().companyProfile);
+  // Two businesses never share a business folder: their documents would mix
+  // (docs/designs/separate-businesses.md, Section 4). Setup asks first
+  // (office:folderTakenBy) to say which business has it; this is the backstop.
+  if (patch && typeof patch === 'object' && typeof patch.businessFolder === 'string' && patch.businessFolder && businessFolderTakenBy(patch.businessFolder)) {
+    throw new Error('Another business already uses that folder.');
+  }
   const next = writeConfig(patch);
   // The office describes itself in <home>/office.json, so a reinstall finds it
   // by folder rather than by the business name typed into setup. Only a save
@@ -4425,6 +4431,12 @@ ipcMain.handle('address:suggest', async (_evt, typed: unknown, lang: unknown) =>
 ipcMain.handle('office:list', () => listBusinesses());
 ipcMain.handle('office:relocate', (_evt, id: unknown, path: unknown) =>
   typeof id === 'string' && typeof path === 'string' && path ? relocateBusiness(id, resolve(expandTilde(path))) : { ok: false, error: 'notFound' });
+// The business that already uses this business folder, or null (Section 4).
+ipcMain.handle('office:folderTakenBy', (_evt, folder: unknown, add: unknown) => {
+  if (typeof folder !== 'string' || !folder) return null;
+  const forAdd = add && typeof add === 'object' ? { id: typeof (add as { id?: unknown }).id === 'string' ? (add as { id: string }).id : null } : undefined;
+  return businessFolderTakenBy(resolve(expandTilde(folder)), forAdd);
+});
 // Add a business over the open one (DT3): its answers go to its own entry.
 ipcMain.handle('office:addBusiness', (_evt, p: unknown) => {
   const v = (p ?? {}) as { id?: unknown; home?: unknown; settings?: unknown; install?: unknown };

@@ -24,7 +24,7 @@ import { BUSINESS_DATA_FILES, configDefaults, keepConfigCopy, moveIntoOffice, of
 import { copySecretsToOffices } from './integrations';
 import { describesBusiness, type OfficeRecord } from '../shared/officeRecord';
 import {
-  BUSINESS_KEYS, businessKeySet, installKeySet, officeIdIn, officesWith, pick, samePath, settingsIn,
+  BUSINESS_KEYS, businessKeySet, businessUsingFolder, installKeySet, officeIdIn, officesWith, pick, samePath, settingsIn,
   type InstallConfig, type OfficeEntry, type OfficeSettings
 } from './officeKeys';
 import { randomUUID } from 'node:crypto';
@@ -227,13 +227,14 @@ export function removeUnfinishedBusiness(id: string): boolean {
  * one's. The install settings it chose (engine, model, auto mode) are saved as
  * install settings. Then the renderer switches to it, through closing time.
  *
- * Refused for the open office's own folder, and for a folder whose office is
- * already a business that finished setup (open that one from the menu). A
+ * Refused for the open office's own folder, for a folder whose office is
+ * already a business that finished setup (open that one from the menu), and
+ * for a business folder another business already uses (with its name). A
  * draft id from Back to office is finished in place.
  */
 export function addBusiness(p: {
   id?: string; home: string; settings: Partial<OfficeSettings>; install?: Partial<InstallConfig>;
-}): { ok: true; id: string } | { ok: false; error: 'notPerOffice' | 'isOpen' | 'exists' } {
+}): { ok: true; id: string } | { ok: false; error: 'notPerOffice' | 'isOpen' | 'exists' } | { ok: false; error: 'folderTaken'; name: string | null } {
   const cfg = readStoredConfig();
   if (!cfg.officesMigrated) return { ok: false, error: 'notPerOffice' };
   if (cfg.harnessHome && samePath(cfg.harnessHome, p.home)) return { ok: false, error: 'isOpen' };
@@ -245,6 +246,9 @@ export function addBusiness(p: {
     if (there && offices[there]?.settings?.onboardingComplete === true) return { ok: false, error: 'exists' };
     id = there ?? (homeFolderStatus(p.home).hasOffice ? ensureOfficeId(p.home) : null) ?? randomUUID();
   }
+  const folder = p.settings?.businessFolder;
+  const taken = typeof folder === 'string' && folder ? businessUsingFolder({ offices }, folder, id) : null;
+  if (taken) return { ok: false, error: 'folderTaken', name: taken.name };
   // A new business starts under the open business's budget unless setup chose
   // its own: it never runs with no budget. Caps per member stay with the
   // members they were set for.
@@ -257,6 +261,22 @@ export function addBusiness(p: {
   for (const k of ['harnessHome', 'recentHives', 'offices', 'officesMigrated']) delete install[k];
   writeConfig({ ...(install as Partial<HarnessConfig>), offices });
   return { ok: true, id };
+}
+
+/**
+ * The open business's business folder is changing to `folder` (its setup, or
+ * any save through Settings): the other business that already uses it, or
+ * null. Keeping its own folder is never refused. For Add a business (`add`),
+ * the open business's folder counts too, and only the draft's own (`add.id`)
+ * is its own.
+ */
+export function businessFolderTakenBy(folder: string, add?: { id: string | null }): { id: string; name: string | null } | null {
+  const cfg = readStoredConfig();
+  if (add) return businessUsingFolder(cfg, folder, add.id);
+  const openId = officeIdIn(cfg, readOfficeId(cfg.harnessHome));
+  const own = openId ? cfg.offices?.[openId]?.settings?.businessFolder : undefined;
+  if (typeof own === 'string' && own && samePath(own, folder)) return null;
+  return businessUsingFolder(cfg, folder, openId);
 }
 
 /**

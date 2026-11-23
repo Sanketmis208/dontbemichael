@@ -711,8 +711,12 @@ const api = {
     ipcRenderer.invoke('office:relocate', id, path),
   /** Add a business (DT3): file the wizard's answers under the new business's
    *  own entry, never the open one's; the renderer then switches to it. */
-  addBusiness: (p: { id?: string; home: string; settings: Record<string, unknown>; install?: Record<string, unknown> }): Promise<{ ok: boolean; id?: string; error?: string }> =>
+  addBusiness: (p: { id?: string; home: string; settings: Record<string, unknown>; install?: Record<string, unknown> }): Promise<{ ok: boolean; id?: string; error?: string; name?: string | null }> =>
     ipcRenderer.invoke('office:addBusiness', p),
+  /** The business that already uses this business folder, or null: two businesses never share one.
+   *  `add` for Add a business: the open business's folder counts, only the draft's own is exempt. */
+  businessFolderTakenBy: (folder: string, add?: { id: string | null }): Promise<{ id: string; name: string | null } | null> =>
+    ipcRenderer.invoke('office:folderTakenBy', folder, add),
   /** Back to office from Add a business: keep what was typed as Setup not finished. */
   saveBusinessDraft: (p: { id?: string; home: string; step: string; settings: Record<string, unknown> }): Promise<string | null> =>
     ipcRenderer.invoke('office:saveDraft', p),

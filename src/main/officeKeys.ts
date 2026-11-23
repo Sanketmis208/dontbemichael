@@ -6,7 +6,7 @@
  */
 import { resolve } from 'node:path';
 import type { HarnessConfig } from './config';
-import { isOfficeId } from '../shared/officeRecord';
+import { isOfficeId, legacyBusinessFolder } from '../shared/officeRecord';
 
 /** What belongs to a business: who it is, its team, mail and connectors, its
  *  Claude account, schedules, Research, knowledge, owner messages, integrations
@@ -95,6 +95,27 @@ export function samePath(a: string, b: string): boolean {
     return process.platform === 'darwin' || process.platform === 'win32' ? t.toLowerCase() : t;
   };
   return norm(a) === norm(b);
+}
+
+/**
+ * The business, other than `selfId`, whose business folder is `folder`, or
+ * null. Two businesses never share one: their documents would mix
+ * (docs/designs/separate-businesses.md, Section 4). A business saved before
+ * businessFolder existed counts by its old officeFolder's parent, as launch
+ * reads it.
+ */
+export function businessUsingFolder(
+  cfg: Pick<HarnessConfig, 'offices'>, folder: string, selfId: string | null
+): { id: string; name: string | null } | null {
+  for (const [id, entry] of Object.entries(cfg.offices ?? {})) {
+    if (id === selfId) continue;
+    const s = entry?.settings ?? {};
+    const theirs = s.businessFolder ?? legacyBusinessFolder(s.officeFolder);
+    if (typeof theirs !== 'string' || !theirs || !samePath(theirs, folder)) continue;
+    const name = typeof s.businessName === 'string' && s.businessName.trim() ? s.businessName.trim() : null;
+    return { id, name };
+  }
+  return null;
 }
 
 /**

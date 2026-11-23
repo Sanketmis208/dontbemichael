@@ -453,6 +453,9 @@ export function OnboardingWizard({ onComplete, preview, add }: OnboardingWizardP
   };
 
 
+  /** Two businesses never share a business folder: their documents would mix. */
+  const folderTaken = (name: string | null | undefined) => t('addBusiness.folderTaken', { name: name || t('addBusiness.anotherBusiness') });
+
   const finish = async () => {
     setBusy(true);
     setError(undefined);
@@ -473,6 +476,11 @@ export function OnboardingWizard({ onComplete, preview, add }: OnboardingWizardP
     // Every await below can reject (IPC down, disk error). Without a catch the
     // button stayed on "Saving" forever with nothing on screen.
     try {
+      // Another business's business folder is refused before any folder is
+      // made, or the team's folders would land among its documents. A new
+      // business may not take the open business's either.
+      const taken = await window.cth.businessFolderTakenBy(finishPlan.business, add ? { id: draftId ?? null } : undefined);
+      if (taken) { setError(folderTaken(taken.name)); setBusy(false); setStep('team'); return; }
       const ensure = await window.cth.ensureHarnessHome(harnessHome);
       if (!ensure.ok) {
         // Plain words for the owner (EACCES and the like mean nothing to them;
@@ -526,9 +534,11 @@ export function OnboardingWizard({ onComplete, preview, add }: OnboardingWizardP
         // which closes the open office first (closing time, D10, D19).
         const saved = await window.cth.addBusiness({ id: draftId, home: harnessHome, settings: { ...patch, claudeLogin }, install: patch });
         if (!saved.ok) {
-          setError(saved.error === 'exists' ? t('addBusiness.exists') : saved.error === 'isOpen' ? t('addBusiness.isOpen') : t('onboarding.errSaveSetup'));
+          setError(saved.error === 'exists' ? t('addBusiness.exists') : saved.error === 'isOpen' ? t('addBusiness.isOpen')
+            : saved.error === 'folderTaken' ? folderTaken(saved.name) : t('onboarding.errSaveSetup'));
           setBusy(false);
           if (saved.error === 'exists' || saved.error === 'isOpen') setStep('home');
+          if (saved.error === 'folderTaken') setStep('team');
           return;
         }
         setDraftId(saved.id);
