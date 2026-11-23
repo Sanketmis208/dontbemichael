@@ -67,12 +67,25 @@ export interface CardLite {
 /** Idle this long and the owner counts as away (D11). */
 export const AWAY_AFTER_SEC = 30 * 60;
 const MAX_BUFFER = 5000;
+/** At most this many cards of the last seen board are saved; open ones first. */
+export const MAX_SAVED_CARDS = 2000;
 /** Running time is saved as one point this often, or sooner at a day's end,
  *  a sleep, a quit or an office change. A crash loses at most this much. */
 export const RUN_SAVE_MS = 5 * 60_000;
 /** One gap between ticks counts at most this much: it bounds a sleep whose
  *  suspend event never came. A late timer (a busy machine) still counts. */
 export const RUN_GAP_CAP_MS = 15 * 60_000;
+
+/** The kv key of an office's last seen board. */
+const cardsKey = (office: string): string => `pulse:cards:${office}`;
+
+/** The board as saved: id to status, cut to the cap with open cards kept
+ *  first (a done card rarely changes again). */
+function savedJson(cards: Map<string, string>): string {
+  let list = [...cards];
+  if (list.length > MAX_SAVED_CARDS) list = [...list.filter(([, s]) => s !== 'done'), ...list.filter(([, s]) => s === 'done')].slice(0, MAX_SAVED_CARDS);
+  return JSON.stringify(Object.fromEntries(list));
+}
 
 interface RunBuffer { office: string; day: string; ms: number; away: number; since: number; until: number }
 
@@ -83,6 +96,8 @@ export class TelemetryStore {
   private lastCost = new Map<string, string>();
   private lastMeter: string | null = null;
   private lastCards = new Map<string, Map<string, string>>();
+  /** office -> the board last seen, saved by the next flush with its points. */
+  private unsavedCards = new Map<string, Map<string, string>>();
   private away: boolean | null = null;
   /** The last running tick; null before the clock starts and after a sleep. */
   private lastTick: number | null = null;
@@ -112,7 +127,7 @@ export class TelemetryStore {
   /** Write the queued points in one transaction. A failure is counted for the
    *  day of each point it lost, and those days are left out of advice (D15). */
   flush(): void {
-    if (!this.buf.length && !this.failed.size) return;
+    if (!this.buf.length && !this.failed.size && !this.unsavedCards.size) return;
     const batch = this.buf;
     this.buf = [];
     const db = this.db();
@@ -124,8 +139,16 @@ export class TelemetryStore {
       db.transaction(() => {
         for (const e of batch) ins.run(e.office, e.agentId, e.kind, Math.round(e.ts), e.value ?? null, e.attrs ? JSON.stringify(e.attrs) : null);
         for (const [key, n] of this.failed) { const [office, day] = key.split('\t'); fail.run(office, day, n); }
+        // The board in the same transaction as its points: after a quit or a
+        // crash the next launch diffs against exactly what was counted.
+        if (this.unsavedCards.size) {
+          const mark = db.prepare(`INSERT INTO kv (key, value, updated_at) VALUES (?, ?, ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`);
+          for (const [office, cards] of this.unsavedCards) mark.run(cardsKey(office), savedJson(cards), this.now());
+        }
       })();
       this.failed.clear();
+      this.unsavedCards.clear();
       this.loggedFailure = false;
     } catch (e) {
       this.countFailures(batch);
@@ -182,17 +205,25 @@ export class TelemetryStore {
   }
 
   /** The 8 s tick's tasks: one card-status point per change (doneAt is the
-   *  time a card reaches done). The first read of an office only remembers. */
+   *  time a card reaches done). The first read of an office diffs against the
+   *  board saved before the last quit, so a card done in its last seconds
+   *  still counts; with none saved it only remembers. */
   tasks(cards: CardLite[], ts = this.now()): void {
     const office = this.office();
     if (!office) return;
-    const prev = this.lastCards.get(office);
+    const seen = this.lastCards.get(office);
+    // A card the saved board does not have is only remembered: it may have
+    // been left out at the cap.
+    const saved = seen ? undefined : this.savedCards(office);
+    const prev = seen ?? saved;
     const next = new Map<string, string>();
+    let changed = false;
     for (const c of cards) {
       if (!c || typeof c.id !== 'string' || typeof c.status !== 'string') continue;
       next.set(c.id, c.status);
       const was = prev?.get(c.id);
-      if (!prev || was === c.status) continue;
+      if (was !== c.status) changed = true;
+      if (!prev || was === c.status || (saved && was === undefined)) continue;
       const excluded = c.closedBy === 'owner' || (Array.isArray(c.humanQA) && c.humanQA.some((e) => e?.kind === 'report'));
       this.record({
         agentId: c.assignee ?? null, kind: 'card-status', ts,
@@ -200,6 +231,20 @@ export class TelemetryStore {
       });
     }
     this.lastCards.set(office, next);
+    if (changed || next.size !== (prev?.size ?? 0)) this.unsavedCards.set(office, next);
+  }
+
+  /** The board saved for an office, or undefined when there is none or it
+   *  cannot be read (the first read then only remembers). */
+  private savedCards(office: string): Map<string, string> | undefined {
+    try {
+      const row = this.db()?.prepare('SELECT value FROM kv WHERE key = ?').get(cardsKey(office)) as { value: string } | undefined;
+      const v: unknown = row ? JSON.parse(row.value) : null;
+      if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined;
+      const out = new Map<string, string>();
+      for (const [id, status] of Object.entries(v)) if (typeof status === 'string') out.set(id, status);
+      return out;
+    } catch { return undefined; }
   }
 
   /** The owner's presence from the system idle time (D11): away after 30
