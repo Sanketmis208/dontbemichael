@@ -172,15 +172,6 @@ Go with it: keep only the owner's own words (the answer, the edit, the note) in 
 **Effort:** S
 **Priority:** P3
 
-### Voice confirms for schedules and settings carry no target
-
-**What:** Carry the staged schedule id or setting key on the pending confirm, and cancel when the confirm names another one, as `namesSomeoneElse` does for members.
-
-**Why:** "confirm, delete the Invoice check schedule" while a delete of Morning report waits deletes Morning report. Older than this branch. Also: a member whose name is an ordinary word ("Will") can cancel a valid confirm; it fails safe.
-
-**Effort:** S
-**Priority:** P2
-
 ## Overlap split (deferred from the CEO review, 2026-10-24)
 
 ### Explain how they split it in the hire wizard
@@ -250,16 +241,6 @@ Go with it: keep only the owner's own words (the answer, the edit, the note) in 
 
 **Effort:** M
 **Priority:** P1
-**Depends on:** None
-
-### Refuse the web tools when a member's set up fails
-
-**What:** When hive set up fails for a team member other than Research (`src/main/index.ts`, `[hive] ensureAgent failed`), the member still starts, with no hooks and no deny rules, so its web page and web search tools are not refused. Either refuse the spawn, as Research already does, or pass `--disallowedTools WebFetch WebSearch` on that path.
-
-**Why:** The site and /security say the app turns off the web page tool and the web search tool for every team member but Pete. On this path it does not, on Mac or Windows. Found in the website's 2.8.1.0 ship review (2026-10-20); moved here from the site's TODOS when its guardrail item closed (site CEO review, owner D10, 2026-11-04).
-
-**Effort:** S
-**Priority:** P2
 **Depends on:** None
 
 ### Take the internet from team members' shells on Windows
@@ -424,16 +405,6 @@ Go with it: keep only the owner's own words (the answer, the edit, the note) in 
 **Why:** Ship review 2026-10-23 found Claude Code keeps every pasted prompt in its shared `~/.claude/history.jsonl` and `paste-cache`, which dropping the transcript does not touch. The file fit check is isolated now (verified live: nothing written under ~/.claude); a message to Pete and an email's text still land there.
 
 **Context:** Isolation relies on `CLAUDE_SECURESTORAGE_CONFIG_DIR`, found in the Claude Code binary and not documented. If a later Claude drops it the session stops at sign in and the check fails closed, which for the trust layer means every message to Pete is held, so check that before widening it. The API key sign in and Windows are untested. The file fit check is isolated on every platform (owner, 2026-10-23), so check a foundation card file upload on Windows first: Claude keeps its sign in in `.credentials.json` inside the settings folder there, and if the variable doesn't reach it every file is refused as "couldn't check".
-
-**Effort:** S
-**Priority:** P2
-**Depends on:** None
-
-### Give the other job helpers the job change's settings
-
-**What:** `convertWorkStyle` (plain words) and `checkFocusArea` in `src/main/workStyleConvert.ts` still start their hidden session with the office folder's settings and hooks and keep the transcript. Give them what `reviseWorkStyle` has: `settingSources: 'user'`, `disableAllHooks` and `dropTranscript`.
-
-**Why:** Codex adversarial pass 2 (2026-10-23): the job text reaches any hook of the owner's or the office folder's. The job change itself keeps no isolated folder by the owner's choice (D9: speed; Claude's history is already closed to members), so its prompt stays in the owner's own Claude history.
 
 **Effort:** S
 **Priority:** P2
@@ -647,15 +618,6 @@ Go with it: keep only the owner's own words (the answer, the edit, the note) in 
 **Effort:** S
 **Priority:** P3
 
-### Parallel tool calls clear each other's detail
-
-**What:** Track detail per tool call so one call's PostToolUse does not clear another's.
-
-**Why:** With parallel calls, the row goes blank while a call is still running.
-
-**Effort:** S
-**Priority:** P3
-
 ### Replace the source-regex dialog tests with pure helpers
 
 **What:** Move the checks in `test/closing-time-dialog.test.cjs` that grep component source into tested helpers.
@@ -663,24 +625,6 @@ Go with it: keep only the owner's own words (the answer, the edit, the note) in 
 **Why:** They break on harmless edits (comments, added props) and passed review cycles several times only after loosening.
 
 **Effort:** M
-**Priority:** P3
-
-### Archiving a live agent during closing time
-
-**What:** Archiving through voice or `hive:setArchived` drops the agent from the wait list but does not call `closingTime.refresh` or tell Michael.
-
-**Why:** Michael can keep waiting for an ACK that never comes until the 6-minute timeout.
-
-**Effort:** S
-**Priority:** P3
-
-### Mark the detail line as the agent's own words
-
-**What:** The detail is agent-written text shown where the owner decides to close without someone.
-
-**Why:** An agent can write "safe to close without me"; the owner's choice is steered by untrusted text.
-
-**Effort:** S
 **Priority:** P3
 
 ## Task board (deferred from ship of mit/local-app-version-stuck-ee4e87, 2026-10-12)
@@ -749,20 +693,6 @@ Go with it: keep only the owner's own words (the answer, the edit, the note) in 
 **Priority:** P2
 **Depends on:** the hire wizard redesign.
 
-
-### One rule for "stuck at a prompt" in main and the panel
-
-**What:** Put the terminal prompt check (`isTerminalPrompt` in `src/main/hooks.ts`) in shared code
-and use it in the renderer's status parsing (`src/renderer/src/hooks/useHive.ts`), passing
-`notification_type` through the hook event.
-
-**Why:** Michael is told an agent is stuck from the prompt's type; the panel decides from words
-in the message. For a dialog without those words, Michael hears "stuck" while the panel shows the
-agent idle, with no coral bar and Talk 1:1 not leading. Found by the red team in the pre-landing
-review of feat/per-agent-schedules (2026-09-25); the owner chose a follow-up.
-
-**Priority:** P2
-**Completed:** `isTerminalPrompt` moved to `src/shared/hookEvents.ts` and consumed in `useHive.ts`'s Notification hook handler alongside `notificationType`.
 
 ### Block mouse and focus reports in a watch-only terminal
 
