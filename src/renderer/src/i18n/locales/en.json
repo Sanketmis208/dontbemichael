@@ -438,6 +438,8 @@
     "hireImported": "Hire imported:",
     "byAuthor": " · by {{author}}",
     "reviewFields": "Review every field (especially the command) before spawning.",
+    "hireBusiness": "This hire joins {{business}}, the business open now.",
+    "hireBusinessUnnamed": "This hire joins the business open now.",
     "hireFlags": "⚠️ flags this hire appends to the command:",
     "hireSkills": "Skills this hire activates:",
     "mcpNotStarted": "MCP servers this hire names, not turned on:",

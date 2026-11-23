@@ -62,18 +62,6 @@
 **Priority:** P1
 **Depends on:** None
 
-### Name the business on a hire or deep link screen
-
-**What:** A link that hires or joins says which business it will join before anything happens.
-
-**Why:** With two businesses, a link opened while the wrong one is open would add to it (Section 3 threat table).
-
-**Context:** Deferred from plan: docs/designs/separate-businesses.md. Planned in the CEO review, not built in step one; the owner chose to ship and defer it (2026-11-20).
-
-**Effort:** S (human) / S (CC)
-**Priority:** P1
-**Depends on:** None
-
 ### Both businesses running at once in one app
 
 **What:** Step two of docs/designs/separate-businesses.md: each business runs as its own office process at the same time, with one window, a business switcher and a Needs you list marked by business.
