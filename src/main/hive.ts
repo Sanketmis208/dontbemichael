@@ -3006,8 +3006,9 @@ export class HiveManager {
     }
     this.researchQueued++;
     // Kept in the app's private folder while its check runs, so a crash in
-    // between is told to Michael at the next start, not lost (Codex review).
-    if (!fromAgent) this.researchPending(msg, true);
+    // between is told to Michael, and a teammate sender too, at the next
+    // start, not lost (Codex review; ship review D3.3).
+    this.researchPending(msg, true);
     const refuse = (reason: string, why?: string): void => {
       this.appendLog({ kind: 'trust-denied', from: msg.from, id: msg.id, ...(why ? { reason: why } : {}) });
       tell(reason);
@@ -3072,12 +3073,12 @@ export class HiveManager {
         if (outcome === 'again') {
           // Its row now says it passed its check, so a start after a close
           // tells Michael it was not delivered, not that it was being checked.
-          if (deliveries === 1 && !fromAgent) this.researchPending(msg, true, true);
+          if (deliveries === 1) this.researchPending(msg, true, true);
           this.researchUndelivered.set(msg.id, settle);
           return;
         }
         if (outcome === 'keep') return;
-        if (!fromAgent) this.researchPending(msg, false);
+        this.researchPending(msg, false);
         if (outcome === 'recheck') this.queueForResearch(msg, upkeep);
       };
       settle();
@@ -3088,7 +3089,7 @@ export class HiveManager {
         return;
       }
       this.researchQueued--;
-      if (!fromAgent) this.researchPending(msg, false);
+      this.researchPending(msg, false);
       try {
         // The owner changed what stays private meanwhile: checked again under
         // the new settings, as a check that answered is (ship review 2026-10-17).
@@ -3100,9 +3101,9 @@ export class HiveManager {
     attempt(0);
   }
 
-  /** The owner's and the app's messages for Research whose check is under
-   *  way, or that passed it and wait to be delivered (`checked`), by id: what
-   *  they were and who sent them, nothing more. */
+  /** The owner's, the app's and a teammate's messages for Research whose
+   *  check is under way, or that passed it and wait to be delivered
+   *  (`checked`), by id: what they were and who sent them, nothing more. */
   private researchPending(msg: HiveMessage, add: boolean, checked = false): void {
     // Anything left from before this start is told first, never this run's.
     this.tellLostResearchPending();
@@ -3116,8 +3117,9 @@ export class HiveManager {
     try { mkdirSync(privateRoot(home), { recursive: true }); this.atomicWriteJson(file, rows); } catch { /* best effort */ }
   }
 
-  /** At start: an owner or app message whose check or delivery never
-   *  finished (the app closed or crashed) is told to Michael (Codex review, D8.2). The rows are
+  /** At start: an owner, app or teammate message whose check or delivery
+   *  never finished (the app closed or crashed) is told to Michael, and a
+   *  teammate hears it too (Codex review, D8.2, D3.3). The rows are
    *  moved aside first, so this run's own checks start a fresh list, and each
    *  stays until Michael's inbox takes its note: tried again on every routing
    *  pass, and at the next start if the app closes first (Codex, second ship). */
@@ -3143,14 +3145,28 @@ export class HiveManager {
         this.researchPendingMoved = true;
       } catch { /* next pass */ }
     }
-    const godId = this.registry().godId ?? 'god';
+    const reg = this.registry();
+    const godId = reg.godId ?? 'god';
     // Each notice goes once, even if the list can't be rewritten after it
     // (verification of the Codex fix: a stuck file sent it every pass).
     const left = rows.filter((r) => {
-      if (!r || (r.from !== 'human' && r.from !== 'system') || this.researchLostTold.has(r.id)) return false;
+      if (!r || this.researchLostTold.has(r.id)) return false;
+      const agent = r.from !== RESEARCH_ID && !!reg.agents[r.from];
+      if (r.from !== 'human' && r.from !== 'system' && !agent) return false;
+      const n = this.researchName();
+      // A teammate's subject is its own words: tidied, as in every note quoting it.
+      const lost = `for ${n} ("${tidy(r.subject, HELD_SUBJECT_MAX)}") was not sent: the app closed while it was being ${r.checked === true ? 'delivered' : 'checked'}. Send it again if it still matters.`;
+      // A teammate hears of its own message, once, as it would of a refusal.
+      if (agent && r.from !== godId && !this.researchLostTold.has(`${r.id}:sender`)) {
+        this.researchLostTold.add(`${r.id}:sender`);
+        try { this.tellSender(r.from, r.id, undefined, NOT_SENT_SUBJECT, `Your message ${lost}`, true); } catch { /* Michael is still told */ }
+      }
+      const what = r.from === 'human' ? 'A note from the owner'
+        : r.from === 'system' ? 'A message from the app'
+          : r.from === godId ? 'Your message' : `${reg.agents[r.from]?.name?.trim() || r.from}'s message`;
       const ok = this.deliver(this.normalize({
-        to: godId, act: 'inform', subject: researchText(NOT_SENT_SUBJECT, this.researchName()),
-        body: `${r.from === 'human' ? 'A note from the owner' : 'A message from the app'} for ${this.researchName()} ("${String(r.subject ?? '').slice(0, 80)}") was not sent: the app closed while it was being ${r.checked === true ? 'delivered' : 'checked'}. Send it again if it still matters.`
+        to: godId, act: 'inform', subject: researchText(NOT_SENT_SUBJECT, n),
+        body: `${what} ${lost}`
       }, PRIVACY_CHECK_SENDER), godId);
       if (ok) this.researchLostTold.add(r.id);
       return !ok;
