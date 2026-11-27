@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { authTypeNeedsSecret as needsSecret, INTEGRATION_ID_TAKEN, MESSAGE_PLACEHOLDER, validateSavedCall, type SavedCall } from '@shared/integrations';
+import { isGitHubConnectorUrl } from '@shared/github';
 import { InfoTip } from './InfoTip';
 import { PixelButton } from './PixelButton';
 import { fieldLabel, groupName, hint, panelStyle } from './fieldText';
@@ -66,7 +67,8 @@ function callOf(d: Draft): SavedCall | undefined {
 // UI-only brand glyphs (Jim's templates carry no glyph). Falls back to label initials.
 const GLYPH: Record<string, { mono: string; bg: string }> = {
   github: { mono: 'Gh', bg: '#1A1320' },
-  'custom-rest': { mono: '{}', bg: '#2E9E5B' }
+  'custom-rest': { mono: '{}', bg: '#2E9E5B' },
+  mcp: { mono: 'M', bg: '#4338CA' }
 };
 function glyphFor(kind: string, label: string): { mono: string; bg: string } {
   return GLYPH[kind] ?? { mono: (label.replace(/[^A-Za-z0-9]/g, '').slice(0, 2) || '··'), bg: '#6B5878' };
@@ -155,7 +157,7 @@ export function IntegrationsRegistry() {
   const validate = (d: Draft): string | null => {
     if (!d.label.trim()) return tr('integrations.errLabel');
     if (!slugify(d.id || d.label)) return tr('integrations.errId');
-    if (d.kind === 'custom-rest') {
+    if (d.kind === 'custom-rest' || d.kind === 'mcp') {
       const u = d.baseUrl.trim();
       if (!u) return tr('integrations.errBaseUrl');
       if (!/^https:\/\//.test(u) && !/^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?(\/|$)/.test(u)) return tr('integrations.errBaseUrlFormat');
@@ -281,7 +283,7 @@ export function IntegrationsRegistry() {
         <div style={{ borderRadius: 'var(--cth-r-md)', display: 'flex', alignItems: 'center', gap: 12, padding: 12, background: 'var(--cth-cream-100)', boxShadow: 'inset 0 0 0 1px var(--cth-line-2)' }}>
           <Glyph mono={g.mono} bg={g.bg} lg />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontSize: 13, lineHeight: '18px', fontWeight: 600, color: 'var(--cth-ink-900)' }}>{tpl?.label ?? draft.kind}</span>
+            <span style={{ fontSize: 13, lineHeight: '18px', fontWeight: 600, color: 'var(--cth-ink-900)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>{draft.kind === 'mcp' ? tr('integrations.mcpKind') : (tpl?.label ?? draft.kind)}{draft.kind === 'mcp' && isGitHubConnectorUrl(draft.baseUrl) && <InfoTip label={tr('integrations.mcpKind')} text={tr('github.setupTip')} />}</span>
             <span style={hint}>{needsSecret(draft.authType) ? tr('integrations.needsSecret', { label: secretLabel.toLowerCase() }) : tr('integrations.publicApi')}</span>
           </div>
         </div>
@@ -296,12 +298,12 @@ export function IntegrationsRegistry() {
         {/* Base URL — editable for custom-rest, fixed for presets */}
         <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
           <span style={fieldLabel}>{tr('integrations.baseUrl')}</span>
-          <input value={draft.baseUrl} onChange={(e) => patch({ baseUrl: e.target.value })} placeholder="https://api.example.com" readOnly={draft.kind !== 'custom-rest'} style={{ ...inputStyle, fontFamily: 'var(--cth-font-mono)', opacity: draft.kind !== 'custom-rest' ? 0.7 : 1 }} />
-          {draft.kind !== 'custom-rest' && <span style={hint}>{tr('integrations.baseUrlHint', { label: tpl?.label ?? tr('integrations.preset') })}</span>}
+          <input value={draft.baseUrl} onChange={(e) => patch({ baseUrl: e.target.value })} placeholder="https://api.example.com" readOnly={draft.kind !== 'custom-rest' && draft.kind !== 'mcp'} style={{ ...inputStyle, fontFamily: 'var(--cth-font-mono)', opacity: draft.kind !== 'custom-rest' && draft.kind !== 'mcp' ? 0.7 : 1 }} />
+          {draft.kind !== 'custom-rest' && draft.kind !== 'mcp' && <span style={hint}>{tr('integrations.baseUrlHint', { label: tpl?.label ?? tr('integrations.preset') })}</span>}
         </label>
 
         {/* Auth type — selectable only for custom-rest */}
-        {draft.kind === 'custom-rest' ? (
+        {draft.kind === 'custom-rest' || draft.kind === 'mcp' ? (
           <label style={{ display: 'flex', flexDirection: 'column', gap: 5, maxWidth: 260 }}>
             <span style={fieldLabel}>{tr('integrations.authentication')}</span>
             <select value={draft.authType} onChange={(e) => patch({ authType: e.target.value as IntegrationAuthType })} style={{ ...inputStyle, fontFamily: 'var(--cth-font-mono)' }}>
@@ -445,7 +447,7 @@ export function IntegrationsRegistry() {
                     <Glyph mono={g.mono} bg={g.bg} />
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 }}>
                       <span style={{ fontSize: 12, lineHeight: '18px', color: 'var(--cth-ink-900)', fontWeight: 600 }}>{r.label}</span>
-                      <span style={hint}>{tpl?.label ?? r.kind} · <code style={{ fontFamily: 'var(--cth-font-mono)' }}>{r.baseUrl || '·'}</code></span>
+                      <span style={hint}>{r.kind === 'mcp' ? tr('integrations.mcpKind') : (tpl?.label ?? r.kind)} · <code style={{ fontFamily: 'var(--cth-font-mono)' }}>{r.baseUrl || '·'}</code></span>
                     </div>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: st.color, whiteSpace: 'nowrap' }}><span style={{ fontSize: 10 }}>{st.dot}</span> {st.text}</span>
                     <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>

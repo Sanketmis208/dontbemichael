@@ -262,6 +262,18 @@ Go with it: keep only the owner's own words (the answer, the edit, the note) in 
 **Priority:** P2
 **Depends on:** None
 
+### Local build and test for members with GitHub
+
+**What:** Let a member with the GitHub connector build and test a full copy of a listed repo in their folder before writing to an `agent/` branch: a read-only clone into the folder plus read-only package installs (npm).
+
+**Why:** The GitHub connector works through GitHub's API (docs/designs/github-connector-modes.md, owner D8, 2026-11-21), so a broken change shows up only in the GitHub preview build. Local build was the owner's original ask ("modify, build, test the code locally before pushing back").
+
+**Context:** The CEO review dropped the app-built git tools and npm mirror in favour of Claude's connector (D8). Research on the dropped route is in the worktree reports "Git access for sandboxed agents" and "GitHub connection access modes". Members' shells reach no host today; a clone or registry route must keep that true (only Research uses the internet), and by the owner's standing rule check first for a Claude connector or tool that already does it (memory prefer-claude-connectors).
+
+**Effort:** human M / CC S
+**Priority:** P2
+**Depends on:** GitHub connector modes shipped.
+
 ### Take the internet from team members' shells on Windows
 
 **What:** Hold team members' shell commands off the internet on Windows, where the engine has no sandbox. Until then, the Research screen says so on Windows (done 2026-10-18).

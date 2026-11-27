@@ -99,7 +99,11 @@ import { FOLDER_READ_TOOLS, FOLDER_WRITE_TOOLS, windowsShellWallDecision, agentT
 import { REFUSAL_WEB_TOOL, REFUSAL_WEB_TOOL_OFF, RESEARCH_DESK_DIR, RESEARCH_ID, RESEARCH_NAME, RESEARCH_SANDBOX_ONLY, RESEARCH_UNCHECKED_TOOL, researchText } from '../shared/research';
 import { folderLayoutFor } from './officeFile';
 import { expandTilde } from './fs';
-import { CONNECTOR_UNDECIDED, connectorAccess, MCP_RESOURCE_TOOLS } from '../shared/claudeConnectors';
+import { CONNECTOR_UNDECIDED, connectorAccess, connectorGranted, isGitHubKey, mcpTarget, MCP_RESOURCE_TOOLS, ungrantedConnectorsLine } from '../shared/claudeConnectors';
+import { mcpIntegrationId } from '../shared/integrations';
+import { localGitContext } from '../shared/localGit';
+import { cleanGitHubCapability, githubAccess, githubContext, githubToolName, isGitHubConnectorUrl, namesGitHub, type VisibilityNow } from '../shared/github';
+import type { GitHubHeldStore } from './githubConnector';
 import { accessLine, unheldMailboxesLine, agentAccessSummary } from '../shared/agentAccess';
 import { MAIL_TOOL_OPS, mailAccess } from '../shared/mailboxes';
 import { WEB_SETTINGS_UNREADABLE, WEB_TOOLS, webAccess } from '../shared/webAccess';
@@ -148,6 +152,8 @@ interface HookPayload {
   tool_input?: unknown;
   /** Set by the hook program when it cut a call's long fields to fit a frame. */
   tool_input_trimmed?: boolean;
+  /** PostToolUse of an MCP call: the hook program kept only whether the result was an error (eng R1). */
+  tool_is_error?: boolean;
   tool_use_id?: string;
   /** PostToolBatch only: the batch's calls, sent by the hook program with only their ids. */
   tool_calls?: unknown;
@@ -191,6 +197,8 @@ export class HookServer {
    *  session, again on change, rule as the goal. */
   private deliveredProfileByAgent = new Map<string, { sessionId: string | null; text: string | null }>();
   private deliveredFoundationsByAgent = new Map<string, { sessionId: string | null; text: string | null }>();
+  /** The member's connector notes (GitHub rules, connectors it could ask for), as last told. */
+  private deliveredToolsByAgent = new Map<string, { sessionId: string | null; text: string | null }>();
   /** What roster each agent's session was last given, so it is sent again only on a change. */
   private deliveredRosterByAgent = new Map<string, { sessionId: string | null; layoutKey: string; statusKey: string }>();
   /** Whether Michael's last roster carried the solo rules, per session, so the
@@ -255,6 +263,12 @@ export class HookServer {
     if (items.length) return render(items);
     return shown?.any && shown.sessionId === sessionId ? none : null;
   }
+
+  /** GitHub modes: the visibility cache and the held writes (set by the app). */
+  github?: { visibility(repo: string): VisibilityNow; held: GitHubHeldStore };
+  /** Local git (docs/designs/github-local-git.md): where a member's working copies
+   *  live, or null when local git is off or git is missing. */
+  localGitCodeDir?: (agentId: string) => string | null;
 
   constructor(
     private hive: HiveManager,
@@ -570,6 +584,14 @@ export class HookServer {
     // it keeps the count, or the long runs this cap is for would never hit it.
     if ((event === 'UserPromptSubmit' || (event === 'SessionStart' && p.source !== 'compact')) && agentId && !subagent) this.turnCap.newRun(agentId);
     if (event === 'Stop' && agentId && !subagent && !p.stop_hook_active) this.plan({ kind: 'turn', agentId });
+    // Research can't move its own mail: the app files what needed no answer
+    // once its turn ends (hive.fileResearchHandled).
+    if (agentId === RESEARCH_ID && !subagent) {
+      try {
+        if (event === 'UserPromptSubmit') this.hive.noteResearchTurn();
+        else if (event === 'Stop' && !p.stop_hook_active) this.hive.fileResearchHandled();
+      } catch (e) { console.error('[research mail]', e); }
+    }
 
     // 7C.3 — a graceful operator HALT overrides everything (incl. the inbox
     // drain below): stop the agent CLEANLY at this hook boundary rather than
@@ -728,6 +750,52 @@ export class HookServer {
           }
         };
       }
+    }
+
+    // GitHub (docs/designs/github-connector-modes.md): the member's repo rows
+    // and their modes, after the connector gate above has checked the grant.
+    // A call GitHub's rule holds is refused now and filed on the owner's card;
+    // once approved, the same call runs once (githubConnector.ts).
+    if (event === 'PreToolUse' && agentId && isMcpCall(p.tool_name)) {
+      const cfg = mcpConfig();
+      const target = mcpTarget(cfg, p.tool_name ?? '', p.tool_input);
+      const key = target.kind === 'connector' ? target.key : undefined;
+      const conn = key ? (cfg.claudeConnectors?.list ?? []).find((c) => c.key === key) : undefined;
+      // Or an MCP server the owner added with a token at GitHub's address.
+      const resServer = MCP_RESOURCE_TOOLS.has(p.tool_name ?? '') && p.tool_input && typeof p.tool_input === 'object' ? (p.tool_input as { server?: unknown }).server : undefined;
+      const mcpId = mcpIntegrationId(p.tool_name ?? '') ?? (typeof resServer === 'string' ? mcpIntegrationId(resServer) : null);
+      const mcpRec = mcpId ? (cfg.integrations ?? []).find((r) => r.id === mcpId && r.kind === 'mcp') : undefined;
+      const isGitHub = (!!key && (namesGitHub(key) || isGitHubConnectorUrl(conn?.url))) || isGitHubConnectorUrl(mcpRec?.baseUrl);
+      if (isGitHub) {
+        const deny = (reason: string, why: RefusalGate = 'github') => {
+          this.emitRefused(agentId, event, p, why);
+          console.log(`[github] refused ${p.tool_name} for ${agentId}: ${reason}`);
+          return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason } };
+        };
+        if (MCP_RESOURCE_TOOLS.has(p.tool_name ?? '')) return deny('Use the GitHub tools for one of your repos, not its resources.');
+        const gate = this.github;
+        if (!gate) return deny(CONNECTOR_UNDECIDED);
+        const d = githubAccess({
+          cap: cleanGitHubCapability(cfg.agentCapabilities?.[agentId]?.github),
+          connectorUrl: mcpRec ? mcpRec.baseUrl : conn?.url,
+          toolName: p.tool_name ?? '',
+          input: p.tool_input,
+          trimmed: p.tool_input_trimmed === true,
+          visibility: (repo) => gate.visibility(repo)
+        });
+        if (d.kind === 'refuse') return deny(d.reason);
+        if (d.kind === 'hold') {
+          const input = p.tool_input && typeof p.tool_input === 'object' ? (p.tool_input as Record<string, unknown>) : {};
+          const r = gate.held.onHold(agentId, githubToolName(p.tool_name ?? ''), input, d, p.tool_use_id);
+          if (!r.run) return deny(r.reason);
+          console.log(`[github] approved write runs once: ${p.tool_name} for ${agentId} (${d.repo} ${d.branch})`);
+        } else {
+          console.log(`[github] allowed ${p.tool_name} for ${agentId}`);
+        }
+      }
+    }
+    if ((event === 'PostToolUse' || event === 'PostToolUseFailure') && agentId && isMcpCall(p.tool_name) && this.github) {
+      try { this.github.held.onEnd(p.tool_use_id, event === 'PostToolUse' && p.tool_is_error !== true); } catch { /* the approval stays in flight until the session ends */ }
     }
 
     // Mailboxes added in Settings (md-mail): the agent's Capabilities for the
@@ -899,6 +967,9 @@ export class HookServer {
     if (event === 'PostToolUse' && agentId && toolName === 'Read') {
       const file = folderToolTarget('Read', p.tool_input, p.cwd);
       const root = this.hive.root();
+      if (file && agentId === RESEARCH_ID && !subagent) {
+        try { this.hive.noteResearchRead(file); } catch { /* best-effort */ }
+      }
       if (file && root && /[\\/]memory[\\/]procedures[\\/][^\\/]+\.md$/.test(file) && file.startsWith(root)) {
         try { this.hive.appendLog({ kind: 'memory-read', agentId, file: file.slice(root.length + 1) }); } catch { /* best-effort */ }
       }
@@ -1034,6 +1105,35 @@ export class HookServer {
       }
     }
 
+    // Connector notes (docs/designs/github-connector-modes.md, owner D6 and D9):
+    // a member holding GitHub gets its repos and rules; every member hears which
+    // connectors on the owner's account it could ask for. Like the profile: at
+    // the start of each session and again when it changes. Never Research.
+    let tools: string | null = null;
+    if ((event === 'SessionStart' || event === 'UserPromptSubmit') && agentId && !isResearchAgent) {
+      let text: string | null = null;
+      try {
+        const cfg = this.getConfig();
+        const books = this.roleReadsBooks?.(agentId) ?? false;
+        const hasGitHub = (cfg.claudeConnectors?.list ?? []).some((c) => isGitHubKey(cfg, c.key) && connectorGranted(cfg, agentId, c.key, books))
+          || (cfg.integrations ?? []).some((r) => r.kind === 'mcp' && r.enabled && isGitHubConnectorUrl(r.baseUrl) && !!cfg.agentCapabilities?.[agentId]?.integrations?.[r.id]);
+        const cap = cleanGitHubCapability(cfg.agentCapabilities?.[agentId]?.github);
+        const codeDir = hasGitHub ? this.localGitCodeDir?.(agentId) ?? null : null;
+        const local = codeDir ? localGitContext(cap.repos.map((r) => r.repo), codeDir) : null;
+        // With working copies, the GitHub note says git runs there (and only there).
+        const gh = hasGitHub ? githubContext(cap, !!local) : null;
+        text = [gh, local, ungrantedConnectorsLine(cfg, agentId, books)].filter(Boolean).join('\n\n') || null;
+      } catch { text = null; }
+      const sessionId = p.session_id ?? null;
+      const delivered = this.deliveredToolsByAgent.get(agentId);
+      const fresh = event === 'SessionStart' || !delivered || delivered.sessionId !== sessionId;
+      if (fresh || delivered.text !== text) {
+        this.deliveredToolsByAgent.set(agentId, { sessionId, text });
+        if (text) tools = text;
+        else if (!fresh && delivered?.text) tools = 'CONNECTORS. The notes given earlier about your connectors no longer apply.';
+      }
+    }
+
     // The agent's memory index (owner, 2026-09-25): once at the start of each
     // session, and never again within it, so it stays in the prompt cache. The
     // tidy-up's changes arrive with the next session.
@@ -1100,9 +1200,9 @@ export class HookServer {
       reInjectedProtocol = this.hive.injectedPromptFor?.(agentId) ?? null;
     }
 
-    if (steer || roster || goal || knowledgeNote || profile || foundations || memoryIndex || handoff || ownerRequests || ownerQuestions || stuckCards || reInjectedProtocol) {
+    if (steer || roster || goal || knowledgeNote || profile || foundations || tools || memoryIndex || handoff || ownerRequests || ownerQuestions || stuckCards || reInjectedProtocol) {
       this.emit(agentId, event, p);
-      const liveContext = [roster, profile, foundations, memoryIndex, handoff, goal, knowledgeNote, ownerRequests, ownerQuestions, stuckCards, steer].filter(Boolean);
+      const liveContext = [roster, profile, foundations, tools, memoryIndex, handoff, goal, knowledgeNote, ownerRequests, ownerQuestions, stuckCards, steer].filter(Boolean);
       return {
         hookSpecificOutput: {
           hookEventName: event,

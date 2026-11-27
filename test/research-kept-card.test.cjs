@@ -99,7 +99,11 @@ test('wiring: the owner\'s click alone adds to the list; the card is on Ask me a
   const ask = read('src/renderer/src/components/AskMeTab.tsx');
   assert.match(ask, /<ResearchKeptCards kept=\{researchKept\} refresh=\{refreshNeedsYou\}/);
   const card = read('src/renderer/src/components/ResearchKeptCards.tsx');
-  assert.match(card, /window\.cth\.researchAllow\(part\)/);
+  assert.match(card, /window\.cth\.researchAllow\(key\)/);
+  assert.match(card, /const rows = groupKept\(k\.parts\);/, 'one row per site');
+  assert.match(card, /const allowed = allowedPublicTerms\(config\?\.researchPublic, profile\);/, 'Company profile counts as allowed on the card too');
+  assert.match(card, /disabled=\{busy !== null \|\| profiled\}/, 'what Company profile says is changed there');
+  assert.match(card, /const isAllowed = \(part: string\): boolean => allowed\.some\(\(a\) => coversPart\(a, part\)\);/, 'the card uses the check\'s own rule');
   assert.match(card, /researchKeptDecide\(k\.id, willAsk \? 'again' : 'keep'\)/, 'Done asks again only with an allowance not sent yet');
   assert.match(card, /if \(willAsk\) await run\(k\.id, \(\) => window\.cth\.researchKeptDecide\(k\.id, 'later'\)\);\s*if \(f\.open\) f\.toggle\(\);/, 'Done for now asks again when something is allowed, then folds');
   assert.match(card, /\{allDecided \? \(/, 'Done only once every piece is decided');
@@ -108,7 +112,7 @@ test('wiring: the owner\'s click alone adds to the list; the card is on Ask me a
   assert.match(main, /ipcMain\.handle\('research:disallow'/);
   const en = JSON.parse(read('src/renderer/src/i18n/locales/en.json')).askMe;
   assert.equal(en.keptAgain, undefined, 'no card level Ask again');
-  for (const k of ['keptTitle', 'keptCleaned', 'keptDenied', 'keptAllow', 'keptAllowAria', 'keptHint', 'keptKeep', 'keptKeepAria', 'keptWillAsk', 'keptDone', 'keptDoneForNow', 'keptFailed']) {
+  for (const k of ['keptTitle', 'keptCleaned', 'keptDenied', 'keptAllow', 'keptAllowAria', 'keptHint', 'keptKeep', 'keptKeepAria', 'keptWillAsk', 'keptDone', 'keptDoneForNow', 'keptFailed', 'keptFromProfile']) {
     assert.ok(en[k], k);
     assert.doesNotMatch(en[k], /[–—]| - /, k);
   }
@@ -241,4 +245,28 @@ test('Done for now asks again and keeps the card for what is undecided', async (
   assert.equal(after.length, 1, 'still the one card');
   assert.deepEqual(after[0].parts, ['Northwind Bakery', 'Contoso Cafe']);
   assert.equal(after[0].denied, false, 'it went this time');
+});
+
+// Value: protects=variants of one site are one decision: allowing the domain counts every variant allowed, Done for now remembers them as sent, and a site kept private is not asked again under another address; fails_when=decideKept or recordKept go back to exact text; why_new=every test above uses one address per site; seam=none; no_claim=the card's buttons (source pins above)
+test('variants of one site are one decision, sent and kept private together', async (t) => {
+  const Q3 = 'Is the Blog link on dontbemichael.com live yet? See https://dontbemichael.com and https://dontbemichael.com/download';
+  const SITE = ['dontbemichael.com', 'https://dontbemichael.com', 'https://dontbemichael.com/download'];
+  const more = ['alpha', 'beta', 'gamma', 'delta', 'epsilon'];
+  assert.deepEqual(T.keptParts([...SITE, ...more], `${Q3} ${more.join(' ')}`), [...SITE, ...more.slice(0, 4)], 'the three addresses take one of the five places');
+  const cleaned = { decision: 'clean', subject: 'Blog', body: 'Is the blog link on a site live', removed: ['names'], parts: SITE };
+  const { hive } = await office(t, () => cleaned);
+  send(hive, 'ryan', { to: 'research', act: 'query', subject: 'Blog', body: Q3 }, 'a.json');
+  await route(hive);
+  const [k] = hive.researchKept();
+  assert.equal(hive.decideKept(k.id, 'later', ['dontbemichael.com']), true);
+  assert.deepEqual(hive.researchKept()[0].sent, SITE, 'one allowance sends every variant');
+  for (const p of SITE) hive.setKeptPrivate(k.id, p, true);
+  assert.equal(hive.decideKept(k.id, 'keep'), true);
+  assert.equal(hive.researchKept().length, 0);
+  // Asked again with another address of the same site: not a new card.
+  const again = { ...cleaned, parts: ['https://www.dontbemichael.com/blog'] };
+  hive.setTrustLayer({ inbound: async () => again, outbound: async (m) => ({ decision: 'pass', subject: String(m.subject), body: String(m.body), flagged: false }) });
+  send(hive, 'ryan', { to: 'research', act: 'query', subject: 'Blog', body: Q3 }, 'b.json');
+  await route(hive);
+  assert.equal(hive.researchKept().length, 0, 'the site was kept private: not asked again');
 });

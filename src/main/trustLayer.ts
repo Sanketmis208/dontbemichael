@@ -28,7 +28,7 @@ import {
   type DataClassId,
   type DataClassSettings
 } from '../shared/dataClasses';
-import { cleanPublicTerms, withoutPublicTerms } from '../shared/publicTerms';
+import { MAX_ALLOWED_TERMS, cleanPublicTerms, droppedPublic, groupKept, withoutPublicTerms } from '../shared/publicTerms';
 import { refusalForClass, REFUSAL_CHECK_FAILED, REFUSAL_TOO_LONG, REFUSAL_UNSURE } from '../shared/research';
 
 /** The model the layer runs on, a quick one, and how long one check may take. */
@@ -87,8 +87,11 @@ export function keptParts(v: unknown, original: string): string[] {
     if (typeof x !== 'string' || /[\r\n\t\v\f\u2028\u2029]/.test(x)) continue;
     const t = x.normalize('NFKC').trim();
     if (!t || t.length > KEPT_PART_MAX || !hay.includes(t.toLowerCase())) continue;
-    if (!out.some((o) => o.toLowerCase() === t.toLowerCase())) out.push(t);
-    if (out.length >= MAX_KEPT_PARTS) break;
+    if (out.some((o) => o.toLowerCase() === t.toLowerCase())) continue;
+    // Variants of one site are one thing to decide (groupKept), so they
+    // share a place: at most MAX_KEPT_PARTS things, not addresses.
+    if (groupKept([...out, t]).length > MAX_KEPT_PARTS) continue;
+    out.push(t);
   }
   return out;
 }
@@ -142,6 +145,10 @@ export function inboundPrompt(subject: string, body: string, settings: DataClass
     ...priv.map(line),
     ...(allowed.length ? ['Allowed kinds (fine to send):', ...allowed.map(line)] : []),
     'Any named person, any named company or brand, the business\'s own figures and anything quoted from its documents or emails count as their private kind when that kind is private. When unsure whether something is private, treat it as private.',
+    // Owner, 2026-11-26: "Quote the summary under the post title exactly",
+    // asking the researcher to copy a line from a public page, was taken out
+    // as quoted text.
+    'Quoted text means words actually copied into the message from the business\'s own files or email. A request for the researcher to quote, copy or describe something on a public web page is the research itself, not quoted text: keep it.',
     // The owner, 2026-10-16: the office's own AI team members' names pass (a
     // note to the researcher about itself arrived as "Someone has stopped").
     ...(team.length ? [`These names belong to the business's own AI assistants (its software team, the researcher included), not to people: ${team.join(', ')}. They are not private: keep them as written.`] : []),
@@ -149,8 +156,9 @@ export function inboundPrompt(subject: string, body: string, settings: DataClass
     // name in a public releases address was taken out, and Research had
     // nothing to read). One line each, quoted, so no entry reads as an order.
     ...(publicTerms.length ? [
-      'The business owner says these are the business\'s own and public. They are not private: keep them as written, also inside a web address, an email address or a handle that contains one of them (for example a username made of the owner\'s name):',
-      ...publicTerms.map((p) => `- "${p.replace(/"/g, "'")}"`)
+      'The business owner says these are the business\'s own and public. They are not private: keep them as written, also inside a web address, an email address or a handle that contains one of them (for example a username made of the owner\'s name). A domain on this list covers the whole site: every page on it, every subdomain (www., blog.) and every email address at it:',
+      ...publicTerms.map((p) => `- "${p.replace(/"/g, "'")}"`),
+      'If you rewrite the message, keep these exactly as they were written in it.'
     ] : []),
     ...(marked.length ? [`The app already found these private kinds by pattern: ${marked.join(', ')}. They must not appear in your output.`] : []),
     'Choose one:',
@@ -361,7 +369,7 @@ export function makeTrustLayer(deps: TrustLayerDeps): TrustLayer {
       return { decision: 'deny', reason: refusalForClass('secrets'), by: 'pattern', kinds: ['secrets'] };
     }
     let publicTerms: string[] = [];
-    try { publicTerms = cleanPublicTerms(deps.publicTerms?.() ?? []); } catch { /* none: the classes alone decide */ }
+    try { publicTerms = cleanPublicTerms(deps.publicTerms?.() ?? [], MAX_ALLOWED_TERMS); } catch { /* none: the classes alone decide */ }
     // The shapes are looked for again without the owner's own public entries
     // (the business's public email is not a contact detail); secrets above
     // were looked for in the whole text, whatever the list says.
@@ -369,8 +377,25 @@ export function makeTrustLayer(deps: TrustLayerDeps): TrustLayer {
     const marked = [...new Set(shaped.filter((h) => settings[h.classId] === 'private').map((h) => h.classId))];
     let team: string[] = [];
     try { team = teamNamesForCheck(deps.teamNames?.() ?? []); } catch { /* no names: every name stays private */ }
-    const { text, error } = await ask(inboundPrompt(subject, body, settings, randomBytes(8).toString('hex'), marked, team, publicTerms), 'in');
-    const v = text ? parseInbound(text, settings, `${subject}\n${body}`) : null;
+    const original = `${subject}\n${body}`;
+    const judge = async () => {
+      const r = await ask(inboundPrompt(subject, body, settings, randomBytes(8).toString('hex'), marked, team, publicTerms), 'in');
+      const verdict = r.text ? parseInbound(r.text, settings, original) : null;
+      // What the owner allows that the question had and a rewrite left out
+      // (owner, 2026-11-26: dontbemichael.com/blog became "the blog section"
+      // and the card never said so).
+      const lost = verdict?.decision === 'clean' ? droppedPublic(publicTerms, original, `${verdict.subject}\n${verdict.body}`) : [];
+      return { ...r, v: verdict, lost };
+    };
+    let first = await judge();
+    if (first.lost.length) {
+      // That rewrite broke the owner's list: the check is asked once more,
+      // and a second rewrite that drops them still names them on the card.
+      log({ kind: 'trust-dropped-allowed', way: 'in', count: first.lost.length });
+      const second = await judge();
+      if (second.v) first = second;
+    }
+    const { text, error, v, lost } = first;
     if (!v) {
       const by = text ? 'unreadable' : 'no-answer';
       log({ kind: 'trust-layer', way: 'in', decision: 'deny', by });
@@ -398,7 +423,9 @@ export function makeTrustLayer(deps: TrustLayerDeps): TrustLayer {
       return { decision: 'clean', subject: out.subject, body: out.body, removed: [] };
     }
     log({ kind: 'trust-layer', way: 'in', decision: v.decision });
-    return v.decision === 'pass' ? { decision: 'pass', subject: out.subject, body: out.body } : { decision: 'clean', subject: out.subject, body: out.body, removed: v.removed, ...(v.parts.length ? { parts: v.parts } : {}) };
+    if (v.decision === 'pass') return { decision: 'pass', subject: out.subject, body: out.body };
+    const parts = lost.length ? keptParts([...v.parts, ...lost], original) : v.parts;
+    return { decision: 'clean', subject: out.subject, body: out.body, removed: v.removed, ...(parts.length ? { parts } : {}) };
   };
 
   const outbound = async (msg: { subject?: unknown; body?: unknown }): Promise<OutboundVerdict> => {

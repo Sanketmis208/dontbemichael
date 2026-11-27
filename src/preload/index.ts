@@ -22,6 +22,7 @@ import type { OpenAttachmentResult, OriginalResult } from '../shared/emailLink';
 import type { ClaudeConnectorsState } from '../shared/claudeConnectors';
 import type { ScheduledMission, ScheduleRequest } from '../shared/missions';
 import type { MailProposal, ProposalDecision, StandingApproval } from '../shared/mailProposals';
+import type { GitHubCapability, HeldWrite } from '../shared/github';
 import type { OwnerDock } from '../shared/ownerRequests';
 import type { AgentProvider } from '../shared/agentProvider';
 import type { EngineSetupStatus } from '../shared/engineSetup';
@@ -1370,6 +1371,25 @@ const api = {
   /** "Don't show me these" on a notice card (owner-items-reach-ask-me.md D2). */
   skipNotice: (taskId: string, index: number): Promise<{ ok: boolean }> => ipcRenderer.invoke('hive:skipNotice', taskId, index),
   /** Send on approval: emails waiting for the owner on Ask me, and the owner's decision. */
+  /** GitHub repos and modes (docs/designs/github-connector-modes.md). */
+  githubCheckRepo: (typed: string): Promise<{ repo: string | null; visibility: 'public' | 'private' | 'unknown' }> => ipcRenderer.invoke('github:checkRepo', typed),
+  /** git on this computer, for members' local git (null when missing). */
+  gitVersion: (again: boolean): Promise<{ version: string | null }> => ipcRenderer.invoke('git:version', again),
+  githubListRepos: (integrationId: string): Promise<{ ok: boolean; repos: Array<{ repo: string; visibility: 'public' | 'private' }>; status?: number }> => ipcRenderer.invoke('github:listRepos', integrationId),
+  githubVisibility: (repos: string[]): Promise<Record<string, 'public' | 'private' | 'unknown'>> => ipcRenderer.invoke('github:visibility', repos),
+  githubSetRepos: (agentId: string, cap: GitHubCapability): Promise<{ ok: boolean; github?: GitHubCapability }> => ipcRenderer.invoke('github:setRepos', agentId, cap),
+  onGitHubVisibility: (cb: () => void): (() => void) => {
+    const listener = (): void => cb();
+    ipcRenderer.on('github:visibility', listener);
+    return () => ipcRenderer.removeListener('github:visibility', listener);
+  },
+  listGitHubHeld: (): Promise<HeldWrite[]> => ipcRenderer.invoke('githubHeld:list'),
+  decideGitHubHeld: (id: string, decision: 'approve' | 'decline' | 'changes', note?: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('githubHeld:decide', id, decision, note),
+  onGitHubHeldUpdated: (cb: () => void): (() => void) => {
+    const listener = (): void => cb();
+    ipcRenderer.on('githubHeld:updated', listener);
+    return () => ipcRenderer.removeListener('githubHeld:updated', listener);
+  },
   listMailProposals: (): Promise<MailProposal[]> => ipcRenderer.invoke('mailProposals:list'),
   decideMailProposal: (id: string, decision: ProposalDecision, edit: { subject?: string; body?: string; files?: number[] }, note?: string, standing?: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('mailProposals:decide', id, decision, edit, note, standing),

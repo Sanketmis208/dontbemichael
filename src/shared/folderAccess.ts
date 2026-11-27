@@ -49,6 +49,11 @@ export interface FolderLayout {
    *  history. The engine writes both itself; no agent, Michael included, opens
    *  them with its tools, so nobody reads a teammate's conversation. */
   engineRecords?: { projects: string; history: string };
+  /** Files that hold the owner's own logins and keys: gh's hosts.yml,
+   *  .git-credentials, .netrc, .npmrc and Claude's .claude.json (CEO D7, eng
+   *  D3). No agent, Michael included, opens them with its shell or file tools,
+   *  so none can copy one into a GitHub write. */
+  credentialFiles?: string[];
 }
 
 export interface AgentFolderPolicy {
@@ -137,6 +142,11 @@ export function folderPolicy(agent: FolderAgent, layout: FolderLayout, caseInsen
     policy.sandbox.denyWrite.push(projects, history);
     policy.deny.push(rule('Read', projects), rule('Edit', projects), fileRule('Read', history), fileRule('Edit', history));
   }
+  for (const f of layout.credentialFiles ?? []) {
+    policy.sandbox.denyRead.push(f);
+    policy.sandbox.denyWrite.push(f);
+    policy.deny.push(fileRule('Read', f), fileRule('Edit', f));
+  }
 
   if (agent.isGod) {
     // Read everything; change nothing that belongs to a team member.
@@ -190,6 +200,10 @@ export function folderDecision(
   }
   if (writes && (layout.appLocked ?? []).some((f) => inside(f, target))) {
     return { deny: true, reason: 'That folder holds the app\'s own program and settings. You can read it, but nobody on the team changes it.' };
+  }
+  // Before any own-folder allow (eng V6): wherever the agent works.
+  if ((layout.credentialFiles ?? []).some((f) => same(f, target))) {
+    return { deny: true, reason: 'That file holds the owner\'s logins and keys, so nobody on the team opens it.' };
   }
   const records = layout.engineRecords;
   if (records && (inside(records.projects, target) || same(records.history, target))) {
@@ -442,6 +456,27 @@ export function withAgentTmpWall(policy: AgentFolderPolicy, home: string, agentI
       denyRead: Array.from(new Set([...policy.sandbox.denyRead, all])),
       allowRead: Array.from(new Set([...policy.sandbox.allowRead, join(all, agentTmpName(agentId))]))
     }
+  };
+}
+
+/** The app's git mirrors (docs/designs/github-local-git.md): every member's
+ *  shell is kept out of the mirror folder, then let read only the mirrors of
+ *  its own repos, so its working copy can fetch them offline and never another
+ *  repo's. Nobody's shell writes there (it is not in any write list). */
+export function withGitMirrorWall(policy: AgentFolderPolicy, mirrorRoot: string | null, ownMirrors: string[]): AgentFolderPolicy {
+  if (!mirrorRoot || !isAbsolute(mirrorRoot)) return policy;
+  const root = resolve(mirrorRoot);
+  const own = ownMirrors.filter((m) => isAbsolute(m) && resolve(m).startsWith(root + sep)).map((m) => resolve(m));
+  return {
+    ...policy,
+    sandbox: {
+      ...policy.sandbox,
+      denyRead: Array.from(new Set([...policy.sandbox.denyRead, root])),
+      allowRead: Array.from(new Set([...policy.sandbox.allowRead, ...own])),
+      denyWrite: Array.from(new Set([...policy.sandbox.denyWrite, root]))
+    },
+    // The file tools never need a bare mirror: git reads it from the shell.
+    deny: Array.from(new Set([...policy.deny, rule('Read', root), rule('Edit', root)]))
   };
 }
 

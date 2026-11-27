@@ -7,7 +7,7 @@ import type { MemberLook } from './askMeFilter';
 import { ALWAYS_OPEN, FoldBody, FoldHeader, foldCardClass, foldCardStyle, type FoldControl } from './AskCardFold';
 import { useResearchName } from '@/shell/research';
 import { useHarnessConfig } from '@/hooks/useHarnessConfig';
-import { cleanPublicTerms } from '@shared/publicTerms';
+import { allowedPublicTerms, cleanPublicTerms, coversPart, groupKept, publicProfile, publicSuggestions } from '@shared/publicTerms';
 import type { ResearchKept } from '@shared/researchKept';
 
 /**
@@ -18,7 +18,9 @@ import type { ResearchKept } from '@shared/researchKept';
  * in Settings) or Keep private. One button ends the card (owner, 2026-11-21):
  * Done once every piece is decided, Done for now (the card folds and waits)
  * until then. Either sends the question again when something is allowed that
- * it has not gone with yet, so the work is not held up.
+ * it has not gone with yet, so the work is not held up. Variants of one site
+ * are one row (owner, 2026-11-26: "a domain can be entirely whitelisted or
+ * not"; shared/publicTerms.ts groupKept), decided once for all of them.
  */
 export function ResearchKeptCards({ kept, refresh, look, hiddenIds, fold }: {
   kept: ResearchKept[];
@@ -33,8 +35,14 @@ export function ResearchKeptCards({ kept, refresh, look, hiddenIds, fold }: {
   const agents = useStore((s) => s.agents);
   const [busy, setBusy] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
-  const allowed = cleanPublicTerms(config?.researchPublic).map((x) => x.toLowerCase());
-  const isAllowed = (part: string): boolean => allowed.includes(part.toLowerCase());
+  // The owner's list and Company profile's public details, as the check reads them.
+  const profile = publicProfile(config?.companyProfile, config?.businessName);
+  const allowed = allowedPublicTerms(config?.researchPublic, profile);
+  const own = cleanPublicTerms(config?.researchPublic);
+  const fromProfile = publicSuggestions(profile, own);
+  // The same rule the check uses: an allowed domain covers its pages,
+  // subdomains and addresses.
+  const isAllowed = (part: string): boolean => allowed.some((a) => coversPart(a, part));
 
   const run = async (key: string, job: () => Promise<{ ok: boolean }>): Promise<void> => {
     setBusy(key);
@@ -58,19 +66,28 @@ export function ResearchKeptCards({ kept, refresh, look, hiddenIds, fold }: {
         const hide = !!hiddenIds?.has(k.id);
         const f = fold?.(k.id) ?? ALWAYS_OPEN;
         const title = t('askMe.keptTitle', { name, research: researchName });
-        const isPrivate = (part: string): boolean => !isAllowed(part) && k.private.some((p) => p.toLowerCase() === part.toLowerCase());
-        const allDecided = k.parts.every((p) => isAllowed(p) || isPrivate(p));
+        const rows = groupKept(k.parts);
+        const rowAllowed = (r: { parts: string[] }): boolean => r.parts.every(isAllowed);
+        const rowPrivate = (r: { parts: string[] }): boolean => !rowAllowed(r) && r.parts.every((part) => k.private.some((p) => p.toLowerCase() === part.toLowerCase()));
+        const allDecided = rows.every((r) => rowAllowed(r) || rowPrivate(r));
         // Goes again only with an allowance it has not gone with yet.
         const willAsk = k.parts.some((p) => isAllowed(p) && !k.sent.some((q) => q.toLowerCase() === p.toLowerCase()));
         const later = async (): Promise<void> => {
           if (willAsk) await run(k.id, () => window.cth.researchKeptDecide(k.id, 'later'));
           if (f.open) f.toggle();
         };
-        const allow = (part: string): Promise<{ ok: boolean }> => window.cth.researchAllow(part);
-        // Keep private also takes the piece back off the Always allowed list.
-        const keep = async (part: string): Promise<{ ok: boolean }> => {
-          if (isAllowed(part) && !(await window.cth.researchDisallow(part)).ok) return { ok: false };
-          return window.cth.researchKeptPrivate(k.id, part, true);
+        // Always allow adds the row's key: the domain, for a site.
+        const allow = (key: string): Promise<{ ok: boolean }> => window.cth.researchAllow(key);
+        // Keep private marks every piece in the row, and takes whatever
+        // allowed them back off the Always allowed list.
+        const keep = async (r: { parts: string[] }): Promise<{ ok: boolean }> => {
+          for (const a of own.filter((x) => r.parts.some((part) => coversPart(x, part)))) {
+            if (!(await window.cth.researchDisallow(a)).ok) return { ok: false };
+          }
+          for (const part of r.parts) {
+            if (!(await window.cth.researchKeptPrivate(k.id, part, true)).ok) return { ok: false };
+          }
+          return { ok: true };
         };
         return (
           <section
@@ -80,7 +97,7 @@ export function ResearchKeptCards({ kept, refresh, look, hiddenIds, fold }: {
             className={foldCardClass(f.open)}
             style={foldCardStyle(f.open, hide)}
           >
-            <FoldHeader open={f.open} toggle={f.toggle} summary={k.parts.join(', ')} title={
+            <FoldHeader open={f.open} toggle={f.toggle} summary={rows.map((r) => r.key).join(', ')} title={
               <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 600, lineHeight: '17px', color: 'var(--cth-ink)' }}>
                 <AgentAvatar id={k.from} name={name} size={17} />
                 {title}
@@ -91,9 +108,12 @@ export function ResearchKeptCards({ kept, refresh, look, hiddenIds, fold }: {
                 {k.denied ? t('askMe.keptDenied', { name, research: researchName, subject: k.subject }) : t('askMe.keptCleaned', { name, research: researchName, subject: k.subject })}
               </div>
               <ul aria-label={t('askMe.keptList')} style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {k.parts.map((part) => {
-                  const on = isAllowed(part);
-                  const priv = isPrivate(part);
+                {rows.map((r) => {
+                  const part = r.key;
+                  const on = rowAllowed(r);
+                  const priv = rowPrivate(r);
+                  // Company profile says it in public: changed there, not here.
+                  const profiled = r.parts.every((p) => fromProfile.some((a) => coversPart(a, p)));
                   return (
                     <li key={part} style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px 8px', padding: '6px 8px', borderRadius: 'var(--cth-r-md)', background: 'var(--cth-neutral-soft)' }}>
                       <span style={{ flex: '1 1 120px', minWidth: 0, fontSize: 12, fontFamily: 'var(--cth-font-mono)', color: 'var(--cth-ink)', overflowWrap: 'anywhere' }}>{part}</span>
@@ -103,8 +123,9 @@ export function ResearchKeptCards({ kept, refresh, look, hiddenIds, fold }: {
                           className={on ? 'cth-askme-chip is-on' : 'cth-askme-chip'}>
                           {t('askMe.keptAllow')}
                         </button>
-                        <button type="button" aria-pressed={priv} aria-label={t('askMe.keptKeepAria', { part })} disabled={busy !== null}
-                          onClick={() => { if (!priv) void run(`${k.id}:${part}`, () => keep(part)); }}
+                        <button type="button" aria-pressed={priv} aria-label={t('askMe.keptKeepAria', { part })} disabled={busy !== null || profiled}
+                          title={profiled ? t('askMe.keptFromProfile') : undefined}
+                          onClick={() => { if (!priv) void run(`${k.id}:${part}`, () => keep(r)); }}
                           className={priv ? 'cth-askme-chip is-on' : 'cth-askme-chip'}>
                           {t('askMe.keptKeep')}
                         </button>

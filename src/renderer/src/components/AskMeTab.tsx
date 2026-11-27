@@ -18,6 +18,7 @@ import { ScheduleRequestCards } from './ScheduleRequestCards';
 import { ResearchKeptCards } from './ResearchKeptCards';
 import { WorkStyleUpdateCards } from './WorkStyleUpdateCards';
 import { MailProposalCards } from './MailProposalCards';
+import { GitHubHeldCards } from './GitHubHeldCards';
 import { EngineSetupCard } from './EngineSetupCard';
 import { OfficeBreakCard, useOfficeBreak } from './OfficeBreakNotice';
 import { SilentEngineCards } from './SilentEngine';
@@ -91,7 +92,7 @@ export function AskMeTab() {
   const agents = useStore((s) => s.agents);
   const restorable = useStore((s) => s.restorableAgents);
   // One shared read with the pill, the strip and the chips (D3, eng R4).
-  const { tasks, requests: scheduleRequests, researchKept, offers, proposals, engineSetup, stop, researchNotice, knowledgeNotice, setupNotice, degraded, silent, foundations, update, updateLater, cliUpdate, cliUpdateLater, caseStudyWaiting, count: needsCount } = useNeedsYou();
+  const { tasks, requests: scheduleRequests, researchKept, offers, proposals, githubHeld, engineSetup, stop, researchNotice, knowledgeNotice, setupNotice, degraded, silent, foundations, update, updateLater, cliUpdate, cliUpdateLater, caseStudyWaiting, count: needsCount } = useNeedsYou();
   // Michael's team upgrade card (docs/designs/team-upgrade-card.md) keeps All clear away too.
   const cliShown = cliUpdateToastVisible(cliUpdate, cliUpdateLater);
   // Michael's card for a new version (UpdateCard) keeps All clear away too.
@@ -235,6 +236,7 @@ export function AskMeTab() {
     ...researchKept.map((k) => ({ key: `kept:${k.id}`, dept: deptOf(k.from) })),
     ...offers.map((o) => ({ key: `offer:${decisionId(o.key, o.agentId)}`, dept: deptOf(o.agentId) })),
     ...proposals.map((p) => ({ key: `mail:${p.id}`, dept: deptOf(p.agentId) })),
+    ...githubHeld.map((h) => ({ key: `github:${h.id}`, dept: deptOf(h.agentId) })),
     ...waiting.map((r) => ({ key: r.key, dept: rowDept(r), keep: isReport(r.ask) }))
   ];
   const cardsRef = useRef(cards);
@@ -291,7 +293,7 @@ export function AskMeTab() {
     return { open: openKey === key, toggle: () => setOpenId(openKey === key ? null : key), pin: () => setOpenId(key) };
   };
   // The whole board, whatever is picked: All clear and the answered list read it.
-  const boardEmpty = !engineCard && !updateWaiting && !caseShown && !silentShown && !cliShown && waiting.length === 0 && scheduleRequests.length === 0 && researchKept.length === 0 && offers.length === 0 && proposals.length === 0;
+  const boardEmpty = !engineCard && !updateWaiting && !caseShown && !silentShown && !cliShown && waiting.length === 0 && scheduleRequests.length === 0 && researchKept.length === 0 && offers.length === 0 && proposals.length === 0 && githubHeld.length === 0;
   // All clear shows, and with it Michael's one tip (owner, 2026-11-10).
   const showAllClear = boardEmpty && !onBreak && !researchNotice && !knowledgeNotice && !setupNotice && degraded.length === 0;
 
@@ -426,6 +428,7 @@ export function AskMeTab() {
       <ResearchKeptCards kept={researchKept} refresh={refreshNeedsYou} look={memberLook} hiddenIds={hiddenOf('kept:')} fold={foldFor('kept:')} />
       <WorkStyleUpdateCards offers={offers} look={memberLook} hiddenIds={hiddenOf('offer:')} fold={foldFor('offer:')} />
       <MailProposalCards proposals={proposals} refresh={refreshNeedsYou} look={memberLook} hiddenIds={hiddenOf('mail:')} fold={foldFor('mail:')} />
+      <GitHubHeldCards held={githubHeld} refresh={refreshNeedsYou} look={memberLook} hiddenIds={hiddenOf('github:')} fold={foldFor('github:')} />
       {/* Always mounted, so screen readers announce the line when it fills. */}
       <div key={foundationSaved?.at} role={foundationSaved?.how === 'failed' ? 'alert' : 'status'} className={foundationSaved ? undefined : 'cth-sr-only'}
         style={foundationSaved ? { fontSize: 12, lineHeight: '17px', color: foundationSaved.how === 'failed' ? 'var(--cth-coral-text)' : 'var(--cth-ink-3)', padding: '0 2px' } : undefined}>

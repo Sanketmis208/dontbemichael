@@ -87,6 +87,10 @@ export interface WorkerWakeFacts {
   halted: boolean;
 }
 
+/** Why the watchdog left a worker with mail alone on a beat. */
+export type HoldReason = 'orchestrator' | 'no terminal' | 'delivery paused' | 'paused' | 'halted'
+  | 'no output yet' | 'terminal busy' | 'starting' | 'at a prompt' | 'already nudged for this mail' | 'cooldown';
+
 export class WorkerWakeWatchdog {
   /** ptyId → spawn timestamp (boot grace). */
   private spawnedAt = new Map<string, number>();
@@ -99,6 +103,10 @@ export class WorkerWakeWatchdog {
   private lastHumanNeedsAt = new Map<string, number>();
   /** agentId → when it last moved past a prompt (MOVED_ON_EVENTS). */
   private lastMovedOnAt = new Map<string, number>();
+  /** agentId → when its inbox last went from empty to holding mail. */
+  private mailSince = new Map<string, number>();
+  /** agentId → why the last beat did not nudge it ('nudged' when it did). */
+  private skipReason = new Map<string, HoldReason | 'nudged'>();
 
   /** Record a PTY spawn so its boot sequence is left alone. */
   noteSpawn(ptyId: string, at = Date.now()): void {
@@ -119,6 +127,8 @@ export class WorkerWakeWatchdog {
     this.announcedInboxIds.delete(agentId);
     this.lastHumanNeedsAt.delete(agentId);
     this.lastMovedOnAt.delete(agentId);
+    this.mailSince.delete(agentId);
+    this.skipReason.delete(agentId);
     if (ptyId) this.spawnedAt.delete(ptyId);
   }
 
@@ -132,23 +142,50 @@ export class WorkerWakeWatchdog {
         // A fully drained inbox starts a fresh announcement cycle and bounds the
         // remembered set even for a worker that lives for months.
         this.announcedInboxIds.delete(f.agentId);
+        this.mailSince.delete(f.agentId);
+        this.skipReason.delete(f.agentId);
         continue;
       }
-      if (f.isGod || !f.ptyId) continue;
-      if (f.autoDeliveryPaused || f.paused || f.halted) continue;
-      if (f.lastOutputAt <= 0) continue; // never produced output → still booting
-      if (now - f.lastOutputAt < WORKER_WAKE_IDLE_MS) continue; // mid-turn
-      const spawned = this.spawnedAt.get(f.ptyId) ?? 0;
-      if (spawned > 0 && now - spawned < WORKER_WAKE_BOOT_GRACE_MS) continue;
-      // Waiting at a prompt: never typed into, however long it waits.
-      if ((this.lastHumanNeedsAt.get(f.agentId) ?? 0) > (this.lastMovedOnAt.get(f.agentId) ?? 0)) continue;
-      const announced = this.announcedInboxIds.get(f.agentId);
-      if (announced && !Array.from(inboxIds).some((id) => !announced.has(id))) continue;
-      const lastNudge = this.lastNudgeAt.get(f.agentId) ?? 0;
-      if (lastNudge > 0 && now - lastNudge < WORKER_WAKE_COOLDOWN_MS) continue;
+      // Michael is never nudged here (his heartbeat is), so his mail is not reported.
+      if (!f.isGod && !this.mailSince.has(f.agentId)) this.mailSince.set(f.agentId, now);
+      const why = this.holdReason(f, inboxIds, now);
+      if (why) { this.skipReason.set(f.agentId, why); continue; }
+      this.skipReason.set(f.agentId, 'nudged');
       this.lastNudgeAt.set(f.agentId, now);
       this.announcedInboxIds.set(f.agentId, inboxIds);
       out.push(f.agentId);
+    }
+    return out;
+  }
+
+  /** Why a worker with mail is not nudged now, or null when it should be. */
+  private holdReason(f: WorkerWakeFacts, inboxIds: Set<string>, now: number): HoldReason | null {
+    if (f.isGod) return 'orchestrator';
+    if (!f.ptyId) return 'no terminal';
+    if (f.autoDeliveryPaused) return 'delivery paused';
+    if (f.paused) return 'paused';
+    if (f.halted) return 'halted';
+    if (f.lastOutputAt <= 0) return 'no output yet'; // still booting
+    if (now - f.lastOutputAt < WORKER_WAKE_IDLE_MS) return 'terminal busy'; // mid-turn
+    const spawned = this.spawnedAt.get(f.ptyId) ?? 0;
+    if (spawned > 0 && now - spawned < WORKER_WAKE_BOOT_GRACE_MS) return 'starting';
+    // Waiting at a prompt: never typed into, however long it waits.
+    if ((this.lastHumanNeedsAt.get(f.agentId) ?? 0) > (this.lastMovedOnAt.get(f.agentId) ?? 0)) return 'at a prompt';
+    const announced = this.announcedInboxIds.get(f.agentId);
+    if (announced && !Array.from(inboxIds).some((id) => !announced.has(id))) return 'already nudged for this mail';
+    const lastNudge = this.lastNudgeAt.get(f.agentId) ?? 0;
+    if (lastNudge > 0 && now - lastNudge < WORKER_WAKE_COOLDOWN_MS) return 'cooldown';
+    return null;
+  }
+
+  /** Workers whose mail has waited at least `minWaitMs`, with why the last
+   *  beat left them alone ('nudged' when it typed). Diagnostics for a member
+   *  that stops taking mail: the log says which guard held it. */
+  waiting(minWaitMs: number, now = Date.now()): Array<{ agentId: string; waitedMs: number; reason: HoldReason | 'nudged' }> {
+    const out: Array<{ agentId: string; waitedMs: number; reason: HoldReason | 'nudged' }> = [];
+    for (const [agentId, since] of this.mailSince) {
+      const reason = this.skipReason.get(agentId);
+      if (reason && now - since >= minWaitMs) out.push({ agentId, waitedMs: now - since, reason });
     }
     return out;
   }

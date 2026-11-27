@@ -580,3 +580,53 @@ test('md-mail resources are refused, and connectors whose names collide are refu
   assert.equal(C.connectorAccess(cfg, 'pam', 'mcp__claude_ai_Foo_Bar__x', {}, false).ok, false);
 });
 
+
+// ── GitHub with per member modes (docs/designs/github-connector-modes.md) ──
+
+test('GitHub calls pass the connector grant, then the member\'s repo rows and modes in the hook', async (t) => {
+  // Value: protects=a granted GitHub connector is narrowed by repo and mode on every call; fails_when=the GitHub gate is skipped after the connector gate or the grant is bypassed; why_new=new gate; seam=none; no_claim=GitHub's real tool names (fixture names from the README)
+  const { GitHubHeldStore } = loadTs('src/main/githubConnector.ts');
+  const ghList = { ...LIST, list: [...LIST.list, { key: 'GitHub', url: 'https://api.githubcopilot.com/mcp/', status: 'connected' }] };
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'md-gh-'));
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const hive = new HiveManager(() => home);
+  await hive.ensureAgent({ id: 'pam', name: 'pam', provider: 'claude', cwd: home });
+  const cfg = { harnessHome: home, claudeConnectors: ghList, connectorsOn: { GitHub: true }, agentCapabilities: { pam: { connectors: ['GitHub'], github: { repos: [{ repo: 'acme/site', mode: 'push', seen: 'private' }, { repo: 'acme/held', mode: 'approval', seen: 'private' }] } } } };
+  const server = new HookServer(hive, () => null, () => cfg);
+  const held = new GitHubHeldStore({ path: path.join(home, 'held.json'), tell: () => {}, changed: () => {} });
+  server.github = { visibility: () => 'private', held };
+  const call = (tool, input, id = 'u1') => server.handle({ agent_id: 'pam', session_id: 's1', hook_event_name: 'PreToolUse', tool_name: `mcp__claude_ai_GitHub__${tool}`, tool_input: input, tool_use_id: id, cwd: home });
+  const write = { owner: 'acme', repo: 'site', branch: 'agent/blog', path: 'blog/a.html', content: 'hi', message: 'add' };
+  assert.ok(!denied(await call('get_file_contents', { owner: 'acme', repo: 'site', path: 'a' })), 'listed read');
+  assert.ok(!denied(await call('create_or_update_file', write)), 'Pull and push to agent/');
+  assert.match(reason(await call('create_or_update_file', { ...write, branch: 'main' })), /agent\//);
+  assert.match(reason(await call('merge_pull_request', { owner: 'acme', repo: 'site', pullNumber: 1 })), /not allowed/);
+  assert.match(reason(await call('get_file_contents', { owner: 'acme', repo: 'other', path: 'a' })), /not given you acme\/other/);
+  assert.ok(denied(server.handle({ agent_id: 'pam', session_id: 's1', hook_event_name: 'PreToolUse', tool_name: 'ReadMcpResourceTool', tool_input: { server: 'claude.ai GitHub', uri: 'repo://acme/other' }, cwd: home })), 'resources refused');
+  const heldWrite = { ...write, repo: 'held' };
+  assert.match(reason(await call('create_or_update_file', heldWrite)), /Held for the owner/);
+  assert.equal(held.waiting().length, 1);
+  held.decide(held.waiting()[0].id, 'approve');
+  assert.ok(!denied(await call('create_or_update_file', heldWrite, 'u9')), 'approved write runs once');
+  server.handle({ agent_id: 'pam', session_id: 's1', hook_event_name: 'PostToolUse', tool_name: 'mcp__claude_ai_GitHub__create_or_update_file', tool_use_id: 'u9', tool_is_error: false, cwd: home });
+  assert.match(reason(await call('create_or_update_file', heldWrite, 'u10')), /Held for the owner/, 'used, so a new card');
+  // Not granted: the connector gate refuses before the rows.
+  cfg.agentCapabilities.pam.connectors = [];
+  assert.match(reason(await call('get_file_contents', { owner: 'acme', repo: 'site', path: 'a' })), /not given you GitHub/);
+});
+
+test('GitHub is never suggested as a Claude connector: the app has its own GitHub integration', () => {
+  // Value: protects=members and Michael point the owner at the app's GitHub token integration, not Claude's GitHub connector; fails_when=the ungranted line lists GitHub or rule 11 loses the exception; why_new=owner 2026-11-23; seam=none; no_claim=how a live model reads the rule
+  const cfg = {
+    claudeConnectors: { list: [{ key: 'GitHub', url: 'https://api.githubcopilot.com/mcp/' }, { key: 'Code host', url: 'https://api.githubcopilot.com/mcp/x' }, { key: 'HubSpot', url: 'https://mcp.hubspot.com/' }] },
+    agentCapabilities: {}
+  };
+  const line = C.ungrantedConnectorsLine(cfg, 'nick', false);
+  assert.match(line, /HubSpot/);
+  assert.doesNotMatch(line, /GitHub|Code host/);
+  assert.equal(C.ungrantedConnectorsLine({ claudeConnectors: { list: [cfg.claudeConnectors.list[0]] } }, 'nick', false), null);
+  const { CONNECTOR_LOOKUP_HOUSE_RULE } = loadTs('src/main/hive.ts');
+  assert.match(CONNECTOR_LOOKUP_HOUSE_RULE, /GitHub is the exception/);
+  assert.match(CONNECTOR_LOOKUP_HOUSE_RULE, /Settings, Connections, Integrations/);
+  assert.match(CONNECTOR_LOOKUP_HOUSE_RULE, /Never suggest Claude's GitHub connector/);
+});

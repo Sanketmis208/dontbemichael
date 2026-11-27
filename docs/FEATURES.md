@@ -204,6 +204,18 @@ moving, and brings you only the decisions that need you.
 - Every connector on your Claude account (HubSpot, Google Drive, QuickBooks and the rest) shows up
   in Settings by itself, off. Turn one on, then give it to the team members who need it. Nobody
   else can reach it, and your own Claude Code servers stay yours.
+- GitHub through the app's own GitHub integration: add GitHub under Integrations with a token from any
+  GitHub account, limited to the repos the team may use, then give it to a member. The app keeps the token, and the member
+  reaches GitHub without ever seeing it. Under GitHub on a member's Access tab, add the repos they may
+  use, each as Pull only, Pull and push, or Push on approval. Pull and push writes only to agent/
+  branches and opens a pull request; merging stays yours, and the merge is what goes live. Push on
+  approval holds every write on an Ask me card, with the repo, a Public or Private badge, warnings and
+  the files, and lets it run once when you approve. A change to how GitHub runs your site (.github/)
+  always waits for you, and your own GitHub, git, npm and Claude login files are walled from every
+  member. When work needs GitHub, Michael points you at this integration, never at Claude's GitHub
+  connector. Team members also hear which other Claude connectors they could ask you for.
+- Connect any MCP server with a token: add it under Integrations with its address and token; the app
+  keeps the token, and team members you give it to reach the server without ever seeing it.
 - Give one team member access to one outside service: a custom REST integration reaches only the
   members you name on their Access tab, at Read only or Can change. A new one starts with nobody,
   taking access away holds on the next call, and the app keeps the key. A connection can hold one
