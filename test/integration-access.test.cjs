@@ -344,7 +344,7 @@ test('the server ships in the app, and a spawn attaches it on the agent\'s own t
   const builder = fs.readFileSync(path.join(ROOT, 'electron-builder.yml'), 'utf8');
   assert.match(builder, /from: resources\/md-integrations-mcp\.cjs/);
   const index = fs.readFileSync(path.join(ROOT, 'src/main/index.ts'), 'utf8');
-  assert.match(index, /const wantsIntegrations = hasIntegrationTools\(cfg, agentId\);/);
+  assert.match(index, /const wantsIntegrations = hasIntegrationTools\(cfg, agentId\)\n\s+&& Object\.keys\(cfg\.agentCapabilities\?\.\[agentId\]\?\.integrations \?\? \{\}\)\.some\(\(id\) => records\.find\(\(r\) => r\.id === id\)\?\.kind !== .mcp.\);/, "the REST tools come with a REST integration only");
   assert.match(index, /\[INTEGRATIONS_MCP_SERVER\]: \{ command: hive\.nodeCommand\(\), args: \[mdIntegrationsScriptPath\(\)\], env \}/);
   assert.match(index, /writeConfig\(\{ agentCapabilities: withoutIntegration\(/, 'removing one clears it');
   assert.match(index, /agentId === RESEARCH_ID \|\| typeof id !== 'string'/, 'Research is refused at the door');

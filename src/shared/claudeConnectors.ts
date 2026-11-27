@@ -17,6 +17,9 @@
  */
 import type { AgentCapabilities } from './mailboxes';
 import { quickbooksCapability } from './quickbooks';
+import { SHOW_GITHUB } from './buildFeatures';
+import { isGitHubConnectorUrl, namesGitHub } from './github';
+import { MCP_INTEGRATION_PREFIX } from './integrations';
 
 /** Whether the owner allowed the email and calendar connected to their Claude
  *  account with the old "Your Claude account" switch (mcpDefaults['email-calendar'],
@@ -69,6 +72,8 @@ export const APP_MCP_SERVER = 'md-mail';
 /** The app's own integrations server, passed the same way. The broker decides
  *  every call, per member (shared/integrations.ts). */
 export const INTEGRATIONS_MCP_SERVER = 'md-integrations';
+/** The app's local git tools (docs/designs/github-local-git.md); the broker decides each call. */
+export const GIT_MCP_SERVER = 'md-git';
 
 const KEY_MAX = 80;
 const URL_MAX = 300;
@@ -164,7 +169,14 @@ export function connectorOn(cfg: ConnectorConfig, key: string): boolean {
 export function connectorGranted(cfg: ConnectorConfig, agentId: string, key: string, roleReadsBooks: boolean): boolean {
   const caps = cfg.agentCapabilities?.[agentId];
   if (isQuickBooksKey(key)) return quickbooksCapability(caps?.quickbooks, roleReadsBooks).enabled;
+  if (!SHOW_GITHUB && isGitHubKey(cfg, key)) return false;
   return (caps?.connectors ?? []).includes(key);
+}
+
+/** A connector that is GitHub, by its name or its address. */
+export function isGitHubKey(cfg: ConnectorConfig, key: string): boolean {
+  if (namesGitHub(key)) return true;
+  return isGitHubConnectorUrl((cfg.claudeConnectors?.list ?? []).find((c) => c.key === key)?.url);
 }
 
 /** The connectors an agent may use now: on the account, on in Settings,
@@ -211,7 +223,7 @@ export function mcpTarget(cfg: ConnectorConfig, toolName: string, input: unknown
     // A list with no server would show every server the session connected:
     // deny rules hide a server's tools, not its resources (owner, 2026-10-02).
     if (typeof s !== 'string' || !s) return { kind: 'all-servers' };
-    if (s === APP_MCP_SERVER || s === INTEGRATIONS_MCP_SERVER) return { kind: 'app' };
+    if (s === APP_MCP_SERVER || s === INTEGRATIONS_MCP_SERVER || s === GIT_MCP_SERVER || s.startsWith(MCP_INTEGRATION_PREFIX)) return { kind: 'app' };
     const c = /^claude\.ai (.+)$/.exec(s);
     if (c) {
       const key = knownKeys(cfg).find((k) => k === c[1].trim());
@@ -222,7 +234,9 @@ export function mcpTarget(cfg: ConnectorConfig, toolName: string, input: unknown
   const m = /^mcp__(.+)$/.exec(toolName ?? '');
   if (!m) return { kind: 'none' };
   server = m[1];
-  if (server.startsWith(`${APP_MCP_SERVER}__`) || server.startsWith(`${INTEGRATIONS_MCP_SERVER}__`)) return { kind: 'app' };
+  // An MCP server the owner added with a token: the broker checks the member's
+  // grant on every call (integrationBroker mcpProxy).
+  if (server.startsWith(`${APP_MCP_SERVER}__`) || server.startsWith(`${INTEGRATIONS_MCP_SERVER}__`) || server.startsWith(`${GIT_MCP_SERVER}__`) || server.startsWith(MCP_INTEGRATION_PREFIX)) return { kind: 'app' };
   // The longest matching prefix wins ("Google" vs "Google Drive"). Two names
   // that become the same tool prefix ("Foo Bar", "Foo_Bar") cannot be told
   // apart, so neither is (Codex adversarial review, 2026-10-02).
@@ -309,6 +323,19 @@ export function connectorAccess(
     return { ok: false, reason: `The owner has not given you ${key} in your Capabilities. ${TELL_MICHAEL}` };
   }
   return { ok: true };
+}
+
+/** The connectors on the owner's Claude account this member was not given,
+ *  so it can ask for one instead of failing (owner D9, 2026-11-21). Mail
+ *  connectors are left out: email goes only through the app. GitHub is left out
+ *  too: the app has its own GitHub integration (owner, 2026-11-23). Null when none. */
+export function ungrantedConnectorsLine(cfg: ConnectorConfig, agentId: string, roleReadsBooks: boolean): string | null {
+  const names = (cfg.claudeConnectors?.list ?? [])
+    .filter((c) => !isMailConnectorKey(c.key) && !isGitHubKey(cfg, c.key) && !connectorGranted(cfg, agentId, c.key, roleReadsBooks))
+    .map((c) => c.key)
+    .sort((a, b) => a.localeCompare(b));
+  if (names.length === 0) return null;
+  return `CONNECTORS YOU COULD ASK FOR. The owner's Claude account has these connectors you were not given: ${names.join(', ')}. When a task needs one of them, or any other outside service, do not try another way: tell Michael which service and why (house rule 11).`;
 }
 
 /** A fresh read against the saved state: keeps switches and grants across a

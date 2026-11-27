@@ -23,7 +23,11 @@
 
 import { RESEARCH_ID } from './research';
 
-export type IntegrationKind = 'github' | 'custom-rest';
+/** 'mcp': a remote MCP server reached with a token the owner pastes (any
+ *  service whose Claude connector login does not fit, e.g. a GitHub account on
+ *  another email). The app starts a granted member with it, proxied through
+ *  the broker, which adds the token; the member never sees it. */
+export type IntegrationKind = 'github' | 'custom-rest' | 'mcp';
 
 /** How the broker injects credentials when forwarding to the integration's baseUrl.
  *  This is the ONLY auth-injection vocabulary; the secret is supplied by the broker
@@ -117,7 +121,7 @@ export const INTEGRATION_SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
 /** A header name the broker may inject under (authType 'header'). */
 export const HEADER_NAME_RE = /^[A-Za-z0-9-]{1,64}$/;
 export const ALL_AUTH_TYPES: readonly IntegrationAuthType[] = ['none', 'bearer', 'header', 'github'];
-export const ALL_KINDS: readonly IntegrationKind[] = ['github', 'custom-rest'];
+export const ALL_KINDS: readonly IntegrationKind[] = ['github', 'custom-rest', 'mcp'];
 /** What main answers when a NEW integration names an id already registered:
  *  saving under it would replace that integration and its secret (`int:<id>`).
  *  The form shows its own words for it. */
@@ -190,6 +194,9 @@ export function validateIntegrationRecord(
   } else if (r.authHeader != null && String(r.authHeader).trim() !== '') {
     return { ok: false, error: "authHeader is only valid when authType === 'header'" };
   }
+
+  if (kind === 'mcp' && authType === 'github') return { ok: false, error: "an MCP server takes authType 'bearer', 'header' or 'none'" };
+  if (kind === 'mcp' && r.call != null) return { ok: false, error: SAVED_CALL_ERRORS.kind };
 
   const needsSecret = authTypeNeedsSecret(authType);
   const secretRef = needsSecret ? secretRefFor(id) : undefined;
@@ -368,6 +375,25 @@ export function resolveUpstreamUrl(baseUrl: string, pathAndQuery: string): URL |
 
 /** v1 reference templates — the two end-to-end references. Dwight appends more here. */
 export const INTEGRATION_TEMPLATES: IntegrationTemplate[] = [
+  {
+    kind: 'mcp',
+    label: 'GitHub (token)',
+    baseUrl: 'https://api.githubcopilot.com/mcp/',
+    authType: 'bearer',
+    secretLabel: 'GitHub personal access token',
+    secretHelp: 'A fine-grained token from any GitHub account, for only the repos the team may use, with Contents and Pull requests read and write, and Actions read.',
+    docsUrl: 'https://github.com/settings/personal-access-tokens',
+    idSuggestion: 'github-mcp'
+  },
+  {
+    kind: 'mcp',
+    label: 'MCP server',
+    baseUrl: '',
+    authType: 'bearer',
+    secretLabel: 'Token',
+    secretHelp: 'The server address and a token from the service. The app keeps the token; team members never see it.',
+    idSuggestion: 'mcp'
+  },
   {
     kind: 'github',
     label: 'GitHub',
@@ -593,13 +619,55 @@ export interface AgentIntegration { id: string; label: string; base_url: string;
 
 export function agentIntegrations(
   cfg: GrantConfig, agentId: string,
-  records: ReadonlyArray<Pick<IntegrationRecord, 'id' | 'label' | 'baseUrl' | 'authType' | 'enabled' | 'call'> & { hasSecret: boolean }>
+  records: ReadonlyArray<Pick<IntegrationRecord, 'id' | 'label' | 'baseUrl' | 'authType' | 'enabled' | 'call'> & { kind?: IntegrationKind; hasSecret: boolean }>
 ): AgentIntegration[] {
   return records.flatMap((r) => {
+    // An MCP server arrives as its own tools, never through list_integrations.
+    if (r.kind === 'mcp') return [];
     const level = integrationLevel(cfg, agentId, r.id);
     if (!level) return [];
     let base = '';
     try { const u = new URL(r.baseUrl); base = u.origin + u.pathname; } catch { /* a bad address shows blank */ }
     return [{ id: r.id, label: r.label, base_url: base, access: level === 'read' ? 'read only' as const : 'can change' as const, ready: r.enabled && (!authTypeNeedsSecret(r.authType) || r.hasSecret), ...(r.call ? { saved_call: { purpose: r.call.purpose } } : {}) }];
   });
+}
+
+/** How the Test button reaches an MCP server: the MCP handshake (an
+ *  initialize request by POST), since a plain GET to a streamable HTTP MCP
+ *  endpoint answers 405. A 2xx means the address and the token work. */
+export function mcpProbeRequest(): { method: 'POST'; headers: Record<string, string>; body: string } {
+  return {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+    body: JSON.stringify({
+      jsonrpc: '2.0', id: 1, method: 'initialize',
+      params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'dontbemichael', version: '1' } }
+    })
+  };
+}
+
+/** The server name an MCP integration is given in a member's MCP config; its
+ *  tools are mcp__md-mcp-<id>__<tool>. */
+export const MCP_INTEGRATION_PREFIX = 'md-mcp-';
+
+export function mcpServerName(id: string): string {
+  return `${MCP_INTEGRATION_PREFIX}${id}`;
+}
+
+/** The integration id an MCP tool or server name belongs to, or null. */
+export function mcpIntegrationId(toolOrServer: string): string | null {
+  const m = /^(?:mcp__)?md-mcp-([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?)(?:__|$)/.exec(toolOrServer ?? '');
+  return m ? m[1] : null;
+}
+
+/** The MCP integrations a member starts with: granted, enabled, and with their
+ *  token saved when one is needed. Sorted, so the list doubles as a signature. */
+export function mcpIntegrationsFor(
+  cfg: GrantConfig, agentId: string,
+  records: ReadonlyArray<Pick<IntegrationRecord, 'id' | 'kind' | 'authType' | 'enabled'> & { hasSecret: boolean }>
+): string[] {
+  return records
+    .filter((r) => r.kind === 'mcp' && r.enabled && (!authTypeNeedsSecret(r.authType) || r.hasSecret) && !!integrationLevel(cfg, agentId, r.id))
+    .map((r) => r.id)
+    .sort();
 }

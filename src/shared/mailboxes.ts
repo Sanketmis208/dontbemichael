@@ -13,6 +13,7 @@
 
 import type { IntegrationGrants } from './integrations';
 import type { QuickBooksCapability } from './quickbooks';
+import type { GitHubCapability } from './github';
 
 export type MailProvider = 'gmail' | 'google-workspace' | 'icloud' | 'yahoo' | 'zoho' | 'other';
 
@@ -97,6 +98,9 @@ export interface AgentCapabilities {
   connectors?: string[];
   /** Integrations from Settings this agent may use (shared/integrations.ts). */
   integrations?: IntegrationGrants;
+  /** GitHub repos and their modes, narrowing the GitHub connector grant
+   *  (shared/github.ts, docs/designs/github-connector-modes.md). */
+  github?: GitHubCapability;
 }
 
 export type MailOp = 'list' | 'read' | 'organize' | 'draft' | 'propose' | 'send';

@@ -62,3 +62,11 @@ export const SHOW_IMPORT_HIRE = false;
  *  business owner picks only Best or Fast (hire redesign D3, owner 2026-09-27);
  *  every hire runs on the engine set in Settings. */
 export const SHOW_ENGINE_PICKER = false;
+
+/** GitHub with per member modes through the owner's Claude connector
+ *  (docs/designs/github-connector-modes.md). While off, a GitHub connector is
+ *  never granted: agents start without it and every call is refused (eng V4). */
+export const SHOW_GITHUB = true;
+/** Local git for members with GitHub repos: a working copy and pushes through
+ *  the app (docs/designs/github-local-git.md). Off: GitHub's own tools only. */
+export const SHOW_LOCAL_GIT = true;
