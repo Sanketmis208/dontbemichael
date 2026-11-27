@@ -116,6 +116,14 @@ const FAILURE_NOTE: Record<Exclude<Failure, 'failed'>, string> = {
   stopped: 'jobChange.errorStopped'
 };
 
+/** The card has no box to say the change in other words, so its lines say
+ *  only what it can do: try again (owner, 2026-11-27). */
+function failureNote(reason: Failure, card: boolean): string {
+  if (reason === 'failed') return card ? 'jobChange.errorNoteCard' : 'jobChange.errorNote';
+  if (reason === 'unreadable' && card) return 'jobChange.errorUnreadableCard';
+  return FAILURE_NOTE[reason];
+}
+
 const SUMMARY_SHOWN = 6;
 
 /**
@@ -343,7 +351,7 @@ export function JobChangeReview(p: JobChangeReviewProps) {
     panel = (
       <div role="alert" style={panelStyle}>
         {head(t('jobChange.errorTitle'))}
-        <span style={noteStyle}>{t(state.reason !== 'failed' ? FAILURE_NOTE[state.reason] : p.autoRun ? 'jobChange.errorNoteCard' : 'jobChange.errorNote', { name: manager })}</span>
+        <span style={noteStyle}>{t(failureNote(state.reason, !!p.autoRun), { name: manager })}</span>
         <div style={rowEnd}><Keep />
           <PixelButton variant="secondary" size="sm" onClick={cancel}>{t('jobChange.cancel')}</PixelButton>
           <PixelButton variant="primary" size="sm" onClick={() => { void start(extras, answersRef.current); }}>{t('jobChange.tryAgain')}</PixelButton>
