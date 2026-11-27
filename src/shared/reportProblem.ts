@@ -1,10 +1,13 @@
 import { REPO_URL } from './updateState';
 
 /**
- * The "Report a problem" link: a new bug report on GitHub with the app version
- * and the OS filled in (docs/designs/windows-11-installer.md, E4). The keys are
- * the bug report form's field ids (.github/ISSUE_TEMPLATE/bug_report.yml), and
- * `os` must be one of that form's dropdown options, which the OS labeler reads.
+ * The "Report a problem" link: a new problem report on GitHub with the app
+ * version and the OS filled in (docs/designs/windows-11-installer.md, E4). It
+ * opens the owner's form, two plain questions and the details the app fills in
+ * (owner, 2026-11-26; docs/designs/report-problem-simple-form.md); the
+ * developer bug form stays for people running from source. The keys are the
+ * owner form's field ids (.github/ISSUE_TEMPLATE/problem_report.yml), and `os`
+ * must be one of that form's dropdown options, which the OS labeler reads.
  * Nothing else goes in the URL: no paths, names or logs. The one addition is
  * this office's recent automatic report fingerprints, in the Logs field, so a
  * person's report can be matched to the automatic issue
@@ -15,7 +18,7 @@ export function reportProblemUrl(p: { appVersion: string; platform: string; arch
     : p.platform === 'win32' ? 'Windows'
     : p.platform === 'linux' ? 'Linux'
     : '';
-  const q = new URLSearchParams({ template: 'bug_report.yml', 'app-version': p.appVersion });
+  const q = new URLSearchParams({ template: 'problem_report.yml', 'app-version': p.appVersion });
   if (os) q.set('os', os);
   if (p.osVersion) q.set('os-version', p.osVersion.slice(0, 40));
   const fps = (p.fingerprints ?? []).filter((f) => /^[0-9a-f]{12}$/.test(f)).slice(0, 5);

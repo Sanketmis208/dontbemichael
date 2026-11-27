@@ -127,6 +127,8 @@ export const LOG_KIND_CLASS: Readonly<Record<string, FailureClass>> = {
   'roster-unreadable': 'owner',
   // A frame without its secret is refused by design.
   'hook-frame-rejected': 'none',
+  // A business's own moves: its settings moved, a switch, its first open.
+  'office-first-open': 'none', 'office-settings-moved': 'none', 'office-switch': 'none',
   // The case study screen shows its own outcome to the owner (docs/designs/case-study.md).
   'case-study-draft': 'none', 'case-study-logo': 'none', 'case-study-pdf': 'none', 'case-study-send': 'none', 'case-study-sent': 'none',
   'agent-hold': 'none', 'app-start': 'none', 'archive': 'none', 'card-reopen': 'none', 'clear': 'none',
@@ -139,7 +141,7 @@ export const LOG_KIND_CLASS: Readonly<Record<string, FailureClass>> = {
   'role': 'none', 'run-compare-held': 'none', 'schedule-request': 'none', 'session': 'none',
   'session-restored': 'none', 'silent-auto-restart': 'none', 'spawn': 'none', 'tasks': 'none',
   'terminal-handoff': 'none', 'trust-checked': 'none', 'trust-denied': 'none', 'trust-held': 'none',
-  'trust-layer': 'none', 'trust-retry': 'none', 'trust-wait': 'none', 'upkeep-to-research': 'none',
+  'trust-layer': 'none', 'trust-retry': 'none', 'trust-dropped-allowed': 'none', 'trust-wait': 'none', 'upkeep-to-research': 'none',
   'work-style-handoff-written': 'none',
   // The failure sender's own state changes.
   'failure-report-stopped': 'none', 'failure-report-waiting': 'none', 'failure-report-dropped': 'none',

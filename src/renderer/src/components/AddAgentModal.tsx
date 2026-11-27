@@ -11,7 +11,7 @@ import { useStore, type Agent, ACTION_CLOCKING_IN } from '@/store/store';
 import { CAST_BY_NAME, CAST_GROUPS, DEFAULT_CHARACTER, HIREABLE_CAST, type OfficeCharacterName } from '@/scene/office/cast';
 import { type AccentColorName } from '@/design/tokens';
 import type { HireManifest } from '@shared/hire';
-import { hireQueueProgress } from '@shared/hireQueue';
+import { hireBusinessName, hireQueueProgress } from '@shared/hireQueue';
 import { mcpCatalogEntry } from '@shared/mcpCatalog';
 import {
   type AgentProvider,
@@ -201,6 +201,7 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
   const [character, setCharacter] = useState<OfficeCharacterName>(firstCharacter);
   const [name, setName] = useState(pendingHire?.name ?? CAST_BY_NAME[firstCharacter].displayName);
   const [hireMeta, setHireMeta] = useState<HireManifest | null>(pendingHire ?? null);
+  const hireBusiness = hireBusinessName(hireMeta, config.businessName);
   /** The teammate whose job is being cloned, by agent id. */
   const [cloneOf, setCloneOf] = useState<string | null>(null);
   const cloneFrom = (of: OfficeCharacterName): void => {
@@ -812,6 +813,9 @@ export function AddAgentModal({ onClose, config, onConfigChange }: AddAgentModal
               {hireMeta.author ? <> · {tr('addAgent.byAuthor', { author: hireMeta.author })}</> : null}
               {reviewProgress ? <> · {tr('addAgent.hireProgress', { current: reviewProgress.current, total: reviewProgress.total })}</> : null}
             </span>
+            {hireBusiness !== null && (
+              <span>{hireBusiness ? tr('addAgent.hireBusiness', { business: hireBusiness }) : tr('addAgent.hireBusinessUnnamed')}</span>
+            )}
             <span>{tr('addAgent.reviewFields')}</span>
             {hireMeta.commandFlags && hireMeta.commandFlags.length > 0 && (
               <span style={chipRow}>

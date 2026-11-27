@@ -9,6 +9,7 @@ const {
   clearHireQueue,
   enqueueHires,
   finishCurrentHire,
+  hireBusinessName,
   hireQueueProgress
 } = loadTs('src/shared/hireQueue.ts');
 
@@ -60,4 +61,16 @@ test('cancelling review discards the remaining batch and resets later progress',
 test('empty arrivals and advances do not invent queue state', () => {
   assert.deepEqual(enqueueHires(EMPTY_HIRE_QUEUE, []), EMPTY_HIRE_QUEUE);
   assert.deepEqual(finishCurrentHire(EMPTY_HIRE_QUEUE), EMPTY_HIRE_QUEUE);
+});
+
+test('a hire from a link or a file names the open business; one started by hand does not', () => {
+  // From a link or a file: the queue head seeds the form and names the business.
+  const queue = enqueueHires(EMPTY_HIRE_QUEUE, [hire('Jim')]);
+  assert.equal(hireBusinessName(queue.pending[0], '  Dunder Mifflin '), 'Dunder Mifflin');
+  // An unnamed business still gets a line, just without a name.
+  assert.equal(hireBusinessName(queue.pending[0], undefined), '');
+  assert.equal(hireBusinessName(queue.pending[0], '   '), '');
+  // Started by hand: no hire under review, nothing shown.
+  assert.equal(hireBusinessName(undefined, 'Dunder Mifflin'), null);
+  assert.equal(hireBusinessName(null, 'Dunder Mifflin'), null);
 });
