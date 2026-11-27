@@ -67,7 +67,8 @@ test('launch checks the name after the backfill, logs the office id only, and ne
   const check = main.indexOf('businessNameMismatch(cfg, rec)');
   assert.ok(backfill > 0 && check > backfill, 'after office.json is backfilled');
   const block = main.slice(main.lastIndexOf('try {', check), main.indexOf('}', main.indexOf('catch', check)) + 1);
-  assert.match(block, /hive\.appendLog\(\{ kind: 'office-name-mismatch', officeId: rec\?\.id \?\? null \}\)/);
+  // The exact line, so an inverted condition or a log outside the if fails here.
+  assert.match(block, /if \(businessNameMismatch\(cfg, rec\)\) hive\.appendLog\(\{ kind: 'office-name-mismatch', officeId: rec\?\.id \?\? null \}\);/);
   assert.ok(!/businessName/.test(block.replace('businessNameMismatch', '')), 'no business name in the log line');
   assert.match(block, /catch \(e\) \{ console\.error\(/, 'a failed check never stops the launch');
   // The line stays in the office log: it is never turned into a failure report.
