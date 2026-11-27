@@ -41,6 +41,11 @@ const compose = {
   attach_files: { type: 'array', items: { type: 'string' }, description: 'Files to attach from your own folder, or a folder the owner named for your job: full paths, or paths inside your folder. At most 20 files and 18 MB together; PDF, Word, Excel, PowerPoint, plain text, CSV and pictures. They follow your sending like any email: Can send sends them, Send on approval puts them on the owner\'s card (the owner sees each file and may take one off), Draft only saves them on the draft. Not from a mailbox you send only from, and never under a standing approval. This holds over any older memory note that says files from a folder can\'t be attached.' }
 };
 
+// What the email tells its recipient the office will do later. The app hands
+// each one to Michael once the email is sent, so it is tracked as a card
+// (owner, 2026-11-27).
+const promises = { type: 'array', items: { type: 'string' }, description: 'Each thing this email tells the recipient the office will do or send later, one short line each with what, for whom and when if the email says, for example "send the Chase statement closing in November, which covers the rest of October". Leave it out when the email promises nothing. Once the email is sent, Michael gets each one and keeps a card for it until the follow up goes out, so you never have to remember it. At most 5.' };
+
 const TOOLS = [
   {
     name: 'list_mailboxes',
@@ -99,12 +104,12 @@ const TOOLS = [
   {
     name: 'propose',
     description: 'Put an email on Ask me for the owner to approve (Send on approval only; Can send and Draft only refuse it). Nothing is sent. The owner approves it (maybe after editing it), asks for changes, or chooses not to send it, and you get a message either way. When it is approved, call send with its proposal id. Learn from their edits and notes for next time.',
-    inputSchema: { type: 'object', properties: { ...compose, offer_standing: { type: 'string', description: 'Optional. Only when your memory notes show the owner approving this kind of email unchanged again and again: one narrow plain line naming the kind, for example "order status replies to existing customers, no prices or dates". The owner may tick it to let you send that kind without approval from now on.' } }, required: ['mailbox', 'to', 'subject', 'body'] }
+    inputSchema: { type: 'object', properties: { ...compose, offer_standing: { type: 'string', description: 'Optional. Only when your memory notes show the owner approving this kind of email unchanged again and again: one narrow plain line naming the kind, for example "order status replies to existing customers, no prices or dates". The owner may tick it to let you send that kind without approval from now on.' }, promises }, required: ['mailbox', 'to', 'subject', 'body'] }
   },
   {
     name: 'send',
     description: 'Send a message from your mailbox. Can send: give the message and it goes out. Send on approval: give only mailbox and proposal, the id of an email the owner approved; the approved version goes out exactly as the owner left it. Or, for a kind the owner let you send without approval, give the full email and its standing id: the app checks it fits, and one that does not goes to the owner on Ask me instead. Draft only: refused, use draft.',
-    inputSchema: { type: 'object', properties: { ...compose, proposal: { type: 'string', description: 'The id propose gave, once the owner approved it.' }, standing: { type: 'string', description: 'A standing approval id from list_mailboxes, for an email of that kind.' } }, required: ['mailbox'] }
+    inputSchema: { type: 'object', properties: { ...compose, proposal: { type: 'string', description: 'The id propose gave, once the owner approved it.' }, standing: { type: 'string', description: 'A standing approval id from list_mailboxes, for an email of that kind.' }, promises: { ...promises, description: `${promises.description} With a proposal id, leave it out: the promises given to propose are used.` } }, required: ['mailbox'] }
   }
 ];
 

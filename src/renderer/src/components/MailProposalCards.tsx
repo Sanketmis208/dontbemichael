@@ -13,6 +13,7 @@ import { EmailChip } from '@/markdown/EmailChip';
 import { Icon } from './Icon';
 import { InfoTip } from './InfoTip';
 import { sizeWords } from './EmailTabView';
+import { useResolvedGodName } from '@/hooks/useResolvedGodName';
 
 /** Rows shown before "Show all" on a card with many files. */
 const FILES_SHOWN = 5;
@@ -61,6 +62,7 @@ function ProposalCard({ p, refresh, look: lk, hide, fold: f }: { p: MailProposal
   const agents = useStore((s) => s.agents);
   const mailboxes = useHarnessConfig()?.mailboxes;
   const name = agents.find((a) => a.id === p.agentId)?.name ?? p.agentId;
+  const godName = useResolvedGodName();
   const from = mailboxes?.find((m) => m.id === p.mailbox)?.address ?? p.mailbox;
   const [subject, setSubject] = useState(p.subject);
   const [body, setBody] = useState(p.body);
@@ -209,6 +211,19 @@ function ProposalCard({ p, refresh, look: lk, hide, fold: f }: { p: MailProposal
         <span style={label}>{t('askMe.mailBody')}</span>
         <GrowingTextarea className="cth-input" value={body} onChange={(e) => setBody(e.target.value)} disabled={busy} maxHeight={320} dir="auto" style={field} />
       </label>
+      {/* What the email promises for later: each becomes a card Michael keeps
+          once it is sent (owner, 2026-11-27). */}
+      {(p.promises?.length ?? 0) > 0 && (
+        <div data-mail-promises style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <span style={{ ...label, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            {t('askMe.mailPromises')}
+            <InfoTip text={t('askMe.mailPromisesTip', { name, manager: godName })} />
+          </span>
+          <ul style={{ margin: 0, paddingInlineStart: 16, display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12.5, lineHeight: '18px', color: 'var(--cth-ink)' }}>
+            {p.promises!.map((line, i) => <li key={i} dir="auto">{line}</li>)}
+          </ul>
+        </div>
+      )}
       {p.offerStanding && !asking && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--cth-ink)' }}>

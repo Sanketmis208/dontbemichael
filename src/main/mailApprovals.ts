@@ -15,7 +15,9 @@ import {
   heldFileBytes,
   liveFileKeys,
   memoryLine,
+  promiseMessage,
   pruneProposals,
+  readPromises,
   sendingChangeMessage,
   sendingMemoryLine,
   standingMemoryLine,
@@ -29,7 +31,8 @@ import {
 } from '../shared/mailProposals';
 import { localDay } from '../shared/messageView';
 import type { SendingMode } from '../shared/mailboxes';
-import type { ProposalStore } from './mail';
+import type { PromisedSend, ProposalStore } from './mail';
+import { emailLinkFor } from '../shared/emailLink';
 
 export interface MailApprovalDeps {
   path: string;
@@ -360,6 +363,16 @@ export class MailApprovals implements ProposalStore {
   /** The send failed: the email is approved and can be sent again. */
   unmarkSending(id: string): void {
     this.write(this.read().map((p) => (p.id === id && p.state === 'sending' ? { ...p, state: 'approved' as const } : p)));
+  }
+
+  /** What a sent email promised goes to Michael as one request, so each
+   *  promise becomes a card he keeps until the follow up is sent. */
+  promised(sent: PromisedSend): void {
+    const promises = readPromises(sent.promises);
+    if (!promises.length) return;
+    const link = sent.messageId ? emailLinkFor(sent.mailbox, { from: `To ${sent.to.split(',')[0].trim()}`, date: new Date(this.now()).toISOString(), messageId: sent.messageId }) : null;
+    const msg = promiseMessage({ member: this.deps.agentName(sent.agentId), memberId: sent.agentId, to: sent.to, subject: sent.subject, body: sent.body, link, promises });
+    if (this.deps.send({ to: this.deps.godId(), ...msg }) === false) console.error('[mail] promises not filed: no hive');
   }
 
   markSent(id: string, messageId: string): void {

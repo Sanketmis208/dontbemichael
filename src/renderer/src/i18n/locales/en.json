@@ -149,6 +149,8 @@
     "mailFileRemove": "Take {{name}} off this email",
     "mailFileGone": "This file is no longer kept.",
     "mailFilesPutBack": "Put back files taken off: {{count}}",
+    "mailPromises": "Promised for later",
+    "mailPromisesTip": "Once this email is sent, {{manager}} keeps a card for each until {{name}} sends the follow up.",
     "recommended": "Recommended",
     "ownAnswer": "Or write your own answer",
     "addNote": "Add a note (optional)",
