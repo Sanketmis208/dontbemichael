@@ -3105,6 +3105,9 @@ export class HiveManager {
             return 'done';
           }
         }
+        // In Research's inbox now: its row goes before the steps after, so a
+        // quit in between never tells the sender to send it again.
+        this.researchPending(msg, false);
         try {
           checked(v.decision, v, v.decision === 'clean' ? v.removed : undefined);
           if (v.decision === 'clean' && fromAgent) this.tellSender(msg.from, msg.id, msg.conversation, SENT_AS_SUBJECT, sentAsBody(v.subject, v.body, this.researchName()), true);
@@ -3169,7 +3172,7 @@ export class HiveManager {
    *  never finished (the app closed or crashed) is told to Michael, and a
    *  teammate hears it too (Codex review, D8.2, D3.3). The rows are
    *  moved aside first, so this run's own checks start a fresh list, and each
-   *  stays until Michael's inbox takes its note: tried again on every routing
+   *  stays until Michael's inbox, and a teammate's, takes its note: tried again on every routing
    *  pass, and at the next start if the app closes first (Codex, second ship). */
   private tellLostResearchPending(): void {
     if (this.researchPendingTold) return;
@@ -3198,26 +3201,31 @@ export class HiveManager {
     // Each notice goes once, even if the list can't be rewritten after it
     // (verification of the Codex fix: a stuck file sent it every pass).
     const left = rows.filter((r) => {
-      if (!r || this.researchLostTold.has(r.id)) return false;
+      if (!r || typeof r.from !== 'string' || !r.from) return false;
+      // A teammate removed before this start can't be told, but Michael still
+      // is, naming it by its id.
       const agent = r.from !== RESEARCH_ID && !!reg.agents[r.from];
-      if (r.from !== 'human' && r.from !== 'system' && !agent) return false;
       const n = this.researchName();
       // A teammate's subject is its own words: tidied, as in every note quoting it.
       const lost = `for ${n} ("${tidy(r.subject, HELD_SUBJECT_MAX)}") was not sent: the app closed while it was being ${r.checked === true ? 'delivered' : 'checked'}. Send it again if it still matters.`;
       // A teammate hears of its own message, once, as it would of a refusal.
-      if (agent && r.from !== godId && !this.researchLostTold.has(`${r.id}:sender`)) {
-        this.researchLostTold.add(`${r.id}:sender`);
-        try { this.tellSender(r.from, r.id, undefined, NOT_SENT_SUBJECT, `Your message ${lost}`, true); } catch { /* Michael is still told */ }
+      // Marked only once it went out, so a note that failed is tried again.
+      const toSender = agent && r.from !== godId && !this.researchLostTold.has(`${r.id}:sender`);
+      if (toSender) {
+        try {
+          this.tellSender(r.from, r.id, undefined, NOT_SENT_SUBJECT, `Your message ${lost}`, true);
+          this.researchLostTold.add(`${r.id}:sender`);
+        } catch { /* Michael is still told */ }
       }
       const what = r.from === 'human' ? 'A note from the owner'
         : r.from === 'system' ? 'A message from the app'
           : r.from === godId ? 'Your message' : `${reg.agents[r.from]?.name?.trim() || r.from}'s message`;
-      const ok = this.deliver(this.normalize({
+      const ok = this.researchLostTold.has(r.id) || this.deliver(this.normalize({
         to: godId, act: 'inform', subject: researchText(NOT_SENT_SUBJECT, n),
         body: `${what} ${lost}`
       }, PRIVACY_CHECK_SENDER), godId);
       if (ok) this.researchLostTold.add(r.id);
-      return !ok;
+      return !ok || (toSender && !this.researchLostTold.has(`${r.id}:sender`));
     });
     if (left.length) {
       // Rewritten only when the list changed.

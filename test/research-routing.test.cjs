@@ -828,6 +828,69 @@ test('a teammate\'s message whose check never finished, because the app closed, 
   assert.ok(!fs.existsSync(path.join(home, 'private', 'research-pending.json')));
 });
 
+test('a teammate\'s message is out of the pending list as soon as Research has it, so a quit after tells nobody to resend', async (t) => {
+  // Value: protects=a quit between delivery and the commit never tells the sender to send it again, which would give Research a duplicate; fails_when=the row is cleared only after checked, the sent as note and the commit; why_new=owner review of #741; seam=fake layer, commit
+  const { hive } = await office(t);
+  const home = path.dirname(hive.root());
+  const file = path.join(home, 'private', 'research-pending.json');
+  let atCommit;
+  hive.commit = (message) => {
+    if (message !== 'hive: trust layer delivered to research') return;
+    // What a crash here would leave on disk.
+    atCommit = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '[]';
+  };
+  hive.send({ to: 'research', act: 'query', subject: 'Flour', body: 'Flour prices' }, 'pam');
+  await tick();
+  assert.equal(msgsIn(hive, 'research').filter((m) => m.from === 'pam').length, 1, 'delivered');
+  assert.deepEqual(JSON.parse(atCommit), [], 'its row was gone before the commit');
+  fs.writeFileSync(file, atCommit);
+  const again = new HiveManager(() => home);
+  again.setResearchEnabled(() => true);
+  again.setTrustLayer(fakeLayer());
+  again.routeOnce();
+  assert.equal(notes(again, 'pam', R.NOT_SENT_SUBJECT).length, 0, 'not told to resend');
+  assert.equal(notes(again, 'god', R.NOT_SENT_SUBJECT).length, 0);
+});
+
+test('a lost message from a teammate removed before the next start is still told to Michael, by its id', async (t) => {
+  // Value: protects=a removed teammate's lost question is not dropped with no word to anyone; fails_when=rows from a sender not on the team are skipped; why_new=owner review of #741; seam=pending file
+  const { hive } = await office(t);
+  const home = path.dirname(hive.root());
+  fs.mkdirSync(path.join(home, 'private'), { recursive: true });
+  fs.writeFileSync(path.join(home, 'private', 'research-pending.json'), JSON.stringify([{ id: 'm-gone', from: 'stanley', subject: 'Flour' }]));
+  hive.routeOnce();
+  const toMichael = notes(hive, 'god', R.NOT_SENT_SUBJECT);
+  assert.equal(toMichael.length, 1);
+  assert.match(toMichael[0].body, /^stanley's message for Pete \("Flour"\) was not sent: the app closed while it was being checked\./);
+  hive.routeOnce();
+  assert.equal(notes(hive, 'god', R.NOT_SENT_SUBJECT).length, 1, 'once');
+});
+
+test('a teammate\'s lost message note that could not go out is tried again on the next pass, and sent once', async (t) => {
+  // Value: protects=a teammate still hears its message was lost when the first note fails; fails_when=the sender is marked told before its note goes out; why_new=owner review of #741; seam=fake layer, tellSender
+  const layer = fakeLayer({ inbound: () => new Promise(() => {}) });
+  const { hive } = await office(t, { layer });
+  hive.send({ to: 'research', act: 'query', subject: 'Flour', body: 'Flour prices' }, 'pam');
+  const home = path.dirname(hive.root());
+  const again = new HiveManager(() => home);
+  let failed = false;
+  again.tellSender = function (...args) {
+    if (!failed) { failed = true; throw new Error('disk full'); }
+    return HiveManager.prototype.tellSender.apply(this, args);
+  };
+  again.setResearchEnabled(() => true);
+  again.setTrustLayer(fakeLayer());
+  again.routeOnce();
+  assert.ok(failed);
+  assert.equal(notes(again, 'pam', R.NOT_SENT_SUBJECT).length, 0, 'the first note failed');
+  assert.equal(notes(again, 'god', R.NOT_SENT_SUBJECT).length, 1, 'Michael is still told');
+  again.routeOnce();
+  assert.equal(notes(again, 'pam', R.NOT_SENT_SUBJECT).length, 1, 'tried again');
+  again.routeOnce();
+  assert.equal(notes(again, 'pam', R.NOT_SENT_SUBJECT).length, 1, 'once');
+  assert.equal(notes(again, 'god', R.NOT_SENT_SUBJECT).length, 1, 'once');
+});
+
 test('an unreadable pending list tells nobody and the next message is still kept', async (t) => {
   // Value: protects=a damaged research-pending.json never stops a start or a new check; fails_when=reading the list throws or a bad file blocks the next row; why_new=ship review red team D3.3; seam=fake layer
   const layer = fakeLayer({ inbound: () => new Promise(() => {}) });
