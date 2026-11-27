@@ -312,9 +312,12 @@ export function noteOfficeClosed(now: number = Date.now()): void {
 
 /**
  * Every other business on this install with the addresses of its mailboxes,
- * so Settings can refuse one address for two businesses (Section 4). Only the
- * saved records are read: no business is opened, and no password is touched.
- * Empty before the move, when the app has one business.
+ * so Settings can keep one address from being connected to two businesses on
+ * one computer (docs/designs/separate-businesses.md). Only the saved records
+ * are read: no business is opened, and no password is touched. Empty before
+ * the move, when the app has one business. If the open business's id cannot
+ * be found, it is listed too, so a refusal could name it; that is rare and
+ * fails safe.
  */
 export function otherBusinessMailboxes(): Array<{ name: string | null; addresses: string[] }> {
   const cfg = readStoredConfig();

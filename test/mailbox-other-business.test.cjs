@@ -1,14 +1,17 @@
 'use strict';
 
 /**
- * One mailbox address, one business (docs/designs/separate-businesses.md,
- * Section 4). Mailboxes are kept per business, so adding one also checks the
- * other businesses on this install and names the one that has it.
+ * One address is never connected to two businesses on one computer
+ * (docs/designs/separate-businesses.md). Mailboxes are kept per business, so
+ * adding one also checks the other businesses on this install and names the
+ * one that has it.
  *
  * Protects: an address another business has is refused (in any case) with
- * that business named; the open business keeps its own "already connected";
- * a new address is still added; a business with no mailboxes saved does not
- * break the check.
+ * that business named; the open business keeps its own "already connected"
+ * and is never listed as another business; a new address is still added; a
+ * fix that keeps its address is not blocked, and a fix that changes it to
+ * another business's is refused; a business with no mailboxes saved does not
+ * break the check; nothing is checked before the move.
  */
 
 const test = require('node:test');
@@ -85,6 +88,10 @@ test('adding a mailbox another business already has is refused, naming that busi
   assert.equal(unnamed.ok, false);
   assert.match(unnamed.reason, /belongs to another business on this computer/);
 
+  const listed = settings.otherBusinessMailboxes();
+  assert.deepEqual(listed.map((b) => b.name), ['Northgate Realty', null], 'only the other businesses with mailboxes');
+  assert.ok(!listed.some((b) => b.addresses.some((a) => a.toLowerCase().includes('bakery.com'))), 'the open business is left out');
+
   const own = await add('Orders@Bakery.com');
   assert.equal(own.ok, false);
   assert.match(own.reason, /already connected\.$/, 'the open business keeps its own message');
@@ -98,12 +105,65 @@ test('adding a mailbox another business already has is refused, naming that busi
   assert.deepEqual(stored.offices[realtyId].settings.mailboxes.map((m) => m.address), ['Hello@Realty.com '], 'the other business is left as it was');
 });
 
+test('a fix that keeps its address is not blocked, and one that takes another business\'s address is refused', async (t) => {
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'mailbox-other-business-'));
+  userDataNow = userData;
+  t.after(() => fs.rmSync(userData, { recursive: true, force: true }));
+  const file = loadTs('src/main/officeFile.ts');
+  const config = loadTs('src/main/config.ts');
+  const settings = loadTs('src/main/officeSettings.ts');
+
+  const bakery = office(userData, 'bakery');
+  const realty = office(userData, 'realty');
+  const bakeryId = file.ensureOfficeId(bakery);
+  const realtyId = file.ensureOfficeId(realty);
+  // An older install left shared@old.com with both businesses.
+  fs.writeFileSync(path.join(userData, 'config.json'), JSON.stringify({
+    harnessHome: bakery,
+    officesMigrated: 1,
+    offices: {
+      [bakeryId]: { home: bakery, settings: { businessName: 'Harbor & Pine Bakery', onboardingComplete: true, mailboxes: [box('orders-bakery-com', 'orders@bakery.com'), box('shared-old-com', 'shared@old.com')] } },
+      [realtyId]: { home: realty, settings: { businessName: 'Northgate Realty', onboardingComplete: true, mailboxes: [box('hello-realty-com', 'hello@realty.com'), box('shared-old-com', 'shared@old.com')] } }
+    }
+  }));
+
+  const logins = [];
+  const svc = { async test(m) { logins.push(m.address); return { ok: true }; }, close() {} };
+  const admin = {
+    getConfig: () => config.readConfig(),
+    saveConfig: (patch) => { config.writeConfig(patch); },
+    setSecret: () => ({ ok: true }),
+    deleteSecret: () => true,
+    otherBusinesses: () => settings.otherBusinessMailboxes()
+  };
+  const fix = (id, address) => saveMailbox(svc, admin, PROVIDER_PRESETS, { id, provider: 'gmail', address, password: 'p' });
+
+  const kept = await fix('shared-old-com', 'Shared@Old.com');
+  assert.equal(kept.ok, true, 'a new password for the same address is never blocked');
+  assert.deepEqual(logins, ['Shared@Old.com']);
+
+  const moved = await fix('orders-bakery-com', 'hello@realty.com');
+  assert.equal(moved.ok, false);
+  assert.equal(moved.kind, 'invalid');
+  assert.match(moved.reason, /hello@realty\.com already belongs to Northgate Realty/);
+  assert.deepEqual(logins, ['Shared@Old.com'], 'a refused fix never logs in');
+  assert.equal(config.readConfig().mailboxes.find((m) => m.id === 'orders-bakery-com').address, 'orders@bakery.com', 'the record keeps its address');
+});
+
 test('before settings are per business there are no other businesses to check', (t) => {
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'mailbox-other-business-'));
   userDataNow = userData;
   t.after(() => fs.rmSync(userData, { recursive: true, force: true }));
+  const file = loadTs('src/main/officeFile.ts');
   const settings = loadTs('src/main/officeSettings.ts');
   const home = office(userData, 'bakery');
-  fs.writeFileSync(path.join(userData, 'config.json'), JSON.stringify({ harnessHome: home, mailboxes: [box('orders-bakery-com', 'orders@bakery.com')] }));
+  const realty = office(userData, 'realty');
+  const realtyId = file.ensureOfficeId(realty);
+  // An offices map that holds another business's mailbox, but no officesMigrated.
+  fs.writeFileSync(path.join(userData, 'config.json'), JSON.stringify({
+    harnessHome: home,
+    mailboxes: [box('orders-bakery-com', 'orders@bakery.com')],
+    offices: { [realtyId]: { home: realty, settings: { businessName: 'Northgate Realty', mailboxes: [box('hello-realty-com', 'hello@realty.com')] } } }
+  }));
   assert.deepEqual(settings.otherBusinessMailboxes(), []);
 });

@@ -2147,6 +2147,11 @@ export interface AddMailboxInput {
   smtp?: MailServer;
 }
 
+/** One way to compare mailbox addresses: trimmed, in any case. */
+function sameAddress(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
 /** Test first, then store: nothing is saved for a mailbox that does not work
  *  (design review 3A: failure shows its reason and "Try again"). */
 export async function saveMailbox(svc: MailService, admin: MailAdminDeps, presets: Record<string, { imap: MailServer; smtp: MailServer }>, input: AddMailboxInput): Promise<{ ok: true; record: MailboxRecord } | { ok: false; kind: MailErrorKind | 'invalid'; reason: string }> {
@@ -2162,13 +2167,16 @@ export async function saveMailbox(svc: MailService, admin: MailAdminDeps, preset
   // Fixing a mailbox keeps its id; any other save (including a made up id)
   // must not add a second record for an address that is already connected.
   const fixing = input.id ? existing.find((m) => m.id === input.id) : undefined;
-  if (existing.some((m) => m.address.toLowerCase() === address.toLowerCase() && m.id !== fixing?.id)) {
+  if (existing.some((m) => sameAddress(m.address, address) && m.id !== fixing?.id)) {
     return { ok: false, kind: 'invalid', reason: `${address} is already connected.` };
   }
-  // Mailboxes are per business, so the check above sees only the open one. A
-  // new address another business already has is refused too, naming it.
-  if (!fixing) {
-    const other = admin.otherBusinesses?.().find((b) => b.addresses.some((a) => a.trim().toLowerCase() === address.toLowerCase()));
+  // One address is never connected to two businesses on one computer
+  // (docs/designs/separate-businesses.md). Mailboxes are per business, so the
+  // check above sees only the open one. An address new to this record, added
+  // or changed by a fix, is refused if another business has it, naming it. A
+  // fix that keeps its address (a new password) is never blocked.
+  if (!fixing || !sameAddress(fixing.address, address)) {
+    const other = admin.otherBusinesses?.().find((b) => b.addresses.some((a) => sameAddress(a, address)));
     if (other) {
       const whose = other.name ? `${other.name}, another business on this computer` : 'another business on this computer';
       return { ok: false, kind: 'invalid', reason: `${address} already belongs to ${whose}. Each business needs its own mailbox, so connect a different address here.` };
