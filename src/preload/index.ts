@@ -686,7 +686,9 @@ const api = {
   /** Where the copy of an unreadable settings file is kept, or null (issue 98). */
   damagedConfigCopy: (): Promise<string | null> =>
     ipcRenderer.invoke('config:damagedCopy'),
-  updateConfig: (patch: Partial<HarnessConfig>): Promise<HarnessConfig> =>
+  /** The saved config, or, for a businessFolder another business uses (or one
+   *  in or around it), a refusal with nothing saved. */
+  updateConfig: (patch: Partial<HarnessConfig>): Promise<HarnessConfig | { ok: false; error: 'folderTaken'; name: string | null }> =>
     ipcRenderer.invoke('config:update', patch),
   /** Set or clear one per-agent token ceiling against main's latest config. */
   setAgentTokenCap: (agentId: string, tokenCap?: number): Promise<HarnessConfig> =>

@@ -153,6 +153,26 @@ test('several offices: by team match (D11), another business keeps only its iden
   assert.equal(settings.officeSettings().onboardingComplete, false);
 });
 
+// Value: protects=a business read back from its office.json at the move never takes a business folder another business uses, or one in or around it; fails_when=migrateToOfficeSettings keeps rec.businessFolder as it is; why_new=the test above has the two businesses in folders apart; seam=none; no_claim=the setup notice the owner sees
+test('a business read back from its office.json never shares another business\'s folder', () => {
+  const root = scene();
+  const folder = path.join(root, 'biz', 'Harbor Bakery');
+  const inside = path.join(folder, 'Northgate Realty');
+  const apart = path.join(root, 'biz', 'Corner Florist');
+  const open = office(root, 'bakery', teamIn(folder, ['oscar', 'pam']));
+  const realty = office(root, 'realty', teamIn(inside, ['dwight']), { businessName: 'Northgate Realty', businessFolder: inside, team: teamIn(inside, ['dwight']) });
+  const florist = office(root, 'florist', teamIn(apart, ['kelly']), { businessName: 'Corner Florist', businessFolder: apart, team: teamIn(apart, ['kelly']) });
+  writeRaw(bakery(root, open, { recentHives: [open, realty, florist] }));
+  const lines = [];
+  assert.equal(settings.migrateToOfficeSettings((l) => lines.push(l)), 'done');
+  const of = (home) => raw().offices[file.readOfficeId(home)].settings;
+  assert.equal(of(open).businessFolder, folder);
+  assert.equal(of(realty).businessName, 'Northgate Realty', 'it keeps the rest');
+  assert.equal(of(realty).businessFolder, undefined, 'not a folder inside the bakery\'s');
+  assert.equal(of(florist).businessFolder, apart, 'a folder of its own is kept');
+  assert.ok(lines.some((l) => l.includes('keeps no business folder')));
+});
+
 test('a business with no team yet moves to its open office', () => {
   const root = scene();
   const home = office(root, 'solo', []);

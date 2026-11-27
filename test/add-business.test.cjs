@@ -201,7 +201,7 @@ test('a business added from setup starts under the open business\'s spend caps',
   assert.equal(s.stored().offices[own.id].settings.costCapUsd, 5, 'its own cap wins');
 });
 
-// Value: protects=two businesses never share one business folder, from Add a business or from a save of the open business (Section 4 edge case); fails_when=addBusiness or businessFolderTakenBy stop checking the other entries' businessFolder, or compare raw strings; why_new=the folder checks above are about the office folder only; seam=none; no_claim=the wizard UI
+// Value: protects=two businesses never share one business folder, from Add a business or from a save of the open business; fails_when=addBusiness or businessFolderTakenBy stop checking the other entries' businessFolder, or compare raw strings; why_new=the folder checks above are about the office folder only; seam=none; no_claim=the wizard UI
 test('never another business\'s business folder, from Add a business or a save in Settings', (t) => {
   const s = scene(t);
   const bakeryDocs = path.join(s.userData, 'Documents', 'Harbor & Pine Bakery');
@@ -262,4 +262,126 @@ test('another business\'s business folder in other letter case', { skip: process
   fs.writeFileSync(path.join(s.userData, 'config.json'), JSON.stringify(cfg));
   assert.deepEqual(s.settings.addBusiness({ home: path.join(s.userData, 'cafe'), settings: { businessFolder: bakeryDocs.toUpperCase() } }), { ok: false, error: 'folderTaken', name: 'Harbor & Pine Bakery' });
   assert.equal(s.settings.businessFolderTakenBy(path.join(s.userData, 'Documents', 'NORTHGATE')).name, 'Northgate Realty');
+});
+
+/** The scene with the bakery on `bakeryDocs` and other entries added. */
+function withFolders(s, bakeryDocs, others = {}) {
+  const cfg = s.stored();
+  cfg.offices[s.bakeryId].settings.businessFolder = bakeryDocs;
+  Object.assign(cfg.offices, others);
+  fs.writeFileSync(path.join(s.userData, 'config.json'), JSON.stringify(cfg));
+}
+
+// Value: protects=a business folder inside another business's, or holding it, is refused too, as is the same folder spelled with ~ or through a link; fails_when=businessUsingFolder compares for equality only, or compares without expanding ~ or following links; why_new=folder access reaches every folder inside an agent's own, and the tests above use only exact spellings; seam=none; no_claim=what the agents can reach (folderAccess tests)
+test('a folder inside another business\'s, or around it, and other spellings of it', (t) => {
+  const s = scene(t);
+  const docs = path.join(s.userData, 'Documents');
+  const bakeryDocs = path.join(docs, 'Harbor & Pine Bakery');
+  withFolders(s, bakeryDocs);
+  const taken = { ok: false, error: 'folderTaken', name: 'Harbor & Pine Bakery' };
+  const add = (businessFolder) => s.settings.addBusiness({ home: path.join(s.userData, 'realty'), settings: { businessName: 'Northgate Realty', businessFolder } });
+  assert.deepEqual(add(path.join(bakeryDocs, 'Realty')), taken, 'inside the bakery\'s folder');
+  assert.deepEqual(add(docs), taken, 'holding the bakery\'s folder');
+  assert.deepEqual(add(path.join(bakeryDocs, '..', 'Harbor & Pine Bakery', 'x', '..')), taken, 'the same folder, spelled the long way');
+  assert.equal(s.settings.businessFolderTakenBy(path.join(docs, 'Harbor & Pine Bakery 2'), { id: null }), null, 'a folder whose name only starts the same is apart');
+
+  // Through a link (or a junction on Windows), to a folder not made yet.
+  fs.mkdirSync(bakeryDocs, { recursive: true });
+  const link = path.join(s.userData, 'Linked');
+  fs.symlinkSync(docs, link, 'junction');
+  assert.deepEqual(add(path.join(link, 'Harbor & Pine Bakery', 'New')), taken, 'a link to the bakery\'s folder');
+
+  // Written with ~: expanded where the folders are compared, not only in the IPC.
+  const mine = `dbm-test-${path.basename(s.userData)}`;
+  withFolders(s, `~/${mine}`);
+  assert.deepEqual(add(path.join(os.homedir(), mine)), taken, 'stored with ~, asked without');
+  assert.deepEqual(add(path.join(os.homedir(), mine, 'Realty')), taken, 'inside it');
+  withFolders(s, path.join(os.homedir(), mine));
+  assert.deepEqual(add(`~/${mine}/Realty`), taken, 'asked with ~');
+  assert.deepEqual(s.settings.businessFolderTakenBy(`~/${mine}/Realty`, { id: null }), { id: s.bakeryId, name: 'Harbor & Pine Bakery' });
+  assert.equal(fs.existsSync(path.join(os.homedir(), mine)), false, 'nothing made on disk');
+
+  // The open business's own setup: nested both ways too.
+  const realtyDocs = path.join(docs, 'Northgate Realty');
+  withFolders(s, bakeryDocs, { other: { home: path.join(s.userData, 'realty'), settings: { businessName: 'Northgate Realty', businessFolder: realtyDocs } } });
+  assert.equal(s.settings.businessFolderTakenBy(path.join(realtyDocs, 'Bakery')).name, 'Northgate Realty');
+  assert.equal(s.settings.businessFolderTakenBy(docs).name, 'Northgate Realty');
+  assert.equal(s.settings.businessFolderTakenBy(bakeryDocs), null, 'its own folder');
+});
+
+// Value: protects=a business saved before businessFolder existed still owns its folder, through its old officeFolder; fails_when=businessUsingFolder reads businessFolder only; why_new=every test above stores businessFolder; seam=none; no_claim=the launch migration that fills businessFolder in (company-knowledge tests)
+test('a business saved before businessFolder existed is matched by its old office folder', (t) => {
+  const s = scene(t);
+  const docs = path.join(s.userData, 'Documents');
+  const realtyDocs = path.join(docs, 'Northgate Realty');
+  withFolders(s, path.join(docs, 'Harbor & Pine Bakery'), {
+    old: { home: path.join(s.userData, 'realty'), settings: { businessName: 'Northgate Realty', officeFolder: path.join(realtyDocs, 'Office') } }
+  });
+  const taken = { ok: false, error: 'folderTaken', name: 'Northgate Realty' };
+  const add = (businessFolder) => s.settings.addBusiness({ home: path.join(s.userData, 'cafe'), settings: { businessName: 'Contoso Cafe', businessFolder } });
+  assert.deepEqual(add(realtyDocs), taken, 'the folder holding its Office folder');
+  assert.deepEqual(add(path.join(realtyDocs, 'Cafe')), taken, 'inside it');
+  assert.equal(s.settings.businessFolderTakenBy(realtyDocs).name, 'Northgate Realty', 'from Settings too');
+  assert.equal(add(path.join(docs, 'Contoso Cafe')).ok, true);
+});
+
+// Value: protects=the open business is never refused its own folder when its id can't be found (office.json missing, or remade with a new id); fails_when=businessFolderTakenBy takes only the entry of the id it finds as itself; why_new=the tests above always have the bakery's office.json; seam=none; no_claim=how launch finds the id again (office-settings tests)
+test('an open business whose id can\'t be found keeps its own folder', (t) => {
+  const s = scene(t);
+  const docs = path.join(s.userData, 'Documents');
+  const bakeryDocs = path.join(docs, 'Harbor & Pine Bakery');
+  const realtyDocs = path.join(docs, 'Northgate Realty');
+  // Its entry under an id launch can't match by folder, and no office.json.
+  const cfg = s.stored();
+  cfg.offices = {
+    old: { home: s.bakery, settings: { ...s.bakerySettings, businessFolder: bakeryDocs } },
+    other: { home: path.join(s.userData, 'realty'), settings: { businessName: 'Northgate Realty', businessFolder: realtyDocs } }
+  };
+  fs.writeFileSync(path.join(s.userData, 'config.json'), JSON.stringify(cfg));
+  fs.rmSync(path.join(s.bakery, 'office.json'));
+  assert.equal(s.settings.businessFolderTakenBy(bakeryDocs), null, 'its own folder, unchanged');
+  assert.equal(s.settings.businessFolderTakenBy(path.join(bakeryDocs, 'Kitchen')), null, 'or inside it');
+  assert.equal(s.settings.businessFolderTakenBy(realtyDocs).name, 'Northgate Realty', 'another business\'s is still refused');
+
+  // office.json remade with an id that has no entry.
+  s.file.ensureOfficeId(s.bakery);
+  assert.ok(s.file.readOfficeId(s.bakery) && !s.stored().offices[s.file.readOfficeId(s.bakery)]);
+  assert.equal(s.settings.businessFolderTakenBy(bakeryDocs), null);
+  assert.equal(s.settings.businessFolderTakenBy(realtyDocs).name, 'Northgate Realty');
+});
+
+// Value: protects=config:update never saves a business folder another business uses: it answers with that business's name and writes nothing, so setup never finishes without a folder; fails_when=the backstop in config:update goes, moves after writeConfig, or throws instead of answering; why_new=before this the backstop could go with every test green; seam=the IPC handler is pinned by source order; no_claim=the Settings window (it never saves businessFolder)
+test('config:update refuses a business folder another business uses, saving nothing', (t) => {
+  const s = scene(t);
+  const docs = path.join(s.userData, 'Documents');
+  withFolders(s, path.join(docs, 'Harbor & Pine Bakery'), {
+    other: { home: path.join(s.userData, 'realty'), settings: { businessName: 'Northgate Realty', businessFolder: path.join(docs, 'Northgate Realty') } }
+  });
+  const refused = { ok: false, error: 'folderTaken', name: 'Northgate Realty' };
+  assert.deepEqual(s.settings.folderTakenRefusal({ businessFolder: path.join(docs, 'Northgate Realty'), businessCity: 'Austin' }), refused);
+  assert.deepEqual(s.settings.folderTakenRefusal({ businessFolder: path.join(docs, 'Northgate Realty', 'Bakery') }), refused);
+  assert.equal(s.settings.folderTakenRefusal({ businessFolder: path.join(docs, 'Harbor & Pine Bakery') }), null, 'its own');
+  assert.equal(s.settings.folderTakenRefusal({ businessCity: 'Austin' }), null, 'no folder in the save');
+  assert.equal(s.settings.folderTakenRefusal(null), null);
+
+  const main = read('src/main/index.ts');
+  const handler = main.slice(main.indexOf("ipcMain.handle('config:update'"));
+  const check = handler.indexOf('const refused = folderTakenRefusal(patch);\n  if (refused) return refused;');
+  assert.ok(check > 0 && check < handler.indexOf('writeConfig(patch)'), 'answered before anything is saved');
+  assert.match(read('src/preload/index.ts'), /updateConfig: \(patch: Partial<HarnessConfig>\): Promise<HarnessConfig \| \{ ok: false; error: 'folderTaken'; name: string \| null \}>/);
+});
+
+// Value: protects=setup asks before it makes any folder, and every refusal says which business has the folder and goes back to the team step: the check, addBusiness's answer and config:update's; fails_when=the check moves after ensureHarnessHome or foldersEnsure, or a refusal stays on the last step or shows other words; why_new=the main side tests can't see the wizard's order; seam=source order pin; no_claim=the rendered wizard
+test('the wizard asks before making folders, and a taken folder goes back to the team step', () => {
+  const wiz = read('src/renderer/src/components/OnboardingWizard.tsx');
+  const finish = wiz.slice(wiz.indexOf('const finish = async () => {'), wiz.indexOf('// Design v2 onboarding'));
+  const asked = finish.indexOf('const taken = await window.cth.businessFolderTakenBy(finishPlan.business, add ? { id: draftId ?? null } : undefined);');
+  assert.ok(asked > 0, 'asked at finish');
+  assert.ok(asked < finish.indexOf('window.cth.ensureHarnessHome('), 'before the office folder is made');
+  assert.ok(asked < finish.indexOf('window.cth.foldersEnsure('), 'before the team\'s folders are made');
+  assert.match(finish, /if \(taken\) \{ refuseFolder\(taken\.name\); return; \}/);
+  assert.match(finish, /if \(saved\.error === 'folderTaken'\) \{ refuseFolder\(saved\.name\); return; \}/);
+  assert.match(finish, /const next = await window\.cth\.updateConfig\(patch\);\n\s*if \('error' in next\) \{ refuseFolder\(next\.name\); return; \}/);
+  assert.match(wiz, /const refuseFolder = \(name: string \| null \| undefined\) => \{\n\s*setError\(folderTakenWords\(t, name\)\); setBusy\(false\); setStep\('team'\);\n\s*\};/);
+  assert.match(wiz, /return t\('addBusiness\.folderTaken', \{ name: name \|\| t\('addBusiness\.anotherBusiness'\) \}\);/);
 });
