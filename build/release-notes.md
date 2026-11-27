@@ -1,4 +1,4 @@
-- **Run two separate businesses on one computer.**
-- Add a business while the open one keeps working.
-- Back up everything and restore it on a new computer.
-- Always allowed: your business's own public names pass the privacy check.
+- **Team members work on your GitHub code.**
+- A held push shows its real changes to approve.
+- The privacy card decides each kept back item, with one Done.
+- Report a problem asks only what you can answer.

@@ -1,6 +1,6 @@
 # Don't Be Michael: features and changes
 
-Everything the app does today, and every release that got it here (0.0.1 to 0.4.3). Part 1 is
+Everything the app does today, and every release that got it here (0.0.1 to 0.4.4). Part 1 is
 written to be lifted onto the GitHub page and the website as it is; Part 2 is the full list, release
 by release.
 
@@ -342,6 +342,20 @@ moving, and brings you only the decisions that need you.
   as a picture, and a part you select pastes as clean as the whole, in light or dark mode.
 
 ## Part 2: Every change, release by release
+
+### 0.4.4 (2026-11-27)
+- GitHub for team members: each repo Pull only, Push on approval or Push to the member's own
+  `agent/` branches. Held pushes and changes under `.github` wait on an Ask me card with the real
+  changes. Every tool call is checked against the repo's setting.
+- Local git: with git installed, a member works in its own copy of a repo in its folder and sends
+  only its committed branch; never a force push, never through a linked folder. Works on Windows.
+- The privacy card decides each kept back item with one Done; Allow covers a whole site. Company
+  profile's public details count as allowed, and an allowance covers only a whole piece.
+- Report a problem: a short form in the owner's own words; the app fills in the version and system.
+- App password steps for iCloud, Yahoo and Zoho mailboxes. The office log notes a settings move,
+  a switch and a first open.
+- Fixes: a hire from a link names its business; a background check gives up on a sign in screen;
+  the Pulse backfill retries; Ask me counts only the cards it shows.
 
 ### 0.4.3 (2026-11-20)
 - Two separate businesses on one computer: each keeps its own settings, saved passwords and keys,
