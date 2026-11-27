@@ -223,6 +223,21 @@ export function teamPlanFromRecord(rec: OfficeRecord | null | undefined): TeamPl
   return { ok: true, business, team: rec.team.map((m) => ({ ...m })), folders };
 }
 
+/**
+ * Whether the open office's settings name another business than its
+ * office.json does. Checked at launch: a mismatch is the first sign of one
+ * business's settings reaching the other's office
+ * (docs/designs/separate-businesses.md, Section 8). Names are compared as the
+ * record keeps them, trimmed. With nothing to compare (setup not finished, no
+ * office.json, or no name on either side) it is not a mismatch.
+ */
+export function businessNameMismatch(cfg: OfficeConfigFields, rec: OfficeRecord | null | undefined): boolean {
+  if (!cfg.onboardingComplete) return false;
+  const settingsName = str(cfg.businessName);
+  const recordName = str(rec?.businessName);
+  return !!settingsName && !!recordName && settingsName !== recordName;
+}
+
 /** True when two records describe the same office, so an unchanged one is not rewritten. */
 export function sameOfficeRecord(a: OfficeRecord | null, b: OfficeRecord | null): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
