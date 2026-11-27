@@ -818,6 +818,11 @@ export class PtyManager {
     return this.sessions.get(id)?.lastOutputAt;
   }
 
+  /** The most recent output this PTY printed (raw, escape codes included). */
+  recentOutput(id: string): string {
+    return this.sessions.get(id)?.tail ?? '';
+  }
+
   /** Milliseconds since this PTY last produced output (Date.now() - lastOutputAt),
    *  or undefined if no such PTY. The idle handshake: large value = safe to type. */
   idleFor(id: string): number | undefined {

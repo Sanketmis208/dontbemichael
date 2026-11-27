@@ -28,6 +28,7 @@ import {
   RESEARCH_UNCHECKED_TOOL, NOT_SENT_SUBJECT_OUT, RESEARCH_ONLY_ASKERS, RESEARCH_NAME, RESEARCH_ROLE, isReservedName,
   SENT_AS_SUBJECT, sentAsBody, nameKey, researchText, cleanResearchName, RESEARCH_ONLY_SKILLS
 } from '../shared/research';
+import { coversPart, publicKey } from '../shared/publicTerms';
 import { FOUNDATION_CAP, LIST_CAP, foundationAsk } from '../shared/foundations';
 /** A card ask as foundationAsk reads it (the ledger's asks carry kind and foundation). */
 type FoundationAskShape = { kind?: unknown; foundation?: unknown };
@@ -305,7 +306,16 @@ export const CHANGES_COME_BACK_HOUSE_RULE = '10. When the owner asks for changes
 /** Every office's house rules: rule 9, only the Research agent uses the
  *  internet, applies in every office (ship review D3; owner ship 2 D16 widened it
  *  from business offices to all). Shown with its current name by houseRules. */
-export const OFFICE_HOUSE_RULES = `${HOUSE_RULES}\n${RESEARCH_HOUSE_RULE}\n${CHANGES_COME_BACK_HOUSE_RULE}`;
+/** Rule 11: an outside service the team can't reach is a connector question
+ *  first (owner, 2026-11-22: "a response from the owner that we use git should
+ *  have auto looked up for a git tool in claude and suggested business owner
+ *  to connect with it"; lookup by Pete each time, owner's choice). Generic:
+ *  any service, not only GitHub. GitHub itself points at the app's own token
+ *  integration, never Claude's GitHub connector (owner, 2026-11-23: "app should
+ *  not suggest claude based git as we are supporting our own integration"). */
+export const CONNECTOR_LOOKUP_HOUSE_RULE = '11. When work needs an outside service the team can\'t reach (code on GitHub or git, a store, a CRM, accounting, a calendar and the like), or the owner says the business uses one, never ask the owner to do the work by hand as the first answer. A team member tells Michael which service and what for. Michael first checks the connectors the app lists for the team; if none fits, Michael asks Pete ("to": "research", "act": "query"), with the service name only, whether Claude has a connector for it and what it is called. If one exists, Michael puts one card on Ask me: connect it on the owner\'s Claude account (claude.ai, Settings, Connectors), then turn it on in the app (Settings, Connections) and give it to the member on their Access tab, naming the member and what it is for. Only when no connector exists, or Pete is off, does the card offer a way by hand, and it says why. GitHub is the exception: the app has its own GitHub integration, so Michael skips Pete and the card asks the owner to add GitHub with a token in the app (Settings, Connections, Integrations) and give it to the member on their Access tab, with the repos and their modes. Never suggest Claude\'s GitHub connector.';
+
+export const OFFICE_HOUSE_RULES = `${HOUSE_RULES}\n${RESEARCH_HOUSE_RULE}\n${CHANGES_COME_BACK_HOUSE_RULE}\n${CONNECTOR_LOOKUP_HOUSE_RULE}`;
 
 
 /**
@@ -460,7 +470,7 @@ export function researchInstructions(b: PromptBusiness, michael: string, p: Prom
     '',
     'You see no office files, task board, memory store or company knowledge, by design: everything you know about a question is in its message. Answer from the public internet, and name each source with a link.',
     '',
-    `Act on each message in your inbox (${p.inbox}); once your answer to it is sent, the app moves it to ${p.inboxDone}. Answer the one who asked: write ONE message JSON to your outbox (${p.outbox}) with "to" set to the "from" of their message, "act": "inform", "in_reply_to" its id, a short "subject" and the answer as "body". Write only to the one who asked, or to ${michael} when you need to raise a problem; never to the whole team (the app refuses anything else). Write only in your inbox, outbox and memory folders and your working folder, attach no files, and never ask the owner: if you cannot answer, say so in your reply.`
+    `Act on each message in your inbox (${p.inbox}); once your answer to it is sent, the app moves it to ${p.inboxDone}; a message that needs no answer is moved there once you have read it. Answer the one who asked: write ONE message JSON to your outbox (${p.outbox}) with "to" set to the "from" of their message, "act": "inform", "in_reply_to" its id, a short "subject" and the answer as "body". Write only to the one who asked, or to ${michael} when you need to raise a problem; never to the whole team (the app refuses anything else). Write only in your inbox, outbox and memory folders and your working folder, attach no files, and never ask the owner: if you cannot answer, say so in your reply.`
   ].join('\n');
 }
 
@@ -2658,22 +2668,43 @@ export class HiveManager {
     }, PRIVACY_CHECK_SENDER));
   }
 
-  /** The kept back questions, newest first (Ask me). */
+  /** The kept back questions waiting on Ask me, newest first. */
   researchKept(): ResearchKept[] {
-    return this.readKept().map(({ again: _again, ...k }) => k).sort((a, b) => b.at - a.at);
+    return this.readKept().filter((k) => !k.closed)
+      .map(({ again: _again, closed: _closed, ...k }) => ({ ...k, private: k.private ?? [], sent: k.sent ?? [] }))
+      .sort((a, b) => b.at - a.at);
+  }
+
+  /** The owner's choice on one kept back piece: keep it private, or take that
+   *  back (it is then undecided, or allowed when it is on the owner's list). */
+  setKeptPrivate(id: string, part: string, on: boolean): boolean {
+    const all = this.readKept();
+    const k = all.find((x) => x.id === id && !x.closed);
+    const mine = k?.parts.find((p) => p.toLowerCase() === String(part).toLowerCase());
+    if (!k || !mine) return false;
+    const rest = (k.private ?? []).filter((p) => p.toLowerCase() !== mine.toLowerCase());
+    k.private = on ? [...rest, mine] : rest;
+    this.writeKept(all);
+    return true;
   }
 
   /**
-   * The owner's answer on a kept back card: 'again' sends the question once
-   * more from the one who asked, through the check with the owner's list as it
-   * is now (an entry they just allowed stays in); 'keep' closes it. Either way
-   * the card goes.
+   * The owner is done with a kept back card (owner, 2026-11-21: one Done, no
+   * card level Keep private). 'again' sends the question once more from the
+   * one who asked, through the check with the owner's list as it is now (what
+   * they just allowed stays in); 'keep' sends nothing. Either way the card
+   * goes. What the owner kept private is remembered with the question, so the
+   * same question kept back for the same words does not ask them again.
+   * 'later' is Done for now with something allowed: the question goes again
+   * so the work is not held up, and the card stays for the pieces still
+   * undecided. `allowed` is what of the card is allowed at this send; the card
+   * keeps it, so the same allowance is not sent twice.
    */
-  decideKept(id: string, action: 'again' | 'keep'): boolean {
+  decideKept(id: string, action: 'again' | 'keep' | 'later', allowed: readonly string[] = []): boolean {
     const all = this.readKept();
-    const k = all.find((x) => x.id === id);
+    const k = all.find((x) => x.id === id && !x.closed);
     if (!k) return false;
-    if (action === 'again') {
+    if (action !== 'keep') {
       const root = this.root();
       if (!root || !this.registry().agents[k.from]) return false;
       const outbox = join(root, 'agents', k.from, 'outbox');
@@ -2685,11 +2716,13 @@ export class HiveManager {
         return false;
       }
     }
-    this.writeKept(all.filter((x) => x.id !== id));
+    if (action === 'later') k.sent = k.parts.filter((p) => allowed.some((a) => coversPart(a, p)));
+    else if (k.private?.length) k.closed = true;
+    this.writeKept(action === 'later' || k.closed ? all : all.filter((x) => x.id !== id));
     return true;
   }
 
-  private readKept(): Array<ResearchKept & { again: { act: string; subject: string; body: string; conversation?: string } }> {
+  private readKept(): Array<Omit<ResearchKept, 'private' | 'sent'> & { private?: string[]; sent?: string[]; closed?: boolean; again: { act: string; subject: string; body: string; conversation?: string } }> {
     const home = this.getHome();
     if (!home) return [];
     try {
@@ -2704,7 +2737,9 @@ export class HiveManager {
     try {
       mkdirSync(privateRoot(home), { recursive: true });
       // The newest cards stay: a question asked again counts from its last try.
-      this.atomicWriteJson(join(privateRoot(home), RESEARCH_KEPT_FILE), [...all].sort((a, b) => a.at - b.at).slice(-MAX_KEPT_OPEN));
+      // Answered ones (kept for what the owner kept private) have their own cap.
+      const byTime = [...all].sort((a, b) => a.at - b.at);
+      this.atomicWriteJson(join(privateRoot(home), RESEARCH_KEPT_FILE), [...byTime.filter((k) => k.closed).slice(-MAX_KEPT_OPEN), ...byTime.filter((k) => !k.closed).slice(-MAX_KEPT_OPEN)]);
     } catch (e) { console.error('[research] saving what was kept back', e); }
   }
 
@@ -2717,8 +2752,21 @@ export class HiveManager {
     if (!body.trim() && !subject.trim()) return;
     const all = this.readKept();
     const same = all.find((x) => x.from === senderId && x.again.subject === subject && x.again.body === body);
-    if (same) {
-      same.parts = [...same.parts, ...parts.filter((p) => !same.parts.some((q) => q.toLowerCase() === p.toLowerCase()))].slice(0, 5);
+    const has = (list: readonly string[], p: string): boolean => list.some((q) => q.toLowerCase() === p.toLowerCase());
+    if (same?.closed) {
+      // Answered already: only words the owner has not kept private bring the
+      // card back, beside the ones they did.
+      // A variant of a site kept private (https://www.acme.com for acme.com)
+      // is that site: it does not ask again (shared/publicTerms.ts).
+      const news = parts.filter((p) => !has(same.private ?? [], p) && !(same.private ?? []).some((q) => coversPart(publicKey(q), p)));
+      if (!news.length) return;
+      same.parts = [...news, ...(same.private ?? [])].slice(0, 5);
+      same.private = (same.private ?? []).filter((p) => has(same.parts, p));
+      same.denied = denied;
+      same.closed = false;
+      same.at = Date.now();
+    } else if (same) {
+      same.parts = [...same.parts, ...parts.filter((p) => !has(same.parts, p))].slice(0, 5);
       same.denied = same.denied && denied;
       same.at = Date.now();
     } else {
@@ -3330,6 +3378,52 @@ export class HiveManager {
     const f = `${id}.json`;
     if (!this.researchDelivered(join(inbox, f))) return;
     try { renameSync(join(inbox, f), join(done, f)); } catch { /* moved already, or next reply */ }
+  }
+
+  /** Research's turn and the inbox files it opened in it. Mail that needs no
+   *  answer never gets the reply that would move it, and Research can't move a
+   *  file itself, so without these it stayed in the inbox and was named in
+   *  every nudge (owner, 2026-11-26: nine "Office open" notes since Nov 20). */
+  private researchTurnStart = 0;
+  private researchReadIds = new Set<string>();
+
+  /** Research's main session took a prompt: a new turn starts. */
+  noteResearchTurn(now = Date.now()): void {
+    this.researchTurnStart = now;
+    this.researchReadIds.clear();
+  }
+
+  /** Research's main session opened a file: remember it when it is a message
+   *  in its own inbox. */
+  noteResearchRead(file: string): void {
+    const inbox = this.researchDir('inbox');
+    if (!inbox || resolve(dirname(file)) !== resolve(inbox)) return;
+    const id = basename(file).replace(/\.json$/, '');
+    if (isSafeMessageId(id)) this.researchReadIds.add(id);
+  }
+
+  /** At the end of Research's turn, the app moves to inbox/.done the mail
+   *  that needs no answer and is done with: what Research opened this turn,
+   *  and the app's own fixed notes delivered before the turn began. Mail that
+   *  needs an answer stays until the answer is sent. Only the app's stamped
+   *  deliveries move. Returns how many moved. */
+  fileResearchHandled(): number {
+    const read = this.researchReadIds;
+    this.researchReadIds = new Set();
+    const inbox = this.researchDir('inbox');
+    const done = this.researchDir('inbox', '.done');
+    if (!inbox || !done) return 0;
+    let n = 0;
+    for (const f of readdirSync(inbox)) {
+      if (!f.endsWith('.json')) continue;
+      const m = this.researchDelivered(join(inbox, f));
+      if (!m || m.requires_reply !== false) continue;
+      const seen = read.has(m.id)
+        || (this.researchTurnStart > 0 && this.isAppUpkeep(m) && Date.parse(m.created_at) < this.researchTurnStart);
+      if (!seen) continue;
+      try { renameSync(join(inbox, f), join(done, f)); n++; } catch { /* moved already */ }
+    }
+    return n;
   }
 
   /** Asks waiting for Research: delivered and not yet read, plus those in a
@@ -5873,6 +5967,19 @@ export class HiveManager {
     try { this.logObserver?.(stamped); } catch { /* best-effort */ }
   }
 
+  /** The first line of a new office's log, written once: only while the log
+   *  is missing or still empty (ensureHive makes it empty), before the
+   *  app-start marker. Any office that ran once has a line, so a later launch,
+   *  a team that never started or a settings move never writes it again. */
+  logFirstOpen(officeId: string | null, appVersion: string): boolean {
+    const root = this.root();
+    if (!root) return false;
+    const log = join(root, 'log.jsonl');
+    try { if (existsSync(log) && statSync(log).size > 0) return false; } catch { return false; }
+    this.appendLog({ kind: 'office-first-open', officeId, appVersion });
+    return true;
+  }
+
   /** Called with every office log event after it is written (Pulse telemetry). */
   logObserver?: (event: Record<string, unknown> & { ts: number }) => void;
 
@@ -6385,6 +6492,12 @@ process.stdin.on('end', () => {
   // would make the frame too big to send, and the call would never end.
   const ev = payload.hook_event_name;
   if (ev === 'PostToolBatch') payload.tool_calls = (Array.isArray(payload.tool_calls) ? payload.tool_calls : []).filter((c) => c && typeof c.tool_use_id === 'string').map((c) => ({ tool_use_id: c.tool_use_id }));
+  // An MCP call keeps one fact of its result, whether it was an error, so an
+  // approved GitHub write the server refused keeps its approval (eng R1).
+  if (ev === 'PostToolUse' && typeof payload.tool_name === 'string' && payload.tool_name.indexOf('mcp__') === 0) {
+    const r = payload.tool_response;
+    payload.tool_is_error = !!(r && typeof r === 'object' && (r.isError === true || r.is_error === true));
+  }
   if (ev === 'PostToolUse' || ev === 'PostToolUseFailure') { delete payload.tool_response; delete payload.error; }
   // Nor what the owner typed: a turn only needs to be known to have started,
   // and a long paste would make the frame too big, so the turn would go

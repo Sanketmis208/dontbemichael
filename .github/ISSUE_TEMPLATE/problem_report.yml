@@ -1,0 +1,65 @@
+name: Problem in the app
+description: Something went wrong while using Don't Be Michael. Tell us in your own words.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Tell us in your own words. The app filled in the details at the bottom.
+        A picture of the app was saved to your Downloads: drag it into the picture box.
+        Reports here are public, so leave out anything private.
+  - type: textarea
+    id: what-doing
+    attributes:
+      label: What were you trying to do?
+      placeholder: For example, I asked Michael to send this week's invoices.
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What went wrong?
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Picture or recording
+      description: Drag the picture from your Downloads into this box.
+      placeholder: Drag a picture here.
+    validations:
+      required: false
+  - type: markdown
+    attributes:
+      value: |
+        **Filled in by the app.** No need to change these.
+  - type: input
+    id: app-version
+    attributes:
+      label: Don't Be Michael version
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Windows
+        - Linux
+    validations:
+      required: true
+  - type: input
+    id: os-version
+    attributes:
+      label: OS version
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Details for the developers
+    validations:
+      required: false

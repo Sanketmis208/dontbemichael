@@ -1509,10 +1509,54 @@ test('once Research\'s answer is sent, the app moves the question it answers to 
   assert.deepEqual(fs.readdirSync(done).filter((f) => f.endsWith('.json')).sort(), [`${first}.json`, `${fromMichael}.json`].sort());
 });
 
+test('at the end of Research\'s turn, the app files the mail that needs no answer; questions stay', async (t) => {
+  // Value: protects=Research's inbox empties of notes it has seen, so nudges stop naming nine old "Office open" notes forever; fails_when=a no-reply note stays after a turn, a question moves before its answer, an unread teammate note moves, or a file the app did not deliver moves; why_new=office log 2026-11-26 (Research mail waiting 4 hours); seam=fake layer
+  const { hive } = await office(t);
+  const { OFFICE_OPEN_SUBJECT, officeOpenBody } = loadTs('src/shared/officeOpen.ts');
+  const inbox = path.join(hive.root(), 'agents', 'research', 'inbox');
+  const done = path.join(inbox, '.done');
+  const here = (id) => fs.existsSync(path.join(inbox, `${id}.json`));
+  hive.send({ to: 'research', act: 'inform', subject: OFFICE_OPEN_SUBJECT, body: officeOpenBody() }, 'human', 'office-open');
+  hive.routeOnce(); await tick(); hive.routeOnce();
+  const note = msgsIn(hive, 'research').find((m) => m.subject === OFFICE_OPEN_SUBJECT).id;
+  const question = await askFrom(hive, 'pam');
+  send(hive, 'god', { to: 'research', act: 'inform', subject: 'FYI', body: 'The bakery opens at 7.' }, 'fyi.json');
+  hive.routeOnce(); await tick(); hive.routeOnce();
+  const fyi = msgsIn(hive, 'research').find((m) => m.subject === 'FYI').id;
+  fs.writeFileSync(path.join(inbox, 'forged.json'), JSON.stringify({ id: 'forged', requires_reply: false, subject: OFFICE_OPEN_SUBJECT, body: officeOpenBody(), from: 'human' }));
+
+  // A turn that ends before any prompt was seen moves nothing it did not read.
+  assert.equal(hive.fileResearchHandled(), 0);
+
+  hive.noteResearchTurn(Date.now() + 1000);
+  hive.noteResearchRead(path.join(inbox, `${question}.json`));
+  hive.noteResearchRead(path.join(hive.root(), 'agents', 'pam', 'inbox', `${fyi}.json`));
+  assert.equal(hive.fileResearchHandled(), 1, 'only the app note moves');
+  assert.ok(!here(note) && fs.existsSync(path.join(done, `${note}.json`)), 'the Office open note is filed');
+  assert.ok(here(question), 'a question waits for its answer even once read');
+  assert.ok(here(fyi), 'a teammate note Research has not opened stays');
+  assert.ok(fs.existsSync(path.join(inbox, 'forged.json')), 'a file the app did not deliver never moves');
+
+  hive.noteResearchTurn();
+  hive.noteResearchRead(path.join(inbox, `${fyi}.json`));
+  assert.equal(hive.fileResearchHandled(), 1);
+  assert.ok(!here(fyi) && fs.existsSync(path.join(done, `${fyi}.json`)), 'a note Research opened is filed at the end of its turn');
+});
+
 test('Research is told the app moves an answered message, not to move it itself', () => {
   // Value: protects=Research isn't sent to do a move its tools can't make on Windows; fails_when=the instruction asks Research to move the file again; why_new=PR 517 review; seam=none
   const { researchInstructions } = loadTs('src/main/hive.ts');
   const text = researchInstructions({ name: 'Harbor Bakery' }, 'Michael', { inbox: '/r/inbox', inboxDone: '/r/inbox/.done', outbox: '/r/outbox', protocol: '/h/PROTOCOL.md', hiveRoot: '/h' });
   assert.match(text, /once your answer to it is sent, the app moves it to \/r\/inbox\/\.done/);
   assert.doesNotMatch(text, /then move it to/);
+  assert.match(text, /a message that needs no answer is moved there once you have read it/);
+});
+
+test('rule 11: an outside service the team cannot reach is a Claude connector question first, looked up by Research', () => {
+  // Value: protects=an owner who names a service (we use git) is offered the Claude connector, not manual work; fails_when=rule 11 drops out of the office rules or loses the lookup; why_new=owner 2026-11-22; seam=none; no_claim=how the model follows it (prompt text only)
+  assert.match(OFFICE_HOUSE_RULES, /^11\. When work needs an outside service/m);
+  assert.match(OFFICE_HOUSE_RULES, /never ask the owner to do the work by hand as the first answer/);
+  assert.match(OFFICE_HOUSE_RULES, /Michael asks Pete \("to": "research", "act": "query"\), with the service name only, whether Claude has a connector/);
+  const { researchText } = loadTs('src/shared/research.ts');
+  assert.match(researchText(OFFICE_HOUSE_RULES, 'Quinn'), /Michael asks Quinn \("to": "research"/);
 });

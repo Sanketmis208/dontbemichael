@@ -237,3 +237,42 @@ test('classifyHook: idle-waiting shapes are idle, other events are null', () => 
   assert.equal(classifyHook('Stop', 'some message'), null);
   assert.equal(classifyHook('UserPromptSubmit', undefined), null);
 });
+
+test('says why a worker with waiting mail was not nudged', () => {
+  const w = new WorkerWakeWatchdog();
+  w.noteSpawn('pty-alice', 0);
+  // Busy terminal: output 1s ago.
+  w.decide([fact({ lastOutputAt: 199_000 })], 200_000);
+  assert.deepEqual(w.waiting(0, 200_000), [{ agentId: 'alice', waitedMs: 0, reason: 'terminal busy' }]);
+  // Under the minimum wait it is not reported yet.
+  assert.deepEqual(w.waiting(60_000, 200_000), []);
+  // Quiet now: nudged; the same mail again is held as already announced.
+  assert.deepEqual(w.decide([fact()], 300_000), ['alice']);
+  assert.equal(w.waiting(0, 300_000)[0].reason, 'nudged');
+  w.decide([fact()], 400_000);
+  assert.deepEqual(w.waiting(150_000, 400_000), [{ agentId: 'alice', waitedMs: 200_000, reason: 'already nudged for this mail' }]);
+  // A drained inbox clears the report.
+  w.decide([fact({ inboxIds: [] })], 500_000);
+  assert.deepEqual(w.waiting(0, 500_000), []);
+  // Michael is never nudged here, so his waiting mail is never reported.
+  w.decide([fact({ agentId: 'god', ptyId: 'pty-god', isGod: true })], 600_000);
+  assert.deepEqual(w.waiting(0, 900_000), []);
+});
+
+test('the wait report names each guard', () => {
+  const cases = [
+    [fact({ paused: true }), 'paused'],
+    [fact({ halted: true }), 'halted'],
+    [fact({ autoDeliveryPaused: true }), 'delivery paused'],
+    [fact({ lastOutputAt: 0 }), 'no output yet']
+  ];
+  for (const [f, reason] of cases) {
+    const w = new WorkerWakeWatchdog();
+    w.decide([f], 200_000);
+    assert.equal(w.waiting(0, 200_000)[0].reason, reason);
+  }
+  const w = new WorkerWakeWatchdog();
+  w.noteHook('alice', 'Notification', 'Claude needs your permission to use Bash', 150_000);
+  w.decide([fact()], 200_000);
+  assert.equal(w.waiting(0, 200_000)[0].reason, 'at a prompt');
+});

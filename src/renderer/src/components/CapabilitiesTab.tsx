@@ -10,7 +10,9 @@ import { SENDING_LABEL_KEY } from './sendingLabels';
 import type { StandingApproval } from '@shared/mailProposals';
 import { missionsFor } from '@shared/missions';
 import { quickbooksCapability, type QuickBooksCapability } from '@shared/quickbooks';
-import { connectorGranted, connectorOn, isQuickBooksKey } from '@shared/claudeConnectors';
+import { connectorGranted, connectorOn, isGitHubKey, isQuickBooksKey } from '@shared/claudeConnectors';
+import { addRepoRow, cleanGitHubCapability, isGitHubConnectorUrl, type GitHubCapability, type GitHubMode, type ListedRepo } from '@shared/github';
+import { VisibilityBadge } from './GitHubHeldCards';
 import { authTypeNeedsSecret, integrationLevel, type IntegrationLevel } from '@shared/integrations';
 import { integrationsClient, type IntegrationRecordView } from '@/integrations/registryClient';
 import { useResolvedGodName } from '@/hooks/useResolvedGodName';
@@ -472,6 +474,11 @@ export function CapabilitiesTab({ agent }: { agent: Agent }) {
                     {c.status === 'unreachable' && <span style={hint}>{t('capabilities.unreachable')}</span>}
                     {roleDefault && <span style={hint}>{t('capabilities.booksRoleDefault')}</span>}
                     <Toggle on={on} label={t('capabilities.canUseConnector', { name, connector: c.key })} onClick={() => { if (qbo) toggleBooks(); else void setGrant(c.key, !on); }} />
+                    {on && isGitHubKey(config, c.key) && (
+                      <div style={{ flexBasis: '100%', paddingInlineStart: 12 }}>
+                        <GitHubRepoRows agentId={agent.id} name={name} cap={cleanGitHubCapability(config.agentCapabilities?.[agent.id]?.github)} />
+                      </div>
+                    )}
                     {qbo && on && (
                       <div style={{ flexBasis: '100%', paddingInlineStart: 12 }}>
                         <RadioRows
@@ -515,9 +522,18 @@ export function CapabilitiesTab({ agent }: { agent: Agent }) {
                       inline
                       label={t('capabilities.integrationAccess', { name, integration: r.label })}
                       value={level ?? 'off'}
-                      options={[{ value: 'off', label: t('capabilities.integrationNone') }, { value: 'read', label: t('capabilities.booksReadOnly') }, { value: 'change', label: t('capabilities.integrationCanChange') }]}
+                      options={r.kind === 'mcp'
+                        // An MCP server's tools are its own: on or off. GitHub's
+                        // repos and modes narrow it below.
+                        ? [{ value: 'off', label: t('capabilities.integrationNone') }, { value: 'change', label: t('capabilities.integrationCanUse') }]
+                        : [{ value: 'off', label: t('capabilities.integrationNone') }, { value: 'read', label: t('capabilities.booksReadOnly') }, { value: 'change', label: t('capabilities.integrationCanChange') }]}
                       onChange={(v) => { if (v !== (level ?? 'off')) void setIntegration(r.id, v === 'off' ? null : v as IntegrationLevel); }}
                     />
+                    {r.kind === 'mcp' && level && isGitHubConnectorUrl(r.baseUrl) && (
+                      <div style={{ flexBasis: '100%', paddingInlineStart: 12 }}>
+                        <GitHubRepoRows agentId={agent.id} name={name} cap={cleanGitHubCapability(config.agentCapabilities?.[agent.id]?.github)} integrationId={r.id} />
+                      </div>
+                    )}
                     <InfoTip label={t('capabilities.integrations')} text={r.call ? t('capabilities.integrationSavedCallInfo', { name }) : t('capabilities.integrationLevelsInfo', { name })} />
                   </div>
                 );
@@ -642,6 +658,145 @@ export function RadioRows({ label, value, options, onChange, inline = false }: {
           </button>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * A member's GitHub repos and their modes (docs/designs/github-connector-modes.md,
+ * design UI-D3, UI-D6, UI-D8): under the GitHub connector row, like QuickBooks'
+ * Read only. Each repo has a word badge, the three way choice and a remove
+ * button; an owner/repo field adds one. The hook reads them on every call.
+ */
+function GitHubRepoRows({ agentId, name, cap, integrationId }: { agentId: string; name: string; cap: GitHubCapability; integrationId?: string }) {
+  const { t } = useTranslation();
+  const [typed, setTyped] = useState('');
+  // With a GitHub token integration, the repos come from the token's own list
+  // (owner, 2026-11-25); typing stays for Claude's connector or a failed read.
+  const [listed, setListed] = useState<ListedRepo[] | null>(null);
+  const [listFailed, setListFailed] = useState(false);
+  const [picked, setPicked] = useState('');
+  useEffect(() => {
+    if (!integrationId) return;
+    let alive = true;
+    setListFailed(false);
+    void window.cth.githubListRepos(integrationId)
+      .then((r) => { if (!alive) return; if (r.ok) setListed(r.repos); else { setListed(null); setListFailed(true); } })
+      .catch(() => { if (alive) { setListed(null); setListFailed(true); } });
+    return () => { alive = false; };
+  }, [integrationId]);
+  const unpicked = (listed ?? []).filter((l) => !cap.repos.some((r) => r.repo === l.repo));
+  // Local git needs git on this computer (owner, 2026-11-26): checked once a
+  // member has a repo, with a way to check again after installing it.
+  const [git, setGit] = useState<'yes' | 'no' | null>(null);
+  const hasRepos = cap.repos.length > 0;
+  const checkGit = (again: boolean): void => {
+    void window.cth.gitVersion?.(again).then((r) => setGit(r?.version ? 'yes' : 'no')).catch(() => setGit('no'));
+  };
+  useEffect(() => { if (hasRepos && integrationId) checkGit(false); }, [hasRepos, integrationId]);
+  const [error, setError] = useState<'invalid' | 'duplicate' | 'full' | 'failed' | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [vis, setVis] = useState<Record<string, 'public' | 'private' | 'unknown'>>({});
+  const repos = cap.repos.map((r) => r.repo).join(' ');
+  useEffect(() => {
+    let alive = true;
+    const read = (): void => { void window.cth.githubVisibility?.(cap.repos.map((r) => r.repo)).then((m) => { if (alive && m) setVis(m); }).catch(() => {}); };
+    read();
+    const off = window.cth.onGitHubVisibility?.(read);
+    return () => { alive = false; off?.(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repos]);
+  const save = async (next: GitHubCapability): Promise<boolean> => {
+    try { const r = await window.cth.githubSetRepos(agentId, next); if (!r.ok) setError('failed'); return r.ok; } catch { setError('failed'); return false; }
+  };
+  const add = async (): Promise<void> => {
+    setError(null);
+    setChecking(true);
+    try {
+      const res = await window.cth.githubCheckRepo(typed);
+      if (!res.repo) { setError('invalid'); return; }
+      const next = addRepoRow(cap, res.repo, res.visibility);
+      if (!next.ok) { setError(next.error); return; }
+      if (await save(next.cap)) setTyped('');
+    } catch { setError('failed'); } finally { setChecking(false); }
+  };
+  const addPicked = async (): Promise<void> => {
+    const l = unpicked.find((x) => x.repo === picked);
+    if (!l) return;
+    setError(null);
+    const next = addRepoRow(cap, l.repo, l.visibility);
+    if (!next.ok) { setError(next.error); return; }
+    if (await save(next.cap)) setPicked('');
+  };
+  const setMode = (repo: string, mode: GitHubMode): void => {
+    void save({ repos: cap.repos.map((r) => (r.repo === repo ? { ...r, mode } : r)) });
+  };
+  const confirm = (repo: string): void => {
+    void save({ repos: cap.repos.map((r) => (r.repo === repo ? { ...r, seen: 'public' as const } : r)) });
+  };
+  const remove = (repo: string): void => { void save({ repos: cap.repos.filter((r) => r.repo !== repo) }); };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+      {cap.repos.length === 0 && <div style={hint}>{t('github.emptyHint', { name })}</div>}
+      {git === 'no' && (
+        <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: 12, lineHeight: '17px', color: 'var(--cth-amber-text)' }}>
+          {t('github.noGit', { name })}
+          <InfoTip label={t('github.noGitLabel')} text={t('github.noGitTip')} />
+          <MiniButton onClick={() => checkGit(true)}>{t('github.checkAgain')}</MiniButton>
+        </div>
+      )}
+      {cap.repos.map((r) => {
+        const now = vis[r.repo] ?? 'unknown';
+        const flipped = r.seen === 'private' && now === 'public';
+        return (
+          <div key={r.repo} style={{ border: '1px solid var(--cth-line)', borderRadius: 'var(--cth-r-md)', padding: '8px 10px', background: 'var(--cth-card-2)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{ ...address, flex: 'unset' }}>{r.repo}</span>
+              <VisibilityBadge vis={now === 'unknown' ? 'unknown' : now} />
+              {now === 'unknown' && <InfoTip text={t('github.notCheckedTip')} />}
+              <button type="button" onClick={() => remove(r.repo)} aria-label={t('github.remove', { repo: r.repo })} title={t('github.remove', { repo: r.repo })}
+                style={{ marginInlineStart: 'auto', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--cth-ink-3)', fontSize: 15, minWidth: 32, minHeight: 32 }}>×</button>
+            </div>
+            <div style={{ marginTop: 6 }}>
+              <RadioRows
+                inline
+                label={t('github.access', { name, repo: r.repo })}
+                value={r.mode}
+                options={[{ value: 'pull', label: t('github.mode.pull') }, { value: 'push', label: t('github.mode.push') }, { value: 'approval', label: t('github.mode.approval') }]}
+                onChange={(v) => { if (v !== r.mode) setMode(r.repo, v as GitHubMode); }}
+              />
+            </div>
+            {now === 'public' && !flipped && <div style={{ ...hint, color: 'var(--cth-amber-text)', marginTop: 6 }}>{t('github.publicLine', { name })}</div>}
+            {flipped && (
+              <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 6, fontSize: 12, color: 'var(--cth-coral-text)' }}>
+                {t('github.flippedLine', { name })}
+                <MiniButton onClick={() => confirm(r.repo)}>{t('github.confirm')}</MiniButton>
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {listed ? (
+        unpicked.length === 0 ? <div style={hint}>{t('github.allAdded')}</div> : (
+          <div style={{ display: 'flex', gap: 6 }}>
+            <select className="cth-input" value={picked} onChange={(e) => { setPicked(e.target.value); setError(null); }} aria-label={t('github.addLabel')}
+              style={{ flex: 1, minWidth: 0, boxSizing: 'border-box', padding: '6px 8px', border: 'none', outline: 'none', background: 'var(--cth-card)', color: 'var(--cth-ink)', fontFamily: 'var(--cth-font-mono)', fontSize: 12.5 }}>
+              <option value="">{t('github.pick')}</option>
+              {unpicked.map((l) => <option key={l.repo} value={l.repo}>{l.visibility === 'public' ? `${l.repo} (${t('github.vis.public')})` : l.repo}</option>)}
+            </select>
+            <MiniButton onClick={() => void addPicked()} disabled={!picked}>{t('github.add')}</MiniButton>
+          </div>
+        )
+      ) : integrationId && !listFailed ? <div style={hint}>{t('github.loadingRepos')}</div> : (<>
+      {listFailed && <div role="alert" style={{ fontSize: 11.5, color: 'var(--cth-coral-text)' }}>{t('github.listFailed')}</div>}
+      <div style={{ display: 'flex', gap: 6 }}>
+        <input className="cth-input" value={typed} onChange={(e) => { setTyped(e.target.value); setError(null); }} placeholder="owner/repo" aria-label={t('github.addLabel')}
+          onKeyDown={(e) => { if (e.key === 'Enter' && typed.trim() && !checking) void add(); }}
+          style={{ flex: 1, minWidth: 0, boxSizing: 'border-box', padding: '6px 8px', border: 'none', outline: 'none', background: 'var(--cth-card)', color: 'var(--cth-ink)', fontFamily: 'var(--cth-font-mono)', fontSize: 12.5 }} />
+        <MiniButton onClick={() => void add()} disabled={!typed.trim() || checking}>{checking ? t('github.vis.checking') : t('github.add')}</MiniButton>
+      </div>
+      </>)}
+      {error && <div role="alert" style={{ fontSize: 11.5, color: 'var(--cth-coral-text)' }}>{t(`github.err.${error}`)}</div>}
     </div>
   );
 }

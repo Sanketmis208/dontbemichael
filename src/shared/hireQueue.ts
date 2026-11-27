@@ -46,3 +46,15 @@ export function hireQueueProgress(
     total: queue.reviewed + queue.pending.length
   };
 }
+
+/** The open business a hire from a link or a file joins, named on its first
+ *  screen: with two businesses on one computer, a link opened in the wrong one
+ *  would add the hire there. An unnamed business gives an empty name. A hire
+ *  started by hand gives null and shows nothing. */
+export function hireBusinessName(
+  hire: HireManifest | null | undefined,
+  businessName: string | undefined
+): string | null {
+  if (!hire) return null;
+  return businessName?.trim() ?? '';
+}
