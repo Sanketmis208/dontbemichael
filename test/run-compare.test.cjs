@@ -105,6 +105,21 @@ test('the call is isolated on Michael\'s engine, and members\' sessions come fro
   assert.match(block, /tellMichael: \(subject, body\) => \{ if \(hive\.enabled\(\)\) hive\.send\(\{ to: hiveGodId\(\), act: 'inform', subject, body \}, 'system'\); \}/);
 });
 
+test('a Windows transcript path matches the projects folder whatever its letter case', () => {
+  // Value: protects=on Windows a session's transcript is recorded and read when Claude Code spells the path in another case than the app (c:\users vs C:\Users); fails_when=the check is a case sensitive startsWith on win32, so nothing is recorded and every comparison says no transcript, or another platform starts ignoring case; why_new=owner review of #739; seam=platform argument; no_claim=Claude Code's own spelling of the path
+  const { inClaudeProjects } = loadTs('src/main/transcript.ts');
+  const root = 'C:\\Users\\Pam\\.claude\\projects';
+  assert.equal(inClaudeProjects('c:\\users\\pam\\.claude\\projects\\C--office\\s-1.jsonl', root, 'win32'), true, 'another case on Windows');
+  assert.equal(inClaudeProjects('C:\\Users\\Pam\\.claude\\projects\\C--office\\s-1.jsonl', root, 'win32'), true, 'the same case on Windows');
+  assert.equal(inClaudeProjects('c:\\users\\pam\\.claude\\projects-old\\s-1.jsonl', root, 'win32'), false, 'a folder that only starts with the same name');
+  assert.equal(inClaudeProjects('D:\\Users\\Pam\\.claude\\projects\\C--office\\s-1.jsonl', root, 'win32'), false, 'another drive');
+  assert.equal(inClaudeProjects('/home/pam/.Claude/projects/-office/s-1.jsonl', '/home/pam/.claude/projects', 'linux'), false, 'case still counts on Linux');
+  assert.equal(inClaudeProjects('/home/pam/.claude/projects/-office/s-1.jsonl', '/home/pam/.claude/projects', 'linux'), true);
+  // Both the hook frame's check and run comparison's go through it.
+  assert.match(read('src/main/hooks.ts'), /function isClaudeTranscript\(path: string\): boolean \{\n\s+return inClaudeProjects\(path\) &&/);
+  assert.match(read('src/main/runCompare.ts'), /if \(inClaudeProjects\(path, root\)\) out\.push/);
+});
+
 test('Edit agent opened the normal way is as before; a suggestion only fills the box (regression D6)', () => {
   // Value: protects=D6's contract; fails_when=a plain open gets a change, the box runs by itself, or the change survives closing; why_new=D6; seam=source; no_claim=the rendered dialog
   const panel = read('src/renderer/src/components/AgentDetailPanel.tsx');

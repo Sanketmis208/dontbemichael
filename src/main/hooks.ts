@@ -21,7 +21,7 @@ import { redactSecrets, SOLO_ENDED, SOLO_RULES, type HiveManager } from './hive'
 import type { HarnessConfig } from './config';
 import type { ControlRegistry } from './control';
 import type { CircuitBreaker } from './breaker';
-import { claudeProjectsRoot, projectDir } from './transcript';
+import { claudeProjectsRoot, inClaudeProjects, projectDir } from './transcript';
 import { HOOK_PATH_UNCHECKED, HOOK_SENDER_UNCHECKED, MAX_HOOK_FRAME_BYTES, TERMINAL_PROMPT_TYPES, batchToolUseIds, isTerminalPrompt, validateHookEvent } from '../shared/hookEvents';
 export { TERMINAL_PROMPT_TYPES, isTerminalPrompt };
 import { resolveGodName } from '../shared/godIdentity';
@@ -50,9 +50,7 @@ const STUCK_MOVED_ON = new Set(['UserPromptSubmit', 'PostToolUse', 'Stop']);
  *  folder (CLAUDE_CONFIG_DIR when set, as Claude Code uses it), where agents
  *  don't write. */
 function isClaudeTranscript(path: string): boolean {
-  const projects = claudeProjectsRoot() + sep;
-  const real = resolve(path);
-  return real.startsWith(projects) && real.endsWith('.jsonl');
+  return inClaudeProjects(path) && resolve(path).endsWith('.jsonl');
 }
 
 /** Desktop notification bodies. The title is the agent's name (displayName). */

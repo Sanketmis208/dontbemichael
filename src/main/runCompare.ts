@@ -11,8 +11,8 @@
  * to the owner's card.
  */
 import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
-import { basename, resolve, sep } from 'node:path';
+import { lstat, realpath } from 'node:fs/promises';
+import { basename } from 'node:path';
 import { createInterface } from 'node:readline';
 import type Database from 'better-sqlite3';
 import { looksLikeInjection } from '../shared/research';
@@ -22,6 +22,7 @@ import {
 } from '../shared/runCompare';
 import { extractJson } from './memoryTidy';
 import { INSTRUCTIONS_MODEL } from './workStyleConvert';
+import { inClaudeProjects } from './transcript';
 
 export interface WentWrongRequest {
   runId: number;
@@ -231,15 +232,23 @@ export class RunCompare {
    * The member's session files, with when each was last written: only the
    * files the private record names, never a search by session id (a member's
    * shell could write a file named for its own session elsewhere). A session
-   * with no recorded file is left out.
+   * with no recorded file is left out. The real file is checked, not only the
+   * spelling: a member's shell that can write there could swap its own file
+   * for a link to another member's, so a link is never followed, and the
+   * folders above the file must really lead into the projects folder.
    */
   private async sessionFiles(agentId: string): Promise<Array<{ path: string; mtime: number }>> {
-    const root = resolve(this.d.projectsRoot()) + sep;
+    let root: string;
+    try { root = await realpath(this.d.projectsRoot()); } catch { return []; }
     const out: Array<{ path: string; mtime: number }> = [];
     for (const f of new Set(this.d.transcriptsOf(agentId))) {
-      const path = resolve(f);
-      if (!path.startsWith(root) || !/^[A-Za-z0-9_-]+\.jsonl$/.test(basename(path))) continue;
-      try { out.push({ path, mtime: (await stat(path)).mtimeMs }); } catch { /* gone */ }
+      if (!/^[A-Za-z0-9_-]+\.jsonl$/.test(basename(f))) continue;
+      try {
+        const st = await lstat(f);
+        if (!st.isFile()) continue;
+        const path = await realpath(f);
+        if (inClaudeProjects(path, root)) out.push({ path, mtime: st.mtimeMs });
+      } catch { /* gone */ }
     }
     return out;
   }

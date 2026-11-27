@@ -12,6 +12,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { posixOnly } = require('./platform.cjs');
 
 if (!process.env.RUN_COMPARE_UNDER_ELECTRON) {
   let bin = null;
@@ -181,8 +182,6 @@ test('only the transcript file the private record names is read, never one found
   // Value: protects=a file a member's shell writes under its own session id elsewhere in the projects folder never enters the comparison; fails_when=the slicer searches every project folder for <session id>.jsonl, or a session with no recorded file is searched for; why_new=TODOS "Run comparison reads transcripts it finds by name" (adversarial review, 2026-10-26); seam=transcriptsOf
   const f = setup(t);
   twoRuns(f);
-  // The record's ids are there too, as a search by name would go by them.
-  f.store.d.sessionsOf = (agentId) => (agentId === 'pam' ? ['s-good', 's-bad'] : []);
   fs.mkdirSync(path.join(f.projects, '-elsewhere'), { recursive: true });
   fs.writeFileSync(path.join(f.projects, '-elsewhere', 's-bad.jsonl'), line('user', T0 + 24 * H + 1500, 'DECOY LINE') + '\n');
   await f.store.wentWrong({ runId: 2, agentId: 'pam', workStyle: 'x' });
@@ -193,7 +192,6 @@ test('only the transcript file the private record names is read, never one found
   // No recorded file: nothing is read, not even the real one by its name.
   const g = setup(t);
   twoRuns(g);
-  g.store.d.sessionsOf = (agentId) => (agentId === 'pam' ? ['s-good', 's-bad'] : []);
   g.store.d.transcriptsOf = () => [];
   const opened = [];
   const real = fs.createReadStream;
@@ -212,6 +210,32 @@ test('only the transcript file the private record names is read, never one found
   fs.copyFileSync(path.join(h.projects, '-office-pam', 's-bad.jsonl'), outside);
   h.store.d.transcriptsOf = () => [outside];
   assert.equal((await h.store.wentWrong({ runId: 2, agentId: 'pam', workStyle: 'x' })).reason, 'no-transcript');
+});
+
+test('a recorded transcript swapped for a link to another file is not read', posixOnly('making a symlink needs extra rights on Windows'), async (t) => {
+  // Value: protects=a member's shell that can write in the projects folder never gets another file into its comparison by linking its own recorded transcript to it; fails_when=the slicer follows a link at the recorded path, or reads a file whose real place is outside the projects folder; why_new=owner review of #739 (check the real file, not only the spelling); seam=transcriptsOf
+  for (const where of ['another member\'s transcript', 'a file outside the projects folder']) {
+    const f = setup(t);
+    twoRuns(f);
+    const target = where.startsWith('another')
+      ? path.join(f.projects, '-office-jim', 's-jim.jsonl')
+      : path.join(path.dirname(f.projects), 'elsewhere.jsonl');
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, line('user', T0 + 24 * H + 1500, 'LINKED LINE') + '\n');
+    const bad = path.join(f.projects, '-office-pam', 's-bad.jsonl');
+    fs.rmSync(bad);
+    fs.symlinkSync(target, bad);
+    const s = await f.store.wentWrong({ runId: 2, agentId: 'pam', workStyle: 'x' });
+    assert.ok(f.calls.every((c) => !/LINKED LINE/.test(c)), `the link to ${where} is not followed`);
+    assert.deepEqual([s.state, s.reason], ['none', 'no-transcript'], `the bad run has no transcript once its file is a link to ${where}`);
+  }
+  // A folder above the file that links out of the projects folder is not followed either.
+  const g = setup(t);
+  twoRuns(g);
+  const away = path.join(path.dirname(g.projects), 'away');
+  fs.renameSync(path.join(g.projects, '-office-pam'), away);
+  fs.symlinkSync(away, path.join(g.projects, '-office-pam'));
+  assert.equal((await g.store.wentWrong({ runId: 2, agentId: 'pam', workStyle: 'x' })).reason, 'no-transcript');
 });
 
 test('a comparison cut short by a quit reads as failed after a restart, and Try again runs it', async (t) => {
