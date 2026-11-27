@@ -52,6 +52,7 @@ import {
   writeOnceIdentity
 } from './brokerWriteOnce';
 import { flagInstructionLike, FLAGGED_NOTE, UNTRUSTED_NOTE } from '../shared/untrustedText';
+import { GITHUB_MCP_TOOLSETS, isGitHubConnectorUrl, withJobLogTail } from '../shared/github';
 
 const MAX_BODY_BYTES = 10 * 1024 * 1024; // 10 MB request-body cap
 const UPSTREAM_TIMEOUT_MS = 30_000;
@@ -102,6 +103,11 @@ export interface IntegrationBrokerDeps {
   getSecret: (secretRef: string | undefined) => string | undefined;
   /** md-mail tool calls, `POST /mail/<tool>` (docs/designs/multi-mailbox.md). */
   mail?: MailRouteHandler;
+  /** md-git tool calls, `POST /git/<tool>` (docs/designs/github-local-git.md). Same shape as mail. */
+  git?: MailRouteHandler;
+  /** A second check on each MCP tool call to an owner-added server (kind 'mcp'),
+   *  for calls that skip the hook (Windows has no shell sandbox). Null allows. */
+  mcpToolGate?: (agentId: string, integrationId: string, tool: string, args: unknown) => string | null;
   /** The level a team member holds, read on every call so a change applies at once. */
   integrationLevel?: (agentId: string, integrationId: string) => IntegrationLevel | undefined;
   /** What `GET /integrations` tells a member. */
@@ -270,6 +276,15 @@ export class IntegrationBroker {
       void this.mail(req, res, cap.agentId ?? cap.workerId, mailMatch[1]);
       return;
     }
+    // 3a') Local git tools: POST /git/<tool>, checked per call against the
+    //      member's GitHub repos (src/main/localGit.ts). Team members only.
+    const gitMatch = /^\/git\/([a-z_]{1,32})$/.exec(rawUrl);
+    if (gitMatch) {
+      if (!this.deps.git || !cap.agentId) return IntegrationBroker.sendError(res, 404, 'not_found', 'local git is not available');
+      if (req.method !== 'POST') return IntegrationBroker.sendError(res, 405, 'method', 'use POST');
+      void this.mail(req, res, cap.agentId, gitMatch[1], this.deps.git);
+      return;
+    }
     // 3b) What this member was given, and the screen for what it reads back.
     if (rawUrl === '/integrations' || rawUrl === '/integrations/screen') {
       if (!cap.agentId) return IntegrationBroker.sendError(res, 404, 'not_found', 'only team members have these');
@@ -283,6 +298,11 @@ export class IntegrationBroker {
       void this.screen(req, res, cap.agentId);
       return;
     }
+    // 3c) An MCP server the owner added with a token (kind 'mcp'): the member's
+    //     Claude talks MCP to /mcp/<integrationId>; the broker adds the token and
+    //     forwards to the server's own address, streaming both ways.
+    const mcpMatch = /^\/mcp\/([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?)$/.exec(rawUrl);
+    if (mcpMatch) { void this.mcpProxy(req, res, cap, mcpMatch[1]); return; }
     // 3) Parse /i/<integrationId>/<path...> or /call/<integrationId>.
     const savedRoute = /^\/call\/([^/?#]+)$/.exec(rawUrl);
     const m = savedRoute ?? /^\/i\/([^/?#]+)(?:\/([^?#]*))?(\?[^#]*)?$/.exec(rawUrl);
@@ -308,6 +328,7 @@ export class IntegrationBroker {
     const rec = this.deps.getRecord(integrationId);
     if (!rec) return IntegrationBroker.sendError(res, 404, 'not_found', 'unknown integration');
     if (!rec.enabled) return IntegrationBroker.sendError(res, 403, 'forbidden', 'integration is disabled');
+    if (rec.kind === 'mcp') return IntegrationBroker.sendError(res, 400, 'mcp_only', `${rec.label || integrationId} is an MCP server: use its own tools.`);
     // A saved call is the only way in, and only a saved call takes the route.
     const name = rec.label || integrationId;
     if (rec.call && !savedRoute) return IntegrationBroker.sendError(res, 400, 'saved_call', `${name} takes only a message: call it with message, and leave out method, path and body.`);
@@ -342,6 +363,105 @@ export class IntegrationBroker {
     void this.forward(req, res, rec, upstream, secret, cap.agentId ?? cap.workerId, integrationId, path + query, level === 'read');
   }
 
+  /**
+   * One MCP request to an owner-added server (kind 'mcp'). Only team members
+   * holding the integration reach it; the token is added here and never sent
+   * back. The upstream address is the record's own, never one the caller names.
+   * The response streams back (MCP answers as JSON or server-sent events), so
+   * only the wait for its headers is timed; a closed caller aborts it.
+   */
+  private async mcpProxy(req: IncomingMessage, res: ServerResponse, cap: Capability, integrationId: string): Promise<void> {
+    const agentId = cap.agentId;
+    if (!agentId || !this.deps.integrationLevel?.(agentId, integrationId)) {
+      return IntegrationBroker.sendError(res, 403, 'forbidden', 'The owner has not given you this connection. It is set on your Access tab. Tell Michael what you need.');
+    }
+    const rec = this.deps.getRecord(integrationId);
+    if (!rec || rec.kind !== 'mcp') return IntegrationBroker.sendError(res, 404, 'not_found', 'unknown MCP connection');
+    if (!rec.enabled) return IntegrationBroker.sendError(res, 403, 'forbidden', 'This connection is turned off.');
+    const method = (req.method ?? 'GET').toUpperCase();
+    if (method !== 'POST' && method !== 'GET' && method !== 'DELETE') return IntegrationBroker.sendError(res, 405, 'method', 'use POST, GET or DELETE');
+    let upstream: URL;
+    try { upstream = new URL(rec.baseUrl); } catch { return IntegrationBroker.sendError(res, 500, 'bad_address', 'The connection\'s address is damaged.'); }
+    let secret: string | undefined;
+    if (authTypeNeedsSecret(rec.authType)) {
+      secret = this.deps.getSecret(rec.secretRef);
+      if (!secret) return IntegrationBroker.sendError(res, 503, 'no_secret', 'No token is saved for this connection. Tell Michael.');
+    }
+    let body: Buffer | undefined;
+    if (method === 'POST') {
+      try { body = await readBodyCapped(req, MAX_BODY_BYTES); } catch { return IntegrationBroker.sendError(res, 413, 'too_large', 'request too large'); }
+    }
+    // Each tool call in the body passes the same rules as the hook.
+    if (body && this.deps.mcpToolGate) {
+      let msg: unknown = null;
+      try { msg = JSON.parse(body.toString('utf8')); } catch { /* not JSON: the server answers */ }
+      type Rpc = { method?: unknown; id?: unknown; params?: { name?: unknown; arguments?: unknown } } | null;
+      const list: Rpc[] = Array.isArray(msg) ? msg as Rpc[] : [msg as Rpc];
+      const refused = new Map<Rpc, string>();
+      for (const call of list) {
+        if (!call || typeof call !== 'object' || call.method !== 'tools/call') continue;
+        const why = typeof call.params?.name === 'string' ? this.deps.mcpToolGate(agentId, integrationId, call.params.name, call.params.arguments) : 'Name the tool.';
+        if (why) refused.set(call, why);
+      }
+      if (refused.size) {
+        const err = (call: Rpc, message: string) => ({ jsonrpc: '2.0', id: call && typeof call === 'object' ? call.id ?? null : null, error: { code: -32001, message } });
+        if (!Array.isArray(msg)) {
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify(err(list[0], refused.get(list[0])!)));
+          return;
+        }
+        // A batch: nothing in it is sent, and every request in it is answered
+        // (refused ones with why, the rest asked to come again on their own),
+        // so no call waits for a reply that never comes. Notifications get none,
+        // and a batch of only notifications gets no body at all (JSON-RPC).
+        const answers = list
+          .filter((c) => c && typeof c === 'object' && c.id !== undefined)
+          .map((c) => err(c, refused.get(c) ?? 'Not sent: another call in the same batch was refused. Send this one again on its own.'));
+        if (!answers.length) { res.writeHead(202); res.end(); return; }
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(answers));
+        return;
+      }
+    }
+    // GitHub job logs: a short tail unless the member asks for more.
+    if (body && isGitHubConnectorUrl(rec.baseUrl)) {
+      const tailed = withJobLogTail(body.toString('utf8'));
+      if (tailed !== null) body = Buffer.from(tailed, 'utf8');
+    }
+    // Only MCP's own headers go up; the caller's broker token never does.
+    const headers: Record<string, string> = { 'user-agent': DEFAULT_USER_AGENT };
+    for (const k of ['accept', 'content-type', 'mcp-session-id', 'mcp-protocol-version', 'last-event-id']) {
+      const v = req.headers[k];
+      if (typeof v === 'string' && v) headers[k] = v;
+    }
+    Object.assign(headers, buildAuthHeaders(rec.authType, rec.authHeader, secret));
+    // GitHub's connector serves only the toolsets it is asked for: add actions
+    // to its defaults so members can read CI runs and logs.
+    if (isGitHubConnectorUrl(rec.baseUrl)) headers['x-mcp-toolsets'] = GITHUB_MCP_TOOLSETS;
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), this.upstreamTimeoutMs);
+    res.on('close', () => { if (!res.writableEnded) ac.abort(); });
+    let upstreamRes: Response;
+    try {
+      upstreamRes = await this.fetchImpl(upstream, { method, headers, body: body as BodyInit | undefined, redirect: 'manual', signal: ac.signal });
+    } catch (e) {
+      clearTimeout(timer);
+      return IntegrationBroker.sendError(res, 502, 'bad_gateway', `the connection did not answer: ${(e as Error).name === 'AbortError' ? 'timed out' : 'network error'}`);
+    }
+    clearTimeout(timer);
+    const respHeaders: Record<string, string> = {};
+    upstreamRes.headers.forEach((value, key) => {
+      const k = key.toLowerCase();
+      if (!STRIP_RESPONSE.has(k) && k !== 'www-authenticate') respHeaders[key] = value;
+    });
+    res.writeHead(upstreamRes.status, respHeaders);
+    try {
+      if (upstreamRes.body) await pipeWebStream(upstreamRes.body, res); else res.end();
+    } catch {
+      res.destroy();
+    }
+  }
+
   /** Label an answer from an integration as outside text and flag lines aimed
    *  at an AI, to Michael only: the member carries on (owner, 2026-10-12). */
   private async screen(req: IncomingMessage, res: ServerResponse, agentId: string): Promise<void> {
@@ -363,7 +483,7 @@ export class IntegrationBroker {
     res.end(JSON.stringify(flags.length ? { note: `${UNTRUSTED_NOTE} ${FLAGGED_NOTE}`, instruction_like: flags } : { note: UNTRUSTED_NOTE }));
   }
 
-  private async mail(req: IncomingMessage, res: ServerResponse, agentId: string, op: string): Promise<void> {
+  private async mail(req: IncomingMessage, res: ServerResponse, agentId: string, op: string, handler: MailRouteHandler = this.deps.mail!): Promise<void> {
     let raw = '';
     let tooBig = false;
     req.setEncoding('utf8');
@@ -374,7 +494,7 @@ export class IntegrationBroker {
     try { body = raw ? JSON.parse(raw) : {}; } catch { return IntegrationBroker.sendError(res, 400, 'bad_request', 'body must be JSON'); }
     if (!body || typeof body !== 'object' || Array.isArray(body)) return IntegrationBroker.sendError(res, 400, 'bad_request', 'body must be a JSON object');
     try {
-      const out = await this.deps.mail!(agentId, op, body);
+      const out = await handler(agentId, op, body);
       if (res.headersSent) return;
       res.writeHead(out.status, { 'content-type': 'application/json' });
       res.end(JSON.stringify(out.body));

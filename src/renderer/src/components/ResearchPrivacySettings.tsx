@@ -14,7 +14,7 @@ import { RESEARCH_ID } from '../../../shared/research';
 import { useResearchName } from '@/shell/research';
 import { groupName, hint, panelStyle } from './fieldText';
 import { PublicTermsList } from './PublicTermsList';
-import { cleanPublicTerms, publicSuggestions } from '@shared/publicTerms';
+import { cleanPublicTerms, publicProfile, publicSuggestions } from '@shared/publicTerms';
 
 /**
  * Settings, Research & privacy (issue #230, docs/designs/research-agent-privacy.md,
@@ -186,7 +186,7 @@ export function ResearchPrivacySettings({ config, classes, onClassesChange, publ
       {/* What the owner says is the business's own and public (owner, 2026-11-20). */}
       <PublicTermsList
         value={publicTerms}
-        suggestions={publicSuggestions({ ...(config.companyProfile ?? {}), businessName: config.businessName }, cleanPublicTerms(publicTerms))}
+        fromProfile={publicSuggestions(publicProfile(config.companyProfile, config.businessName), cleanPublicTerms(publicTerms))}
         onChange={onPublicTermsChange}
       />
     </>

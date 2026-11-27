@@ -6,6 +6,27 @@ All notable changes to this project are documented here. The format is based on
 
 Don't Be Michael keeps its own version line, starting at 0.0.1.
 
+## [0.4.4] (2026-11-27)
+
+### Added
+- **Team members work on your GitHub code.** Give a team member your GitHub repos, each one Pull only, Push on approval or Push to its own `agent/` branches. A push on approval, and any change under a repo's `.github` folder, waits on an Ask me card that shows the real changes, for you to approve, decline or send back with a note. Every tool call is checked against the repo's setting, even one that skips the usual check.
+- **A working copy on your computer.** With git installed, a team member with GitHub gets its own copy of a repo in its folder, works and commits there, and sends only its committed branch. Nothing is ever force pushed, and a linked folder on the way is never followed. On Windows this works too.
+- **Report a problem asks only what you can answer.** The form asks what you were doing and what went wrong, in your own words; the app fills in the version and system.
+- Adding an iCloud, Yahoo or Zoho mailbox shows the app password steps for that provider, with regional Zoho pages (#727, with thanks to @mateuscmtropical).
+- The office log notes a settings move, a switch between businesses and a business's first open (#726, with thanks to @mateuscmtropical).
+
+### Changed
+- **The privacy card decides each kept back item, with one Done.** Allow covers a whole site: its pages, subdomains and email addresses. The list in Settings is titled Allowed.
+- Company profile's public details (the business and legal names, the owner, the website, the public email and the social links) count as allowed for the privacy check.
+
+### Fixed
+- An allowed name or address covers a kept back piece only when it is the whole piece, so an allowed business name never lets a longer private phrase through.
+- When the privacy check takes out something you allowed, it asks again with your allowed words kept.
+- A hire from a link or a file names the business it joins (#735, with thanks to @Sanketmis208).
+- A background check gives up on a Claude sign in screen instead of typing into it (#742, with thanks to @Sanketmis208).
+- The Pulse checks backfill runs again when it could not read a file, and its retry stays inside its own window (#695, with thanks to @Sanketmis208).
+- Ask me counts the update and case study cards only while they show, and keeps the board as it was while a restart is pending (#725, with thanks to @mateuscmtropical).
+
 ## [0.4.3] (2026-11-20)
 
 ### Added

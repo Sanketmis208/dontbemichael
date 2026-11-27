@@ -141,7 +141,7 @@ export const LOG_KIND_CLASS: Readonly<Record<string, FailureClass>> = {
   'role': 'none', 'run-compare-held': 'none', 'schedule-request': 'none', 'session': 'none',
   'session-restored': 'none', 'silent-auto-restart': 'none', 'spawn': 'none', 'tasks': 'none',
   'terminal-handoff': 'none', 'trust-checked': 'none', 'trust-denied': 'none', 'trust-held': 'none',
-  'trust-layer': 'none', 'trust-retry': 'none', 'trust-wait': 'none', 'upkeep-to-research': 'none',
+  'trust-layer': 'none', 'trust-retry': 'none', 'trust-dropped-allowed': 'none', 'trust-wait': 'none', 'upkeep-to-research': 'none',
   'work-style-handoff-written': 'none',
   // The failure sender's own state changes.
   'failure-report-stopped': 'none', 'failure-report-waiting': 'none', 'failure-report-dropped': 'none',

@@ -23,6 +23,7 @@ import {
 import { homeFolderStatus } from './homeFolder';
 import type { FolderLayout } from '../shared/folderAccess';
 import { claudeProjectsRoot, engineHistoryFile } from './transcript';
+import { claudeJsonFile } from './claudeHome';
 
 export function officeRecordPath(home: string): string {
   return join(home, 'office.json');
@@ -270,8 +271,26 @@ export function folderLayoutFor(businessFolder: string | undefined, folders: str
   return {
     business, teamFolders,
     ...(app ? { appPrivate: join(app, 'private'), appLocked: [join(app, 'hive', 'bin'), join(app, 'agent-settings')] } : {}),
-    engineRecords: { projects: recordOnDisk(claudeProjectsRoot()), history: recordOnDisk(engineHistoryFile()) }
+    engineRecords: { projects: recordOnDisk(claudeProjectsRoot()), history: recordOnDisk(engineHistoryFile()) },
+    credentialFiles: credentialFiles().map(recordOnDisk)
   };
+}
+
+/** The owner's login and key files (CEO D7, eng D3): gh, git, netrc, npm and
+ *  Claude's account file, in both its default and CLAUDE_CONFIG_DIR places. */
+export function credentialFiles(home: string = homedir()): string[] {
+  const xdg = process.env.XDG_CONFIG_HOME?.trim() || join(home, '.config');
+  const out = [
+    join(xdg, 'gh', 'hosts.yml'),
+    join(home, '.git-credentials'),
+    join(xdg, 'git', 'credentials'),
+    join(home, '.netrc'),
+    join(home, '_netrc'),
+    join(home, '.npmrc'),
+    join(home, '.claude.json'),
+    claudeJsonFile(home)
+  ];
+  return [...new Set(out)];
 }
 
 /** The deepest folder that contains every path's parent, or undefined. */
