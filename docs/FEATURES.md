@@ -1,6 +1,6 @@
 # Don't Be Michael: features and changes
 
-Everything the app does today, and every release that got it here (0.0.1 to 0.4.3). Part 1 is
+Everything the app does today, and every release that got it here (0.0.1 to 0.4.4). Part 1 is
 written to be lifted onto the GitHub page and the website as it is; Part 2 is the full list, release
 by release.
 
@@ -204,6 +204,18 @@ moving, and brings you only the decisions that need you.
 - Every connector on your Claude account (HubSpot, Google Drive, QuickBooks and the rest) shows up
   in Settings by itself, off. Turn one on, then give it to the team members who need it. Nobody
   else can reach it, and your own Claude Code servers stay yours.
+- GitHub through the app's own GitHub integration: add GitHub under Integrations with a token from any
+  GitHub account, limited to the repos the team may use, then give it to a member. The app keeps the token, and the member
+  reaches GitHub without ever seeing it. Under GitHub on a member's Access tab, add the repos they may
+  use, each as Pull only, Pull and push, or Push on approval. Pull and push writes only to agent/
+  branches and opens a pull request; merging stays yours, and the merge is what goes live. Push on
+  approval holds every write on an Ask me card, with the repo, a Public or Private badge, warnings and
+  the files, and lets it run once when you approve. A change to how GitHub runs your site (.github/)
+  always waits for you, and your own GitHub, git, npm and Claude login files are walled from every
+  member. When work needs GitHub, Michael points you at this integration, never at Claude's GitHub
+  connector. Team members also hear which other Claude connectors they could ask you for.
+- Connect any MCP server with a token: add it under Integrations with its address and token; the app
+  keeps the token, and team members you give it to reach the server without ever seeing it.
 - Give one team member access to one outside service: a custom REST integration reaches only the
   members you name on their Access tab, at Read only or Can change. A new one starts with nobody,
   taking access away holds on the next call, and the app keeps the key. A connection can hold one
@@ -228,9 +240,9 @@ moving, and brings you only the decisions that need you.
   pages or searches, in every office. A trust layer checks every message to Pete against the kinds
   of data you keep private and cleans Pete's answers. Pete is off until you turn them on, and sees
   none of your files. On a Mac nobody else's commands reach the internet.
-- Always allowed: in Settings, Research and privacy, list your business's own public names and
+- Allowed: in Settings, Research and privacy, list your business's own public names and
   links, and the privacy check keeps them as written in questions to Research. When the check
-  keeps words back, an Ask me card offers to always allow each one and ask again. Passwords and
+  keeps words back, an Ask me card lets you allow each one or keep it private, then asks again. Passwords and
   keys never go through, whatever the list says.
 
 ### 7. An office you can watch
@@ -331,6 +343,20 @@ moving, and brings you only the decisions that need you.
 
 ## Part 2: Every change, release by release
 
+### 0.4.4 (2026-11-27)
+- GitHub for team members: each repo Pull only, Push on approval or Push to the member's own
+  `agent/` branches. Held pushes and changes under `.github` wait on an Ask me card with the real
+  changes. Every tool call is checked against the repo's setting.
+- Local git: with git installed, a member works in its own copy of a repo in its folder and sends
+  only its committed branch; never a force push, never through a linked folder. Works on Windows.
+- The privacy card decides each kept back item with one Done; Allow covers a whole site. Company
+  profile's public details count as allowed, and an allowance covers only a whole piece.
+- Report a problem: a short form in the owner's own words; the app fills in the version and system.
+- App password steps for iCloud, Yahoo and Zoho mailboxes. The office log notes a settings move,
+  a switch and a first open.
+- Fixes: a hire from a link names its business; a background check gives up on a sign in screen;
+  the Pulse backfill retries; Ask me counts only the cards it shows.
+
 ### 0.4.3 (2026-11-20)
 - Two separate businesses on one computer: each keeps its own settings, saved passwords and keys,
   files, history, spend caps and, optionally, its own Claude account. The business name in the top
@@ -340,7 +366,7 @@ moving, and brings you only the decisions that need you.
 - Back up everything to one file and restore it on a new computer, from Settings or the first setup
   screen. Saved passwords and keys are locked with a backup password; a restore writes only into
   the business's own folders and says when it stops partway.
-- Always allowed for the privacy check, and Ask me cards that offer to allow what it kept back.
+- An Allowed list for the privacy check, and Ask me cards that offer to allow what it kept back.
 - Address suggestions from OpenStreetMap, business hours by day, languages and currency from a list,
   one field per social link, Team setup four across with one office folder.
 - Ask me shows three questions at a time. Pete waits while he starts. Closing time tells and reminds

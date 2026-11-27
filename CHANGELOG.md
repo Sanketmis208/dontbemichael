@@ -6,6 +6,27 @@ All notable changes to this project are documented here. The format is based on
 
 Don't Be Michael keeps its own version line, starting at 0.0.1.
 
+## [0.4.4] (2026-11-27)
+
+### Added
+- **Team members work on your GitHub code.** Give a team member your GitHub repos, each one Pull only, Push on approval or Push to its own `agent/` branches. A push on approval, and any change under a repo's `.github` folder, waits on an Ask me card that shows the real changes, for you to approve, decline or send back with a note. Every tool call is checked against the repo's setting, even one that skips the usual check.
+- **A working copy on your computer.** With git installed, a team member with GitHub gets its own copy of a repo in its folder, works and commits there, and sends only its committed branch. Nothing is ever force pushed, and a linked folder on the way is never followed. On Windows this works too.
+- **Report a problem asks only what you can answer.** The form asks what you were doing and what went wrong, in your own words; the app fills in the version and system.
+- Adding an iCloud, Yahoo or Zoho mailbox shows the app password steps for that provider, with regional Zoho pages (#727, with thanks to @mateuscmtropical).
+- The office log notes a settings move, a switch between businesses and a business's first open (#726, with thanks to @mateuscmtropical).
+
+### Changed
+- **The privacy card decides each kept back item, with one Done.** Allow covers a whole site: its pages, subdomains and email addresses. The list in Settings is titled Allowed.
+- Company profile's public details (the business and legal names, the owner, the website, the public email and the social links) count as allowed for the privacy check.
+
+### Fixed
+- An allowed name or address covers a kept back piece only when it is the whole piece, so an allowed business name never lets a longer private phrase through.
+- When the privacy check takes out something you allowed, it asks again with your allowed words kept.
+- A hire from a link or a file names the business it joins (#735, with thanks to @Sanketmis208).
+- A background check gives up on a Claude sign in screen instead of typing into it (#742, with thanks to @Sanketmis208).
+- The Pulse checks backfill runs again when it could not read a file, and its retry stays inside its own window (#695, with thanks to @Sanketmis208).
+- Ask me counts the update and case study cards only while they show, and keeps the board as it was while a restart is pending (#725, with thanks to @mateuscmtropical).
+
 ## [0.4.3] (2026-11-20)
 
 ### Added
@@ -375,7 +396,7 @@ Don't Be Michael keeps its own version line, starting at 0.0.1.
 - **Email an agent reads is labelled as written by someone outside the business.** Each message reaches the agent with a note that its text is information, never instructions, and any lines plainly written to steer an AI are listed so the agent skips them and carries on. Michael is told once per such email; you are not (contributed in #188). Research's web answers are checked against the same list.
 - **Michael's conversation keeps your place when new replies arrive.** Reading an earlier answer, you are no longer pulled to the bottom: a "2 new replies" button appears above the message box, and clicking it or scrolling down catches up. Moving the conversation between the bar and the center opens on the same line (contributed in #209).
 - **A change an agent makes in a connected app goes out once.** Writes to QuickBooks and other connected apps are recorded before they are sent, so an agent's retry, or a restart before the answer came back, never creates a second invoice, booking or contact. A write that may already have gone out is refused, and the agent tells Michael (contributed in #212).
-- **Team members can no longer read each other's conversations.** The engine's session records and prompt history are closed to every member's tools and shell, Michael included, even when the Claude folder is a link. The app still reads them itself (contributed in #387).
+- **Team members can no longer read each other's conversations.** The app keeps each team member's session records and prompt history out of every other member's file tools, Michael's included, even when the Claude folder is a link. The app still reads them itself (contributed in #387).
 - **Closing time shows what each waiting agent last said, and how long ago,** so a long job reads differently from a stuck one (contributed in #390).
 - **Pulse shows which emails were organized.** "See the emails" on the emails organized tile lists each email archived, marked read or moved to junk in the period: its subject, its sender, where it went, who moved it and when. A name under the bar lists only that member's. Senders and subjects are kept in the office's private folder for 62 days, then in a monthly archive that only a reset erases; mail organized before this update is counted as having no details.
 - **A team member with no schedules gets up to three starter jobs to add in one click,** taken from its office pack. Each is added paused, so nothing runs until you turn it on (contributed in #407).

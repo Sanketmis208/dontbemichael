@@ -12,18 +12,32 @@ const { reportProblemUrl } = loadTs('src/shared/reportProblem.ts');
 const { createReporter, pictureName, CAPTURE_LIMIT_MS } = loadTs('src/main/reportProblem.ts');
 const read = (p) => fs.readFileSync(path.resolve(__dirname, '..', p), 'utf8');
 
-test('the report link fills the bug form\'s version and OS fields, and nothing else', () => {
-  // Value: protects=reports arrive labeled by OS and version without private data; fails_when=the field ids drift from bug_report.yml, the OS value is not a dropdown option, or more goes in the URL; why_new=E4; seam=none
+test('the report link fills the owner form\'s version and OS fields, and nothing else', () => {
+  // Value: protects=reports arrive labeled by OS and version without private data; fails_when=the field ids drift from problem_report.yml, the OS value is not a dropdown option, or more goes in the URL; why_new=E4; seam=none
   const win = new URL(reportProblemUrl({ appVersion: '0.1.1', platform: 'win32', arch: 'x64', osVersion: '10.0.26100' }));
   assert.equal(win.pathname, '/agentvivekkumar/dontbemichael/issues/new');
   assert.deepEqual([...win.searchParams.keys()].sort(), ['app-version', 'os', 'os-version', 'template']);
   assert.equal(win.searchParams.get('os'), 'Windows');
-  assert.equal(win.searchParams.get('template'), 'bug_report.yml');
+  assert.equal(win.searchParams.get('template'), 'problem_report.yml');
   assert.equal(new URL(reportProblemUrl({ appVersion: '0.1.1', platform: 'darwin', arch: 'arm64' })).searchParams.get('os'), 'macOS (Apple Silicon)');
   assert.equal(new URL(reportProblemUrl({ appVersion: '0.1.1', platform: 'darwin', arch: 'x64' })).searchParams.get('os'), 'macOS (Intel)');
-  const form = read('.github/ISSUE_TEMPLATE/bug_report.yml');
-  for (const id of ['app-version', 'os', 'os-version']) assert.match(form, new RegExp(`id: ${id}\\b`), `${id} is a field of the form`);
-  for (const os of ['macOS (Apple Silicon)', 'macOS (Intel)', 'Windows']) assert.ok(form.includes(`- ${os}`), `${os} is a dropdown option`);
+  const form = read('.github/ISSUE_TEMPLATE/problem_report.yml');
+  for (const id of ['app-version', 'os', 'os-version', 'logs']) assert.match(form, new RegExp(`id: ${id}\\b`), `${id} is a field of the form`);
+  for (const os of ['macOS (Apple Silicon)', 'macOS (Intel)', 'Windows', 'Linux']) assert.ok(form.includes(`- ${os}`), `${os} is a dropdown option`);
+});
+
+// Value: protects=a business owner can send a report answering only what they know (owner, 2026-11-26); fails_when=a developer question, a required checkbox or a dash comes back into the owner form, or the OS heading the labeler reads is renamed; why_new=only the developer form was pinned; seam=none; no_claim=how GitHub renders the form
+test('the owner form asks only what an owner can answer; developers keep the bug form', () => {
+  const form = read('.github/ISSUE_TEMPLATE/problem_report.yml');
+  assert.doesNotMatch(form, /node|npm|type: checkboxes|Steps to reproduce|stack trace/i, 'no developer questions');
+  const required = [...form.matchAll(/id: ([a-z-]+)[\s\S]*?required: (true|false)/g)].filter((m) => m[2] === 'true').map((m) => m[1]);
+  assert.deepEqual(required, ['what-doing', 'what-happened', 'app-version', 'os'], 'two questions, and what the app fills in');
+  assert.match(form, /label: Operating system\n/, 'the OS labeler reads this heading');
+  assert.match(read('.github/workflows/issue-os-labeler.yml'), /Operating system/);
+  // YAML list markers start a line; every other dash would be in owner text.
+  const words = form.split('\n').filter((l) => !/^\s*- /.test(l)).join('\n');
+  assert.doesNotMatch(words, /[\u2013\u2014]| - /, 'no dashes in owner text');
+  assert.match(read('.github/ISSUE_TEMPLATE/bug_report.yml'), /id: node\b/, 'the developer form is unchanged');
 });
 
 // A reporter with fakes; every call is logged in order.
@@ -174,5 +188,5 @@ test('the report link adds only this office\'s recent automatic report fingerpri
   assert.equal(new URL(reportProblemUrl({ ...base, fingerprints: [] })).searchParams.has('logs'), false);
   const many = Array.from({ length: 9 }, (_, i) => String(i).repeat(12));
   assert.equal(new URL(reportProblemUrl({ ...base, fingerprints: many })).searchParams.get('logs').split(', ').length, 5);
-  assert.match(read('.github/ISSUE_TEMPLATE/bug_report.yml'), /id: logs\b/);
+  assert.match(read('.github/ISSUE_TEMPLATE/problem_report.yml'), /id: logs\b/);
 });

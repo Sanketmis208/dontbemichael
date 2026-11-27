@@ -66,6 +66,8 @@ extraResources:
   # Claude Code starts it with the bundled node, outside the asar.
   - from: resources/md-mail-mcp.cjs
     to: md-mail-mcp.cjs
+  - from: resources/md-git-mcp.cjs
+    to: md-git-mcp.cjs
   # md-integrations: the same for the integrations the owner gives a member.
   - from: resources/md-integrations-mcp.cjs
     to: md-integrations-mcp.cjs
