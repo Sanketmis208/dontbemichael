@@ -405,14 +405,20 @@ export class IntegrationBroker {
       }
       if (refused.size) {
         const err = (call: Rpc, message: string) => ({ jsonrpc: '2.0', id: call && typeof call === 'object' ? call.id ?? null : null, error: { code: -32001, message } });
-        res.writeHead(200, { 'content-type': 'application/json' });
-        if (!Array.isArray(msg)) { res.end(JSON.stringify(err(list[0], refused.get(list[0])!))); return; }
+        if (!Array.isArray(msg)) {
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify(err(list[0], refused.get(list[0])!)));
+          return;
+        }
         // A batch: nothing in it is sent, and every request in it is answered
         // (refused ones with why, the rest asked to come again on their own),
-        // so no call waits for a reply that never comes. Notifications get none.
+        // so no call waits for a reply that never comes. Notifications get none,
+        // and a batch of only notifications gets no body at all (JSON-RPC).
         const answers = list
           .filter((c) => c && typeof c === 'object' && c.id !== undefined)
           .map((c) => err(c, refused.get(c) ?? 'Not sent: another call in the same batch was refused. Send this one again on its own.'));
+        if (!answers.length) { res.writeHead(202); res.end(); return; }
+        res.writeHead(200, { 'content-type': 'application/json' });
         res.end(JSON.stringify(answers));
         return;
       }

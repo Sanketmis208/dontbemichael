@@ -187,6 +187,14 @@ test('the broker checks each tool call too, so a call that skips the hook still 
   assert.match(answers[0].error.message, /another call in the same batch was refused/);
   assert.equal(answers[1].error.message, 'Not allowed.');
   assert.equal(seen.length, 1, 'nothing in the batch was forwarded');
+  // A refused batch of only notifications gets no body at all (JSON-RPC).
+  const quiet = await send(broker.url(), '/mcp/gh', { headers: { authorization: `Bearer ${token}` }, body: JSON.stringify([
+    { jsonrpc: '2.0', method: 'tools/call', params: { name: 'merge_pull_request', arguments: {} } },
+    { jsonrpc: '2.0', method: 'notifications/progress' }
+  ]) });
+  assert.equal(quiet.status, 202);
+  assert.equal(quiet.body, '');
+  assert.equal(seen.length, 1, 'nothing in the quiet batch was forwarded');
 });
 
 test('the Test button speaks MCP to an MCP server: a POSTed initialize, never a GET', () => {
