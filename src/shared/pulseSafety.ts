@@ -16,9 +16,9 @@
  *  status line sent 20 such frames at each restart). `turn-cap` is the call
  *  past Max turns per run (turnCap.ts), which also stops the run. */
 export type RefusalGate =
-  | 'paused' | 'connector' | 'quickbooks' | 'mail' | 'sandbox' | 'internet'
+  | 'paused' | 'connector' | 'quickbooks' | 'github' | 'mail' | 'sandbox' | 'internet'
   | 'office-files' | 'folder' | 'impostor' | 'turn-cap';
-export const REFUSAL_GATES: readonly RefusalGate[] = ['connector', 'quickbooks', 'mail', 'internet', 'sandbox', 'folder', 'office-files', 'paused', 'turn-cap', 'impostor'];
+export const REFUSAL_GATES: readonly RefusalGate[] = ['connector', 'quickbooks', 'github', 'mail', 'internet', 'sandbox', 'folder', 'office-files', 'paused', 'turn-cap', 'impostor'];
 
 /** A trust layer log line as trustLayer.ts writes it. */
 export interface TrustDecision { way?: unknown; decision?: unknown; by?: unknown; flagged?: unknown; v?: unknown }

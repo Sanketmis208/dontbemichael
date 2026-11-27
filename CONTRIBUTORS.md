@@ -7,7 +7,7 @@ It is generated from the pull requests themselves rather than from commit metada
 dropped because their git email does not happen to match their GitHub account. It is regenerated
 from merged pull requests, so you appear without having to ask.
 
-**165 people** have contributed so far.
+**166 people** have contributed so far.
 
 <a href="https://github.com/agentvivekkumar/dontbemichael/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=agentvivekkumar/dontbemichael" alt="Contributor avatars">
@@ -24,9 +24,9 @@ requests, and a pull request always has a real account behind it.
 |---|---:|---|---|
 | [@amartya1523](https://github.com/amartya1523) | 93 | 2026-10-10 | 2026-11-10 |
 | [@agentvivekkumar](https://github.com/agentvivekkumar) | 91 | 2026-09-15 | 2026-11-21 |
+| [@Sanketmis208](https://github.com/Sanketmis208) | 14 | 2026-11-01 | 2026-11-26 |
 | [@coolstack-coder](https://github.com/coolstack-coder) | 13 | 2026-10-29 | 2026-11-01 |
 | [@SantoshMalana](https://github.com/SantoshMalana) | 9 | 2026-10-12 | 2026-10-13 |
-| [@Sanketmis208](https://github.com/Sanketmis208) | 9 | 2026-11-01 | 2026-11-18 |
 | [@dhruvpuri](https://github.com/dhruvpuri) | 7 | 2026-10-10 | 2026-10-10 |
 | [@Kartikey1306](https://github.com/Kartikey1306) | 6 | 2026-10-12 | 2026-10-12 |
 | [@codedbygo](https://github.com/codedbygo) | 4 | 2026-10-10 | 2026-10-14 |
@@ -37,6 +37,7 @@ requests, and a pull request always has a real account behind it.
 | [@Johanofcourse](https://github.com/Johanofcourse) | 3 | 2026-10-17 | 2026-10-21 |
 | [@mohuxaiphasalik](https://github.com/mohuxaiphasalik) | 3 | 2026-10-18 | 2026-10-18 |
 | [@Manibharadwaj](https://github.com/Manibharadwaj) | 3 | 2026-10-21 | 2026-10-21 |
+| [@mateuscmtropical](https://github.com/mateuscmtropical) | 3 | 2026-11-21 | 2026-11-26 |
 | [@init-pushu](https://github.com/init-pushu) | 2 | 2026-10-10 | 2026-10-12 |
 | [@shrinivas-sn](https://github.com/shrinivas-sn) | 2 | 2026-10-11 | 2026-10-11 |
 | [@coolman-97](https://github.com/coolman-97) | 2 | 2026-10-12 | 2026-10-21 |
@@ -188,7 +189,7 @@ requests, and a pull request always has a real account behind it.
 | [@swarshah09](https://github.com/swarshah09) | 1 | 2026-10-31 | 2026-10-31 |
 | [@dhruvprmr](https://github.com/dhruvprmr) | 1 | 2026-11-05 | 2026-11-05 |
 
-_416 pull requests from 165 people._
+_424 pull requests from 166 people._
 
 ## † Contributions that never got the merged badge
 

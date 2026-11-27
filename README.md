@@ -41,8 +41,8 @@ runs on your computer.
 > brings you only the calls that need you.
 
 > [!TIP]
-> **New in 0.4.3: run two separate businesses on one computer.** Each keeps its own settings,
-> passwords and files, and the business name in the top bar switches between them.
+> **New in 0.4.4: team members work on your GitHub code.** Each repo is Pull only, Push on
+> approval or Push to the member's own branches, and a held push shows its real changes to approve.
 
 ## Contents
 

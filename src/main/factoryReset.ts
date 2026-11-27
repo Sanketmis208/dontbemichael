@@ -93,6 +93,8 @@ export const APP_DATA_ENTRIES = [
   'mail-send-journal.json',
   'broker-write-journal.json',
   'mail-proposals.json',
+  // GitHub writes held for the owner (github-connector-modes.md).
+  'github-held.json',
   // Attachments the owner opened from an email tab (source-attachments.md).
   'opened-attachments',
   'trigger-history.json',
