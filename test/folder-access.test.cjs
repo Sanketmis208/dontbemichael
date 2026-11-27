@@ -356,3 +356,25 @@ test('file tools write only in the agent\'s own folders, Michael included; reads
   // An agent the hook knows nothing about keeps the old rule.
   assert.equal(folderDecision(oscar, layout, 'Write', elsewhere[0], true).deny, false);
 });
+
+// ── The owner's login and key files (docs/designs/github-connector-modes.md,
+//    CEO D7 and eng D3) ──────────────────────────────────────────────────────
+
+test('every agent, Michael too, is walled from the owner\'s credential files, before its own folder', () => {
+  // Value: protects=no member copies the owner's gh, git, npm or Claude login into a GitHub write; fails_when=a file drops out of the walls or the own-folder allow runs first; why_new=GitHub writes give members a way out; seam=none
+  const { credentialFiles } = loadTs('src/main/officeFile.ts');
+  const home = abs('/Users/me');
+  const files = credentialFiles(home);
+  for (const f of ['.git-credentials', '.netrc', '.npmrc', '.claude.json']) assert.ok(files.includes(path.join(home, f)), f);
+  assert.ok(files.some((f) => f.endsWith(path.join('gh', 'hosts.yml'))));
+  const l = { ...layout, credentialFiles: files };
+  for (const agent of [{ isGod: false, cwd: path.join(B, 'Finance') }, { isGod: true, cwd: B }, { isGod: false, cwd: home }]) {
+    const p = folderPolicy(agent, l, false);
+    for (const f of files) {
+      assert.ok(p.sandbox.denyRead.includes(f) && p.sandbox.denyWrite.includes(f), `${f} in the sandbox walls`);
+      const r = `//${f.replace(/\\/g, '/').replace(/^\//, '')}`;
+      assert.ok(p.deny.includes(`Read(${r})`) && p.deny.includes(`Edit(${r})`), `${f} in the file tool rules`);
+      assert.equal(folderDecision(agent, l, 'Read', f, false).deny, true, `Read ${f} for an agent working in ${agent.cwd}`);
+    }
+  }
+});

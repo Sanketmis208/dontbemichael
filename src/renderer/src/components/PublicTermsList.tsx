@@ -8,14 +8,14 @@ import { MAX_PUBLIC_TERMS, PUBLIC_TERM_MAX, cleanPublicTerms } from '@shared/pub
  * Settings, Research & privacy, Always allowed (owner, 2026-11-20;
  * shared/publicTerms.ts): what the owner says is the business's own and
  * public, which the privacy check keeps as written. One field per entry, a
- * remove button on each, and Company profile's public entries offered as one
- * click suggestions, never added by themselves. Staged for the footer Save
- * like the classes above it.
+ * remove button on each. Company profile's public details are allowed too
+ * (owner, 2026-11-26) and shown under the list, changed in Company profile.
+ * Staged for the footer Save like the classes above it.
  */
-export function PublicTermsList({ value, suggestions, onChange }: {
+export function PublicTermsList({ value, fromProfile, onChange }: {
   value: string[] | undefined;
-  /** Company profile's public entries not on the list yet (publicSuggestions). */
-  suggestions: string[];
+  /** Company profile's public details not on the list (publicSuggestions). */
+  fromProfile: string[];
   onChange: (terms: string[]) => void;
 }) {
   const { t } = useTranslation();
@@ -67,16 +67,20 @@ export function PublicTermsList({ value, suggestions, onChange }: {
             <button type="button" onClick={() => setRows([...rows.filter((r) => r.trim()), ''])} style={addButton}>
               <span aria-hidden="true">+</span> {t('research.publicAdd')}
             </button>
-            {/* Company profile's public entries, one click each; never added by themselves. */}
-            {suggestions.slice(0, MAX_PUBLIC_TERMS - saved.length).map((s) => (
-              <button key={s} type="button" onClick={() => save([...saved, s])} style={suggestion}
-                aria-label={t('research.publicSuggestAria', { term: s })}>
-                <span aria-hidden="true">+</span> {s}
-              </button>
-            ))}
           </>
         )}
       </div>
+      {fromProfile.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+          <span style={{ ...hint, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            {t('research.publicFromProfile')}
+            <InfoTip label={t('research.publicFromProfile')} text={t('research.publicFromProfileTip')} />
+          </span>
+          <ul aria-label={t('research.publicFromProfile')} style={{ listStyle: 'none', margin: 0, padding: 0, display: 'contents' }}>
+            {fromProfile.map((s) => <li key={s} style={chip} title={s}>{s}</li>)}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
@@ -89,8 +93,8 @@ const addButton: CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 5, height: 26, padding: '0 8px', border: 'none', borderRadius: 'var(--cth-r-md)',
   background: 'transparent', color: 'var(--cth-ink-2)', cursor: 'pointer', fontFamily: 'var(--cth-font-ui)', fontSize: 12.5, fontWeight: 500
 };
-const suggestion: CSSProperties = {
-  display: 'inline-flex', alignItems: 'center', gap: 4, height: 26, maxWidth: 260, padding: '0 10px', border: 'none', borderRadius: 'var(--cth-r-pill)',
-  background: 'var(--cth-neutral-soft)', color: 'var(--cth-ink-2)', cursor: 'pointer', fontFamily: 'var(--cth-font-ui)', fontSize: 12,
+const chip: CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', height: 24, maxWidth: 260, padding: '0 10px', borderRadius: 'var(--cth-r-pill)',
+  background: 'var(--cth-neutral-soft)', color: 'var(--cth-ink-2)', fontFamily: 'var(--cth-font-ui)', fontSize: 12,
   overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis'
 };
