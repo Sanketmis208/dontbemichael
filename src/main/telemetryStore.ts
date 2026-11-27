@@ -66,7 +66,7 @@ export interface CardLite {
 
 /** Idle this long and the owner counts as away (D11). */
 export const AWAY_AFTER_SEC = 30 * 60;
-const MAX_BUFFER = 5000;
+export const MAX_BUFFER = 5000;
 /** At most this many cards of the last seen board are saved; open ones first. */
 export const MAX_SAVED_CARDS = 2000;
 /** Running time is saved as one point this often, or sooner at a day's end,
@@ -118,10 +118,10 @@ export class TelemetryStore {
     if (office) this.push(ev, office);
   }
 
-  private push(ev: TelemetryEvent, office: string): void {
+  private push(ev: TelemetryEvent, office: string, mayFlush = true): void {
     this.buf.push({ ...ev, office });
     this.onRecord?.(office);
-    if (this.buf.length >= MAX_BUFFER) this.flush();
+    if (mayFlush && this.buf.length >= MAX_BUFFER) this.flush();
   }
 
   /** Write the queued points in one transaction. A failure is counted for the
@@ -131,14 +131,12 @@ export class TelemetryStore {
     const batch = this.buf;
     this.buf = [];
     const db = this.db();
-    if (!db) { this.countFailures(batch); return; }
+    if (!db) { this.countFailures(batch); this.forgetBoards(); return; }
     try {
       const ins = db.prepare('INSERT INTO telemetry_events (office, agent_id, kind, ts, value, attrs) VALUES (?, ?, ?, ?, ?, ?)');
       const fail = db.prepare(`INSERT INTO telemetry_failures (office, day, count) VALUES (?, ?, ?)
         ON CONFLICT(office, day) DO UPDATE SET count = count + excluded.count`);
       db.transaction(() => {
-        for (const e of batch) ins.run(e.office, e.agentId, e.kind, Math.round(e.ts), e.value ?? null, e.attrs ? JSON.stringify(e.attrs) : null);
-        for (const [key, n] of this.failed) { const [office, day] = key.split('\t'); fail.run(office, day, n); }
         // The board in the same transaction as its points: after a quit or a
         // crash the next launch diffs against exactly what was counted.
         if (this.unsavedCards.size) {
@@ -146,14 +144,24 @@ export class TelemetryStore {
             ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`);
           for (const [office, cards] of this.unsavedCards) mark.run(cardsKey(office), savedJson(cards), this.now());
         }
+        for (const e of batch) ins.run(e.office, e.agentId, e.kind, Math.round(e.ts), e.value ?? null, e.attrs ? JSON.stringify(e.attrs) : null);
+        for (const [key, n] of this.failed) { const [office, day] = key.split('\t'); fail.run(office, day, n); }
       })();
       this.failed.clear();
       this.unsavedCards.clear();
       this.loggedFailure = false;
     } catch (e) {
       this.countFailures(batch);
+      this.forgetBoards();
       if (!this.loggedFailure) { this.loggedFailure = true; console.error('[pulse] telemetry write failed:', e); }
     }
+  }
+
+  /** After a failed write the points of the pending boards are lost, so the
+   *  next read diffs against the board still saved and counts them again. */
+  private forgetBoards(): void {
+    for (const office of this.unsavedCards.keys()) this.lastCards.delete(office);
+    this.unsavedCards.clear();
   }
 
   private countFailures(batch: Array<TelemetryEvent & { office: string }>): void {
@@ -225,13 +233,18 @@ export class TelemetryStore {
       if (was !== c.status) changed = true;
       if (!prev || was === c.status || (saved && was === undefined)) continue;
       const excluded = c.closedBy === 'owner' || (Array.isArray(c.humanQA) && c.humanQA.some((e) => e?.kind === 'report'));
-      this.record({
+      // No flush inside the loop: it would save these points with the old board.
+      this.push({
         agentId: c.assignee ?? null, kind: 'card-status', ts,
         attrs: { id: c.id, from: was ?? null, to: c.status, createdAt: c.createdAt ? Date.parse(c.createdAt) || null : null, ...(excluded ? { excluded: true } : {}) }
-      });
+      }, office, false);
     }
+    // An empty board after one with cards is most likely tasks.json that could
+    // not be read: keeping it would count every card again on the next read.
+    if (!next.size && prev?.size) return;
     this.lastCards.set(office, next);
     if (changed || next.size !== (prev?.size ?? 0)) this.unsavedCards.set(office, next);
+    if (this.buf.length >= MAX_BUFFER) this.flush();
   }
 
   /** The board saved for an office, or undefined when there is none or it
