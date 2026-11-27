@@ -5951,6 +5951,19 @@ export class HiveManager {
     try { this.logObserver?.(stamped); } catch { /* best-effort */ }
   }
 
+  /** The first line of a new office's log, written once: only while the log
+   *  is missing or still empty (ensureHive makes it empty), before the
+   *  app-start marker. Any office that ran once has a line, so a later launch,
+   *  a team that never started or a settings move never writes it again. */
+  logFirstOpen(officeId: string | null, appVersion: string): boolean {
+    const root = this.root();
+    if (!root) return false;
+    const log = join(root, 'log.jsonl');
+    try { if (existsSync(log) && statSync(log).size > 0) return false; } catch { return false; }
+    this.appendLog({ kind: 'office-first-open', officeId, appVersion });
+    return true;
+  }
+
   /** Called with every office log event after it is written (Pulse telemetry). */
   logObserver?: (event: Record<string, unknown> & { ts: number }) => void;
 

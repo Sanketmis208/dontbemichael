@@ -144,7 +144,22 @@ export function hiddenExitCause(tail: string): HiddenExitCause {
   const text = plainLines(tail).slice(-30).join('\n').toLowerCase().replace(/\s+/g, '');
   if (text.includes('itrustthisfolder')) return 'trust-folder';
   if (text.includes('bypasspermissionsmode') && text.includes('no,exit')) return 'bypass-warning';
+  if (text.includes('selectloginmethod')) return 'signed-out';
   return exitCause(tail);
+}
+
+/** What to do about a prompt not yet seen in the session's transcript: keep
+ *  waiting, stop checking as it was taken, or give up so the caller's fallback
+ *  answers. A session that started on a sign in screen can never take it, so
+ *  it is given up on at once. Slowness alone only at promptTakenMs. The screen
+ *  read is the one from before the prompt was pasted, so words in the prompt
+ *  itself never count. Trust and bypass questions are left out: the Enter
+ *  answers them "No, exit" and the session ends by itself. */
+export function promptWait(s: { taken: boolean; bootScreen: string; waitedMs: number; promptTakenMs: number }): { verdict: 'wait' | 'taken' | 'give-up'; exitCause?: HiddenExitCause } {
+  if (s.taken) return { verdict: 'taken' };
+  if (hiddenExitCause(s.bootScreen) === 'signed-out') return { verdict: 'give-up', exitCause: 'signed-out' };
+  if (s.waitedMs >= s.promptTakenMs) return { verdict: 'give-up' };
+  return { verdict: 'wait' };
 }
 
 /** How much of the session's output is kept for hiddenExitCause. */
@@ -401,6 +416,11 @@ export function runHiddenClaude(prompt: string, opts: HiddenClaudeOptions): Prom
 
     const sendPrompt = () => {
       if (settled || promptSent) return;
+      // A sign in screen is given up on before anything is typed into it: an
+      // Enter there picks a way to sign in.
+      const bootScreen = tail;
+      const atBoot = promptWait({ taken: false, bootScreen, waitedMs: 0, promptTakenMs });
+      if (atBoot.exitCause) { finish({ ok: false, error: 'hidden session never took the prompt (signed out, or a screen is waiting)', exitCause: atBoot.exitCause }); return; }
       promptSent = true;
       if (bootTimer) { clearTimeout(bootTimer); bootTimer = null; }
       // Pictures first, one paste each, so each attaches before the prompt.
@@ -426,11 +446,12 @@ export function runHiddenClaude(prompt: string, opts: HiddenClaudeOptions): Prom
         const sentAt = Date.now();
         promptTimer = setInterval(() => {
           if (settled) return;
-          if (existsSync(transcriptFile(sessionDir(), sessionId))) {
+          const wait = promptWait({ taken: existsSync(transcriptFile(sessionDir(), sessionId)), bootScreen, waitedMs: Date.now() - sentAt, promptTakenMs });
+          if (wait.verdict === 'taken') {
             if (promptTimer) { clearInterval(promptTimer); promptTimer = null; }
             return;
           }
-          if (Date.now() - sentAt >= promptTakenMs) { finish({ ok: false, error: 'hidden session never took the prompt (signed out, or a screen is waiting)' }); return; }
+          if (wait.verdict === 'give-up') { finish({ ok: false, error: 'hidden session never took the prompt (signed out, or a screen is waiting)' }); return; }
           ptyProc.write('\r');
         }, ENTER_AGAIN_MS);
       }, afterImages + 140);

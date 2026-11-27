@@ -177,7 +177,7 @@ import { AUTO_FAILURE_REPORTS } from '../shared/buildFeatures';
 import { APP_NAME, APP_DATA_DIR, APP_URL_SCHEME } from '../shared/appName';
 import { copyOfficeData, homeFolderStatus, homeReadyAtLaunch } from './homeFolder';
 import { backfillOfficeRecord, findOffice, folderLayoutFor, isUsableTeamFolder, officeSwitchGuard, syncOfficeRecord } from './officeFile';
-import { addBusiness, adoptOpenOffice, businessDraft, businessNameAt, listBusinesses, migrateToOfficeSettings, neverOpenedBusiness, noteOfficeClosed, officeClaudeDir, officesAfterMove, relocateBusiness, removeUnfinishedBusiness, saveBusinessDraft } from './officeSettings';
+import { addBusiness, adoptOpenOffice, businessDraft, businessNameAt, currentOfficeId, listBusinesses, migrateToOfficeSettings, neverOpenedBusiness, noteOfficeClosed, officeClaudeDir, officesAfterMove, relocateBusiness, removeUnfinishedBusiness, saveBusinessDraft } from './officeSettings';
 import { folderPolicy, AGENT_TMP_DIR, agentTmpName, researchFolderPolicy, withAgentTmpWall, withGitMirrorWall, withMemberWall, RESEARCH_TMP_DIR, shellTempWalls, withResearchWall, type AgentFolderPolicy, type FolderLayout } from '../shared/folderAccess';
 import { sandboxNetwork } from '../shared/webAccess';
 import { legacyBusinessFolder, touchesOffice } from '../shared/officeRecord';
@@ -227,8 +227,11 @@ app.setName(APP_NAME);
 // starts. On every launch: a config already moved returns at once, and one
 // whose office is not there yet waits for it. The move is one way; the copy
 // kept from before it (config.before-offices.json) is what a downgrade needs.
+// Written to the office log once the hive is up.
+let settingsMovedThisLaunch = false;
 try {
   const moved = migrateToOfficeSettings();
+  settingsMovedThisLaunch = moved === 'done';
   if (moved === 'failed') console.error('[offices] settings were not moved this launch; the app runs on them as they are');
   adoptOpenOffice();
 } catch (e) { console.error('[offices] launch move:', e); }
@@ -1066,8 +1069,9 @@ const pulse = new PulseService({
   readChecked: () => {
     const home = readConfig().harnessHome;
     if (!home) return '';
-    // Checks from before the lists kept words, put together once from the
-    // office's files (owner, 2026-10-16: "still not saying changed message").
+    // Checks from before the lists kept words, put together from the office's
+    // files: once, or again a few times while a scan misses files (owner,
+    // 2026-10-16: "still not saying changed message").
     try {
       const reg = hive.registry();
       ensureCheckedBackfill(privateRoot(home), {
@@ -4403,6 +4407,10 @@ function switchOffice(newHome: string, mode: 'move' | 'fresh', oldHome: string |
   try { memory.stop(); } catch (e) { console.error('[changeHome] memory.stop:', e); }
   try { memoryTidy.stop(); } catch (e) { console.error('[changeHome] memoryTidy.stop:', e); }
 
+  // One line in the open office's log (support sees when and on which
+  // version), the id and the version only. Before a move copies the hive
+  // folder, so the line goes with the office (docs/designs/separate-businesses.md).
+  hive.appendLog({ kind: 'office-switch', officeId: currentOfficeId(), appVersion: app.getVersion() });
   if (mode === 'move' && oldHome) {
     try {
       copyOfficeData(oldHome, newHome);
@@ -7063,6 +7071,9 @@ function bootstrapHiveServices(): void {
   // Tell the hive what it is running inside, BEFORE anything spawns: the prompt
   // builder reads this, so an agent spawned earlier would never learn it.
   hive.setRuntimeInfo({ version: app.getVersion(), packaged: app.isPackaged, appPath: app.getAppPath() });
+  // A new office's first line, once (hive.logFirstOpen): a business set up on
+  // this launch, or the first one on a fresh install through config:update.
+  hive.logFirstOpen(currentOfficeId(), app.getVersion());
   // An app-start marker in the event log. log.jsonl had twelve event kinds and
   // none of them meant "the app restarted", so a relaunch, and more importantly a
   // switch between a packaged build and a local one, was invisible to every agent
@@ -7468,6 +7479,7 @@ app.whenReady().then(() => {
   if (homeReady) {
     bootstrapHiveServices();
     if (firstOpen) { try { adoptOpenOffice(); } catch (e) { console.error('[offices] first open:', e); } }
+    if (settingsMovedThisLaunch) hive.appendLog({ kind: 'office-settings-moved', officeId: currentOfficeId(), appVersion: app.getVersion() });
     // An office set up before office.json existed gets one now, if the config's
     // team is really this office's team (officeFile.ts).
     backfillOfficeRecord(readConfig());
