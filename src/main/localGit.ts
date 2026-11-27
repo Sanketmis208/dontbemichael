@@ -17,7 +17,6 @@
 import { execFile } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { closeSync, constants as fsc, existsSync, fstatSync, lstatSync, mkdirSync, openSync, readSync, rmSync, writeFileSync } from 'node:fs';
-import { devNull } from 'node:os';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { cleanGitHubCapability, normalizeRepo, type GitHubCapability, type RepoVisibility } from '../shared/github';
 import {
@@ -98,6 +97,19 @@ export class LocalGit {
     return d;
   }
 
+  /** An empty file for git's global config. Not the null device: git for
+   *  Windows cannot open \\.\nul as a config file ("unable to access"). Kept
+   *  empty: anything written there is cleared before the next command. */
+  private emptyConfig(): string {
+    const p = this.deps.privateDir() ?? this.deps.home() ?? '.';
+    mkdirSync(p, { recursive: true });
+    const f = join(p, 'git-empty-config');
+    let size = -1;
+    try { const st = lstatSync(f); size = st.isFile() ? st.size : -1; } catch { /* not made yet */ }
+    if (size !== 0) { rmSync(f, { recursive: true, force: true }); writeFileSync(f, '', { mode: 0o600 }); }
+    return f;
+  }
+
   /** Run git safely. Never throws; a timeout or a missing program is code -1. */
   private run(args: string[], opts: { cwd?: string; token?: string; maxBuffer?: number } = {}): Promise<RunResult> {
     const safe = [
@@ -113,7 +125,7 @@ export class LocalGit {
       '-c', 'advice.detachedHead=false'
     ];
     const env: Record<string, string> = {
-      GIT_CONFIG_GLOBAL: devNull,
+      GIT_CONFIG_GLOBAL: this.emptyConfig(),
       GIT_CONFIG_NOSYSTEM: '1',
       GIT_ATTR_NOSYSTEM: '1',
       GIT_TERMINAL_PROMPT: '0',

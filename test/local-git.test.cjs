@@ -23,7 +23,10 @@ let hasGit = true;
 try { execFileSync('git', ['--version'], { stdio: 'ignore' }); } catch { hasGit = false; }
 const gitOnly = hasGit ? {} : { skip: 'git is not installed' };
 
-const g = (cwd, ...args) => execFileSync('git', ['-c', 'user.name=T', '-c', 'user.email=t@example.com', '-c', 'init.defaultBranch=main', ...args], { cwd, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: os.devNull, GIT_CONFIG_NOSYSTEM: '1' } });
+// An empty file, not os.devNull: git for Windows cannot open \\.\nul as its config.
+const EMPTY_CONFIG = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'md-gitcfg-')), 'config');
+fs.writeFileSync(EMPTY_CONFIG, '');
+const g = (cwd, ...args) => execFileSync('git', ['-c', 'user.name=T', '-c', 'user.email=t@example.com', '-c', 'init.defaultBranch=main', ...args], { cwd, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: EMPTY_CONFIG, GIT_CONFIG_NOSYSTEM: '1' } });
 
 /** An office with a stand in GitHub repo holding one commit on main. */
 function office(t, mode = 'push') {
@@ -284,4 +287,16 @@ test('the md-git server lists its two tools and passes a call to the broker, an 
   const no = (await ask(3, 'tools/call', { name: 'git_push', arguments: { repo: 'acme/site', branch: 'agent/x' } })).result;
   assert.equal(no.isError, true); assert.match(no.content[0].text, /Pull only/);
   assert.deepEqual(seen.map((s) => [s.url, s.token]), [['/git/git_sync', 'tok'], ['/git/git_push', 'tok']]);
+});
+
+test('git runs with an empty config file of the app, never the null device, and it stays empty', gitOnly, async (t) => {
+  // Git for Windows cannot open \\.\nul as its config (CI, 2026-11-27).
+  const { lg, root } = office(t);
+  const cfg = path.join(root, 'private', 'git-empty-config');
+  fs.mkdirSync(path.dirname(cfg), { recursive: true });
+  fs.writeFileSync(cfg, '[core]\n\thooksPath = /tmp/evil\n');
+  assert.ok(await lg.version(true), 'git runs');
+  assert.equal(fs.readFileSync(cfg, 'utf8'), '', 'anything written there is cleared first');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'main', 'localGit.ts'), 'utf8');
+  assert.doesNotMatch(src, /devNull/);
 });
