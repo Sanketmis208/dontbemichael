@@ -194,8 +194,8 @@
 </ul>
 <p>Frameworks are adding pieces of this (LangGraph’s interrupts, CrewAI’s memory and tracing, Agent Framework’s telemetry), and their commercial platforms sell more of it. But the assembled, running system is still your project. That’s a great deal if the agent system <em>is</em> your product. It’s a terrible deal if what you wanted was help with your repos this afternoon.</p>
 <h2 id="what-a-harness-is-instead" tabindex="-1">What a harness is instead <a class="anchor" href="#what-a-harness-is-instead" aria-hidden="true">#</a></h2>
-<p>A <a href="/blog/what-is-a-multi-agent-harness/">multi-agent harness</a> is the other answer: the system, already assembled, as an app. Munder Difflin is a free, MIT-licensed, local-first desktop app (macOS/Windows/Linux) where every agent is a <strong>real CLI process</strong> — Claude Code, OpenAI Codex, Antigravity, OpenCode, Crush, pi.dev, GitHub Copilot CLI — running in its own pseudo-terminal and its own isolated git worktree. A <a href="/blog/how-the-god-orchestrator-works/">GOD orchestrator</a> routes work between them; agents share long-term memory; triggers include typing, Slack, webhooks, schedules, and voice.</p>
-<p>The pieces you’d have built around a framework are already there: <a href="/blog/human-in-the-loop-approving-ai-agents/">human approval gates</a> on spend, scope, and destructive ops; a circuit breaker with a steer → constrain → stop ladder; per-agent token budgets; OpenTelemetry observability; a Command Center with a kanban board and live fleet monitoring. And because it drives CLIs rather than calling model APIs, it rides the <strong>subscriptions you already pay for</strong> — no mandatory API key, with BYO keys and local LLMs as options.</p>
+<p>A <a href="/blog/what-is-a-multi-agent-harness/">multi-agent harness</a> is the other answer: the system, already assembled, as an app. Munder Difflin is a free, MIT-licensed, local-first desktop app (macOS/Windows/Linux) where every agent is a <strong>real CLI process</strong> — Claude Code, OpenAI Codex, Antigravity, OpenCode, Crush, pi.dev, GitHub Copilot CLI — running in its own pseudo-terminal and its own isolated git worktree. A GOD orchestrator routes work between them; agents share long-term memory; triggers include typing, Slack, webhooks, schedules, and voice.</p>
+<p>The pieces you’d have built around a framework are already there: human approval gates on spend, scope, and destructive ops; a circuit breaker with a steer → constrain → stop ladder; per-agent token budgets; OpenTelemetry observability; a Command Center with a kanban board and live fleet monitoring. And because it drives CLIs rather than calling model APIs, it rides the <strong>subscriptions you already pay for</strong> — no mandatory API key, with BYO keys and local LLMs as options.</p>
 <p>The honest flip side: you can’t <code>import</code> Munder Difflin into your SaaS. It won’t run your custom document pipeline inside your product. It’s an app for a specific job — a team of agents working your repositories, visible on one screen — not a toolkit for arbitrary agent systems. Server based meta harnesses such as Databricks’ Omnigent sit in between, which our OmniAgent alternatives post covers.</p>
 <figure class="fig fig-inline"><img src="/blog/assets/media/crewai-autogen-vs-a-local-agent-harness/note-2.png" alt="Hand-drawn sketch from “CrewAI and AutoGen vs a Local Agent Harness: Framework or App?”" loading="lazy" decoding="async" /></figure>
 <h2 id="the-honest-decision-rule" tabindex="-1">The honest decision rule <a class="anchor" href="#the-honest-decision-rule" aria-hidden="true">#</a></h2>
@@ -211,7 +211,7 @@
 <li>You want guardrails, memory, isolation, and a UI on day one, not as a Q3 project.</li>
 <li>You want it local and driving the CLI subscriptions you already have, rather than metering API calls through code you wrote.</li>
 </ul>
-<p>There’s no loser here. It’s the same distinction as Rails vs. a deployed app: nobody asks which is “better,” because one is for builders of systems and the other is a system. If you’re still weighing categories, <a href="/blog/how-to-choose-a-multi-agent-tool/">how to choose a multi-agent tool</a> walks the wider field, and <a href="/blog/local-first-vs-cloud-agent-sdks/">local-first vs cloud agent SDKs</a> covers the deployment axis.</p>
+<p>There’s no loser here. It’s the same distinction as Rails vs. a deployed app: nobody asks which is “better,” because one is for builders of systems and the other is a system.</p>
 <h2 id="try-the-harness-side-in-five-minutes" tabindex="-1">Try the harness side in five minutes <a class="anchor" href="#try-the-harness-side-in-five-minutes" aria-hidden="true">#</a></h2>
 <p>If your answer was “I just want the team,” that’s the job Munder Difflin exists for. <a href="https://github.com/chaitanyagiri/munder-difflin/releases/latest">Download the latest release</a> — free, open source, local-first — and if it earns it, <a href="https://github.com/chaitanyagiri/munder-difflin">a GitHub star</a> helps more people find it.</p>
 <p>Sources: <a href="https://github.com/crewAIInc/crewAI">CrewAI on GitHub</a>; <a href="https://learn.microsoft.com/en-us/agent-framework/overview/">Microsoft Agent Framework overview</a>; <a href="https://devblogs.microsoft.com/agent-framework/migrate-your-semantic-kernel-and-autogen-projects-to-microsoft-agent-framework-release-candidate/">Migrating Semantic Kernel and AutoGen to Agent Framework</a>; <a href="https://www.langchain.com/langgraph">LangGraph</a>.</p>
@@ -274,64 +274,9 @@
   </div>
 
   <footer class="post-foot wrap"><div class="prevnext">
-      <a class="pn prev" href="/blog/github-copilot-cli-vs-claude-code-for-hive-work/"><span class="k">← Older</span><span class="t">GitHub Copilot CLI vs Claude Code as Hive Workers</span></a>
+      <a class="pn prev" href="/blog/how-to-talk-to-your-orchestrator/"><span class="k">← Older</span><span class="t">How to Brief Your Orchestrator (So the Floor Actually Ships)</span></a>
       <a class="pn next" href="/blog/command-center-guide/"><span class="k">Newer →</span><span class="t">The Command Center: Kanban, Fleet and Budgets in One Place</span></a>
     </div>
-    <section class="related">
-      <h2>Related in Comparisons</h2>
-      <div class="post-grid">
-        <article class="card t-comparisons">
-  <a class="thumb t-comparisons" href="/blog/claude-code-vs-antigravity/" aria-hidden="true" tabindex="-1"><img src="/blog/assets/media/claude-code-vs-antigravity/hero.png" alt="" loading="lazy" decoding="async" /></a>
-  <div class="body">
-    <div class="meta">
-      <time datetime="2026-09-14">Sep 14, 2026</time>
-      <span class="dot" aria-hidden="true"></span>
-      <span>5 min</span>
-    </div>
-    <h3><a href="/blog/claude-code-vs-antigravity/">Claude Code vs Antigravity: Which One Fits Your Work?</a></h3>
-    <p class="dek">Claude Code vs Google Antigravity, checked 14 Sep 2026: terminal agent or desktop agent app, Claude inside Antigravity, plans, limits and a verdict.</p>
-    <div class="foot">
-      <span class="tag kind">Comparisons</span>
-      <a class="more" href="/blog/claude-code-vs-antigravity/" aria-label="Read: Claude Code vs Antigravity: Which One Fits Your Work?">Read →</a>
-    </div>
-  </div>
-</article>
-<article class="card t-comparisons">
-  <a class="thumb t-comparisons" href="/blog/claude-code-vs-cursor/" aria-hidden="true" tabindex="-1"><img src="/blog/assets/media/claude-code-vs-cursor/hero.png" alt="" loading="lazy" decoding="async" /></a>
-  <div class="body">
-    <div class="meta">
-      <time datetime="2026-09-14">Sep 14, 2026</time>
-      <span class="dot" aria-hidden="true"></span>
-      <span>5 min</span>
-    </div>
-    <h3><a href="/blog/claude-code-vs-cursor/">Claude Code vs Cursor: Which Is Better in 2026?</a></h3>
-    <p class="dek">Claude Code vs Cursor, checked 14 Sep 2026: where each runs, models, plans, the new Claude Code weekly limits, parallel agents and using both.</p>
-    <div class="foot">
-      <span class="tag kind">Comparisons</span>
-      <a class="more" href="/blog/claude-code-vs-cursor/" aria-label="Read: Claude Code vs Cursor: Which Is Better in 2026?">Read →</a>
-    </div>
-  </div>
-</article>
-<article class="card t-comparisons">
-  <a class="thumb t-comparisons" href="/blog/codex-cli-vs-claude-code/" aria-hidden="true" tabindex="-1"><img src="/blog/assets/media/codex-cli-vs-claude-code/hero.png" alt="" loading="lazy" decoding="async" /></a>
-  <div class="body">
-    <div class="meta">
-      <time datetime="2026-09-10">Sep 10, 2026</time>
-      <span class="dot" aria-hidden="true"></span>
-      <span>5 min</span>
-    </div>
-    <h3><a href="/blog/codex-cli-vs-claude-code/">Codex CLI vs Claude Code</a></h3>
-    <p class="dek">Codex CLI and Claude Code compared firsthand: sandbox and approval flags, AGENTS.md vs CLAUDE.md, real pricing, and where each terminal agent wins.</p>
-    <div class="foot">
-      <span class="tag kind">Comparisons</span>
-      <a class="more" href="/blog/codex-cli-vs-claude-code/" aria-label="Read: Codex CLI vs Claude Code">Read →</a>
-    </div>
-  </div>
-</article>
-
-      </div>
-    </section>
-    
   </footer>
 </article>
 

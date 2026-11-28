@@ -1,4 +1,4 @@
-- **Team members work on your GitHub code.**
-- A held push shows its real changes to approve.
-- The privacy card decides each kept back item, with one Done.
-- Report a problem asks only what you can answer.
+- **What an email promises becomes a card Michael keeps.**
+- Remove a business whose folder is gone.
+- Attach PDFs and documents again.
+- An update the job already covers says so.

@@ -32,7 +32,7 @@ faq:
   <source src="/media/demo/orchestrator.mp4" type="video/mp4" />
 </video>
 
-Munder Difflin puts one agent between you and the floor: the GOD orchestrator — Michael — who reads every request, decomposes it, routes work to the right agents, and escalates only critical items back to you. (The full mechanics are in [how the GOD orchestrator works](/blog/how-the-god-orchestrator-works/).) That design has one implication people keep missing: **the quality of what the floor ships is mostly the quality of your brief.**
+Munder Difflin puts one agent between you and the floor: the GOD orchestrator — Michael — who reads every request, decomposes it, routes work to the right agents, and escalates only critical items back to you. That design has one implication people keep missing: **the quality of what the floor ships is mostly the quality of your brief.**
 
 Here's how to brief well.
 
@@ -48,7 +48,7 @@ State the outcome and the definition of done. Let the plan be his problem.
 
 **1. The goal.** One or two sentences describing the end state. "Users can reset their password over email" beats "add a route, then a token table, then a mailer."
 
-**2. The constraints.** What must not change, where the work lives, what conventions apply. Which repo (the floor works over your registered repos), which directories are off-limits, "follow the existing design tokens," "don't touch the migration history." Constraints are cheap to write and expensive to omit — this is [context engineering](/blog/context-engineering-for-ai-agents/) at the human layer.
+**2. The constraints.** What must not change, where the work lives, what conventions apply. Which repo (the floor works over your registered repos), which directories are off-limits, "follow the existing design tokens," "don't touch the migration history." Constraints are cheap to write and expensive to omit — this is context engineering at the human layer.
 
 **3. The budget.** Munder Difflin supports per-agent token budgets with live fleet monitoring, backed by a circuit breaker that nudges, constrains, then stops runaways. Say what the work is worth: "keep this under N tokens total" or "this is an overnight job, not a sprint." A budget in the brief becomes a budget on the floor.
 
@@ -84,7 +84,7 @@ A brief is not a launch-and-pray. Three controls matter while the floor runs:
 
 **Status.** Ask Michael in plain language — "what's the state of the floor?" — or read it yourself: the Command Center's Tasks kanban, live fleet monitoring, real token and cost telemetry, and the activity log.
 
-**Approvals.** Michael resolves routine requests himself and escalates only critical items — spend, destructive ops, scope changes — into an approvals queue you act on. Answer those promptly; a stalled approval is a stalled floor. More on this pattern in [approving AI agents](/blog/human-in-the-loop-approving-ai-agents/).
+**Approvals.** Michael resolves routine requests himself and escalates only critical items — spend, destructive ops, scope changes — into an approvals queue you act on. Answer those promptly; a stalled approval is a stalled floor.
 
 ## Briefing by voice: Talk mode
 

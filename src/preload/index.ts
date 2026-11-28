@@ -743,6 +743,8 @@ const api = {
     ipcRenderer.invoke('address:suggest', typed, lang),
   /** Remove a business whose setup was never finished (not the open one). */
   removeUnfinishedBusiness: (id: string): Promise<boolean> => ipcRenderer.invoke('office:removeUnfinished', id),
+  /** Remove a finished business whose folder is gone, with its saved passwords and history. */
+  removeMissingBusiness: (id: string): Promise<boolean> => ipcRenderer.invoke('office:removeMissing', id),
   /** Whether a folder (default: the current home) exists and holds an office. */
   homeStatus: (path?: string): Promise<{ path: string | null; exists: boolean; hasOffice: boolean }> =>
     ipcRenderer.invoke('config:homeStatus', path),

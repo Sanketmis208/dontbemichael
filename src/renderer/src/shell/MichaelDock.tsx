@@ -422,8 +422,10 @@ function boldFirst(text: string): string {
 const FOLD_PX = 144;
 const FOLD_NOTES_PX = 108;
 
+/** Narrow, the 1:1 sits on the message box at the box's own width, edge to
+ *  edge, as one piece with it (owner, 2026-11-27). */
 const dockStyle: CSSProperties = {
-  position: 'absolute', insetInlineStart: 0, bottom: 'calc(100% + 8px)', width: 400, maxWidth: 'calc(100vw - 48px)',
+  position: 'absolute', insetInlineStart: 0, insetInlineEnd: 0, bottom: 'calc(100% + 8px)',
   maxHeight: 'min(430px, calc(100vh - 182px))', display: 'flex', flexDirection: 'column', overflow: 'hidden',
   background: 'var(--cth-card)', borderRadius: 'var(--cth-r-2xl)',
   boxShadow: 'inset 0 0 0 1px var(--cth-line-2), var(--cth-shadow-lg)', fontFamily: 'var(--cth-font-ui)', pointerEvents: 'auto'
