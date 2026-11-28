@@ -11,7 +11,8 @@
  * and is never listed as another business; a new address is still added; a
  * fix that keeps its address is not blocked, and a fix that changes it to
  * another business's is refused; a business with no mailboxes saved does not
- * break the check; nothing is checked before the move.
+ * break the check; an older entry for the open folder is not another
+ * business; nothing is checked before the move.
  */
 
 const test = require('node:test');
@@ -148,6 +149,30 @@ test('a fix that keeps its address is not blocked, and one that takes another bu
   assert.match(moved.reason, /hello@realty\.com already belongs to Northgate Realty/);
   assert.deepEqual(logins, ['Shared@Old.com'], 'a refused fix never logs in');
   assert.equal(config.readConfig().mailboxes.find((m) => m.id === 'orders-bakery-com').address, 'orders@bakery.com', 'the record keeps its address');
+});
+
+test('an older entry for the open folder is never another business', (t) => {
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'mailbox-other-business-'));
+  userDataNow = userData;
+  t.after(() => fs.rmSync(userData, { recursive: true, force: true }));
+  const file = loadTs('src/main/officeFile.ts');
+  const settings = loadTs('src/main/officeSettings.ts');
+  const bakery = office(userData, 'bakery');
+  const realty = office(userData, 'realty');
+  const bakeryId = file.ensureOfficeId(bakery);
+  const realtyId = file.ensureOfficeId(realty);
+  // office.json was restored with a new id, so the open folder also has an
+  // older entry holding its own mailbox.
+  fs.writeFileSync(path.join(userData, 'config.json'), JSON.stringify({
+    harnessHome: bakery,
+    officesMigrated: 1,
+    offices: {
+      'office-older-1234': { home: bakery, settings: { businessName: 'Harbor & Pine Bakery', mailboxes: [box('orders-bakery-com', 'orders@bakery.com')] } },
+      [bakeryId]: { home: bakery, settings: { businessName: 'Harbor & Pine Bakery', mailboxes: [box('orders-bakery-com', 'orders@bakery.com')] } },
+      [realtyId]: { home: realty, settings: { businessName: 'Northgate Realty', mailboxes: [box('hello-realty-com', 'hello@realty.com')] } }
+    }
+  }));
+  assert.deepEqual(settings.otherBusinessMailboxes(), [{ name: 'Northgate Realty', addresses: ['hello@realty.com'] }]);
 });
 
 test('before settings are per business there are no other businesses to check', (t) => {

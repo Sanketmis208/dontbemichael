@@ -353,6 +353,9 @@ export function otherBusinessMailboxes(): Array<{ name: string | null; addresses
   const out: Array<{ name: string | null; addresses: string[] }> = [];
   for (const [id, entry] of Object.entries(cfg.offices ?? {})) {
     if (id === openId || !entry) continue;
+    // An office.json replaced or restored with a new id leaves an older entry
+    // for the open folder, and that is still the open business.
+    if (cfg.harnessHome && typeof entry.home === 'string' && samePath(entry.home, cfg.harnessHome)) continue;
     const s = entry.settings ?? {};
     const boxes = Array.isArray(s.mailboxes) ? s.mailboxes : [];
     const addresses = boxes.map((m) => m?.address).filter((a): a is string => typeof a === 'string' && !!a.trim());
