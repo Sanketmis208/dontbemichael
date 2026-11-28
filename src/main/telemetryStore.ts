@@ -131,7 +131,7 @@ export class TelemetryStore {
     const batch = this.buf;
     this.buf = [];
     const db = this.db();
-    if (!db) { this.countFailures(batch); this.forgetBoards(); return; }
+    if (!db) { this.writeFailed(batch); return; }
     try {
       const ins = db.prepare('INSERT INTO telemetry_events (office, agent_id, kind, ts, value, attrs) VALUES (?, ?, ?, ?, ?, ?)');
       const fail = db.prepare(`INSERT INTO telemetry_failures (office, day, count) VALUES (?, ?, ?)
@@ -151,17 +151,19 @@ export class TelemetryStore {
       this.unsavedCards.clear();
       this.loggedFailure = false;
     } catch (e) {
-      this.countFailures(batch);
-      this.forgetBoards();
+      this.writeFailed(batch);
       if (!this.loggedFailure) { this.loggedFailure = true; console.error('[pulse] telemetry write failed:', e); }
     }
   }
 
   /** After a failed write the points of the pending boards are lost, so the
-   *  next read diffs against the board still saved and counts them again. */
-  private forgetBoards(): void {
-    for (const office of this.unsavedCards.keys()) this.lastCards.delete(office);
-    this.unsavedCards.clear();
+   *  next read diffs against the board still saved and records them again.
+   *  Those card points are not failures; the rest of the batch is (D15). */
+  private writeFailed(batch: Array<TelemetryEvent & { office: string }>): void {
+    const pending = this.unsavedCards;
+    this.countFailures(batch.filter((e) => !(e.kind === 'card-status' && pending.has(e.office))));
+    for (const office of pending.keys()) this.lastCards.delete(office);
+    pending.clear();
   }
 
   private countFailures(batch: Array<TelemetryEvent & { office: string }>): void {
@@ -246,9 +248,10 @@ export class TelemetryStore {
         attrs: { id: c.id, from: was ?? null, to: c.status, createdAt: c.createdAt ? Date.parse(c.createdAt) || null : null, ...(excluded ? { excluded: true } : {}) }
       }, office, false);
     }
-    // An empty board after one with cards is most likely tasks.json that could
-    // not be read: keeping it would count every card again on the next read.
-    if (!next.size && prev?.size) return;
+    // An empty board is never kept: hive hands Pulse [] when tasks.json cannot
+    // be read, and keeping it, even as a first read, would count every card
+    // again on the next read. An office is remembered only from cards.
+    if (!next.size) return;
     this.lastCards.set(office, next);
     if (changed || next.size !== (prev?.size ?? 0)) this.unsavedCards.set(office, next);
     if (this.buf.length >= MAX_BUFFER) this.flush();

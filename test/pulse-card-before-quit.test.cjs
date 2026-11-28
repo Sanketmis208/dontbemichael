@@ -244,3 +244,63 @@ test('a tick that fills the buffer saves its points with its own board', (t) => 
   s2.flush();
   assert.equal(done().length, MAX_BUFFER, 'nothing counted twice');
 });
+
+test('an empty first read with no saved board is not taken as the baseline', (t) => {
+  // Value: protects=Tasks done on the first launch after this change or in a new office; fails_when=an empty first read is remembered, so the next real board counts every card from nothing; why_new=owner re-review of #737; seam=tasks([]) stands in for the unreadable file; no_claim=none beyond protects
+  const { launch, done, row } = setup(t);
+  const s = launch();
+  s.tasks([], t0);
+  s.flush();
+  assert.equal(row(), undefined, 'the empty read is not saved');
+  s.tasks([card('a', 'done'), card('b', 'doing')], t0 + 8_000);
+  s.flush();
+  assert.deepEqual(done(), [], 'the real board is only remembered');
+  assert.deepEqual(JSON.parse(row().value), { a: 'done', b: 'doing' });
+});
+
+test('a write that keeps failing counts a changed card once, and not as a failure', (t) => {
+  // Value: protects=the failure count and the days left out of advice; fails_when=the card points of a forgotten board count as failures, so each failed tick adds the same change again; why_new=owner re-review of #737; seam=a database whose points insert throws; no_claim=none beyond protects
+  t.mock.method(console, 'error', () => {});
+  const { persist, launch, done } = setup(t);
+  let broken = false;
+  const db = () => {
+    const real = persist.database();
+    if (!broken) return real;
+    return {
+      transaction: (fn) => real.transaction(fn),
+      prepare: (sql) => (sql.startsWith('INSERT INTO telemetry_events') ? { run: () => { throw new Error('disk full'); } } : real.prepare(sql))
+    };
+  };
+  const s = launch({ db });
+  s.tasks([card('a', 'doing')], t0);
+  s.flush();
+  broken = true;
+  s.record({ agentId: 'pam', kind: 'prompt', ts: t0 + 1_000 });
+  for (let i = 1; i <= 3; i++) {
+    s.tasks([card('a', 'done')], t0 + i * 8_000);
+    s.flush();
+  }
+  broken = false;
+  s.tasks([card('a', 'done')], t0 + 32_000);
+  s.flush();
+  assert.deepEqual(done(), ['a'], 'the card counts once');
+  assert.deepEqual(Object.values(s.failedWrites(OFFICE)), [1], 'only the lost prompt is a failure');
+});
+
+test('a flush with no database saves no board, and the card it lost counts exactly once', (t) => {
+  // Value: protects=the board and its points in step when the database is away for a flush; fails_when=the pending board is kept and saved by the next flush without its point, so the card never counts; why_new=owner re-review of #737; seam=db() returns null for one flush; no_claim=none beyond protects
+  const { persist, launch, done } = setup(t);
+  let away = false;
+  const s = launch({ db: () => (away ? null : persist.database()) });
+  s.tasks([card('a', 'doing')], t0);
+  s.flush();
+  s.tasks([card('a', 'done')], t0 + 8_000);
+  away = true;
+  s.flush();
+  away = false;
+  s.flush();
+  s.tasks([card('a', 'done')], t0 + 16_000);
+  s.flush();
+  assert.deepEqual(done(), ['a']);
+  assert.deepEqual(s.failedWrites(OFFICE), {});
+});
