@@ -41,8 +41,8 @@ runs on your computer.
 > brings you only the calls that need you.
 
 > [!TIP]
-> **New in 0.4.4: team members work on your GitHub code.** Each repo is Pull only, Push on
-> approval or Push to the member's own branches, and a held push shows its real changes to approve.
+> **New in 0.4.5: what an email promises becomes a card.** When a team member's email tells
+> someone the office will send something later, Michael keeps a card for it until the follow up goes out.
 
 ## Contents
 
