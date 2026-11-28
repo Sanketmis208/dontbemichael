@@ -171,7 +171,7 @@ test('a session file read only up to the run\'s end is closed after it', async (
 });
 
 test('only the member\'s own sessions from the private record are read', async (t) => {
-  // Value: protects=a forged or other member's session never enters the comparison; fails_when=the slicer scans every session file; why_new=architecture finding 1; seam=sessionsOf
+  // Value: protects=a forged or other member's session never enters the comparison; fails_when=the slicer scans every session file; why_new=architecture finding 1; seam=transcriptsOf
   const f = setup(t);
   twoRuns(f);
   fs.writeFileSync(path.join(f.projects, '-office-pam', 's-forged.jsonl'), line('user', T0 + 24 * H + 1500, 'FORGED LINE') + '\n');
@@ -215,18 +215,22 @@ test('only the transcript file the private record names is read, never one found
 });
 
 test('a recorded transcript swapped for a link to another file is not read', posixOnly('making a symlink needs extra rights on Windows'), async (t) => {
-  // Value: protects=a member's shell that can write in the projects folder never gets another file into its comparison by linking its own recorded transcript to it; fails_when=the slicer follows a link at the recorded path, or reads a file whose real place is outside the projects folder; why_new=owner review of #739 (check the real file, not only the spelling); seam=transcriptsOf
-  for (const where of ['another member\'s transcript', 'a file outside the projects folder']) {
+  // Value: protects=a member's shell that can write in the projects folder never gets another file into its comparison by linking its own recorded transcript to it; fails_when=the slicer follows a link at the recorded path, reads a hard link (a plain file to lstat, inside the projects folder to realpath), or reads a file whose real place is outside the projects folder; why_new=owner reviews of #739 (check the real file, not only the spelling; hard links); seam=transcriptsOf
+  for (const [where, link] of [
+    ['another member\'s transcript', fs.symlinkSync],
+    ['a file outside the projects folder', fs.symlinkSync],
+    ['another member\'s transcript by a hard link', fs.linkSync]
+  ]) {
     const f = setup(t);
     twoRuns(f);
-    const target = where.startsWith('another')
+    const target = where.startsWith('another member')
       ? path.join(f.projects, '-office-jim', 's-jim.jsonl')
       : path.join(path.dirname(f.projects), 'elsewhere.jsonl');
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, line('user', T0 + 24 * H + 1500, 'LINKED LINE') + '\n');
     const bad = path.join(f.projects, '-office-pam', 's-bad.jsonl');
     fs.rmSync(bad);
-    fs.symlinkSync(target, bad);
+    link(target, bad);
     const s = await f.store.wentWrong({ runId: 2, agentId: 'pam', workStyle: 'x' });
     assert.ok(f.calls.every((c) => !/LINKED LINE/.test(c)), `the link to ${where} is not followed`);
     assert.deepEqual([s.state, s.reason], ['none', 'no-transcript'], `the bad run has no transcript once its file is a link to ${where}`);
