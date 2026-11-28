@@ -208,13 +208,33 @@ export function relocateBusiness(id: string, home: string): { ok: true } | { ok:
 /**
  * Remove a business whose setup was never finished (DT2, D18): its entry goes,
  * and with it the settings typed so far. Never the open business, and never
- * one that finished setup: those are erased by a factory reset only.
+ * one that finished setup: a factory reset erases those, and one whose folder
+ * is gone is removed by removeMissingBusiness.
  */
 export function removeUnfinishedBusiness(id: string): boolean {
   const cfg = readStoredConfig();
   const entry = cfg.officesMigrated ? cfg.offices?.[id] : undefined;
   if (!entry || entry.settings?.onboardingComplete === true) return false;
   if (officeIdIn(cfg, readOfficeId(cfg.harnessHome)) === id) return false;
+  const offices = { ...cfg.offices };
+  delete offices[id];
+  writeConfig({ offices });
+  return true;
+}
+
+/**
+ * Remove a business whose folder is gone (owner 2026-11-27): one that finished
+ * setup can otherwise never be removed, and it would keep its place in the menu
+ * and its mailbox addresses for good. Only when its folder holds no office now,
+ * never the open business, and never an unfinished setup (that has its own
+ * Remove). The owner confirms first; main erases its passwords and history.
+ */
+export function removeMissingBusiness(id: string): boolean {
+  const cfg = readStoredConfig();
+  const entry = cfg.officesMigrated ? cfg.offices?.[id] : undefined;
+  if (!entry || entry.settings?.onboardingComplete !== true) return false;
+  if (officeIdIn(cfg, readOfficeId(cfg.harnessHome)) === id) return false;
+  if (typeof entry.home === 'string' && homeFolderStatus(entry.home).hasOffice) return false;
   const offices = { ...cfg.offices };
   delete offices[id];
   writeConfig({ offices });

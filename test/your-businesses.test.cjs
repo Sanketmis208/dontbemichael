@@ -5,8 +5,9 @@
  * D15 to D18).
  *
  * Protects: Settings lists the same businesses as the top bar's menu, from the
- * same source; Find it only ever accepts the same office's folder; only an
- * unfinished setup can be removed, never the open business or a finished one;
+ * same source; Find it only ever accepts the same office's folder; an
+ * unfinished setup can be removed, and a finished business only once its
+ * folder is gone and the owner confirms, never the open business;
  * nothing changes in Settings before each business keeps its own settings.
  */
 
@@ -74,6 +75,41 @@ test('Remove: only an unfinished setup, never the open business or a finished on
   assert.equal(s.settings.removeUnfinishedBusiness('office-new-12345'), true);
   assert.equal(s.stored().offices['office-new-12345'], undefined);
   assert.equal(s.settings.removeUnfinishedBusiness('office-new-12345'), false, 'gone already');
+});
+
+test('Remove a missing business: only a finished one whose folder is gone, never the open one or one that is there', (t) => {
+  // Value: protects=a business whose folder was deleted can be removed, so it stops holding its mailbox addresses and its place in the menu; fails_when=a finished business can never be removed, or Remove takes one whose folder is there, the open one, or an unfinished setup; why_new=owner 2026-11-27 (PR 736 review, a deleted business kept its addresses for good); seam=real config on disk; no_claim=what main erases with it (source pin below)
+  const s = scene(t);
+  assert.equal(s.settings.removeMissingBusiness(s.bakeryId), false, 'the open business stays');
+  assert.equal(s.settings.removeMissingBusiness('office-new-12345'), false, 'an unfinished setup has its own Remove');
+  assert.deepEqual(s.settings.relocateBusiness(s.realtyId, s.realty), { ok: true });
+  assert.equal(s.settings.removeMissingBusiness(s.realtyId), false, 'its folder is there again, so it stays');
+  assert.deepEqual(s.stored().offices[s.realtyId].home, s.realty);
+  const cfg = s.stored();
+  cfg.offices[s.realtyId].home = path.join(s.userData, 'deleted');
+  fs.writeFileSync(path.join(s.userData, 'config.json'), JSON.stringify(cfg));
+  assert.equal(s.settings.removeMissingBusiness(s.realtyId), true);
+  assert.equal(s.stored().offices[s.realtyId], undefined, 'its settings, mailboxes included, are gone');
+  assert.equal(s.settings.listBusinesses().businesses.some((b) => b.id === s.realtyId), false, 'and it leaves the menu');
+  assert.equal(s.settings.removeMissingBusiness(s.realtyId), false, 'gone already');
+});
+
+test('removing a missing business also erases its saved passwords, Pulse history and app files, behind a confirm', () => {
+  // Value: protects=a removed business leaves no passwords or history behind, and the owner confirms first with Find it pointed out; fails_when=only the config entry goes, or Remove acts on one click; why_new=owner 2026-11-27; seam=source pin (main needs Electron); no_claim=the erase helpers themselves (factory reset tests)
+  const main = read('src/main/index.ts');
+  const start = main.indexOf("ipcMain.handle('office:removeMissing'");
+  assert.ok(start > 0);
+  const handler = main.slice(start, main.indexOf('\n});', start));
+  assert.match(handler, /if \(typeof id !== 'string' \|\| !removeMissingBusiness\(id\)\) return false;/, 'nothing is erased unless the business really is removable');
+  assert.match(handler, /integrations\.deleteOfficeSecrets\(id\)/);
+  assert.match(handler, /persist\.eraseOffice\(id\)/);
+  assert.match(handler, /isOfficeId\(id\)[^\n]*rmSync\(businessDataFolder\(app\.getPath\('userData'\), id\)/, 'its own app folder only, by a checked id');
+  const list = read('src/renderer/src/components/YourBusinesses.tsx');
+  assert.match(list, /\{row\.state === 'missing' && confirming !== row\.id && \(/, 'Remove on a missing business');
+  assert.match(list, /window\.cth\.removeMissingBusiness\(row\.id\)/);
+  assert.match(list, /confirming === row\.id && \(/, 'it asks first');
+  const en = JSON.parse(read('src/renderer/src/i18n/locales/en.json')).settings.business;
+  assert.match(en.removeMissingConfirm, /\{\{name\}\}[^]*Find it/, 'names the business and points to Find it');
 });
 
 test('Settings lists the same businesses as the menu, and changes nothing before the move', () => {

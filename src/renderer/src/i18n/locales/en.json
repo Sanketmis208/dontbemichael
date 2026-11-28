@@ -259,7 +259,9 @@
       "notThatOffice": "That folder holds a different office. Pick the folder where {{name}} is.",
       "couldNotRemove": "Couldn't remove it. Try again.",
       "addHereTitle": "Add a business here",
-      "addHereDesc": "A new business starts in this folder, with its own settings, and runs setup."
+      "addHereDesc": "A new business starts in this folder, with its own settings, and runs setup.",
+      "removeMissingConfirm": "Remove {{name}} for good? Its settings, mailboxes and history on this computer are deleted. If its folder is on a drive that isn't plugged in, use Find it instead.",
+      "removeForGood": "Remove for good"
     },
     "general": {
       "homeFolder": "Office folder",
