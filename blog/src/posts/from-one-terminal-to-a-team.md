@@ -57,12 +57,12 @@ The fix isn't more tabs — it's a coordination layer. Three additions turn para
 team:
 
 - **Roles** so each agent stays in its lane and "who does this?" is obvious.
-- **Shared memory** so the team reads from one [long-term
-  memory](/blog/give-claude-code-long-term-memory/) and stops re-learning the project.
+- **Shared memory** so the team reads from one long-term
+  memory and stops re-learning the project.
 - **Messaging + an orchestrator** so agents hand work to each other and a coordinator routes it —
   instead of routing through you.
 
-That's the leap from juggling [Claude Code agents](/blog/what-are-claude-code-agents/) to running a
+That's the leap from juggling Claude Code agents to running a
 [multi-agent harness](/#what). It's the stage where adding agents stops adding *overhead*.
 
 {% img "note-2" %}

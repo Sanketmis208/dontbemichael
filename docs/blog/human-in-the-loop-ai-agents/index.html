@@ -199,14 +199,14 @@ escalates to a human; everything else the agents handle. A solid default:</p>
 </ul>
 <p>The power of making this <em>explicit</em> is that it becomes a control surface you can tune. Too many
 interruptions? Tighten the list. Agents doing things that scare you? Loosen what they’re allowed to
-decide alone. In a hive, this policy lives in the <a href="/blog/how-the-god-orchestrator-works/">orchestrator’s</a>
+decide alone. In a hive, this policy lives in the orchestrator’s
 instructions — so you adjust behavior by editing a prompt, not by shipping code.</p>
 <figure class="fig fig-inline"><img src="/blog/assets/media/human-in-the-loop-ai-agents/note-1.png" alt="Hand-drawn sketch from “Human-in-the-Loop AI Agents: Approvals That Don't Slow You Down”" loading="lazy" decoding="async" /></figure>
 <h2 id="how-escalation-actually-works" tabindex="-1">How escalation actually works <a class="anchor" href="#how-escalation-actually-works" aria-hidden="true">#</a></h2>
 <p>When an agent (or the orchestrator on its behalf) hits something critical, it doesn’t act. It addresses
 a message to the human — or flags the item as needing human attention — and the coordinating process
 diverts it into an <strong>approvals queue</strong> instead of delivering it normally. Mechanically it’s the same
-messaging fabric agents use for each other (<a href="/blog/atomic-file-mailboxes-for-agents/">atomic file mailboxes</a>),
+messaging fabric agents use for each other (atomic file mailboxes),
 with one rule: anything marked for the human lands in the queue, not in another agent’s inbox.</p>
 <p>The queue surfaces in the UI as a short list of “I need your call on these.” Each item carries enough
 context to decide: who’s asking, what they want to do, and why it’s critical.</p>
@@ -243,7 +243,7 @@ ops, and scope drift don’t happen behind your back — they wait for you.</li>
 <p>The selective-escalation model is what lets a hive run unattended for long stretches and still be
 safe, which is the foundation of <a href="/blog/claude-code-automation-while-you-sleep/">letting agents build while you sleep</a>:
 you wake up to progress plus a short approvals list, not a pile of irreversible actions. It’s also the
-core of <a href="/blog/coordinating-ai-coding-agents/">coordinating AI coding agents</a> — the orchestrator
+core of coordinating AI coding agents — the orchestrator
 adjudicates the routine traffic and escalates only what it should.</p>
 <h2 id="designing-your-own-escalation-policy" tabindex="-1">Designing your own escalation policy <a class="anchor" href="#designing-your-own-escalation-policy" aria-hidden="true">#</a></h2>
 <p>If you’re building this, a few principles:</p>
@@ -252,7 +252,7 @@ adjudicates the routine traffic and escalates only what it should.</p>
 the agents handle well. Earning trust beats assuming it.</li>
 <li><strong>Make every escalation legible.</strong> An approval you can’t understand at a glance is one you’ll
 rubber-stamp. Include the <em>why</em>, not just the <em>what</em>.</li>
-<li><strong>Log every decision.</strong> Approvals and rejections belong in the <a href="/blog/append-only-event-log-agents/">event log</a>
+<li><strong>Log every decision.</strong> Approvals and rejections belong in the event log
 so “who approved this?” always has an answer.</li>
 <li><strong>Keep the human’s note actionable.</strong> The point of the round-trip is steering; make it easy to send
 guidance, not just a yes/no.</li>
@@ -313,56 +313,24 @@ and ask only when they should; it’s free and open source.</p>
 
   <footer class="post-foot wrap"><div class="prevnext">
       <a class="pn prev" href="/blog/munder-difflin-faq/"><span class="k">← Older</span><span class="t">Munder Difflin FAQ: Everything People Ask</span></a>
-      <a class="pn next" href="/blog/how-to-choose-a-multi-agent-tool/"><span class="k">Newer →</span><span class="t">How to Choose a Multi-Agent Coding Tool: A Buyer&#39;s Checklist</span></a>
+      <a class="pn next" href="/blog/from-one-terminal-to-a-team/"><span class="k">Newer →</span><span class="t">From One Terminal to a Team: Scaling Your Claude Code Workflow</span></a>
     </div>
     <section class="related">
       <h2>Related in Orchestration</h2>
       <div class="post-grid">
         <article class="card t-orchestration">
-  <a class="thumb t-orchestration" href="/blog/multi-agent-orchestration-patterns/" aria-hidden="true" tabindex="-1"><img src="/blog/assets/media/multi-agent-orchestration-patterns/hero.png" alt="" loading="lazy" decoding="async" /></a>
+  <a class="thumb t-orchestration" href="/blog/claude-code-orchestration-guide/" aria-hidden="true" tabindex="-1"><img src="/blog/assets/media/claude-code-orchestration-guide/hero.png" alt="" loading="lazy" decoding="async" /></a>
   <div class="body">
     <div class="meta">
-      <time datetime="2026-06-05">Jun 5, 2026</time>
+      <time datetime="2026-05-28">May 28, 2026</time>
       <span class="dot" aria-hidden="true"></span>
       <span>5 min</span>
     </div>
-    <h3><a href="/blog/multi-agent-orchestration-patterns/">Multi-Agent Orchestration Patterns: Which Topology, and When</a></h3>
-    <p class="dek">The multi-agent orchestration patterns — orchestrator-worker, pipeline, fan-out, debate, swarm, blackboard — when to use each, and when one agent wins.</p>
+    <h3><a href="/blog/claude-code-orchestration-guide/">Orchestrating Claude Code Agents: A Practical Guide</a></h3>
+    <p class="dek">How to orchestrate Claude Code agents in practice: what orchestration means, how a GOD orchestrator routes and escalates work, and how to wire it up.</p>
     <div class="foot">
       <span class="tag kind">Orchestration</span>
-      <a class="more" href="/blog/multi-agent-orchestration-patterns/" aria-label="Read: Multi-Agent Orchestration Patterns: Which Topology, and When">Read →</a>
-    </div>
-  </div>
-</article>
-<article class="card t-orchestration">
-  <a class="thumb t-orchestration" href="/blog/claude-code-git-worktrees-vs-hive/" aria-hidden="true" tabindex="-1"><img src="/blog/assets/media/claude-code-git-worktrees-vs-hive/hero.png" alt="" loading="lazy" decoding="async" /></a>
-  <div class="body">
-    <div class="meta">
-      <time datetime="2026-06-04">Jun 4, 2026</time>
-      <span class="dot" aria-hidden="true"></span>
-      <span>5 min</span>
-    </div>
-    <h3><a href="/blog/claude-code-git-worktrees-vs-hive/">Git Worktrees vs a Hive: Two Ways to Parallelize Claude Code</a></h3>
-    <p class="dek">Claude Code git worktrees vs a hive: when isolated worktrees suffice for parallel agents, and when you need memory, messaging, and an orchestrator on top.</p>
-    <div class="foot">
-      <span class="tag kind">Orchestration</span>
-      <a class="more" href="/blog/claude-code-git-worktrees-vs-hive/" aria-label="Read: Git Worktrees vs a Hive: Two Ways to Parallelize Claude Code">Read →</a>
-    </div>
-  </div>
-</article>
-<article class="card t-orchestration">
-  <a class="thumb t-orchestration" href="/blog/local-first-ai-agent-orchestration/" aria-hidden="true" tabindex="-1"><img src="/blog/assets/media/local-first-ai-agent-orchestration/hero.png" alt="" loading="lazy" decoding="async" /></a>
-  <div class="body">
-    <div class="meta">
-      <time datetime="2026-06-04">Jun 4, 2026</time>
-      <span class="dot" aria-hidden="true"></span>
-      <span>5 min</span>
-    </div>
-    <h3><a href="/blog/local-first-ai-agent-orchestration/">Local-First AI Agent Orchestration: How a Hive Runs Without a Cloud</a></h3>
-    <p class="dek">How local-first AI agent orchestration works under the hood — the loop, mailboxes, scheduler, and audit log that coordinate a hive on one machine.</p>
-    <div class="foot">
-      <span class="tag kind">Orchestration</span>
-      <a class="more" href="/blog/local-first-ai-agent-orchestration/" aria-label="Read: Local-First AI Agent Orchestration: How a Hive Runs Without a Cloud">Read →</a>
+      <a class="more" href="/blog/claude-code-orchestration-guide/" aria-label="Read: Orchestrating Claude Code Agents: A Practical Guide">Read →</a>
     </div>
   </div>
 </article>

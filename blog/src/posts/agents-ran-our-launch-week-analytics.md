@@ -57,14 +57,14 @@ don't require re-reading anything. Then the orchestrator synthesized the four in
 The naive version of this is pasting comments into one chat session until it fills up. The
 problem isn't just context size — it's that a model skimming its 400th comment gets exactly as
 lazy as a human does. One agent per channel keeps each report grounded in a full, careful read,
-and the [orchestrator](/blog/how-the-god-orchestrator-works/) works from four distilled reports
+and the orchestrator works from four distilled reports
 instead of raw sludge. Fan out, then synthesize. It's the same
-[pattern](/blog/multi-agent-orchestration-patterns/) that works for code.
+pattern that works for code.
 
 The other thing a hive gets you is **iteration without re-reading**. Days later we came back
 with sharper questions — "split willingness-to-pay by supporter motive versus buyer motive,"
 "which commenters were blocked from even running it?" — and dispatched them to the same agent,
-which still had [its memory](/blog/how-agents-remember-semantic-memory/) of the corpus. Each
+which still had its memory of the corpus. Each
 pass appended to the same reports. The research got *thicker* instead of starting over.
 
 {% img "note-2", "Sharper question, same agent, same corpus — the reports grow instead of restarting." %}

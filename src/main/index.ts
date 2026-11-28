@@ -141,7 +141,7 @@ import { GitHubHeldStore, RepoVisibilityCache, VISIBILITY_REFRESH_MS } from './g
 import { agentIntegrations, fillSavedCall, mcpProbeRequest, hasIntegrationTools, integrationLevel, mcpIntegrationsFor, mcpServerName, validateBaseUrl, buildAuthHeaders, resolveUpstreamUrl, secretRefFor, withIntegrationLevel, withoutIntegration, INTEGRATION_TEMPLATES } from '../shared/integrations';
 import { RosterStore } from './roster';
 import { PASTE_KEEP_MS, savePaste, sweepOldPastes } from './pastes';
-import { CASE_STUDY_DIR, CHECK_FOLDERS, JOB_CHECK_DIR, RUN_COMPARE_DIR, STANDING_CHECK_DIR, TRUST_CHECK_DIR, eraseOfficeData } from './factoryReset';
+import { CASE_STUDY_DIR, CHECK_FOLDERS, JOB_CHECK_DIR, RUN_COMPARE_DIR, STANDING_CHECK_DIR, TRUST_CHECK_DIR, businessDataFolder, eraseOfficeData } from './factoryReset';
 import { autoMemoryFolders, eraseMemoryTargets, foldersFromRoster, gitTopOf, idsFromCostRows, idsFromRecord, memberIdsIn, memoryResetTargets } from './memoryReset';
 import { groupMembers, hardKillTree, isAlive, KILL_GRACE_MS, snapshotRemains } from './procKill';
 import { ControlRegistry } from './control';
@@ -176,11 +176,11 @@ import { claudeCliFlags, claudeCliVersion, lastClaudeCliVersion } from './claude
 import { AUTO_FAILURE_REPORTS } from '../shared/buildFeatures';
 import { APP_NAME, APP_DATA_DIR, APP_URL_SCHEME } from '../shared/appName';
 import { copyOfficeData, homeFolderStatus, homeReadyAtLaunch } from './homeFolder';
-import { backfillOfficeRecord, findOffice, folderLayoutFor, isUsableTeamFolder, officeSwitchGuard, syncOfficeRecord } from './officeFile';
-import { addBusiness, adoptOpenOffice, businessDraft, businessFolderTakenBy, businessNameAt, currentOfficeId, folderTakenRefusal, listBusinesses, migrateToOfficeSettings, neverOpenedBusiness, noteOfficeClosed, officeClaudeDir, officesAfterMove, relocateBusiness, removeUnfinishedBusiness, saveBusinessDraft } from './officeSettings';
+import { backfillOfficeRecord, findOffice, folderLayoutFor, isUsableTeamFolder, officeSwitchGuard, readOfficeRecord, syncOfficeRecord } from './officeFile';
+import { addBusiness, adoptOpenOffice, businessDraft, businessFolderTakenBy, businessNameAt, currentOfficeId, folderTakenRefusal, listBusinesses, migrateToOfficeSettings, neverOpenedBusiness, noteOfficeClosed, officeClaudeDir, officesAfterMove, relocateBusiness, removeMissingBusiness, removeUnfinishedBusiness, saveBusinessDraft } from './officeSettings';
 import { folderPolicy, AGENT_TMP_DIR, agentTmpName, researchFolderPolicy, withAgentTmpWall, withGitMirrorWall, withMemberWall, RESEARCH_TMP_DIR, shellTempWalls, withResearchWall, type AgentFolderPolicy, type FolderLayout } from '../shared/folderAccess';
 import { sandboxNetwork } from '../shared/webAccess';
-import { legacyBusinessFolder, touchesOffice } from '../shared/officeRecord';
+import { businessNameMismatch, isOfficeId, legacyBusinessFolder, touchesOffice } from '../shared/officeRecord';
 import { cleanCompanyProfile, companyProfileContext } from '../shared/companyProfile';
 import { scheduledRunBody } from '../shared/scheduleMessage';
 import { OFFICE_OPEN_SUBJECT, officeClosedInLog, officeOpenBody } from '../shared/officeOpen';
@@ -4579,6 +4579,17 @@ ipcMain.handle('office:saveDraft', (_evt, p: unknown) => {
 });
 ipcMain.handle('office:draft', (_evt, id: unknown) => (typeof id === 'string' ? businessDraft(id) : null));
 ipcMain.handle('office:removeUnfinished', (_evt, id: unknown) => (typeof id === 'string' ? removeUnfinishedBusiness(id) : false));
+// A business whose folder is gone, confirmed by the owner: its entry goes, and
+// with it what this install still keeps for it apart from that folder: saved
+// passwords and keys, Pulse history, and its own place in the app's data folder.
+// A failure there is logged; the business is removed either way.
+ipcMain.handle('office:removeMissing', (_evt, id: unknown) => {
+  if (typeof id !== 'string' || !removeMissingBusiness(id)) return false;
+  if (!integrations.deleteOfficeSecrets(id)) console.error('[offices] remove: could not erase its saved passwords');
+  if (!persist.eraseOffice(id)) console.error('[offices] remove: could not erase its Pulse history');
+  try { if (isOfficeId(id)) rmSync(businessDataFolder(app.getPath('userData'), id), { recursive: true, force: true }); } catch (e) { console.error('[offices] remove: its app files:', e); }
+  return true;
+});
 
 /** Switch now, from the closing bar (D20): the owner chose not to wait. */
 ipcMain.handle('office:switchNow', () => {
@@ -6083,17 +6094,15 @@ async function ingestSequentially(paths: string[], tags?: string[]) {
 // ─── IPC: composer attachments (images + arbitrary files, attached by PATH) ──
 // The message queue pipes raw text into a Claude CLI PTY, so attachments travel
 // as a file PATH the agent reads with its Read tool.
-// Picker offers an Images group + All Files.
+// No file type filter: on macOS the first filter is the one in force, and an
+// Images group there greyed out every PDF and document (owner 2026-11-27, a
+// bank statement could not be attached to an Ask me card).
 ipcMain.handle('dialog:attachFiles', async (evt) => {
   const win = BrowserWindow.fromWebContents(evt.sender);
   if (!win) return { ok: false as const, error: 'no window' };
   const res = await dialog.showOpenDialog(win, {
     properties: ['openFile', 'multiSelections'],
-    title: 'Attach images or files',
-    filters: [
-      { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'heic', 'tiff', 'avif'] },
-      { name: 'All Files', extensions: ['*'] }
-    ]
+    title: 'Attach files'
   });
   if (res.canceled || res.filePaths.length === 0) return { ok: false as const, error: 'cancelled' };
   return { ok: true as const, files: res.filePaths.map((p) => ({ path: p, name: basename(p) })) };
@@ -7497,6 +7506,15 @@ app.whenReady().then(() => {
     // An office set up before office.json existed gets one now, if the config's
     // team is really this office's team (officeFile.ts).
     backfillOfficeRecord(readConfig());
+    // The office's settings and its office.json should name the same business.
+    // When they differ, another business's settings may have reached this
+    // office (separate-businesses.md, Section 8): a line in the office log,
+    // without either name. The office opens as usual.
+    try {
+      const cfg = readConfig();
+      const rec = cfg.harnessHome ? readOfficeRecord(cfg.harnessHome) : null;
+      if (businessNameMismatch(cfg, rec)) hive.appendLog({ kind: 'office-name-mismatch', officeId: rec?.id ?? null });
+    } catch (e) { console.error('[office] name check:', e); }
   }
   else console.warn('[home] office folder missing, waiting for the owner:', readConfig().harnessHome);
   // Survive sleep/lock. macOS freezes libuv timers during true system sleep, so a

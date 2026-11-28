@@ -45,8 +45,8 @@ Each agent has a scoped job, so it doesn't wander into another's work or duplica
 "who does this?" obvious and keep parallel agents out of each other's lanes.
 
 ### Shared memory
-The team reads from and writes to a [shared long-term
-memory](/blog/give-claude-code-long-term-memory/). When the test-writer learns a convention, the
+The team reads from and writes to a shared long-term
+memory. When the test-writer learns a convention, the
 refactorer inherits it. Knowledge compounds overnight instead of resetting each session.
 
 ### Messaging + an orchestrator

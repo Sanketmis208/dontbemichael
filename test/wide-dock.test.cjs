@@ -98,7 +98,9 @@ test('wide, the conversation and box are drawn outside the office, beside the ri
   const dock = read('src/renderer/src/shell/MichaelDock.tsx');
   assert.match(dock, /if \(draft\.trim\(\)\) return;\n\s*if \(!target\.closest\('\.cth-studio'\)/);
   assert.match(dock, /style=\{wide \? dockWideStyle : dockStyle\}/);
-  assert.match(dock, /position: 'absolute', insetInlineStart: 0, bottom: 'calc\(100% \+ 8px\)', width: 400,/);
+  // As wide as the message box it sits on, edge to edge (owner, 2026-11-27: "they should be aligned in width").
+  assert.match(dock, /position: 'absolute', insetInlineStart: 0, insetInlineEnd: 0, bottom: 'calc\(100% \+ 8px\)',\n/);
+  assert.doesNotMatch(dock.slice(dock.indexOf('const dockStyle')), /^\s*position: 'absolute'[^\n]*width: 400/m);
 });
 
 test('wide reads at 14 / 22 in a 720 px column, with no fold and tables at their own width', () => {

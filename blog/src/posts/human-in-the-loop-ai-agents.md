@@ -55,7 +55,7 @@ escalates to a human; everything else the agents handle. A solid default:
 
 The power of making this *explicit* is that it becomes a control surface you can tune. Too many
 interruptions? Tighten the list. Agents doing things that scare you? Loosen what they're allowed to
-decide alone. In a hive, this policy lives in the [orchestrator's](/blog/how-the-god-orchestrator-works/)
+decide alone. In a hive, this policy lives in the orchestrator's
 instructions — so you adjust behavior by editing a prompt, not by shipping code.
 
 {% img "note-1" %}
@@ -65,7 +65,7 @@ instructions — so you adjust behavior by editing a prompt, not by shipping cod
 When an agent (or the orchestrator on its behalf) hits something critical, it doesn't act. It addresses
 a message to the human — or flags the item as needing human attention — and the coordinating process
 diverts it into an **approvals queue** instead of delivering it normally. Mechanically it's the same
-messaging fabric agents use for each other ([atomic file mailboxes](/blog/atomic-file-mailboxes-for-agents/)),
+messaging fabric agents use for each other (atomic file mailboxes),
 with one rule: anything marked for the human lands in the queue, not in another agent's inbox.
 
 The queue surfaces in the UI as a short list of "I need your call on these." Each item carries enough
@@ -109,7 +109,7 @@ flag them.
 The selective-escalation model is what lets a hive run unattended for long stretches and still be
 safe, which is the foundation of [letting agents build while you sleep](/blog/claude-code-automation-while-you-sleep/):
 you wake up to progress plus a short approvals list, not a pile of irreversible actions. It's also the
-core of [coordinating AI coding agents](/blog/coordinating-ai-coding-agents/) — the orchestrator
+core of coordinating AI coding agents — the orchestrator
 adjudicates the routine traffic and escalates only what it should.
 
 ## Designing your own escalation policy
@@ -120,7 +120,7 @@ If you're building this, a few principles:
   the agents handle well. Earning trust beats assuming it.
 - **Make every escalation legible.** An approval you can't understand at a glance is one you'll
   rubber-stamp. Include the *why*, not just the *what*.
-- **Log every decision.** Approvals and rejections belong in the [event log](/blog/append-only-event-log-agents/)
+- **Log every decision.** Approvals and rejections belong in the event log
   so "who approved this?" always has an answer.
 - **Keep the human's note actionable.** The point of the round-trip is steering; make it easy to send
   guidance, not just a yes/no.

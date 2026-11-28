@@ -68,7 +68,6 @@ If you're comparing options, these go deeper than an FAQ can:
   honest field roundup.
 - [Why we built Munder Difflin](/blog/why-we-built-munder-difflin/) — the origin story and the problem
   it solves.
-- [What are Claude Code agents?](/blog/what-are-claude-code-agents/) — the basics, if you're new.
 
 ---
 
