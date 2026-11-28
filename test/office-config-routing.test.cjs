@@ -154,25 +154,6 @@ test('a moved office keeps its settings; a copied one gets its own id and a copy
   assert.equal(config.readConfig().businessCity, undefined, 'and the two never write each other\'s');
 });
 
-// Value: protects=a copied office gets its own entry without the original's business folder, so two businesses never share one; fails_when=adoptOpenOffice copies businessFolder or the old officeFolder launch fills it from; why_new=the copy test above has no business folder; seam=none; no_claim=what the copy shows the owner
-test('a copied office never keeps the original\'s business folder', () => {
-  const home = migratedBakery();
-  const id = file.readOfficeId(home);
-  const docs = path.join(userData, `docs-${++n}`, 'Harbor Bakery');
-  config.writeConfig({ businessFolder: docs, officeFolder: path.join(docs, 'Office') });
-  const copy = path.join(userData, `copy-${++n}`);
-  fs.mkdirSync(copy, { recursive: true });
-  loadTs('src/main/homeFolder.ts').copyOfficeData(home, copy);
-  config.writeConfig({ harnessHome: copy });
-  const copyId = settings.adoptOpenOffice();
-  assert.notEqual(copyId, id);
-  const mine = raw().offices[copyId].settings;
-  assert.equal(mine.businessFolder, undefined, 'not the original\'s folder');
-  assert.equal(mine.officeFolder, undefined, 'nor the old folder launch would fill it from');
-  assert.equal(mine.businessName, 'Harbor Bakery', 'the rest is copied');
-  assert.equal(raw().offices[id].settings.businessFolder, docs, 'the original keeps it');
-});
-
 test('an office moved in Finder: its entry follows it', () => {
   const home = migratedBakery();
   const id = file.readOfficeId(home);

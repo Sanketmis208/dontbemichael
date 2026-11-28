@@ -3,6 +3,7 @@
  * pure helpers that file a business's settings by office id
  * (docs/designs/separate-businesses.md). No runtime import of config.ts, so
  * config.ts can route its reads and writes through these without a cycle.
+ * The business folder checks (diskFolder) read the disk, to follow links.
  */
 import { realpathSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';

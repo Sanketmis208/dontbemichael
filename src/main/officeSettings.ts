@@ -22,14 +22,15 @@
  */
 import { BUSINESS_DATA_FILES, configDefaults, keepConfigCopy, moveIntoOffice, officeDataPath, readConfig, readStoredConfig, replaceConfig, writeConfig, type HarnessConfig } from './config';
 import { copySecretsToOffices } from './integrations';
-import { describesBusiness, type OfficeRecord } from '../shared/officeRecord';
+import { describesBusiness, legacyBusinessFolder, type OfficeRecord } from '../shared/officeRecord';
 import {
   BUSINESS_KEYS, businessKeySet, businessUsingFolder, installKeySet, officeIdIn, officesWith, pick, sameFolder, samePath, settingsIn,
   type InstallConfig, type OfficeEntry, type OfficeSettings
 } from './officeKeys';
 import { randomUUID } from 'node:crypto';
-import { ensureOfficeId, officeSwitchGuard, readOfficeId, readOfficeRecord, setOfficeId, syncOfficeRecord } from './officeFile';
+import { ensureOfficeId, isUsableTeamFolder, officeSwitchGuard, readOfficeId, readOfficeRecord, setOfficeId, syncOfficeRecord } from './officeFile';
 import { homeFolderStatus } from './homeFolder';
+import { expandTilde } from './fs';
 
 /** A business's settings before anything was saved for it: the app defaults,
  *  so a new business has no mailboxes, runs the built in schedules and starts
@@ -78,8 +79,7 @@ export function updateOfficeSettings(patch: Partial<OfficeSettings>): boolean {
  *   office was moved (in Finder, or found again from the missing office
  *   screen). The entry follows it.
  * - That other folder still holds the same id: this folder is a copy. It gets
- *   its own id and a copy of the settings, so the two never write each other's,
- *   without the business folder, which stays the original's.
+ *   its own id and a copy of the settings, so the two never write each other's.
  * - No id yet: the entry last opened from this folder gives it one, else a new
  *   one; an office with no entry starts from the defaults (setup).
  *
@@ -98,12 +98,7 @@ export function adoptOpenOffice(): string | null {
     if (readOfficeId(elsewhere) === id) {
       const copyId = setOfficeId(home, randomUUID());
       if (!copyId) return null;
-      // The copy never shares the original's business folder (their documents
-      // would mix). Without one it runs as an office from before business
-      // folders did; the old officeFolder goes too, or launch would fill the
-      // business folder back in from it.
-      const { businessFolder: _theirs, officeFolder: _theirsBefore, ...settings } = structuredClone(offices[id].settings);
-      offices[copyId] = { home, settings };
+      offices[copyId] = { home, settings: structuredClone(offices[id].settings) };
       id = copyId;
     } else {
       offices[id] = { ...offices[id], home };
@@ -277,10 +272,12 @@ export function addBusiness(p: {
   const there = homeFolderStatus(p.home).hasOffice ? officeIdIn({ harnessHome: p.home, offices }, readOfficeId(p.home)) : null;
   if (there && there !== draft && offices[there]?.settings?.onboardingComplete === true) return { ok: false, error: 'exists' };
   let id = draft;
-  if (!id) id = there ?? (homeFolderStatus(p.home).hasOffice ? ensureOfficeId(p.home) : null) ?? randomUUID();
+  // The folder is checked before an id is made, so a refusal leaves no
+  // office.json behind.
   const folder = p.settings?.businessFolder;
-  const taken = typeof folder === 'string' && folder ? businessUsingFolder({ offices }, folder, id) : null;
+  const taken = typeof folder === 'string' && folder ? businessUsingFolder({ offices }, folder, id ?? there) : null;
   if (taken) return { ok: false, error: 'folderTaken', name: taken.name };
+  if (!id) id = there ?? (homeFolderStatus(p.home).hasOffice ? ensureOfficeId(p.home) : null) ?? randomUUID();
   // A new business starts under the open business's budget unless setup chose
   // its own: it never runs with no budget. Caps per member stay with the
   // members they were set for.
@@ -305,22 +302,24 @@ export function addBusiness(p: {
 /**
  * The open business's business folder is changing to `folder` (its setup, or
  * any save through Settings): the other business that already uses it, or
- * null. Keeping its own folder is never refused. For Add a business (`add`),
- * the open business's folder counts too, and only the draft's own (`add.id`)
- * is its own.
+ * null. Keeping its own folder is never refused. The open business is the one
+ * the save goes to: `home` when the save sets harnessHome (setup's does), else
+ * the stored one, found the way writeConfig files it (officeIdForSave). For
+ * Add a business (`add`), the open business's folder counts too, and only the
+ * draft's own (`add.id`) is its own.
  */
-export function businessFolderTakenBy(folder: string, add?: { id: string | null }): { id: string; name: string | null } | null {
+export function businessFolderTakenBy(folder: string, add?: { id: string | null }, home?: string): { id: string; name: string | null } | null {
   const cfg = readStoredConfig();
   if (add) return businessUsingFolder(cfg, folder, add.id);
-  const home = cfg.harnessHome ?? undefined;
-  const openId = officeIdIn(cfg, readOfficeId(home));
+  const where = typeof home === 'string' && home ? expandTilde(home) : cfg.harnessHome ?? undefined;
+  const openId = where ? officeIdIn({ harnessHome: where, offices: cfg.offices }, readOfficeId(where)) : null;
   // An id with no entry (office.json missing or remade): the entry last
   // opened from this folder is still the open business, not another one.
   const found = openId ? cfg.offices?.[openId] : undefined;
-  const byHome = found || !home ? undefined : Object.values(cfg.offices ?? {}).find((e) => typeof e?.home === 'string' && sameFolder(e.home, home));
+  const byHome = found || !where ? undefined : Object.values(cfg.offices ?? {}).find((e) => typeof e?.home === 'string' && sameFolder(e.home, where));
   const own = (found ?? byHome)?.settings?.businessFolder;
   if (typeof own === 'string' && own && sameFolder(own, folder)) return null;
-  return businessUsingFolder(cfg, folder, openId, byHome ? home : undefined);
+  return businessUsingFolder(cfg, folder, openId, byHome ? where : undefined);
 }
 
 /**
@@ -330,10 +329,25 @@ export function businessFolderTakenBy(folder: string, add?: { id: string | null 
  * may go ahead.
  */
 export function folderTakenRefusal(patch: unknown): { ok: false; error: 'folderTaken'; name: string | null } | null {
-  const folder = patch && typeof patch === 'object' ? (patch as { businessFolder?: unknown }).businessFolder : undefined;
+  const p = patch && typeof patch === 'object' ? (patch as { businessFolder?: unknown; harnessHome?: unknown }) : {};
+  const folder = p.businessFolder;
   if (typeof folder !== 'string' || !folder) return null;
-  const taken = businessFolderTakenBy(folder);
+  const taken = businessFolderTakenBy(folder, undefined, typeof p.harnessHome === 'string' ? p.harnessHome : undefined);
   return taken ? { ok: false, error: 'folderTaken', name: taken.name } : null;
+}
+
+/**
+ * Launch fills businessFolder in for an office set up before it existed
+ * (migrateBusinessFolder): the folder holding its Office folder, else (a home
+ * or system folder, or another business's folder is in or around it) the
+ * Office folder itself. Null when that is another business's too: then
+ * nothing is written, and the office keeps its officeFolder and its walls.
+ */
+export function businessFolderFromOffice(officeFolder: string): string | null {
+  const office = expandTilde(officeFolder);
+  const parent = legacyBusinessFolder(office);
+  if (parent && isUsableTeamFolder(parent) && !businessFolderTakenBy(parent)) return parent;
+  return businessFolderTakenBy(office) ? null : office;
 }
 
 /**
@@ -508,21 +522,11 @@ export function migrateToOfficeSettings(log: (line: string) => void = (l) => con
   if (!keepConfigCopy(CONFIG_BEFORE_OFFICES)) { log('[offices] migration: could not keep the copy, kept as it was'); return 'failed'; }
 
   const offices: Record<string, OfficeEntry> = { ...(cfg.offices ?? {}) };
-  const restored: string[] = [];
   for (const office of known) {
     if (offices[office.id]) continue; // written by a run that stopped before the end
     const { outcome, settings } = settingsForMigration(cfg, office);
     offices[office.id] = { home: office.home, settings };
-    if (outcome === 'identity') restored.push(office.id);
     log(`[offices] migration: office ${office.id} gets ${outcome}`);
-  }
-  // A business read back from its office.json never takes a business folder
-  // another business uses (their documents would mix): it keeps the rest.
-  for (const id of restored) {
-    const { businessFolder, ...rest } = offices[id].settings;
-    if (!businessFolder || !businessUsingFolder({ offices }, businessFolder, id)) continue;
-    offices[id] = { ...offices[id], settings: rest };
-    log(`[offices] migration: office ${id} keeps no business folder, another business uses it`);
   }
   writeConfig({ offices });
 

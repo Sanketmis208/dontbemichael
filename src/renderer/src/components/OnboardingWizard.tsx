@@ -488,7 +488,7 @@ export function OnboardingWizard({ onComplete, preview, add }: OnboardingWizardP
       // Another business's business folder is refused before any folder is
       // made, or the team's folders would land among its documents. A new
       // business may not take the open business's either.
-      const taken = await window.cth.businessFolderTakenBy(finishPlan.business, add ? { id: draftId ?? null } : undefined);
+      const taken = await window.cth.businessFolderTakenBy(finishPlan.business, add ? { id: draftId ?? null } : undefined, harnessHome);
       if (taken) { refuseFolder(taken.name); return; }
       const ensure = await window.cth.ensureHarnessHome(harnessHome);
       if (!ensure.ok) {

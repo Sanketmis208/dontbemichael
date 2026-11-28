@@ -350,6 +350,36 @@ test('an open business whose id can\'t be found keeps its own folder', (t) => {
   assert.equal(s.settings.businessFolderTakenBy(realtyDocs).name, 'Northgate Realty');
 });
 
+// Value: protects=the open business the check exempts is the one the save goes to: setup's harnessHome when it sends one, as writeConfig files it; fails_when=businessFolderTakenBy or folderTakenRefusal take the stored harnessHome only; why_new=the tests above always save from the stored office; seam=none; no_claim=writeConfig's routing (office-config-routing tests)
+test('the open business is the one the save goes to, when the save sets the office folder', (t) => {
+  const s = scene(t);
+  const docs = path.join(s.userData, 'Documents');
+  const realty = path.join(s.userData, 'realty');
+  const realtyDocs = path.join(docs, 'Northgate Realty');
+  withFolders(s, path.join(docs, 'Harbor & Pine Bakery'), { other: { home: realty, settings: { businessName: 'Northgate Realty', businessFolder: realtyDocs } } });
+  // Setup over the realty folder, while the stored office is still the bakery.
+  assert.equal(s.settings.folderTakenRefusal({ harnessHome: realty, businessFolder: realtyDocs }), null, 'its own folder');
+  assert.deepEqual(s.settings.folderTakenRefusal({ harnessHome: realty, businessFolder: path.join(docs, 'Harbor & Pine Bakery') }), { ok: false, error: 'folderTaken', name: 'Harbor & Pine Bakery' }, 'the stored office\'s is another business\'s');
+  assert.equal(s.settings.businessFolderTakenBy(realtyDocs, undefined, realty), null, 'the pre-check, with the folder setup sends');
+  assert.equal(s.settings.businessFolderTakenBy(realtyDocs).name, 'Northgate Realty', 'without it, the stored office is the open one');
+  assert.match(read('src/main/index.ts'), /return businessFolderTakenBy\(folder, forAdd, typeof home === 'string' && home \? home : undefined\);/);
+});
+
+// Value: protects=launch fills businessFolder in from an old Office folder without landing in or around another business's folder, and writes nothing when the Office folder itself is; fails_when=businessFolderFromOffice skips the check on the parent or on the Office folder; why_new=PR 740 review 2026-11-28; seam=none; no_claim=the launch call (company-knowledge tests pin it)
+test('an old Office folder gives a business folder of its own, or none', (t) => {
+  const s = scene(t);
+  const biz = path.join(s.userData, 'Biz');
+  const office = path.join(biz, 'Office');
+  fs.mkdirSync(office, { recursive: true });
+  assert.equal(s.settings.businessFolderFromOffice(office), biz, 'the folder holding it');
+  withFolders(s, path.join(s.userData, 'Documents', 'Harbor & Pine Bakery'), { other: { home: path.join(s.userData, 'realty'), settings: { businessName: 'Northgate Realty', businessFolder: path.join(biz, 'Realty') } } });
+  assert.equal(s.settings.businessFolderFromOffice(office), office, 'another business inside the parent: the Office folder itself');
+  withFolders(s, path.join(s.userData, 'Documents', 'Harbor & Pine Bakery'), { other: { home: path.join(s.userData, 'realty'), settings: { businessName: 'Northgate Realty', officeFolder: office } } });
+  assert.equal(s.settings.businessFolderFromOffice(office), null, 'another business on the parent holds the Office folder too: nothing');
+  withFolders(s, path.join(s.userData, 'Documents', 'Harbor & Pine Bakery'), { other: { home: path.join(s.userData, 'realty'), settings: { businessName: 'Northgate Realty', businessFolder: office } } });
+  assert.equal(s.settings.businessFolderFromOffice(office), null, 'the same Office folder: nothing');
+});
+
 // Value: protects=config:update never saves a business folder another business uses: it answers with that business's name and writes nothing, so setup never finishes without a folder; fails_when=the backstop in config:update goes, moves after writeConfig, or throws instead of answering; why_new=before this the backstop could go with every test green; seam=the IPC handler is pinned by source order; no_claim=the Settings window (it never saves businessFolder)
 test('config:update refuses a business folder another business uses, saving nothing', (t) => {
   const s = scene(t);
@@ -375,7 +405,7 @@ test('config:update refuses a business folder another business uses, saving noth
 test('the wizard asks before making folders, and a taken folder goes back to the team step', () => {
   const wiz = read('src/renderer/src/components/OnboardingWizard.tsx');
   const finish = wiz.slice(wiz.indexOf('const finish = async () => {'), wiz.indexOf('// Design v2 onboarding'));
-  const asked = finish.indexOf('const taken = await window.cth.businessFolderTakenBy(finishPlan.business, add ? { id: draftId ?? null } : undefined);');
+  const asked = finish.indexOf('const taken = await window.cth.businessFolderTakenBy(finishPlan.business, add ? { id: draftId ?? null } : undefined, harnessHome);');
   assert.ok(asked > 0, 'asked at finish');
   assert.ok(asked < finish.indexOf('window.cth.ensureHarnessHome('), 'before the office folder is made');
   assert.ok(asked < finish.indexOf('window.cth.foldersEnsure('), 'before the team\'s folders are made');

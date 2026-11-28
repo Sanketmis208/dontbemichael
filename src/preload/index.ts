@@ -717,9 +717,10 @@ const api = {
   addBusiness: (p: { id?: string; home: string; settings: Record<string, unknown>; install?: Record<string, unknown> }): Promise<{ ok: boolean; id?: string; error?: string; name?: string | null }> =>
     ipcRenderer.invoke('office:addBusiness', p),
   /** The business that already uses this business folder, or null: two businesses never share one.
-   *  `add` for Add a business: the open business's folder counts, only the draft's own is exempt. */
-  businessFolderTakenBy: (folder: string, add?: { id: string | null }): Promise<{ id: string; name: string | null } | null> =>
-    ipcRenderer.invoke('office:folderTakenBy', folder, add),
+   *  `add` for Add a business: the open business's folder counts, only the draft's own is exempt.
+   *  `home`: the office folder the save goes to, which decides which business is the open one. */
+  businessFolderTakenBy: (folder: string, add?: { id: string | null }, home?: string): Promise<{ id: string; name: string | null } | null> =>
+    ipcRenderer.invoke('office:folderTakenBy', folder, add, home),
   /** Back to office from Add a business: keep what was typed as Setup not finished. */
   saveBusinessDraft: (p: { id?: string; home: string; step: string; settings: Record<string, unknown> }): Promise<string | null> =>
     ipcRenderer.invoke('office:saveDraft', p),

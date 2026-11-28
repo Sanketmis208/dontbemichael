@@ -35,8 +35,8 @@ test('an office set up with an Office folder gets Michael\'s folder: the one hol
   const at = main.indexOf('function migrateBusinessFolder(): void {');
   const fn = main.slice(at, main.indexOf('\n}\n', at));
   assert.match(fn, /if \(!cfg\.businessFolder && cfg\.officeFolder\) \{/);
-  // Never a parent another business's folder is in or around: the Office folder itself then.
-  assert.match(fn, /writeConfig\(\{ businessFolder: parent && isUsableTeamFolder\(parent\) && !businessFolderTakenBy\(parent\) \? parent : office \}\);/);
+  // Which folder it gets is businessFolderFromOffice (add-business tests); none when every choice is another business's.
+  assert.match(fn, /const folder = businessFolderFromOffice\(cfg\.officeFolder\);\n\s*if \(folder\) writeConfig\(\{ businessFolder: folder \}\);/);
   assert.match(main, /migrateBusinessFolder\(\); \/\/ one-time/);
   const { legacyBusinessFolder } = loadTs('src/shared/officeRecord.ts');
   assert.equal(legacyBusinessFolder('/Users/o/Documents/Biz/Office'), '/Users/o/Documents/Biz');
