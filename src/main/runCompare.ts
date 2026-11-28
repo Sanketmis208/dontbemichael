@@ -11,7 +11,7 @@
  * to the owner's card.
  */
 import { createReadStream } from 'node:fs';
-import { readdir, stat } from 'node:fs/promises';
+import { lstat, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import type Database from 'better-sqlite3';
@@ -242,7 +242,14 @@ export class RunCompare {
       for (const n of names) {
         if (!n.endsWith('.jsonl') || !ids.has(n.slice(0, -6))) continue;
         const path = join(root, dir, n);
-        try { out.push({ path, mtime: (await stat(path)).mtimeMs }); } catch { /* gone */ }
+        // Only Claude's own file: a member's shell that can write here could
+        // put a link named for its own session in place, to another member's
+        // transcript. A symlink is never followed, and a file with a second
+        // name (a hard link) is skipped, since Claude never links its own.
+        try {
+          const st = await lstat(path);
+          if (st.isFile() && st.nlink === 1) out.push({ path, mtime: st.mtimeMs });
+        } catch { /* gone */ }
       }
     }
     return out;

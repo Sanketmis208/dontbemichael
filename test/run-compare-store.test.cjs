@@ -177,6 +177,32 @@ test('only the member\'s own sessions from the private record are read', async (
   assert.doesNotMatch(f.calls[0], /FORGED LINE/);
 });
 
+test('a session file that is a link to another member\'s transcript is not read', async (t) => {
+  // Value: protects=another member's transcript never enters the comparison through a file named for this member's session; fails_when=the slicer follows a symlink or reads a hard link (lstat says plain file, the path stays in the projects folder); why_new=PR 739 review 2026-11-27, hard links found by the security and testing passes; seam=real files on disk; no_claim=a swap between the check and the read
+  const theirs = (f) => {
+    fs.mkdirSync(path.join(f.projects, '-office-jim'), { recursive: true });
+    const target = path.join(f.projects, '-office-jim', 's-jim.jsonl');
+    fs.writeFileSync(target, line('user', T0 + 24 * H + 1500, 'LINKED LINE') + '\n');
+    return target;
+  };
+  const hard = setup(t);
+  twoRuns(hard);
+  const bad = path.join(hard.projects, '-office-pam', 's-bad.jsonl');
+  fs.rmSync(bad);
+  fs.linkSync(theirs(hard), bad);
+  const viaHard = await hard.store.wentWrong({ runId: 2, agentId: 'pam', workStyle: 'x' });
+  assert.ok(hard.calls.every((c) => !/LINKED LINE/.test(c)), 'a hard link is not read');
+  assert.equal(viaHard.reason, 'no-transcript');
+  if (process.platform === 'win32') return; // a symlink needs extra rights there
+  const soft = setup(t);
+  twoRuns(soft);
+  const bad2 = path.join(soft.projects, '-office-pam', 's-bad.jsonl');
+  fs.rmSync(bad2);
+  fs.symlinkSync(theirs(soft), bad2);
+  await soft.store.wentWrong({ runId: 2, agentId: 'pam', workStyle: 'x' });
+  assert.ok(soft.calls.every((c) => !/LINKED LINE/.test(c)), 'a symlink is not followed');
+});
+
 test('a comparison cut short by a quit reads as failed after a restart, and Try again runs it', async (t) => {
   // Value: protects=a Went wrong never sticks at working; fails_when=a working row saved before the model call is read back as working with nothing doing it, so the jobs list hides Went wrong for that run for good; why_new=testing and state machine review; seam=fake model; no_claim=none beyond protects
   const f = setup(t);
