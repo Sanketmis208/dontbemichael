@@ -111,10 +111,6 @@ subscriptions you already pay for and within their normal usage limits.
 
 ## Where to go next
 
-- [How to manage multiple Claude Code sessions](/blog/manage-multiple-claude-code-sessions/) without losing
-  track of them.
-- [How to give Claude Code long term memory](/blog/give-claude-code-long-term-memory/) so the team stops
-  forgetting.
 - The best tools to run multiple Claude Code agents, compared.
 
 ---

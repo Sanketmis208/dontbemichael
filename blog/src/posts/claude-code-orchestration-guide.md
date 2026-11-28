@@ -64,7 +64,7 @@ the approvals queue) and the intelligence is the **GOD agent** — an ordinary `
 as the orchestrator, seated in the corner office. Because the orchestrator is a prompt, not a
 codebase, you tune *how* it routes and *what* it considers critical by editing its instructions, not
 by redeploying. That's the practical heart of
-[how the GOD orchestrator works](/blog/how-the-god-orchestrator-works/).
+how the GOD orchestrator works.
 
 {% img "note-1" %}
 
@@ -89,8 +89,7 @@ tests, not the migration.
 Each worker is its own session with isolated context. When one needs something from another, it sends
 a message rather than going through you. Crucially, agents never write into each other's files — they
 drop a message in their own outbox and the harness delivers it. That single-writer discipline is what
-keeps the whole thing from corrupting itself; the mechanics are in
-[atomic file mailboxes](/blog/atomic-file-mailboxes-for-agents/).
+keeps the whole thing from corrupting itself.
 
 ### 4. The orchestrator adjudicates the routine stuff
 
@@ -122,8 +121,7 @@ ones that thrash:
 - **Keep the orchestrator out of the work.** Its job is to route and adjudicate, not to write the
   code itself. An orchestrator that starts doing the tasks is a bottleneck wearing a manager's hat.
 - **Make coordination auditable.** Every routed message and every escalation should be logged, so
-  when the team goes sideways you can replay what happened. For the broader patterns here, see
-  [the best way to coordinate AI coding agents](/blog/coordinating-ai-coding-agents/).
+  when the team goes sideways you can replay what happened.
 
 {% img "note-2" %}
 
