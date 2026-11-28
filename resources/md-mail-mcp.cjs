@@ -171,12 +171,25 @@ async function handle(msg) {
 }
 
 const rl = readline.createInterface({ input: process.stdin });
+/** Requests still being answered, so closing input never cuts a reply off. */
+const inFlight = new Set();
 rl.on('line', (line) => {
   if (!line.trim()) return;
   let msg;
   try { msg = JSON.parse(line); } catch { return write({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }); }
   if (!msg || typeof msg !== 'object') return write({ jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Invalid request' } });
-  handle(msg).catch((e) => write({ jsonrpc: '2.0', id: msg.id === undefined ? null : msg.id, error: { code: -32603, message: String((e && e.message) || e) } }));
+  const p = handle(msg).catch((e) => write({ jsonrpc: '2.0', id: msg.id === undefined ? null : msg.id, error: { code: -32603, message: String((e && e.message) || e) } }));
+  inFlight.add(p);
+  p.finally(() => inFlight.delete(p));
 });
-rl.on('close', () => process.exit(0));
+// Input closed: finish the answers already asked for, then exit once stdout is
+// written out. A pipe on macOS writes later, so exiting at once cut a long
+// reply (the tool list) at 8 KB. Never waits more than 10 s.
+rl.on('close', () => {
+  const quit = () => process.exit(0);
+  setTimeout(quit, 10_000).unref();
+  Promise.allSettled([...inFlight]).then(() => {
+    try { process.stdout.write('', quit); } catch { quit(); }
+  });
+});
 process.on('uncaughtException', (e) => { try { process.stderr.write(`md-mail: ${e && e.stack}\n`); } catch { /* ignore */ } });
