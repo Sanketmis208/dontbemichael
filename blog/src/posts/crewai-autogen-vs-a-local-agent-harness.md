@@ -58,9 +58,9 @@ Frameworks are adding pieces of this (LangGraph's interrupts, CrewAI's memory an
 
 ## What a harness is instead
 
-A [multi-agent harness](/blog/what-is-a-multi-agent-harness/) is the other answer: the system, already assembled, as an app. Munder Difflin is a free, MIT-licensed, local-first desktop app (macOS/Windows/Linux) where every agent is a **real CLI process** — Claude Code, OpenAI Codex, Antigravity, OpenCode, Crush, pi.dev, GitHub Copilot CLI — running in its own pseudo-terminal and its own isolated git worktree. A [GOD orchestrator](/blog/how-the-god-orchestrator-works/) routes work between them; agents share long-term memory; triggers include typing, Slack, webhooks, schedules, and voice.
+A [multi-agent harness](/blog/what-is-a-multi-agent-harness/) is the other answer: the system, already assembled, as an app. Munder Difflin is a free, MIT-licensed, local-first desktop app (macOS/Windows/Linux) where every agent is a **real CLI process** — Claude Code, OpenAI Codex, Antigravity, OpenCode, Crush, pi.dev, GitHub Copilot CLI — running in its own pseudo-terminal and its own isolated git worktree. A GOD orchestrator routes work between them; agents share long-term memory; triggers include typing, Slack, webhooks, schedules, and voice.
 
-The pieces you'd have built around a framework are already there: [human approval gates](/blog/human-in-the-loop-approving-ai-agents/) on spend, scope, and destructive ops; a circuit breaker with a steer → constrain → stop ladder; per-agent token budgets; OpenTelemetry observability; a Command Center with a kanban board and live fleet monitoring. And because it drives CLIs rather than calling model APIs, it rides the **subscriptions you already pay for** — no mandatory API key, with BYO keys and local LLMs as options.
+The pieces you'd have built around a framework are already there: human approval gates on spend, scope, and destructive ops; a circuit breaker with a steer → constrain → stop ladder; per-agent token budgets; OpenTelemetry observability; a Command Center with a kanban board and live fleet monitoring. And because it drives CLIs rather than calling model APIs, it rides the **subscriptions you already pay for** — no mandatory API key, with BYO keys and local LLMs as options.
 
 The honest flip side: you can't `import` Munder Difflin into your SaaS. It won't run your custom document pipeline inside your product. It's an app for a specific job — a team of agents working your repositories, visible on one screen — not a toolkit for arbitrary agent systems. Server based meta harnesses such as Databricks' Omnigent sit in between, which our OmniAgent alternatives post covers.
 
@@ -80,7 +80,7 @@ The honest flip side: you can't `import` Munder Difflin into your SaaS. It won't
 - You want guardrails, memory, isolation, and a UI on day one, not as a Q3 project.
 - You want it local and driving the CLI subscriptions you already have, rather than metering API calls through code you wrote.
 
-There's no loser here. It's the same distinction as Rails vs. a deployed app: nobody asks which is "better," because one is for builders of systems and the other is a system. If you're still weighing categories, [how to choose a multi-agent tool](/blog/how-to-choose-a-multi-agent-tool/) walks the wider field, and [local-first vs cloud agent SDKs](/blog/local-first-vs-cloud-agent-sdks/) covers the deployment axis.
+There's no loser here. It's the same distinction as Rails vs. a deployed app: nobody asks which is "better," because one is for builders of systems and the other is a system.
 
 ## Try the harness side in five minutes
 

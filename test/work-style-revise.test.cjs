@@ -280,13 +280,31 @@ test('a change that can never work on a retry says why, and the app hears of a r
   // The card says each cause in its own words, and none of them asks for a retry.
   const jc = JSON.parse(read('src/renderer/src/i18n/locales/en.json')).jobChange;
   for (const k of ['errorEngine', 'errorStopped', 'errorNote', 'errorNoteCard']) assert.doesNotMatch(jc[k], /try again/i, k);
+  // A cause the owner can't see names the problem and where to send it (owner, 2026-11-27: "neither tells the problem nor how to fix it").
+  for (const k of ['errorNote', 'errorNoteCard']) assert.match(jc[k], /ran into a problem[^]*Report a problem/, k);
   assert.match(jc.errorEngine, /\{\{name\}\}/);
 });
 
 test('the engine note names the manager, never a raw {{name}}', () => {
   // Value: protects=the card reads "Job changes need Michael on Claude or Codex", with the office's own name for him; fails_when=the error note's t() call stops passing name, so i18next shows "{{name}}" as written; why_new=errorEngine is the first job change note with a placeholder (2026-11-13), and the i18n placeholder check skips this call because its key is chosen at run time; seam=source pin, the box needs a renderer; no_claim=the rendered card
   const box = read('src/renderer/src/components/JobChangeReview.tsx');
-  const call = /\{t\(state\.reason !== 'failed' \? FAILURE_NOTE\[state\.reason\] : [^)]*?, \{ name: (\w+) \}\)\}/.exec(box);
+  const call = /\{t\(failureNote\(state\.reason, !!p\.autoRun\), \{ name: (\w+) \}\)\}/.exec(box);
   assert.ok(call, 'the error note passes a name');
   assert.match(box, new RegExp(`const ${call[1]} = useResolvedGodName\\(\\);`), 'the name is the manager\'s, as the office calls him');
+});
+
+test('an update the job already covers reads as no change, not a broken answer', async () => {
+  // Value: protects=a pack update card whose duty the job already covers shows "nothing changes" instead of failing on every try; fails_when=the empty summary the update prompt asks for is refused as missing-part again; why_new=owner 2026-11-27, Ryan's update card failed 5 times with unreadable: missing-part; seam=stubbed hidden model; no_claim=the rendered card
+  const prompt = T.toRevisePrompt({ ctx, instructions: 'x', handles: '', changes: ['c'], update: true });
+  assert.match(prompt, /already covers the duty, return the current instructions unchanged, "handles": null and "summary": \[\]/);
+  assert.deepEqual(T.readRevise(okReply({ summary: [] }), ctx), { fail: 'missing-part' }, 'the owner\'s own change still needs its summary');
+  assert.equal(T.readRevise(okReply({ summary: [] }), ctx, false, { update: true }).answer.kind, 'ok');
+  stub({ ok: true, text: okReply({ summary: [] }) });
+  const res = await W.reviseWorkStyle({ ctx, current: { instructions: 'x', handles: '' }, changes: ['c'], update: true }, deps);
+  assert.equal(res.kind, 'ok');
+  assert.deepEqual(res.summary, []);
+  // The card can't take other words, so its unreadable line asks only for a retry, and the report line names the real button.
+  const L = JSON.parse(read('src/renderer/src/i18n/locales/en.json'));
+  assert.doesNotMatch(L.jobChange.errorUnreadableCard, /other words/);
+  assert.ok(L.jobChange.errorNoteCard.includes(L.shell.reportProblem));
 });

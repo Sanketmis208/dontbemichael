@@ -154,6 +154,12 @@ function setAsideJournals(userData: string): string[] {
   } catch { return []; }
 }
 
+/** A business's own place in the app's data folder (officeDataPath), which a
+ *  reset of that business, or its removal, erases whole. */
+export function businessDataFolder(userData: string, officeId: string): string {
+  return join(userData, 'offices', officeId);
+}
+
 /** Erase the office's data. `extra` adds folders that live elsewhere (the
  *  hive and palace where they resolve, Research's and the checks' Claude Code
  *  conversations). Returns the paths it could not remove; a reset carries on
@@ -176,7 +182,7 @@ export function eraseOfficeData(p: { home: string | null; userData: string; extr
     // opened; the shared database, secrets file and other offices stay (their
     // rows and keys are erased by office in the reset itself).
     ...(p.officeId
-      ? [join(p.userData, 'offices', p.officeId), join(p.userData, 'opened-attachments')]
+      ? [businessDataFolder(p.userData, p.officeId), join(p.userData, 'opened-attachments')]
       : [...APP_DATA_ENTRIES.map((n) => join(p.userData, n)), ...setAsideJournals(p.userData)]),
     ...(p.extra ?? []).filter(Boolean)
   ];
