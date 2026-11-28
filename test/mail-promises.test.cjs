@@ -97,6 +97,20 @@ test('a direct send with promises is tracked; one with none, a draft or a failed
   assert.equal(promised(out).length, 1);
 });
 
+test('promises given at the send of an approved proposal are added to the proposal\'s, never dropped', async (t) => {
+  // Value: protects=a promise named only when the approved email is sent still reaches Michael; fails_when=the approved send uses only the promises given to propose and drops the rest without a word; why_new=review 2026-11-27 of the running branch; seam=fake mail service
+  const { approvals, call, out, cleanup } = setup();
+  t.after(cleanup);
+  const p = await call('pam', 'propose', { mailbox: 'ceo', to: 'books@keeper.com', subject: 'Re: statements', body: 'The rest will follow.', promises: [PROMISES[0]] });
+  approvals.decide(p.body.proposal, 'approve', {}, '');
+  await call('pam', 'send', { mailbox: 'ceo', proposal: p.body.proposal, promises: [PROMISES[1], PROMISES[0]] });
+  const [m] = promised(out);
+  assert.ok(m, 'Michael is asked');
+  for (const line of PROMISES) assert.equal(m.body.split(`- ${line}`).length, 2, `once each: ${line}`);
+  const tool = read('resources/md-mail-mcp.cjs');
+  assert.match(tool, /With a proposal id, the promises given to propose are used, and any you give here are added to them\./);
+});
+
 test('promises that could not reach Michael are said in the send result, and the send still stands', async (t) => {
   // Value: protects=a member is never left believing Michael tracks a promise he never got; fails_when=the hive is off at the send and the result says nothing, so the promise is lost; why_new=review 2026-11-27 of the running branch; seam=fake mail service with a hive that refuses
   const { call, out, cleanup } = setup({ hive: false });

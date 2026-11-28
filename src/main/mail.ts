@@ -1881,7 +1881,9 @@ async function runMailRequest(
         console.error('[mail] mark sent failed:', p!.id, e);
       }
       recordGrantSend(out, approved);
-      const told = tellPromises(out, approved, p!.promises ?? []);
+      // The promises given to propose, and any the member added at the send:
+      // Michael checks each against the text as sent.
+      const told = tellPromises(out, approved, readPromises([...(p!.promises ?? []), ...promises]));
       try { deps.audit?.({ kind: 'mail-sent-approved', agentId, mailbox, proposal: p!.id, ...grantFlag, ...(approved.files?.length ? { files: approved.files.length, bytes: approved.files.reduce((n, f) => n + f.content.length, 0) } : {}) }); } catch { /* the send stands */ }
       return { status: 200, body: told };
     }

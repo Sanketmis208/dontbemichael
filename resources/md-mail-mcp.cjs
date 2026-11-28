@@ -109,7 +109,7 @@ const TOOLS = [
   {
     name: 'send',
     description: 'Send a message from your mailbox. Can send: give the message and it goes out. Send on approval: give only mailbox and proposal, the id of an email the owner approved; the approved version goes out exactly as the owner left it. Or, for a kind the owner let you send without approval, give the full email and its standing id: the app checks it fits, and one that does not goes to the owner on Ask me instead. Draft only: refused, use draft.',
-    inputSchema: { type: 'object', properties: { ...compose, proposal: { type: 'string', description: 'The id propose gave, once the owner approved it.' }, standing: { type: 'string', description: 'A standing approval id from list_mailboxes, for an email of that kind.' }, promises: { ...promises, description: `${promises.description} With a proposal id, leave it out: the promises given to propose are used.` } }, required: ['mailbox'] }
+    inputSchema: { type: 'object', properties: { ...compose, proposal: { type: 'string', description: 'The id propose gave, once the owner approved it.' }, standing: { type: 'string', description: 'A standing approval id from list_mailboxes, for an email of that kind.' }, promises: { ...promises, description: `${promises.description} With a proposal id, the promises given to propose are used, and any you give here are added to them.` } }, required: ['mailbox'] }
   }
 ];
 
