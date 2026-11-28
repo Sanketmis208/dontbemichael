@@ -99,8 +99,7 @@ This is the part that makes a floor safe to leave running.
 The triggers tab. **Schedules** run a prompt on an interval or on chosen weekdays at a set time, and the prompt is sent word for
 word on every run. **Context** rules decide what happens as an agent's memory fills up. **Webhooks** let outside systems post work
 in, and **organisation** lets a teammate's office send work to yours. Together with the board, triggers turn the office from
-something you drive into something you supervise. The full pattern is in
-[scheduling autonomous agent missions](/blog/scheduling-autonomous-agent-missions/).
+something you drive into something you supervise.
 
 ## Should you watch the floor or the Command Center?
 
@@ -113,7 +112,7 @@ Both show the same office, so this is about attention, not data:
 
 In practice, keep the floor open while you work and check the Command Center when you check in. A morning check in takes two
 minutes: the done column, the ask me tab, spend per agent, and what is scheduled next. When something needs a human decision, it is
-already waiting for you on [the ask me tab](/blog/human-in-the-loop-approving-ai-agents/) rather than buried in a scrollback.
+already waiting for you on the ask me tab rather than buried in a scrollback.
 
 ## Try it
 

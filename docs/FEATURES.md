@@ -1,6 +1,6 @@
 # Don't Be Michael: features and changes
 
-Everything the app does today, and every release that got it here (0.0.1 to 0.4.4). Part 1 is
+Everything the app does today, and every release that got it here (0.0.1 to 0.4.5). Part 1 is
 written to be lifted onto the GitHub page and the website as it is; Part 2 is the full list, release
 by release.
 
@@ -147,6 +147,9 @@ moving, and brings you only the decisions that need you.
   The app reads each file inside the member's own folder walls and sends the copy it took then,
   so a file changed later never goes out in its place. For a file a teammate keeps, the member
   asks that teammate, and the app copies it into the member's From teammates folder to attach.
+- When an email tells someone the office will do or send something later, Michael keeps a card
+  for each promise once it is sent, until the follow up goes out. An email waiting on Ask me lists
+  what it promises.
 
 ### 4. Jobs on a clock
 - Each team member's schedules sit on its Access tab. Name the job ("Check the support
@@ -309,7 +312,8 @@ moving, and brings you only the decisions that need you.
 - Add a business from the top bar or Settings while the open one keeps working. Setup opens over
   the office, the new business's folder is named after it, and Back to the office keeps what you
   typed for later. Settings, General lists every business with Open, Find it for a folder that
-  moved, and Remove for a setup never finished.
+  moved, Remove for a setup never finished, and Remove for good, after a confirm, for a business
+  whose folder is gone.
 - Back up everything on this computer to one file and restore it on a new one: every business with
   its team, memory, tasks, history, knowledge, settings and the team's folders. Saved passwords and
   keys are locked with a backup password you choose. Restore from Settings, General, or from the
@@ -342,6 +346,17 @@ moving, and brings you only the decisions that need you.
   as a picture, and a part you select pastes as clean as the whole, in light or dark mode.
 
 ## Part 2: Every change, release by release
+
+### 0.4.5 (2026-11-27)
+- What an email promises becomes a card: once the email is sent, Michael keeps a card for each
+  promise until the follow up goes out. An email waiting on Ask me lists what it promises.
+- Remove a finished business whose folder is gone, after a confirm, with its saved passwords, keys
+  and history on this computer.
+- A job update the job already covers says so with Got it; a failed job change says what went wrong.
+- The file picker shows every file, so PDFs and documents attach again. The 1:1 window is as wide
+  as the message box. The blog keeps only posts about using the app.
+- Fixes: Pulse's Tasks done counts a card listed twice once; a business added over an existing
+  office names it in its record (#738); a resumed setup never renames another business.
 
 ### 0.4.4 (2026-11-27)
 - GitHub for team members: each repo Pull only, Push on approval or Push to the member's own

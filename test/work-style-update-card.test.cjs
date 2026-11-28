@@ -124,7 +124,7 @@ test('the card says why, and holds one row of buttons', () => {
   assert.match(card, /keep=\{keepMine\}/, 'Keep mine rides in the review\'s own row');
   assert.equal((card.match(/\{keepMine\}/g) ?? []).length, 2, 'and in the one row when nothing is worked out yet');
   const review = fs.readFileSync(path.join(__dirname, '../src/renderer/src/components/JobChangeReview.tsx'), 'utf8');
-  assert.match(review, /<Keep \/>\n\s*\{!keep && <PixelButton variant="secondary" size="sm" onClick=\{onCancel\}/, 'no Cancel beside Keep mine');
+  assert.match(review, /\{done \?\? <Keep \/>\}\n\s*\{!keep && !done && <PixelButton variant="secondary" size="sm" onClick=\{onCancel\}/, 'no Cancel beside Keep mine');
   assert.equal((review.match(/<Keep \/>/g) ?? []).length, 6, 'every button row of the review');
   assert.match(review, /<Disclosure open=\{whyOpen\} \/>\{why\.label\}/, 'Why this change folds like See the whole new job');
   assert.match(review, /color: 'var\(--cth-indigo-text\)', fontWeight: 600 \}\}>\n\s*<Disclosure open=\{whyOpen\}/, 'and is set apart, easy to notice');
@@ -136,4 +136,15 @@ test('the card says why, and holds one row of buttons', () => {
     // Each reason names what went wrong before, not only what the update does.
     for (const [k, v] of Object.entries(L.askMe.workStyleWhy)) assert.ok(/[.。]\s*\S/.test(v), `${lang} ${k}: a cause, then the change`);
   }
+});
+
+test('when the job already covers the update, the card offers Got it, not Keep mine', () => {
+  // Value: protects=owner 2026-11-27 ("if nothing changes then the button with label keep mine makes no sense"); fails_when=a nothing-changes preview shows Keep mine, Cancel or See the whole new job, or Got it stops recording the decision; why_new=owner feedback on Ryan's card; seam=source; no_claim=layout
+  const card = fs.readFileSync(path.join(__dirname, '../src/renderer/src/components/WorkStyleUpdateCards.tsx'), 'utf8');
+  assert.match(card, /done=\{<PixelButton variant="primary" size="sm" disabled=\{busy === id\} onClick=\{\(\) => void keep\(offer\)\}>\{t\('askMe\.gotIt'\)\}<\/PixelButton>\}/, 'Got it records the decision, so the card goes');
+  const review = fs.readFileSync(path.join(__dirname, '../src/renderer/src/components/JobChangeReview.tsx'), 'utf8');
+  assert.match(review, /done=\{lineView\?\.none \? p\.done : undefined\}/, 'only when nothing changes');
+  assert.match(review, /\{!done && \(\n\s*<button type="button" aria-expanded=\{whole\}/, 'no "whole new job" when the job is the same');
+  const L = JSON.parse(fs.readFileSync(path.join(__dirname, '../src/renderer/src/i18n/locales/en.json'), 'utf8'));
+  assert.equal(L.askMe.gotIt, 'Got it');
 });

@@ -286,6 +286,8 @@ const oneLine = (v: string): string => v.replace(/[-\u2010-\u2015\u2212]{3,}/g, 
 /** What a parse checks a run's handoffs against. */
 export interface ReviseParseOpts {
   askHome?: boolean;
+  /** An app update: an empty summary is its "the job already covers this". */
+  update?: boolean;
   teammates?: ReviseTeammate[];
   handoffList?: Array<{ toId: string; scope: string }>;
 }
@@ -358,7 +360,9 @@ export function readRevise(answer: string, ctx: WorkStyleContext, lead = false, 
   const handles = lead ? null : line(o.handles, 1500) || null;
   const summary = listOf(o.summary).map((s) => line(s, 300)).filter(Boolean).slice(0, SUMMARY_MAX);
   const oneTimeTask = line(o.oneTimeTask, 1500) || undefined;
-  if (!instructions || instructions === opening || !plain || summary.length === 0) return { fail: 'missing-part' };
+  // An update the job already covers comes back with no summary, as the prompt
+  // asks; refusing it failed that card on every try (owner, 2026-11-27: Ryan).
+  if (!instructions || instructions === opening || !plain || (summary.length === 0 && !opts.update)) return { fail: 'missing-part' };
   const handoffs = lead ? [] : readHandoffs(o.handoffs, opts.teammates ?? []);
   const drops = lead ? [] : readDrops(o.drops, opts.handoffList ?? []);
   return {

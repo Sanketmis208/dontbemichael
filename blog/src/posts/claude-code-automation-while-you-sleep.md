@@ -72,8 +72,7 @@ The mechanism, in plain terms: when an agent tries to stop, a hook checks whethe
 work waiting in its inbox. If it does, the hook returns *"don't stop — here's what's next,"* and the
 agent keeps going. If the inbox is empty, the hook lets it finish. Two safeguards keep this from
 becoming an infinite loop: a flag that prevents blocking a stop twice in a row, and a per-agent cursor
-so each task is surfaced exactly once. The full mechanics are in
-[Claude Code hooks, explained](/blog/claude-code-hooks-explained/).
+so each task is surfaced exactly once.
 
 The crucial property for overnight work: the loop is **driven by a queue, not a timer.** An agent
 continues only while it has tasks; when the work runs out, it stops cleanly instead of spinning or
@@ -101,7 +100,7 @@ escalate to a human queue instead of executing. A good default critical list:
 - **scope changes** (work drifting from what you asked), and
 - **conflicts** the team can't resolve.
 
-In a hive, the [orchestrator](/blog/how-the-god-orchestrator-works/) enforces this: routine decisions
+In a hive, the orchestrator enforces this: routine decisions
 it makes itself, critical ones it routes to an approvals queue — the
 [human-in-the-loop approvals](/blog/human-in-the-loop-ai-agents/) that keep an overnight run safe. You
 come back in the morning to a short list of "I needed your call on these," not a pile of irreversible

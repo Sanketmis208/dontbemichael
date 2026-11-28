@@ -57,7 +57,7 @@ happens to feel like.
 ### 2. Draft, in its own worktree
 
 The writer works in its **own git worktree**, a separate checkout, so a half written draft never collides
-with anyone else's files. ([Why that isolation matters](/blog/claude-code-git-worktrees-vs-hive/).) It reads a
+with anyone else's files. It reads a
 handful of existing posts for structure, and it can carry the house style as an installed **skill**, a
 checklist it rereads on every draft instead of a prompt we hope it remembers.
 

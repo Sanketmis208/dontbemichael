@@ -300,23 +300,6 @@ const RICH = {
     s += `<path d="M950 400 C 1010 390, 1030 380, 1070 360" marker-end="url(#ah)"/>`;
     return s + txt(150, 240, "ten engines, one office", BLUE, 32) + txt(950, 780, A.orange || "from zero to a working hive", ORANGE, 34);
   },
-  "run-munder-difflin-on-open-models"(r, A) {
-    let s = `<path d="M120 700 L1480 700"/>`;
-    // left: your machine
-    s += desk(180, 620, 380) + laptop(260, 560, 180);
-    s += chip(200, 640, 190, "local/gpt-oss:20b") + mug(560, 618, 0.9);
-    s += txt(180, 300, "your machine", BLUE, 30) + txt(180, 338, "private · no per-token bill", AMBER, 24);
-    // right: provider rack + cloud
-    s += rack(1160, 380, 260, 240) + cloudS(1310, 250, 0.9);
-    s += chip(1150, 650, 280, "openrouter/deepseek-v4");
-    s += txt(1140, 300, "provider GPUs", BLUE, 30) + txt(1140, 338, "frontier scale · your key", AMBER, 24);
-    // center: Hei with the key, cables to both
-    s += hei(790, 500, 1, { legs: "stand", armL: "out", armR: "out" });
-    s += keyI(770, 350, 1.1);
-    s += `<path d="M700 520 C 600 540, 520 550, 450 560" marker-end="url(#ah)"/>`;
-    s += `<path d="M880 520 C 990 540, 1060 545, 1140 540" marker-end="url(#ah)"/>`;
-    return s + txt(620, 790, A.orange || "your floor, your weights", ORANGE, 34);
-  },
   "deploy-a-blog-writer-agent"(r, A) {
     let s = `<path d="M110 700 L1490 700"/>`;
     // writer desk: papers + style book
@@ -395,22 +378,6 @@ const RICHNOTE = {
     s += hei(560, 395, 0.42, { legs: "none", armL: "none", armR: "none" });
     s += txt(400, 92, "add agent", BLUE, 26);
     s += `<path d="M730 280 C 790 285, 820 290, 860 300" marker-end="url(#ah)"/>`;
-    s += miniAtDesk(950, 290);
-    return s;
-  },
-  "run-munder-difflin-on-open-models#1"(r) {
-    let s = chip(230, 160, 230, "local/gpt-oss:20b");
-    s += chip(230, 250, 250, "ollama/qwen3:30b");
-    s += chip(230, 340, 320, "openrouter/deepseek-v4");
-    s += txt(240, 130, "same model, three prefixes", AMBER, 26);
-    s += hei(820, 310, 0.8, { legs: "stand", armL: "out", armR: "down" }) + magnifier(730, 230, 0.9);
-    return s;
-  },
-  "run-munder-difflin-on-open-models#2"(r) {
-    let s = keyI(280, 210, 1.2) + box(480, 160, 190, 110, true);
-    s += txt(490, 140, "write-only broker", AMBER, 25);
-    s += `<path d="M330 240 C 390 235, 420 225, 470 215" marker-end="url(#ah)"/>`;
-    s += `<path d="M680 215 C 750 225, 790 245, 840 270" marker-end="url(#ah)"/>`;
     s += miniAtDesk(950, 290);
     return s;
   },

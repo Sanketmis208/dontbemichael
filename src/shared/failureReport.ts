@@ -145,7 +145,9 @@ export const LOG_KIND_CLASS: Readonly<Record<string, FailureClass>> = {
   'work-style-handoff-written': 'none',
   // The failure sender's own state changes.
   'failure-report-stopped': 'none', 'failure-report-waiting': 'none', 'failure-report-dropped': 'none',
-  'failure-report-held': 'none'
+  'failure-report-held': 'none',
+  // Kept in the office log for support, never sent (docs/designs/separate-businesses.md, Section 8).
+  'office-name-mismatch': 'none'
 };
 
 const ERROR_CODE = /^([A-Z][A-Z0-9_]{1,23}|none)$/;
