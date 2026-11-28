@@ -84,7 +84,7 @@ The card knew his name. That follow-up is worth more than a week of marketing.
 Do this once and it's a great retro. The compounding version is a **standing intake**: the
 same bucketing agent runs on whatever accumulated overnight — new issues, Discord threads,
 stray mentions — and appends to the same backlog under the same merge rules, on a
-[schedule](/blog/scheduling-autonomous-agent-missions/). Feedback stops being an event and
+schedule. Feedback stops being an event and
 becomes a pipeline, and the backlog stays ranked by evidence instead of by whoever shouted
 most recently.
 

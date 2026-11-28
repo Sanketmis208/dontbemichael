@@ -95,6 +95,10 @@ export interface MailProposal {
   cancelReason?: string;
   /** The earlier waiting card for the same email that this one replaced. */
   replaces?: string;
+  /** What the email tells the recipient the office will do later ("the
+   *  November statement will follow"): shown on the owner's card, and each
+   *  becomes a card for Michael once it is sent (owner, 2026-11-27). */
+  promises?: string[];
 }
 
 /**
@@ -428,4 +432,43 @@ export function parseStandingFit(answer: string): { fits: true } | { fits: false
   const no = /^no\s*:\s*([\s\S]+)$/i.exec(a);
   if (no && no[1].trim()) return { fits: false, reason: no[1].trim().replace(/\s+/g, ' ').slice(0, 300) };
   return null;
+}
+
+/** At most this many promises on one email, each at most PROMISE_MAX long. */
+export const PROMISES_MAX = 5;
+export const PROMISE_MAX = 300;
+
+/** The member's "promises" for an email: short plain lines, no blanks or
+ *  repeats. Anything else reads as none. */
+export function readPromises(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  const out: string[] = [];
+  for (const x of v) {
+    if (typeof x !== 'string') continue;
+    const line = x.replace(/\s+/g, ' ').trim().slice(0, PROMISE_MAX).trim();
+    if (line && !out.some((o) => o.toLowerCase() === line.toLowerCase())) out.push(line);
+    if (out.length >= PROMISES_MAX) break;
+  }
+  return out;
+}
+
+/** What a sent email promised, as Michael's request to track each one: a card
+ *  per promise owned by the member who sent it, so nothing the office told
+ *  someone outside is left to memory (owner, 2026-11-27: "how would agent
+ *  track it as a to do"). The email's own subject and address stay in the
+ *  body, never the logged subject (D14). */
+export function promiseMessage(e: { member: string; memberId: string; to: string; subject: string; body: string; link: string | null; promises: string[] }): { act: 'request'; subject: string; body: string } {
+  const one = e.promises.length === 1;
+  return {
+    act: 'request',
+    subject: 'Promised in an email',
+    body: [
+      `${e.member} sent an email to ${e.to.slice(0, 200)}, ${quote(e.subject)}${e.link ? ` (${e.link})` : ''}, telling them the office will do ${one ? 'this' : 'these'} later:`,
+      ...e.promises.map((p) => `- ${p}`),
+      `Track ${one ? 'it' : 'each one'} on the board so it is done and never only remembered: fold it into an open card that already covers it, or make a card with "${e.memberId}" as assignee and the email's link in "sources". Write in its "description" what was promised, to whom, and by when if the email says. When it can only start after a date (a statement that closes later in the month), make it "waiting" with "waitingOn" naming what it waits for and "nextAt" that date. When only the owner can provide what it needs (a statement to download, a document to sign), it is an "action" for the owner on Ask me, with the member as raiser. Otherwise it is "todo" for ${e.member}. It stays open until ${e.member} tells you the follow up went out.`,
+      `The owner may have edited the email before it went: drop any line above that the sent text below no longer promises.`,
+      '--- SENT TEXT ---',
+      e.body.slice(0, 4000)
+    ].join('\n')
+  };
 }

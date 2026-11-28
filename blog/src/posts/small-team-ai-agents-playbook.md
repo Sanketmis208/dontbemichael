@@ -39,7 +39,7 @@ Treat your agents like a small team with a lead, not a pile of interchangeable w
 
 Start with **one orchestrator** — the agent that holds the plan, breaks work into tasks, assigns them, and
 decides what's ready to integrate. Everything routes through it, so there's a single place that knows the
-state of the world. (This is the role the [GOD orchestrator](/blog/how-the-god-orchestrator-works/) plays
+state of the world. (This is the role the GOD orchestrator plays
 in a hive — the human's proxy on the floor.)
 
 Around it, run **two or three specialists**: maybe one for a feature area, one for review and verification,
@@ -48,7 +48,7 @@ task lands you know who it goes to and the agents aren't all reaching for the sa
 
 Resist scaling the headcount early. A small set is supervisable; you can read every handoff and catch
 problems while they're cheap. Add an agent only when a real bottleneck asks for one, and let the
-orchestrator [coordinate the work](/blog/coordinating-ai-coding-agents/) rather than having agents
+orchestrator coordinate the work rather than having agents
 free-lance.
 
 {% img "note-1" %}
@@ -58,7 +58,7 @@ free-lance.
 Agents coordinate best the same way a remote team does — asynchronously, in writing, on a rhythm.
 
 **Use file-based handoffs.** Instead of agents interrupting each other, have them drop messages into each
-other's inbox as plain files, picked up on the next cycle. [Atomic file mailboxes](/blog/atomic-file-mailboxes-for-agents/)
+other's inbox as plain files, picked up on the next cycle. Atomic file mailboxes
 make this dead simple and debuggable: every request and reply is a file you can read, replay, or audit.
 There's no shared mutable channel to corrupt.
 
@@ -69,7 +69,7 @@ gives every agent the same picture without a meeting. It's the team's working me
 agents report what they did, what's next, and whether they're still on track, keeps drift from compounding
 silently. It's also where you catch two agents about to collide and re-route before they do.
 
-Pair this with durable [markdown memory](/blog/markdown-first-agent-memory/) so the team stops re-learning
+Pair this with durable markdown memory so the team stops re-learning
 the same facts every session. The cadence is what turns a set of independent agents into something that
 accumulates progress instead of restarting cold.
 
@@ -81,9 +81,9 @@ expensive. The trick is to make the *safe* action the path of least resistance.
 - **Branch-only by default.** Agents work on their own branches and never push or merge on their own. The
   orchestrator (and a human) decide what lands. A bad change stays contained on a branch instead of in main.
 - **One committer.** Let exactly one process own commits to the shared repo so concurrent agents never
-  corrupt each other's history. The [single-committer pattern](/blog/single-committer-git-pattern/) removes
+  corrupt each other's history. The single-committer pattern removes
   a whole class of race conditions.
-- **Isolated worktrees.** Give each agent its own [git worktree](/blog/claude-code-git-worktrees-vs-hive/)
+- **Isolated worktrees.** Give each agent its own git worktree
   so parallel work physically can't touch the same files. Collisions become impossible instead of merely
   unlikely.
 - **Human gates on the hard-to-reverse.** Deploys, merges to main, deleting data, anything outward-facing —

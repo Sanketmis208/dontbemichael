@@ -88,6 +88,9 @@ export interface JobChangeReviewProps {
    *  the card has one row of buttons (owner, 2026-11-07). The preview then
    *  has no Cancel: folding the card puts it away. */
   keep?: ReactNode;
+  /** The pack card's one button when the job already covers the update, in
+   *  place of Keep mine: there is nothing to keep or use (owner, 2026-11-27). */
+  done?: ReactNode;
   /** A run or a preview is up: the parent holds its own buttons. */
   onBusy?: (busy: boolean) => void;
   /** False where Apply sends no card for a one-time task (Michael's own job,
@@ -115,6 +118,14 @@ const FAILURE_NOTE: Record<Exclude<Failure, 'failed'>, string> = {
   engine: 'jobChange.errorEngine',
   stopped: 'jobChange.errorStopped'
 };
+
+/** The card has no box to say the change in other words, so its lines say
+ *  only what it can do: try again (owner, 2026-11-27). */
+function failureNote(reason: Failure, card: boolean): string {
+  if (reason === 'failed') return card ? 'jobChange.errorNoteCard' : 'jobChange.errorNote';
+  if (reason === 'unreadable' && card) return 'jobChange.errorUnreadableCard';
+  return FAILURE_NOTE[reason];
+}
 
 const SUMMARY_SHOWN = 6;
 
@@ -279,7 +290,7 @@ export function JobChangeReview(p: JobChangeReviewProps) {
     const count = overlap?.names.length ?? 0;
     const lineView = p.changesOf?.(state.ok);
     panel = <Preview ok={state.ok} who={p.who} lead={p.lead} sendsTask={p.sendsTask ?? true} title={p.previewTitle ?? t('jobChange.previewTitle')} heading={heading}
-      changes={lineView?.node} hideApply={lineView?.none} why={p.why}
+      changes={lineView?.node} hideApply={lineView?.none} done={lineView?.none ? p.done : undefined} why={p.why}
       applyLabel={p.applyLabel} applying={applying} failed={failed} onCancel={cancel} onApply={() => { void doApply(state.ok, state.from); }}
       nameOf={(id) => p.nameOf?.(id) ?? named.current.get(id)?.name}
       noSplit={noSplit ? t('jobChange.noSplit', { names: splitNames, count: named.current.size }) : undefined}
@@ -343,7 +354,7 @@ export function JobChangeReview(p: JobChangeReviewProps) {
     panel = (
       <div role="alert" style={panelStyle}>
         {head(t('jobChange.errorTitle'))}
-        <span style={noteStyle}>{t(state.reason !== 'failed' ? FAILURE_NOTE[state.reason] : p.autoRun ? 'jobChange.errorNoteCard' : 'jobChange.errorNote', { name: manager })}</span>
+        <span style={noteStyle}>{t(failureNote(state.reason, !!p.autoRun), { name: manager })}</span>
         <div style={rowEnd}><Keep />
           <PixelButton variant="secondary" size="sm" onClick={cancel}>{t('jobChange.cancel')}</PixelButton>
           <PixelButton variant="primary" size="sm" onClick={() => { void start(extras, answersRef.current); }}>{t('jobChange.tryAgain')}</PixelButton>
@@ -443,12 +454,14 @@ function Working({ who, progress, heading, onStop }: { who: string; progress?: P
 }
 
 /** The new job: what changes, the new "What X handles", the whole job folded. */
-function Preview({ ok, who, lead, sendsTask, title, heading, applyLabel, applying, failed, onCancel, onApply, nameOf, noSplit, noAccess, onOpenAccess, overlap, changes, hideApply, why }: {
+function Preview({ ok, who, lead, sendsTask, title, heading, applyLabel, applying, failed, onCancel, onApply, nameOf, noSplit, noAccess, onOpenAccess, overlap, changes, hideApply, done, why }: {
   ok: ReviseOk; who: string; lead?: boolean; sendsTask: boolean; title: string; heading: React.RefObject<HTMLDivElement>;
   /** Why the change is offered, folded: its link and its words. */
   why?: { label: string; text: string };
   /** The exact line changes, shown in place of the summary (pack card). */
   changes?: React.ReactNode; hideApply?: boolean;
+  /** Nothing changes: this one button closes it, and the job is not "new". */
+  done?: React.ReactNode;
   applyLabel: string; applying: boolean; failed: boolean; onCancel: () => void; onApply: () => void;
   nameOf?: (id: string) => string | undefined; noSplit?: string; noAccess?: string; onOpenAccess?: () => void;
   /** Teammates the change adds to the overlap: a note with two optional
@@ -516,9 +529,11 @@ function Preview({ ok, who, lead, sendsTask, title, heading, applyLabel, applyin
             <Disclosure open={whyOpen} />{why.label}
           </button>
         )}
-        <button type="button" aria-expanded={whole} onClick={() => setWhole((v) => !v)} style={{ ...linkStyle, display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
-          <Disclosure open={whole} />{t('jobChange.seeWhole')}
-        </button>
+        {!done && (
+          <button type="button" aria-expanded={whole} onClick={() => setWhole((v) => !v)} style={{ ...linkStyle, display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
+            <Disclosure open={whole} />{t('jobChange.seeWhole')}
+          </button>
+        )}
       </div>
       {why && whyOpen && <span style={{ fontSize: 12, lineHeight: '16.5px', color: 'var(--cth-ink-2)' }}>{why.text}</span>}
       {whole && <div style={{ padding: '8px 10px', borderRadius: 'var(--cth-r-md)', background: 'var(--cth-card)' }}><JobParts plain={ok.plain} /></div>}
@@ -544,8 +559,8 @@ function Preview({ ok, who, lead, sendsTask, title, heading, applyLabel, applyin
       {failed && <span role="alert" style={{ fontSize: 12, color: 'var(--cth-coral-text)' }}>{t('jobChange.applyFailed')}</span>}
       {/* The decision stays in reach on a short window (DR11). */}
       <div style={{ ...rowEnd, position: 'sticky', bottom: 0, paddingTop: 6, background: bare ? 'var(--cth-card)' : 'var(--cth-indigo-soft)' }}>
-        <Keep />
-        {!keep && <PixelButton variant="secondary" size="sm" onClick={onCancel} disabled={applying}>{t('jobChange.cancel')}</PixelButton>}
+        {done ?? <Keep />}
+        {!keep && !done && <PixelButton variant="secondary" size="sm" onClick={onCancel} disabled={applying}>{t('jobChange.cancel')}</PixelButton>}
         {!hideApply && <PixelButton variant="primary" size="sm" onClick={onApply} disabled={applying}>{applyLabel}</PixelButton>}
       </div>
     </div>

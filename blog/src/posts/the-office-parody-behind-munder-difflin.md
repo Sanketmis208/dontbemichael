@@ -56,15 +56,15 @@ bunch of workers coordinate to get things done without stepping on each other?" 
 costume on top of the tech; it's a one-to-one map of it:
 
 - **A manager who routes work.** Every office has someone deciding who does what. In a hive, that's the
-  [orchestrator](/blog/how-the-god-orchestrator-works/) — and naturally, it's *Michael* running the
+  orchestrator — and naturally, it's *Michael* running the
   room, the control surface the whole floor reports through.
 - **Specialists at their desks.** An office is a set of people with roles. A hive is a set of agents
   with roles. "Give that to the researcher" and "give that to Dwight" are the same instruction.
 - **Mailboxes and memos.** Coworkers pass notes and messages instead of interrupting the boss for
-  everything. Agents pass [messages through inboxes](/blog/atomic-file-mailboxes-for-agents/) the same
+  everything. Agents pass messages through inboxes the same
   way.
 - **Institutional knowledge.** A good office *remembers* — nobody re-explains last quarter's decision
-  every morning. A hive remembers through [shared memory](/blog/semantic-memory-for-ai-agents/).
+  every morning. A hive remembers through shared memory.
 - **A place you can walk through.** You can glance across an office and see who's busy, who's blocked,
   who's at the coffee machine. That's observability — and it's why the floor is something you
   [actually watch](/blog/run-an-office-of-ai-agents/).
@@ -80,8 +80,8 @@ The parody isn't skin-deep; it's wired through the real software:
 - **Michael's control surface.** The command center you drive the hive from is literally framed as
   Michael's office — the one room everything routes through.
 - **A living office floor.** A Pixi.js scene renders the cast as avatars at desks, walking the floor
-  with real pathfinding, carrying messages between coworkers. It's [a developer tool you can watch like
-  a room](/blog/building-an-ai-office-floor/), not a wall of logs.
+  with real pathfinding, carrying messages between coworkers. It's a developer tool you can watch like
+  a room, not a wall of logs.
 - **The cast as your team.** The avatars are the show's ensemble, each visually distinct, so "who's
   doing what" reads at a glance instead of as a list of process IDs.
 - **The little touches.** Idle agents wander off for coffee. The brand wears Dunder-Mifflin maroon and

@@ -52,7 +52,7 @@ half-applied changes. Parallel agents need a coordination rule, not just separat
 ### 2. They don't share what they learn
 Each session has its own context. Agent 2 can't use what agent 1 just figured out, so you become the
 courier — copy-pasting findings between windows. That's the
-[long-term memory problem](/blog/give-claude-code-long-term-memory/), and it compounds fast.
+long-term memory problem, and it compounds fast.
 
 ### 3. You can't see the whole board
 With six tabs open, "what is everyone doing right now?" has no answer. You lose track, and lost track
@@ -92,8 +92,6 @@ message bus.
 
 ## Next steps
 
-- [How to give Claude Code long-term memory](/blog/give-claude-code-long-term-memory/) — so the team
-  stops forgetting.
 - [What is a multi-agent harness?](/blog/what-is-a-multi-agent-harness/) — the concept behind the
   coordination.
 

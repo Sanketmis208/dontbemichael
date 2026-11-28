@@ -10,8 +10,8 @@
  * that reads like text planted in an outside message goes to Michael, never
  * to the owner's card.
  */
-import { createReadStream } from 'node:fs';
-import { lstat, realpath } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { lstat, realpath, type FileHandle } from 'node:fs/promises';
 import { basename } from 'node:path';
 import { createInterface } from 'node:readline';
 import type Database from 'better-sqlite3';
@@ -23,6 +23,7 @@ import {
 import { extractJson } from './memoryTidy';
 import { INSTRUCTIONS_MODEL } from './workStyleConvert';
 import { inClaudeProjects } from './transcript';
+import { openNoFollowAsync } from './noFollow';
 
 export interface WentWrongRequest {
   runId: number;
@@ -80,6 +81,28 @@ const LEAD_MS = 5_000;
 const PICK_TRIES = 5;
 /** Lines can land a little out of order around a run's end; reading stops this long after it. */
 const TAIL_MS = 60_000;
+
+/** A session file as checked: its place, when it was last written, and which
+ *  file it was (device and file id), so the file read is the file checked. */
+interface SessionFile { path: string; mtime: number; dev: bigint; ino: bigint }
+
+/**
+ * Open a checked session file once and read from that handle: opened again by
+ * name, the file could have been swapped for a link in between. The open never
+ * goes through a link (openNoFollowAsync, on every platform), and the open file
+ * must be the very one checked, still a plain file with one name; else nothing
+ * is read.
+ */
+async function openChecked(f: SessionFile): Promise<FileHandle | null> {
+  let handle: FileHandle | undefined;
+  try {
+    handle = await openNoFollowAsync(f.path, constants.O_RDONLY);
+    const st = await handle.stat({ bigint: true });
+    if (st.isFile() && st.nlink === 1n && st.dev === f.dev && st.ino === f.ino) return handle;
+  } catch { /* gone, or a link */ }
+  await handle?.close().catch(() => undefined);
+  return null;
+}
 
 export class RunCompare {
   private readonly busy = new Set<number>();
@@ -234,32 +257,36 @@ export class RunCompare {
    * shell could write a file named for its own session elsewhere). A session
    * with no recorded file is left out. The real file is checked, not only the
    * spelling: a member's shell that can write there could swap its own file
-   * for a link to another member's, so a link is never followed, and the
-   * folders above the file must really lead into the projects folder.
+   * for a link to another member's transcript. A symlink is never followed, a
+   * file with a second name (a hard link) is skipped, since Claude never links
+   * its own, and the folders above the file must really lead into the
+   * projects folder.
    */
-  private async sessionFiles(agentId: string): Promise<Array<{ path: string; mtime: number }>> {
+  private async sessionFiles(agentId: string): Promise<SessionFile[]> {
     let root: string;
     try { root = await realpath(this.d.projectsRoot()); } catch { return []; }
-    const out: Array<{ path: string; mtime: number }> = [];
+    const out: SessionFile[] = [];
     for (const f of new Set(this.d.transcriptsOf(agentId))) {
       if (!/^[A-Za-z0-9_-]+\.jsonl$/.test(basename(f))) continue;
       try {
-        const st = await lstat(f);
-        if (!st.isFile()) continue;
+        const st = await lstat(f, { bigint: true });
+        if (!st.isFile() || st.nlink !== 1n) continue;
         const path = await realpath(f);
-        if (inClaudeProjects(path, root)) out.push({ path, mtime: st.mtimeMs });
+        if (inClaudeProjects(path, root)) out.push({ path, mtime: Number(st.mtimeMs), dev: st.dev, ino: st.ino });
       } catch { /* gone */ }
     }
     return out;
   }
 
   /** Everything the member did in the run's window, across its session files, capped. */
-  private async slice(files: Array<{ path: string; mtime: number }>, run: JobRun): Promise<string> {
+  private async slice(files: SessionFile[], run: JobRun): Promise<string> {
     const from = run.start - LEAD_MS;
     const lines: Array<{ t: number; text: string }> = [];
     for (const f of files) {
       if (f.mtime < from) continue;
-      const input = createReadStream(f.path, { encoding: 'utf8' });
+      const handle = await openChecked(f);
+      if (!handle) continue;
+      const input = handle.createReadStream({ encoding: 'utf8' });
       const rl = createInterface({ input, crlfDelay: Infinity });
       try {
         for await (const line of rl) {

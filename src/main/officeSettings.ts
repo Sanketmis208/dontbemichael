@@ -28,7 +28,7 @@ import {
   type InstallConfig, type OfficeEntry, type OfficeSettings
 } from './officeKeys';
 import { randomUUID } from 'node:crypto';
-import { ensureOfficeId, officeSwitchGuard, readOfficeId, readOfficeRecord, setOfficeId } from './officeFile';
+import { ensureOfficeId, officeSwitchGuard, readOfficeId, readOfficeRecord, setOfficeId, syncOfficeRecord } from './officeFile';
 import { homeFolderStatus } from './homeFolder';
 
 /** A business's settings before anything was saved for it: the app defaults,
@@ -208,13 +208,33 @@ export function relocateBusiness(id: string, home: string): { ok: true } | { ok:
 /**
  * Remove a business whose setup was never finished (DT2, D18): its entry goes,
  * and with it the settings typed so far. Never the open business, and never
- * one that finished setup: those are erased by a factory reset only.
+ * one that finished setup: a factory reset erases those, and one whose folder
+ * is gone is removed by removeMissingBusiness.
  */
 export function removeUnfinishedBusiness(id: string): boolean {
   const cfg = readStoredConfig();
   const entry = cfg.officesMigrated ? cfg.offices?.[id] : undefined;
   if (!entry || entry.settings?.onboardingComplete === true) return false;
   if (officeIdIn(cfg, readOfficeId(cfg.harnessHome)) === id) return false;
+  const offices = { ...cfg.offices };
+  delete offices[id];
+  writeConfig({ offices });
+  return true;
+}
+
+/**
+ * Remove a business whose folder is gone (owner 2026-11-27): one that finished
+ * setup can otherwise never be removed, and it would keep its place in the menu
+ * and its mailbox addresses for good. Only when its folder holds no office now,
+ * never the open business, and never an unfinished setup (that has its own
+ * Remove). The owner confirms first; main erases its passwords and history.
+ */
+export function removeMissingBusiness(id: string): boolean {
+  const cfg = readStoredConfig();
+  const entry = cfg.officesMigrated ? cfg.offices?.[id] : undefined;
+  if (!entry || entry.settings?.onboardingComplete !== true) return false;
+  if (officeIdIn(cfg, readOfficeId(cfg.harnessHome)) === id) return false;
+  if (typeof entry.home === 'string' && homeFolderStatus(entry.home).hasOffice) return false;
   const offices = { ...cfg.offices };
   delete offices[id];
   writeConfig({ offices });
@@ -239,12 +259,12 @@ export function addBusiness(p: {
   if (cfg.harnessHome && samePath(cfg.harnessHome, p.home)) return { ok: false, error: 'isOpen' };
   const offices: Record<string, OfficeEntry> = { ...(cfg.offices ?? {}) };
   const draft = p.id && offices[p.id] && offices[p.id].settings?.onboardingComplete !== true ? p.id : null;
+  // A setup picked up again is checked too: its folder may hold another
+  // business's office by now.
+  const there = homeFolderStatus(p.home).hasOffice ? officeIdIn({ harnessHome: p.home, offices }, readOfficeId(p.home)) : null;
+  if (there && there !== draft && offices[there]?.settings?.onboardingComplete === true) return { ok: false, error: 'exists' };
   let id = draft;
-  if (!id) {
-    const there = homeFolderStatus(p.home).hasOffice ? officeIdIn({ harnessHome: p.home, offices }, readOfficeId(p.home)) : null;
-    if (there && offices[there]?.settings?.onboardingComplete === true) return { ok: false, error: 'exists' };
-    id = there ?? (homeFolderStatus(p.home).hasOffice ? ensureOfficeId(p.home) : null) ?? randomUUID();
-  }
+  if (!id) id = there ?? (homeFolderStatus(p.home).hasOffice ? ensureOfficeId(p.home) : null) ?? randomUUID();
   // A new business starts under the open business's budget unless setup chose
   // its own: it never runs with no budget. Caps per member stay with the
   // members they were set for.
@@ -256,6 +276,13 @@ export function addBusiness(p: {
   const install = pick(p.install ?? {}, installKeySet) as Record<string, unknown>;
   for (const k of ['harnessHome', 'recentHives', 'offices', 'officesMigrated']) delete install[k];
   writeConfig({ ...(install as Partial<HarnessConfig>), offices });
+  // A folder that already holds an office keeps its office.json, which still
+  // describes the business it had: describe this one, or every launch would
+  // log a name mismatch (businessNameMismatch). A folder with no office yet
+  // gets its record when the office is made. Only this business's own office:
+  // an office.json with another id describes another business, never renamed
+  // from here.
+  if (homeFolderStatus(p.home).hasOffice && readOfficeId(p.home) === id) syncOfficeRecord({ ...settings, harnessHome: p.home });
   return { ok: true, id };
 }
 

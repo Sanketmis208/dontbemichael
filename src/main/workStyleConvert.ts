@@ -274,7 +274,7 @@ export async function reviseWorkStyle(
     });
     if (result.error === 'cancelled' || signal?.aborted) return { kind: 'error', reason: 'cancelled' };
     const read = result.ok && result.text
-      ? readRevise(result.text, req.ctx, req.lead, { askHome: req.askHome, teammates: req.teammates, handoffList: req.handoffList })
+      ? readRevise(result.text, req.ctx, req.lead, { askHome: req.askHome, teammates: req.teammates, handoffList: req.handoffList, update: req.update })
       : null;
     const answer = read && 'answer' in read ? read.answer : null;
     if (answer?.kind === 'ok') return withHandoffLines(answer, req, bound, deps.log);

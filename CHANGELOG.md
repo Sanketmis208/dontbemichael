@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format is based on
 
 Don't Be Michael keeps its own version line, starting at 0.0.1.
 
+## [0.4.5] (2026-11-27)
+
+### Added
+- **What an email promises becomes a card.** When a team member's email tells someone the office will do or send something later, each promise goes to Michael once the email is sent, and he keeps a card for it until the follow up goes out. An email waiting on Ask me lists what it promises.
+- **Remove a business whose folder is gone.** In Settings, Your businesses, a finished business whose folder is missing can be removed after a confirm, with its saved passwords, keys and history on this computer.
+
+### Changed
+- An app update to a member's job that the job already covers no longer fails: the card says nothing changes and offers Got it. A job change that fails says what went wrong and points to Report a problem.
+- The 1:1 window with Michael is as wide as the message box it sits on.
+- The blog keeps only the posts about using the app.
+
+### Fixed
+- The file picker shows every file again, so a PDF or a document can be attached.
+- Pulse's Tasks done no longer counts a card again on every tick when the board lists it twice.
+- A business added over a folder that already holds an office names it in that office's record, and the office log notes when the settings and the office record name different businesses (#738, with thanks to @Sanketmis208).
+- Finishing a business setup you picked up again is refused when its folder now belongs to another business, so that business is never renamed.
+- The Went wrong comparison reads only the member's own session files.
+
 ## [0.4.4] (2026-11-27)
 
 ### Added
