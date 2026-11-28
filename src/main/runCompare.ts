@@ -10,8 +10,8 @@
  * that reads like text planted in an outside message goes to Michael, never
  * to the owner's card.
  */
-import { createReadStream } from 'node:fs';
-import { lstat, readdir } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { lstat, readdir, type FileHandle } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import type Database from 'better-sqlite3';
@@ -22,6 +22,7 @@ import {
 } from '../shared/runCompare';
 import { extractJson } from './memoryTidy';
 import { INSTRUCTIONS_MODEL } from './workStyleConvert';
+import { openNoFollowAsync } from './noFollow';
 
 export interface WentWrongRequest {
   runId: number;
@@ -79,6 +80,28 @@ const LEAD_MS = 5_000;
 const PICK_TRIES = 5;
 /** Lines can land a little out of order around a run's end; reading stops this long after it. */
 const TAIL_MS = 60_000;
+
+/** A session file as checked: its place, when it was last written, and which
+ *  file it was (device and file id), so the file read is the file checked. */
+interface SessionFile { path: string; mtime: number; dev: bigint; ino: bigint }
+
+/**
+ * Open a checked session file once and read from that handle: opened again by
+ * name, the file could have been swapped for a link in between. The open never
+ * goes through a link (openNoFollowAsync, on every platform), and the open file
+ * must be the very one checked, still a plain file with one name; else nothing
+ * is read.
+ */
+async function openChecked(f: SessionFile): Promise<FileHandle | null> {
+  let handle: FileHandle | undefined;
+  try {
+    handle = await openNoFollowAsync(f.path, constants.O_RDONLY);
+    const st = await handle.stat({ bigint: true });
+    if (st.isFile() && st.nlink === 1n && st.dev === f.dev && st.ino === f.ino) return handle;
+  } catch { /* gone, or a link */ }
+  await handle?.close().catch(() => undefined);
+  return null;
+}
 
 export class RunCompare {
   private readonly busy = new Set<number>();
@@ -228,10 +251,10 @@ export class RunCompare {
   }
 
   /** The member's session files, by the private record, with when each was last written. */
-  private async sessionFiles(agentId: string): Promise<Array<{ path: string; mtime: number }>> {
+  private async sessionFiles(agentId: string): Promise<SessionFile[]> {
     const ids = new Set(this.d.sessionsOf(agentId).filter((s) => /^[A-Za-z0-9_-]+$/.test(s)));
     if (!ids.size) return [];
-    const out: Array<{ path: string; mtime: number }> = [];
+    const out: SessionFile[] = [];
     const root = this.d.projectsRoot();
     let dirs: string[] = [];
     // Without blocking: the projects folder holds every project Claude ever opened.
@@ -247,8 +270,8 @@ export class RunCompare {
         // transcript. A symlink is never followed, and a file with a second
         // name (a hard link) is skipped, since Claude never links its own.
         try {
-          const st = await lstat(path);
-          if (st.isFile() && st.nlink === 1) out.push({ path, mtime: st.mtimeMs });
+          const st = await lstat(path, { bigint: true });
+          if (st.isFile() && st.nlink === 1n) out.push({ path, mtime: Number(st.mtimeMs), dev: st.dev, ino: st.ino });
         } catch { /* gone */ }
       }
     }
@@ -256,12 +279,14 @@ export class RunCompare {
   }
 
   /** Everything the member did in the run's window, across its session files, capped. */
-  private async slice(files: Array<{ path: string; mtime: number }>, run: JobRun): Promise<string> {
+  private async slice(files: SessionFile[], run: JobRun): Promise<string> {
     const from = run.start - LEAD_MS;
     const lines: Array<{ t: number; text: string }> = [];
     for (const f of files) {
       if (f.mtime < from) continue;
-      const input = createReadStream(f.path, { encoding: 'utf8' });
+      const handle = await openChecked(f);
+      if (!handle) continue;
+      const input = handle.createReadStream({ encoding: 'utf8' });
       const rl = createInterface({ input, crlfDelay: Infinity });
       try {
         for await (const line of rl) {

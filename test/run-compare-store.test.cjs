@@ -149,19 +149,20 @@ test('a change that reads like a planted instruction goes to Michael, never to t
 });
 
 test('a session file read only up to the run\'s end is closed after it', async (t) => {
-  // Value: protects=the slicer releases every file it opens before the comparison goes on; fails_when=reading stops early (past the run's end) and the file is still open, or only closing, when wentWrong returns, which Windows refuses to delete or rename; why_new=Windows CI 2026-10-24 and 2026-10-27 (ENOTEMPTY on cleanup, some runs only); seam=fs.createReadStream
+  // Value: protects=the slicer releases every file it opens before the comparison goes on; fails_when=reading stops early (past the run's end) and the file is still open, or only closing, when wentWrong returns, which Windows refuses to delete or rename; why_new=Windows CI 2026-10-24 and 2026-10-27 (ENOTEMPTY on cleanup, some runs only); seam=fs.promises.open (the slicer opens each file once and reads from that handle)
   const f = setup(t);
   twoRuns(f);
-  // Every stream the slicer opens, so this checks the close on every platform,
+  // Every file the slicer opens, so this checks the close on every platform,
   // not only where Windows happens to catch the file still open.
+  const fsp = require('node:fs/promises');
   const opened = [];
-  const real = fs.createReadStream;
-  fs.createReadStream = (...args) => { const s = real(...args); opened.push(s); return s; };
-  t.after(() => { fs.createReadStream = real; });
+  const real = fsp.open;
+  fsp.open = async (...args) => { const h = await real(...args); opened.push(h); return h; };
+  t.after(() => { fsp.open = real; });
   await f.store.wentWrong({ runId: 2, agentId: 'pam', workStyle: 'x' });
-  fs.createReadStream = real;
+  fsp.open = real;
   assert.ok(opened.length > 0, 'the slicer read the session files');
-  assert.deepEqual(opened.map((s) => s.closed), opened.map(() => true), 'every file is shut when wentWrong returns');
+  assert.deepEqual(opened.map((h) => h.fd), opened.map(() => -1), 'every file is shut when wentWrong returns');
   const file = path.join(f.projects, '-office-pam', 's-bad.jsonl');
   fs.renameSync(file, `${file}.moved`);
   fs.rmSync(path.join(f.projects, '-office-pam'), { recursive: true });
@@ -201,6 +202,26 @@ test('a session file that is a link to another member\'s transcript is not read'
   fs.symlinkSync(theirs(soft), bad2);
   await soft.store.wentWrong({ runId: 2, agentId: 'pam', workStyle: 'x' });
   assert.ok(soft.calls.every((c) => !/LINKED LINE/.test(c)), 'a symlink is not followed');
+});
+
+test('a session file swapped for a link after it was checked is not read', async (t) => {
+  // Value: protects=the file read is the file checked; fails_when=the slicer opens the path again by name after the check, so a link put in place in between is read; why_new=PR 739 review 2026-11-27 (open once); seam=fs.promises.lstat wrapped to swap the file right after the check; no_claim=O_NOFOLLOW on Windows (the same-file check covers it there)
+  const fsp = require('node:fs/promises');
+  const realLstat = fsp.lstat;
+  t.after(() => { fsp.lstat = realLstat; });
+  const f = setup(t);
+  twoRuns(f);
+  fs.mkdirSync(path.join(f.projects, '-office-jim'), { recursive: true });
+  const target = path.join(f.projects, '-office-jim', 's-jim.jsonl');
+  fs.writeFileSync(target, line('user', T0 + 24 * H + 1500, 'LINKED LINE') + '\n');
+  const bad = path.join(f.projects, '-office-pam', 's-bad.jsonl');
+  fsp.lstat = async (p, ...rest) => {
+    const st = await realLstat(p, ...rest);
+    if (p === bad) { fs.rmSync(bad); fs.linkSync(target, bad); } // swapped right after the check
+    return st;
+  };
+  await f.store.wentWrong({ runId: 2, agentId: 'pam', workStyle: 'x' });
+  assert.ok(f.calls.every((c) => !/LINKED LINE/.test(c)), 'the file read is the file that was checked');
 });
 
 test('a comparison cut short by a quit reads as failed after a restart, and Try again runs it', async (t) => {
