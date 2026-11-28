@@ -200,3 +200,25 @@ test('a business added from setup starts under the open business\'s spend caps',
   const own = s.settings.addBusiness({ home: path.join(s.userData, 'cafe'), settings: { businessName: 'Contoso Cafe', costCapUsd: 5 } });
   assert.equal(s.stored().offices[own.id].settings.costCapUsd, 5, 'its own cap wins');
 });
+
+test('a business added over a folder that holds an office describes that office.json, so launch sees no name mismatch', (t) => {
+  // Value: protects=the launch name check stays quiet for a business added over an existing office folder; fails_when=addBusiness files the new name in the settings but leaves office.json naming the folder's old business, so every launch logs office-name-mismatch; why_new=PR 738 review 2026-11-27; seam=real config and office.json on disk; no_claim=the launch line itself (office-name-check.test.cjs)
+  const s = scene(t);
+  const { businessNameMismatch } = loadTs('src/shared/officeRecord.ts');
+  const old = path.join(s.userData, 'old office');
+  fs.mkdirSync(path.join(old, 'hive'), { recursive: true });
+  fs.writeFileSync(path.join(old, 'hive', 'registry.json'), JSON.stringify({ godId: 'god', agents: {} }));
+  const oldId = s.file.ensureOfficeId(old);
+  s.file.writeOfficeRecord(old, { ...s.file.readOfficeRecord(old), businessName: 'Contoso Cafe', team: [] });
+  const res = s.settings.addBusiness({ home: old, settings: { businessName: 'Northgate Realty', businessType: 'services' } });
+  assert.equal(res.ok, true);
+  assert.equal(res.id, oldId, 'the folder keeps its office id');
+  const rec = s.file.readOfficeRecord(old);
+  assert.equal(rec.id, oldId, 'office.json keeps the id');
+  assert.equal(rec.businessName, 'Northgate Realty', 'office.json names the business that now owns the folder');
+  const opened = { ...s.stored().offices[res.id].settings, harnessHome: old };
+  assert.equal(businessNameMismatch(opened, rec), false, 'the next launch finds no mismatch');
+  assert.equal(fs.existsSync(path.join(s.userData, 'fresh', 'office.json')), false);
+  s.settings.addBusiness({ home: path.join(s.userData, 'fresh'), settings: { businessName: 'Contoso Cafe' } });
+  assert.equal(fs.existsSync(path.join(s.userData, 'fresh', 'office.json')), false, 'a folder with no office yet gets no office.json from here');
+});

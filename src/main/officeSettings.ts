@@ -28,7 +28,7 @@ import {
   type InstallConfig, type OfficeEntry, type OfficeSettings
 } from './officeKeys';
 import { randomUUID } from 'node:crypto';
-import { ensureOfficeId, officeSwitchGuard, readOfficeId, readOfficeRecord, setOfficeId } from './officeFile';
+import { ensureOfficeId, officeSwitchGuard, readOfficeId, readOfficeRecord, setOfficeId, syncOfficeRecord } from './officeFile';
 import { homeFolderStatus } from './homeFolder';
 
 /** A business's settings before anything was saved for it: the app defaults,
@@ -256,6 +256,11 @@ export function addBusiness(p: {
   const install = pick(p.install ?? {}, installKeySet) as Record<string, unknown>;
   for (const k of ['harnessHome', 'recentHives', 'offices', 'officesMigrated']) delete install[k];
   writeConfig({ ...(install as Partial<HarnessConfig>), offices });
+  // A folder that already holds an office keeps its office.json, which still
+  // describes the business it had: describe this one, or every launch would
+  // log a name mismatch (businessNameMismatch). A folder with no office yet
+  // gets its record when the office is made.
+  if (homeFolderStatus(p.home).hasOffice) syncOfficeRecord({ ...settings, harnessHome: p.home });
   return { ok: true, id };
 }
 
