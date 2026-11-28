@@ -6069,17 +6069,15 @@ async function ingestSequentially(paths: string[], tags?: string[]) {
 // ─── IPC: composer attachments (images + arbitrary files, attached by PATH) ──
 // The message queue pipes raw text into a Claude CLI PTY, so attachments travel
 // as a file PATH the agent reads with its Read tool.
-// Picker offers an Images group + All Files.
+// No file type filter: on macOS the first filter is the one in force, and an
+// Images group there greyed out every PDF and document (owner 2026-11-27, a
+// bank statement could not be attached to an Ask me card).
 ipcMain.handle('dialog:attachFiles', async (evt) => {
   const win = BrowserWindow.fromWebContents(evt.sender);
   if (!win) return { ok: false as const, error: 'no window' };
   const res = await dialog.showOpenDialog(win, {
     properties: ['openFile', 'multiSelections'],
-    title: 'Attach images or files',
-    filters: [
-      { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'heic', 'tiff', 'avif'] },
-      { name: 'All Files', extensions: ['*'] }
-    ]
+    title: 'Attach files'
   });
   if (res.canceled || res.filePaths.length === 0) return { ok: false as const, error: 'cancelled' };
   return { ok: true as const, files: res.filePaths.map((p) => ({ path: p, name: basename(p) })) };
