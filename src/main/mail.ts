@@ -54,7 +54,7 @@ import { ATTACHMENT_MAX_BYTES, AttachmentSaveError, saveAttachmentFile } from '.
 
 export { ATTACHMENT_MAX_BYTES };
 import { emailLinkFor, type OriginalEmail } from '../shared/emailLink';
-import { OWN_SENDS_ONLY, approvedFiles, proposalSendProblem, standingProblem, standingTooLong, threadFrom, STANDING_KIND_MAX, type MailProposal, type SendRecord, type StandingApproval, type StandingCheckEmail, type ThreadHeaders } from '../shared/mailProposals';
+import { OWN_SENDS_ONLY, approvedFiles, readPromises, proposalSendProblem, standingProblem, standingTooLong, threadFrom, STANDING_KIND_MAX, type MailProposal, type SendRecord, type StandingApproval, type StandingCheckEmail, type ThreadHeaders } from '../shared/mailProposals';
 import { unfoundedMoneyReason } from '../shared/standingFacts';
 import { OUTGOING_HELD_MAX, OutgoingFileError, contentTypeOf, parseAttachPaths, type OutgoingFile, type OutgoingFiles } from './outgoingFiles';
 
@@ -1510,7 +1510,17 @@ export interface ProposalStore {
   recentSends(agentId: string, mailbox: string, limit?: number): SendRecord[];
   /** Bytes of file copies the member holds for emails not yet sent. */
   heldFileBytes?(agentId: string): number;
+  /** A sent email told its recipient the office will do more later: Michael
+   *  tracks each promise on the board (owner, 2026-11-27). False when they
+   *  could not be handed to him. */
+  promised?(sent: PromisedSend): boolean;
 }
+
+/** A sent email and what it promised, for Michael's cards. */
+export interface PromisedSend { agentId: string; mailbox: string; to: string; subject: string; body: string; messageId: string; promises: string[] }
+
+/** Said in a send's result when its promises could not reach Michael. */
+export const PROMISES_NOT_FILED = 'Sent, but the promises in it could not be handed to Michael, so nobody is tracking them yet. Keep each one in your memory notes and tell Michael about them in your next message to him.';
 
 /** The separate check that an email fits a standing approval. Null when it
  *  could not run, which counts as not fitting. */
@@ -1662,6 +1672,19 @@ async function runMailRequest(
   const mailbox = str(body.mailbox, 100);
   const proposalId = str(body.proposal, 100);
   const standingId = op === 'send' && !proposalId ? str(body.standing, 100) : undefined;
+  // What the email tells its recipient the office will do later. Kept on a
+  // proposal for the owner's card; tracked by Michael once it is sent.
+  const promises = op === 'send' || op === 'propose' ? readPromises(body.promises) : [];
+  /** After a send that went out now (never a repeat), each promise goes to
+   *  Michael. Bookkeeping that fails never reads as a failed send, but the
+   *  member is told, since the tool says Michael keeps them. Returns the
+   *  send's result to give the member. */
+  const tellPromises = <T extends { sent?: boolean; messageId?: unknown; repeated?: boolean }>(out: T, email: { to: string; subject: string; body: string }, list: string[]): T | (T & { promises: string }) => {
+    if (!list.length || out.repeated || out.sent === false || !deps.proposals?.promised) return out;
+    let filed = false;
+    try { filed = deps.proposals.promised({ agentId, mailbox: mailbox!, to: email.to, subject: email.subject, body: email.body, messageId: String(out.messageId ?? ''), promises: list }) !== false; } catch (e) { console.error('[mail] promises not filed:', e); }
+    return filed ? out : { ...out, promises: PROMISES_NOT_FILED };
+  };
   const attachRefs = Array.isArray(body.attach_from) ? (body.attach_from.map(ref).filter(Boolean) as MailRef[]).slice(0, 10) : undefined;
   // Send on approval lets a send through with an approved proposal or a
   // standing approval; the broker checks either one below.
@@ -1858,8 +1881,11 @@ async function runMailRequest(
         console.error('[mail] mark sent failed:', p!.id, e);
       }
       recordGrantSend(out, approved);
+      // The promises given to propose, and any the member added at the send:
+      // Michael checks each against the text as sent.
+      const told = tellPromises(out, approved, readPromises([...(p!.promises ?? []), ...promises]));
       try { deps.audit?.({ kind: 'mail-sent-approved', agentId, mailbox, proposal: p!.id, ...grantFlag, ...(approved.files?.length ? { files: approved.files.length, bytes: approved.files.reduce((n, f) => n + f.content.length, 0) } : {}) }); } catch { /* the send stands */ }
-      return { status: 200, body: out };
+      return { status: 200, body: told };
     }
     // A standing approval: fixed facts first, then the separate check. An email
     // that does not plainly fit goes to the owner on Ask me instead, so a
@@ -1910,7 +1936,7 @@ async function runMailRequest(
             recordGrantSend(out, input);
             try { deps.audit?.({ kind: 'mail-sent', agentId, mailbox, messageId: String(out.messageId ?? ''), grant: true }); } catch { /* the send stands */ }
           }
-          return { status: 200, body: out };
+          return { status: 200, body: tellPromises(out, input, promises) };
         }
         const still = deps.proposals.getStanding(standingId);
         const stillProblem = standingProblem(still, agentId, mailbox!, input);
@@ -1926,7 +1952,7 @@ async function runMailRequest(
           if (!thread && input.replyTo) {
             try { thread = (await svc.threadOf(mailbox!, input.replyTo)) ?? undefined; } catch { /* read at the send */ }
           }
-          const p = deps.proposals.file({ agentId, mailbox: mailbox!, to: input.to, cc: input.cc, subject: input.subject, body: input.body, replyTo: input.replyTo, forward: input.forward, attachFrom: input.attachFrom, ...(thread ? { thread } : {}) });
+          const p = deps.proposals.file({ agentId, mailbox: mailbox!, to: input.to, cc: input.cc, subject: input.subject, body: input.body, replyTo: input.replyTo, forward: input.forward, attachFrom: input.attachFrom, ...(thread ? { thread } : {}), ...(promises.length ? { promises } : {}) });
           try { deps.audit?.({ kind: 'mail-standing-refused', agentId, mailbox, standing: rule!.id, proposal: p.id }); } catch { /* the filing stands */ }
           return { status: 200, body: { sent: false, proposal: p.id, state: 'waiting for the owner on Ask me', why: `Not sent under your standing approval: ${why}`, next: 'It is on Ask me now. You will get a message when the owner decides; then send it with this proposal id.' } };
         }
@@ -1942,7 +1968,7 @@ async function runMailRequest(
           recordGrantSend(out, input);
           try { deps.audit?.({ kind: 'mail-sent-standing', agentId, mailbox, standing: rule!.id, ...grantFlag }); } catch { /* the send stands */ }
         }
-        return { status: 200, body: out };
+        return { status: 200, body: tellPromises(out, input, promises) };
       } finally { sendingStanding.delete(sendKey); }
     }
     if (op === 'search') {
@@ -2060,7 +2086,7 @@ async function runMailRequest(
       }
       let p: MailProposal;
       try {
-        p = deps.proposals.file({ agentId, mailbox: mailbox!, to: input.to, cc: input.cc, subject: input.subject, body: input.body, replyTo: input.replyTo, forward: kept.forward, attachFrom: kept.attachFrom, ...(files ? { files } : {}), ...(thread ? { thread } : {}), ...(offer ? { offerStanding: offer } : {}) });
+        p = deps.proposals.file({ agentId, mailbox: mailbox!, to: input.to, cc: input.cc, subject: input.subject, body: input.body, replyTo: input.replyTo, forward: kept.forward, attachFrom: kept.attachFrom, ...(files ? { files } : {}), ...(thread ? { thread } : {}), ...(offer ? { offerStanding: offer } : {}), ...(promises.length ? { promises } : {}) });
       } catch (e) {
         if (files) deps.outgoing!.drop(files.key);
         throw e;
@@ -2082,7 +2108,7 @@ async function runMailRequest(
       // committed to git and agents read it, so no recipient or subject (D14).
       try { deps.audit?.({ kind: 'mail-sent', agentId, mailbox, messageId: String(out.messageId ?? ''), grant: true }); } catch { /* the send stands */ }
     }
-    return { status: 200, body: out };
+    return { status: 200, body: tellPromises(out, input, promises) };
   } catch (e) {
     const err = classifyMailError(e);
     const status = err.kind === 'not-found' ? 404 : err.kind === 'bad-request' ? 400 : err.kind === 'timeout' ? 504 : 502;

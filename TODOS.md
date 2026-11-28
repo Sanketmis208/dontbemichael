@@ -14,18 +14,6 @@
 **Priority:** P1
 **Depends on:** None
 
-### Check at launch that the business name matches the office record
-
-**What:** At launch, compare the open office's settings business name with its office.json and report a mismatch.
-
-**Why:** A mismatch is the first sign of one business's settings reaching the other's office (Section 8).
-
-**Context:** Deferred from plan: docs/designs/separate-businesses.md. Planned in the CEO review, not built in step one; the owner chose to ship and defer it (2026-11-20).
-
-**Effort:** S (human) / S (CC)
-**Priority:** P1
-**Depends on:** None
-
 ### Refuse two businesses sharing one business folder
 
 **What:** Add a business, and Settings when the business folder changes, refuse a business folder another business already uses.
@@ -40,9 +28,9 @@
 
 ### Refuse a mailbox a copied business brings with it
 
-**What:** A business made from a copied office folder, or added with settings copied from another business, is checked for a mailbox another business already has, and that business is named.
+**What:** A business made from a copied office folder is checked for a mailbox another business already has, and that business is named.
 
-**Why:** Settings now refuses an address another business has, but adoptOpenOffice and addBusiness copy the settings whole, so the same mailbox can still end up with two businesses that way (Section 4 edge case).
+**Why:** Mailboxes are per business now, so the old one install check only looks at the open business (mail.ts, Section 4 edge case). The Settings check is in agentvivekkumar/dontbemichael#736. One path stays open after it: a business made from a copied office folder gets a full copy of the original's settings, mailboxes included (adoptOpenOffice, officeSettings.ts), so both businesses hold the same address. Add a business does not: addBusiness takes only the spend budget from the open business, and the rest comes from the setup answers.
 
 **Context:** Deferred from plan: docs/designs/separate-businesses.md. Planned in the CEO review, not built in step one; the owner chose to ship and defer it (2026-11-20).
 

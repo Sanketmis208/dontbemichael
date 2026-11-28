@@ -53,7 +53,7 @@ team is local, *you* own the failure modes — and you can fix them.
 
 ### 2. Privacy — your code and memory don't leave the box
 Agents that touch your whole repo accumulate a lot of context: source, secrets-adjacent config,
-internal docs, and a [memory store](/blog/give-claude-code-long-term-memory/) full of your project's
+internal docs, and a memory store full of your project's
 hard-won knowledge. Keeping orchestration and memory local means there's no third party storing your
 codebase's working notes. For client work, regulated environments, or just good hygiene, that's a real
 advantage.

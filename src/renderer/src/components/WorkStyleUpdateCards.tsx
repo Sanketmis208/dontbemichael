@@ -143,6 +143,7 @@ export function WorkStyleUpdateCards({ offers, look, hiddenIds, fold }: {
                 sendsTask={false}
                 autoRun
                 keep={keepMine}
+                done={<PixelButton variant="primary" size="sm" disabled={busy === id} onClick={() => void keep(offer)}>{t('askMe.gotIt')}</PixelButton>}
                 // Why the app suggests it: folded, for a curious owner (owner,
                 // 2026-11-07, design job-update-why B, made easy to spot).
                 why={{ label: t('jobChange.updateWhyLabel'), text: `${t(offer.whyKey).replace(/\.\s*$/, '')}. ${t('jobChange.updateWhy', { name })}` }}

@@ -187,9 +187,16 @@ export class TelemetryStore {
     const office = this.office();
     if (!office) return;
     const prev = this.lastCards.get(office);
-    const next = new Map<string, string>();
+    // A card id listed twice is one card: its last entry wins and is compared
+    // once. Comparing each entry recorded a change on every tick.
+    const byId = new Map<string, CardLite>();
     for (const c of cards) {
       if (!c || typeof c.id !== 'string' || typeof c.status !== 'string') continue;
+      byId.delete(c.id);
+      byId.set(c.id, c);
+    }
+    const next = new Map<string, string>();
+    for (const c of byId.values()) {
       next.set(c.id, c.status);
       const was = prev?.get(c.id);
       if (!prev || was === c.status) continue;

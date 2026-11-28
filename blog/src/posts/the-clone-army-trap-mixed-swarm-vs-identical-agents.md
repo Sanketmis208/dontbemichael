@@ -37,9 +37,7 @@ top-tier CLI agents, all on the frontier model, all pointed at the same repo. It
 multiplier. It feels safe — every agent is maximally capable, so surely the swarm is too.
 
 It's a trap. Not because the agents are bad, but because the *shape of the work* doesn't reward
-sameness. We've argued before that [a hive shouldn't all run the biggest
-model](/blog/do-more-with-less-model-routing/) and laid out the [five levers that cut a fleet's
-bill](/blog/the-multi-agent-cost-playbook/). This post is the head-to-head those posts imply: **the
+sameness. This post is the head-to-head: **the
 clone army versus the mixed swarm** — why uniform top-tier agents burn tokens on work a cheaper agent
 could do, and why a swarm of mixed-capability agents is both leaner *and*, surprisingly often, better.
 
@@ -64,14 +62,14 @@ The per-token waste is the obvious cost. The structural ones are worse.
 **Tax 1 — Re-derivation.** Ten identical agents with no shared state each rebuild the same understanding
 from scratch. Each one reads the same files, re-infers the same architecture, re-discovers the same
 constraint that "auth lives in the middleware layer." That context-building is real tokens, paid N times,
-to arrive at knowledge one agent already had. Without [shared memory](/blog/markdown-first-agent-memory/),
+to arrive at knowledge one agent already had. Without shared memory,
 the swarm is N strangers who refuse to talk.
 
 **Tax 2 — Collision.** Identical agents with no owner have no division of labor. Two of them pick the
 same subtask; a third refactors a file a fourth is mid-edit on; their outputs contradict and someone (you)
 has to reconcile them. A leaderless clone army doesn't parallelize a problem — it parallelizes *confusion*,
-and then you pay again to merge it. This is exactly the [coordinate-without-colliding
-problem](/blog/coordinating-ai-coding-agents/), made worse by sameness: when every agent is interchangeable,
+and then you pay again to merge it. This is exactly the coordinate-without-colliding
+problem, made worse by sameness: when every agent is interchangeable,
 nothing tells them who does what.
 
 **Tax 3 — No escalation ceiling, no floor.** Because every agent is already maxed out, there's nowhere to
@@ -90,21 +88,21 @@ A mixed-capability swarm isn't "the same idea, but cheaper agents." It's a diffe
 structure is where the wins come from.
 
 - **An orchestrator that routes by tier.** Instead of ten peers, you have one lead that sees the whole job,
-  decomposes it, and sends each subtask to the [right capability tier](/blog/do-more-with-less-model-routing/):
+  decomposes it, and sends each subtask to the right capability tier:
   routine work to fast cheap workers, the hard reasoning to a frontier worker, and itself reserved for
   planning and integration. The expensive model still does the expensive thinking — it just stops doing the
   cheap thinking.
 - **Shared memory so nobody re-derives.** The context one agent establishes — the architecture, the
   decision, the gotcha — is written once to a shared board and read by everyone. Re-derivation tax: gone.
-  This is why a hive leans on [compact, markdown-first memory and semantic
-  recall](/blog/how-agents-remember-semantic-memory/) instead of stuffing the whole world into ten separate
+  This is why a hive leans on compact, markdown-first memory and semantic
+  recall instead of stuffing the whole world into ten separate
   context windows.
 - **Scoped contracts.** Each worker gets a *narrow* assignment with a clear input and expected output — not
   the whole problem. Narrow scope means a small model can handle it, the context window stays tiny (so the
-  [per-turn cost you pay N times](/blog/the-multi-agent-cost-playbook/) stays small), and there's no ambiguity
+  per-turn cost you pay N times stays small), and there's no ambiguity
   about who owns what. Collision tax: gone.
 - **Real parallelism, not redundant parallelism.** The independent subtasks run at once because the
-  orchestrator knows they're independent — a genuine [fan-out](/blog/multi-agent-orchestration-patterns/),
+  orchestrator knows they're independent — a genuine fan-out,
   not ten agents racing to do the same thing.
 
 Specialization, delegation, shared state. That's the lever. Each one removes a tax the clone army pays.
@@ -119,11 +117,11 @@ reasoning, with the routine noise handled elsewhere, is a frontier agent that is
 problem in busywork. You concentrate capability where it changes the outcome.
 
 Second, the structure adds a quality dimension the clone army lacks: you can route risky output through a
-[maker-checker pass](/blog/how-ai-agents-verify-their-own-work/) — a cheap worker produces, a stronger
+maker-checker pass — a cheap worker produces, a stronger
 agent verifies — which catches more than ten parallel agents independently being confident. Capability
 isn't just the model; it's the *organization* around the model.
 
-The honest caveat — and we [keep this one honest](/blog/multi-agent-orchestration-patterns/) — is that
+The honest caveat — and we keep this one honest — is that
 quality drops the moment you route a genuinely hard subtask to a model that can't handle it. But that's a
 *routing* mistake, not a swarm one. Default lean, escalate the hard minority on signal, and the capability
 gap to an all-premium fleet closes to roughly nothing — at a fraction of the tokens.
@@ -143,15 +141,15 @@ isn't cheap on that measure at all.
 ## How Munder Difflin is built around this
 
 This isn't just a thesis — it's the architecture of the product. [Munder Difflin](https://munderdiffl.in)
-runs a virtual office where a [god orchestrator](/blog/how-the-god-orchestrator-works/) decomposes your
+runs a virtual office where a god orchestrator decomposes your
 intent and delegates to Office-themed worker agents of *varying* capability. The cheap workers handle the
-routine; the orchestrator and any escalated workers handle the hard reasoning — [per-agent model
-selection](/blog/the-multi-agent-cost-playbook/) is a real setting, not advice. A shared board, inboxes,
+routine; the orchestrator and any escalated workers handle the hard reasoning — per-agent model
+selection is a real setting, not advice. A shared board, inboxes,
 and memory mean no agent re-derives what another already established. And a token budget with a *steward*
 model keeps the whole swarm inside a spend ceiling you set — so the structure that makes it efficient is
 also the structure that makes the cost predictable. It supports Claude Code, Codex, and Antigravity CLIs,
-runs [local-first](/blog/why-local-first-matters-for-ai-agents/), and you can [watch every agent
-work](/blog/observability-for-agent-fleets/).
+runs [local-first](/blog/why-local-first-matters-for-ai-agents/), and you can watch every agent
+work.
 
 ## The bottom line
 

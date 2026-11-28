@@ -201,13 +201,13 @@ don’t require re-reading anything. Then the orchestrator synthesized the four 
 <p>The naive version of this is pasting comments into one chat session until it fills up. The
 problem isn’t just context size — it’s that a model skimming its 400th comment gets exactly as
 lazy as a human does. One agent per channel keeps each report grounded in a full, careful read,
-and the <a href="/blog/how-the-god-orchestrator-works/">orchestrator</a> works from four distilled reports
+and the orchestrator works from four distilled reports
 instead of raw sludge. Fan out, then synthesize. It’s the same
-<a href="/blog/multi-agent-orchestration-patterns/">pattern</a> that works for code.</p>
+pattern that works for code.</p>
 <p>The other thing a hive gets you is <strong>iteration without re-reading</strong>. Days later we came back
 with sharper questions — “split willingness-to-pay by supporter motive versus buyer motive,”
 “which commenters were blocked from even running it?” — and dispatched them to the same agent,
-which still had <a href="/blog/how-agents-remember-semantic-memory/">its memory</a> of the corpus. Each
+which still had its memory of the corpus. Each
 pass appended to the same reports. The research got <em>thicker</em> instead of starting over.</p>
 <figure class="fig fig-inline"><img src="/blog/assets/media/agents-ran-our-launch-week-analytics/note-2.png" alt="Hand-drawn sketch from “Our Agents Ran Our Launch-Week Analytics”" loading="lazy" decoding="async" /><figcaption>Sharper question, same agent, same corpus — the reports grow instead of restarting.</figcaption></figure>
 <h2 id="what-fell-out-of-it" tabindex="-1">What fell out of it <a class="anchor" href="#what-fell-out-of-it" aria-hidden="true">#</a></h2>
@@ -289,29 +289,13 @@ half of this ran while we slept off the launch.</p>
   </div>
 
   <footer class="post-foot wrap"><div class="prevnext">
-      <a class="pn prev" href="/blog/run-a-release-train-with-agents/"><span class="k">← Older</span><span class="t">Run a Release Train with Agents</span></a>
-      <a class="pn next" href="/blog/the-spend-counter-that-went-back-to-zero/"><span class="k">Newer →</span><span class="t">The Spend Counter That Went Back to Zero</span></a>
+      <a class="pn prev" href="/blog/turn-feedback-into-a-backlog-with-agents/"><span class="k">← Older</span><span class="t">Turn a Firehose of Feedback into a Backlog with Agents</span></a>
+      <span></span>
     </div>
     <section class="related">
       <h2>Related in Use Cases</h2>
       <div class="post-grid">
         <article class="card t-use-cases">
-  <a class="thumb t-use-cases" href="/blog/run-a-release-train-with-agents/" aria-hidden="true" tabindex="-1"><img src="/blog/assets/media/run-a-release-train-with-agents/hero.png" alt="" loading="lazy" decoding="async" /></a>
-  <div class="body">
-    <div class="meta">
-      <time datetime="2026-08-19">Aug 19, 2026</time>
-      <span class="dot" aria-hidden="true"></span>
-      <span>3 min</span>
-    </div>
-    <h3><a href="/blog/run-a-release-train-with-agents/">Run a Release Train with Agents</a></h3>
-    <p class="dek">Version bumps, changelog entries, release notes in plain language, site updates, and link checks — the release chores that always slip are exactly the work a hive does well. The workflow behind our seven-releases-in-eight-days week.</p>
-    <div class="foot">
-      <span class="tag kind">Use Cases</span>
-      <a class="more" href="/blog/run-a-release-train-with-agents/" aria-label="Read: Run a Release Train with Agents">Read →</a>
-    </div>
-  </div>
-</article>
-<article class="card t-use-cases">
   <a class="thumb t-use-cases" href="/blog/turn-feedback-into-a-backlog-with-agents/" aria-hidden="true" tabindex="-1"><img src="/blog/assets/media/turn-feedback-into-a-backlog-with-agents/hero.png" alt="" loading="lazy" decoding="async" /></a>
   <div class="body">
     <div class="meta">
@@ -340,6 +324,22 @@ half of this ran while we slept off the launch.</p>
     <div class="foot">
       <span class="tag kind">Use Cases</span>
       <a class="more" href="/blog/deploy-a-blog-writer-agent/" aria-label="Read: Deploy a Blog Writer Agent: The One That Wrote This Post">Read →</a>
+    </div>
+  </div>
+</article>
+<article class="card t-use-cases">
+  <a class="thumb t-use-cases" href="/blog/from-one-terminal-to-a-team/" aria-hidden="true" tabindex="-1"><img src="/blog/assets/media/from-one-terminal-to-a-team/hero.png" alt="" loading="lazy" decoding="async" /></a>
+  <div class="body">
+    <div class="meta">
+      <time datetime="2026-06-02">Jun 2, 2026</time>
+      <span class="dot" aria-hidden="true"></span>
+      <span>3 min</span>
+    </div>
+    <h3><a href="/blog/from-one-terminal-to-a-team/">From One Terminal to a Team: Scaling Your Claude Code Workflow</a></h3>
+    <p class="dek">The workflow shift from a single Claude Code session to a coordinated team of agents — what changes, where it breaks, and the concrete before-and-after.</p>
+    <div class="foot">
+      <span class="tag kind">Use Cases</span>
+      <a class="more" href="/blog/from-one-terminal-to-a-team/" aria-label="Read: From One Terminal to a Team: Scaling Your Claude Code Workflow">Read →</a>
     </div>
   </div>
 </article>

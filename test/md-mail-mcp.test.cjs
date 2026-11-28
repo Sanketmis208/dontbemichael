@@ -105,3 +105,20 @@ test('a token the broker does not know is refused before mail runs', { timeout: 
   assert.equal(r.result.isError, true);
   assert.equal(ran, false);
 });
+
+test('closing the input right after a request still returns the whole reply', { timeout: 15_000 }, async () => {
+  // Value: protects=a reply longer than one pipe write is never cut off when the caller closes the input; fails_when=the server exits on close before its answers are written out (macOS CI cut the 14 KB tool list at 8 KB on the 0.4.5 release head, 2026-11-28); why_new=that CI failure; seam=the real server over a pipe plus a pin on its close handler, since the cut depends on pipe timing a local run rarely hits; no_claim=answers that outlast the 10 s cap
+  const child = spawn(process.execPath, [SCRIPT], { stdio: ['pipe', 'pipe', 'ignore'] });
+  const chunks = [];
+  child.stdout.on('data', (d) => chunks.push(d));
+  const closed = new Promise((r) => child.on('close', r));
+  child.stdin.end('{"jsonrpc":"2.0","id":1,"method":"tools/list"}\n');
+  assert.equal(await closed, 0);
+  const reply = JSON.parse(Buffer.concat(chunks).toString('utf8').split('\n')[0]);
+  assert.ok(reply.result.tools.length > 5, 'the whole tool list arrived');
+  const src = require('node:fs').readFileSync(SCRIPT, 'utf8');
+  const onClose = src.slice(src.indexOf("rl.on('close'"));
+  assert.match(onClose, /Promise\.allSettled\(\[\.\.\.inFlight\]\)/, 'it finishes the answers already asked for');
+  assert.match(onClose, /process\.stdout\.write\('', quit\)/, 'and exits only once stdout is written out');
+  assert.doesNotMatch(src, /rl\.on\('close', \(\) => process\.exit\(0\)\)/, 'never exits the moment input closes');
+});
