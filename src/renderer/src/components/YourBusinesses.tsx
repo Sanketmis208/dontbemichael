@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelButton } from './PixelButton';
 import { closedTime, openAddBusiness, rowAction, type BusinessRow } from '@/shell/businessMenuRows';
@@ -23,6 +23,11 @@ export function YourBusinesses({ businesses, onOpen, onChanged }: {
   const [busy, setBusy] = useState<string | null>(null);
   /** The missing business whose Remove is waiting for the owner's confirm. */
   const [confirming, setConfirming] = useState<string | null>(null);
+  // Its folder came back (or it went): the confirm is put away, since Remove
+  // for good is only for a business whose folder is gone.
+  useEffect(() => {
+    if (confirming && !businesses.some((b) => b.id === confirming && b.state === 'missing')) setConfirming(null);
+  }, [businesses, confirming]);
 
   const findIt = async (row: BusinessRow): Promise<void> => {
     setError('');
@@ -84,7 +89,7 @@ export function YourBusinesses({ businesses, onOpen, onChanged }: {
                 )}
               </div>
             </div>
-            {confirming === row.id && (
+            {confirming === row.id && row.state === 'missing' && (
               <div role="group" style={{ display: 'flex', alignItems: 'center', gap: 8, paddingInlineStart: 18 }}>
                 <span style={{ flex: 1, fontSize: 12, lineHeight: '18px', color: 'var(--cth-ink-2)' }}>{t('settings.business.removeMissingConfirm', { name })}</span>
                 <PixelButton variant="destructive" size="sm" disabled={busy === row.id} onClick={() => { void remove(row); }}>{t('settings.business.removeForGood')}</PixelButton>

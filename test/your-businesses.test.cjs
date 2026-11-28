@@ -107,7 +107,8 @@ test('removing a missing business also erases its saved passwords, Pulse history
   const list = read('src/renderer/src/components/YourBusinesses.tsx');
   assert.match(list, /\{row\.state === 'missing' && confirming !== row\.id && \(/, 'Remove on a missing business');
   assert.match(list, /window\.cth\.removeMissingBusiness\(row\.id\)/);
-  assert.match(list, /confirming === row\.id && \(/, 'it asks first');
+  assert.match(list, /confirming === row\.id && row\.state === 'missing' && \(/, 'it asks first, and only while the folder is gone: back, Remove for good would call the unfinished setup Remove and fail');
+  assert.match(list, /if \(confirming && !businesses\.some\(\(b\) => b\.id === confirming && b\.state === 'missing'\)\) setConfirming\(null\);/, 'a confirm whose folder came back is put away');
   const en = JSON.parse(read('src/renderer/src/i18n/locales/en.json')).settings.business;
   assert.match(en.removeMissingConfirm, /\{\{name\}\}[^]*Find it/, 'names the business and points to Find it');
 });

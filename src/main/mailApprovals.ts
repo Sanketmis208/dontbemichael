@@ -367,12 +367,14 @@ export class MailApprovals implements ProposalStore {
 
   /** What a sent email promised goes to Michael as one request, so each
    *  promise becomes a card he keeps until the follow up is sent. */
-  promised(sent: PromisedSend): void {
+  promised(sent: PromisedSend): boolean {
     const promises = readPromises(sent.promises);
-    if (!promises.length) return;
+    if (!promises.length) return true;
     const link = sent.messageId ? emailLinkFor(sent.mailbox, { from: `To ${sent.to.split(',')[0].trim()}`, date: new Date(this.now()).toISOString(), messageId: sent.messageId }) : null;
     const msg = promiseMessage({ member: this.deps.agentName(sent.agentId), memberId: sent.agentId, to: sent.to, subject: sent.subject, body: sent.body, link, promises });
-    if (this.deps.send({ to: this.deps.godId(), ...msg }) === false) console.error('[mail] promises not filed: no hive');
+    if (this.deps.send({ to: this.deps.godId(), ...msg }) !== false) return true;
+    console.error('[mail] promises not filed: no hive');
+    return false;
   }
 
   markSent(id: string, messageId: string): void {

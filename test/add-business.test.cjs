@@ -222,3 +222,28 @@ test('a business added over a folder that holds an office describes that office.
   s.settings.addBusiness({ home: path.join(s.userData, 'fresh'), settings: { businessName: 'Contoso Cafe' } });
   assert.equal(fs.existsSync(path.join(s.userData, 'fresh', 'office.json')), false, 'a folder with no office yet gets no office.json from here');
 });
+
+test('a setup picked up again over a folder that is now another business is refused, and that office.json keeps its name', (t) => {
+  // Value: protects=another business's office.json is never renamed by Add a business; fails_when=a draft id skips the folder check, so finishing it over a finished business's folder files a second entry there and writes the new name into that business's office.json; why_new=review 2026-11-27 of the running branch; seam=real config and office.json on disk; no_claim=the wizard's message for the refusal
+  const s = scene(t);
+  const shop = path.join(s.userData, 'shop');
+  const id = s.settings.saveBusinessDraft({ home: shop, step: 'team', settings: { businessName: 'Corner Florist' } });
+  // Meanwhile another business that finished setup has its office there.
+  fs.mkdirSync(path.join(shop, 'hive'), { recursive: true });
+  fs.writeFileSync(path.join(shop, 'hive', 'registry.json'), JSON.stringify({ godId: 'god', agents: {} }));
+  const otherId = s.file.ensureOfficeId(shop);
+  s.file.writeOfficeRecord(shop, { ...s.file.readOfficeRecord(shop), businessName: 'Contoso Cafe', team: [] });
+  const cfg = s.stored();
+  cfg.offices[otherId] = { home: shop, settings: { businessName: 'Contoso Cafe', onboardingComplete: true } };
+  fs.writeFileSync(path.join(s.userData, 'config.json'), JSON.stringify(cfg));
+
+  assert.deepEqual(s.settings.addBusiness({ id, home: shop, settings: { businessName: 'Corner Florist' } }), { ok: false, error: 'exists' });
+  assert.equal(s.file.readOfficeRecord(shop).businessName, 'Contoso Cafe', 'the other business keeps its office.json');
+  assert.equal(s.stored().offices[id].settings.onboardingComplete, false, 'the draft stays a draft');
+});
+
+test('an office.json with another id is never renamed by Add a business', () => {
+  // Value: protects=the record write names only the business being filed; fails_when=addBusiness syncs office.json whenever the folder holds an office, whatever office it is; why_new=review 2026-11-27 of the running branch; seam=source pin on the guard; no_claim=which folders are refused (test above)
+  const src = read('src/main/officeSettings.ts');
+  assert.match(src, /hasOffice && readOfficeId\(p\.home\) === id\) syncOfficeRecord\(/);
+});

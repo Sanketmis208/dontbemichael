@@ -17,7 +17,7 @@ const { execFileSync } = require('node:child_process');
 const loadTs = require('./load-ts.cjs');
 
 const { readPromises, promiseMessage, PROMISES_MAX, PROMISE_MAX } = loadTs('src/shared/mailProposals.ts');
-const { handleMailRequest } = loadTs('src/main/mail.ts');
+const { handleMailRequest, PROMISES_NOT_FILED } = loadTs('src/main/mail.ts');
 const { MailApprovals } = loadTs('src/main/mailApprovals.ts');
 const read = (p) => fs.readFileSync(path.resolve(__dirname, '..', p), 'utf8');
 
@@ -32,12 +32,12 @@ const cfg = {
 };
 const PROMISES = ['Send the statement closing in November, which covers the rest of October', 'Send the bank statements for April to October'];
 
-function setup() {
+function setup({ hive = true } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'md-promises-'));
   const out = { messages: [], sends: [] };
   const approvals = new MailApprovals({
     path: path.join(dir, 'mail-proposals.json'),
-    send: (m) => out.messages.push(m),
+    send: (m) => { if (!hive) return false; out.messages.push(m); return true; },
     remember: () => {},
     toast: () => {},
     agentName: (id) => ({ pam: 'Pam', kelly: 'Kelly', god: 'Michael' }[id] ?? id),
@@ -95,6 +95,20 @@ test('a direct send with promises is tracked; one with none, a draft or a failed
   await call('kelly', 'send', { mailbox: 'support', to: 'a@b.com', subject: 'S2', body: 'B2' });
   await call('kelly', 'draft', { mailbox: 'support', to: 'a@b.com', subject: 'S3', body: 'B3', promises: ['x'] });
   assert.equal(promised(out).length, 1);
+});
+
+test('promises that could not reach Michael are said in the send result, and the send still stands', async (t) => {
+  // Value: protects=a member is never left believing Michael tracks a promise he never got; fails_when=the hive is off at the send and the result says nothing, so the promise is lost; why_new=review 2026-11-27 of the running branch; seam=fake mail service with a hive that refuses
+  const { call, out, cleanup } = setup({ hive: false });
+  t.after(cleanup);
+  const r = await call('kelly', 'send', { mailbox: 'support', to: 'a@b.com', subject: 'S', body: 'B', promises: ['Send the signed contract on Monday'] });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.sent, true, 'the email went out');
+  assert.equal(r.body.promises, PROMISES_NOT_FILED);
+  assert.doesNotMatch(PROMISES_NOT_FILED, /[\u2013\u2014]| - /, 'no dashes in text an agent reads');
+  const plain = await call('kelly', 'send', { mailbox: 'support', to: 'a@b.com', subject: 'S2', body: 'B2' });
+  assert.equal(plain.body.promises, undefined, 'nothing said when there were none');
+  assert.equal(out.sends.length, 2);
 });
 
 test('Michael\'s request keeps the logged subject fixed and names nothing private there', () => {

@@ -259,12 +259,12 @@ export function addBusiness(p: {
   if (cfg.harnessHome && samePath(cfg.harnessHome, p.home)) return { ok: false, error: 'isOpen' };
   const offices: Record<string, OfficeEntry> = { ...(cfg.offices ?? {}) };
   const draft = p.id && offices[p.id] && offices[p.id].settings?.onboardingComplete !== true ? p.id : null;
+  // A setup picked up again is checked too: its folder may hold another
+  // business's office by now.
+  const there = homeFolderStatus(p.home).hasOffice ? officeIdIn({ harnessHome: p.home, offices }, readOfficeId(p.home)) : null;
+  if (there && there !== draft && offices[there]?.settings?.onboardingComplete === true) return { ok: false, error: 'exists' };
   let id = draft;
-  if (!id) {
-    const there = homeFolderStatus(p.home).hasOffice ? officeIdIn({ harnessHome: p.home, offices }, readOfficeId(p.home)) : null;
-    if (there && offices[there]?.settings?.onboardingComplete === true) return { ok: false, error: 'exists' };
-    id = there ?? (homeFolderStatus(p.home).hasOffice ? ensureOfficeId(p.home) : null) ?? randomUUID();
-  }
+  if (!id) id = there ?? (homeFolderStatus(p.home).hasOffice ? ensureOfficeId(p.home) : null) ?? randomUUID();
   // A new business starts under the open business's budget unless setup chose
   // its own: it never runs with no budget. Caps per member stay with the
   // members they were set for.
@@ -279,8 +279,10 @@ export function addBusiness(p: {
   // A folder that already holds an office keeps its office.json, which still
   // describes the business it had: describe this one, or every launch would
   // log a name mismatch (businessNameMismatch). A folder with no office yet
-  // gets its record when the office is made.
-  if (homeFolderStatus(p.home).hasOffice) syncOfficeRecord({ ...settings, harnessHome: p.home });
+  // gets its record when the office is made. Only this business's own office:
+  // an office.json with another id describes another business, never renamed
+  // from here.
+  if (homeFolderStatus(p.home).hasOffice && readOfficeId(p.home) === id) syncOfficeRecord({ ...settings, harnessHome: p.home });
   return { ok: true, id };
 }
 
